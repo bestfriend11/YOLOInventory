@@ -1,0 +1,374 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_PANEL DIALOG DISCARDABLE  0, 0, 108, 141
+STYLE WS_CHILD | WS_VISIBLE
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "Pick Boundary Mesh",IDC_PICK_BOUNDING_MESH_BUTTON,
+                    "CustButton",WS_TABSTOP,14,34,80,14
+    LTEXT           "",IDC_BOUNDING_MESH_NAME,13,16,80,8
+    GROUPBOX        "Loops",IDC_STATIC,15,51,76,55
+    LTEXT           "0",IDC_DOOR_LOOP_COUNT,57,78,17,12
+    LTEXT           "Doors",IDC_STATIC,24,78,23,12
+    LTEXT           "0",IDC_TOPO_LOOP_COUNT,57,66,17,8
+    LTEXT           "Topo",IDC_STATIC,24,66,23,8
+END
+
+IDD_IDOOR_SUBPANEL DIALOG DISCARDABLE  0, 0, 109, 236
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Add Door",IDC_ADD_DOOR,19,14,62,19
+    PUSHBUTTON      "Delete Door",IDC_DELETE_DOOR,19,37,62,19
+    PUSHBUTTON      "Flip Door",IDC_FLIP_DOOR,19,60,62,19
+    LTEXT           "Verts",IDC_STATIC,20,167,22,13
+    LTEXT           "NONE",IDC_VERT_COUNT,56,167,22,13
+    GROUPBOX        "Internal Door",IDC_STATIC,15,133,70,88
+    LTEXT           "ID",IDC_STATIC,20,150,22,13
+    LTEXT           "NONE",IDC_DOOR_ID,56,150,22,13
+    PUSHBUTTON      "Flip Alignment",IDC_ORIENT_DOOR,19,83,62,19
+    PUSHBUTTON      "Clear Selection",IDC_CLEAR_SELECTION,19,106,62,19
+END
+
+IDD_FLOOR_SUBPANEL DIALOG DISCARDABLE  0, 0, 108, 226
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Add to Floor",IDC_ADD_TO_FLOOR,22,14,62,19
+    PUSHBUTTON      "Delete from Floor",IDC_DELETE_FROM_FLOOR,22,39,62,19
+    PUSHBUTTON      "Reset Floor",IDC_RESET_FLOOR,22,64,62,19
+    LTEXT           "Floor Faces",IDC_STATIC,24,125,22,22
+    LTEXT           "NONE",IDC_FLOOR_FACE_NUM,60,128,22,11
+    LTEXT           "Total Faces",IDC_STATIC,24,150,22,22
+    LTEXT           "NONE",IDC_TOTAL_FACE_NUM,60,153,22,11
+    LTEXT           "Selected Faces",IDC_STATIC,24,175,32,22
+    LTEXT           "NONE",IDC_SELECTED_FACE_NUM,60,178,22,8
+    PUSHBUTTON      "Fetch Selected",IDC_FETCH_SELECTED_FLOOR,22,90,62,19
+END
+
+IDD_OBB_SUBPANEL DIALOG DISCARDABLE  0, 0, 108, 198
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Compute Selected",IDC_BUTTON1,16,14,74,14
+    CONTROL         "Find Separate Meshes",IDC_FIND_SEPARATE_MESHES,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,10,42,87,10
+    CONTROL         "Slider1",IDC_SLIDER1,"msctls_trackbar32",TBS_VERT | 
+                    TBS_NOTICKS | WS_TABSTOP,15,66,19,89
+    LTEXT           "Static",IDC_RECURSELEVEL,35,98,19,8
+    LTEXT           "Recursion Level",IDC_STATIC,36,86,52,8
+    CONTROL         "Root Colour",IDC_CROOT,"ColorSwatch",WS_TABSTOP,55,119,
+                    17,31
+    CONTROL         "Root Colour",IDC_CRIGHT,"ColorSwatch",WS_TABSTOP,73,137,
+                    17,31
+    CONTROL         "Root Colour",IDC_CLEFT,"ColorSwatch",WS_TABSTOP,37,137,
+                    17,31
+END
+
+IDD_SPOT_SUBPANEL DIALOG DISCARDABLE  0, 0, 109, 157
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Add Spot",IDC_ADD_SPOT,14,13,83,14,NOT WS_TABSTOP
+    PUSHBUTTON      "Delete Spot",IDC_DELETE_SPOT,14,29,83,14
+    PUSHBUTTON      "Snap Spot to Object",IDC_SNAP_SPOT,14,45,83,14
+    LTEXT           "Current Spot",IDC_STATIC,15,87,26,18
+    CTEXT           "NONE",IDC_TOTAL_SPOT_NUM,45,126,49,14,SS_CENTERIMAGE
+    LTEXT           "Total Spots",IDC_STATIC,16,125,26,18
+    PUSHBUTTON      "Lock Spot to Object",IDC_LOCK_SPOT,13,61,83,14
+    PUSHBUTTON      "Button2",IDC_PREV_SPOT,48,102,19,12,BS_ICON
+    PUSHBUTTON      "Button2",IDC_NEXT_SPOT,72,102,19,12,BS_ICON
+    EDITTEXT        IDC_CURRENT_SPOT,45,83,46,14,ES_AUTOHSCROLL
+END
+
+IDD_DOOR_SUBPANEL1 DIALOG DISCARDABLE  0, 0, 109, 236
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Add Door",IDC_ADD_DOOR,19,14,62,19
+    PUSHBUTTON      "Delete Door",IDC_DELETE_DOOR,19,37,62,19
+    PUSHBUTTON      "Flip Door",IDC_FLIP_DOOR,19,60,62,19
+    LTEXT           "Loop",IDC_STATIC,20,167,22,13
+    LTEXT           "First Edge",IDC_STATIC,20,185,35,13
+    LTEXT           "Last Edge",IDC_STATIC,20,202,35,13
+    LTEXT           "NONE",IDC_SELECTED_LOOP_NUM,56,167,22,13
+    LTEXT           "NONE",IDC_SELECTED_FIRST_VERT,56,185,22,13
+    LTEXT           "NONE",IDC_SELECTED_LAST_VERT,56,202,22,13
+    GROUPBOX        "Selected Door",IDC_STATIC,15,133,70,88
+    LTEXT           "ID",IDC_STATIC,20,150,22,13
+    LTEXT           "NONE",IDC_DOOR_ID,56,150,22,13
+    PUSHBUTTON      "Flip Alignment",IDC_ORIENT_DOOR,19,83,62,19
+    PUSHBUTTON      "Move Start Vert",IDC_MOVE_START_VERT,19,106,62,19
+END
+
+IDD_NORMALS_SUBPANEL DIALOG DISCARDABLE  0, 0, 108, 186
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Lock Selected",IDC_LOCK_NORMS,22,14,62,19
+    PUSHBUTTON      "Unlock Selected",IDC_UNLOCK_NORMS,22,39,62,19
+    PUSHBUTTON      "Reset All",IDC_RESET_NORMS,22,64,62,19
+    LTEXT           "Locked Normals",-1,24,92,28,22
+    LTEXT           "NONE",IDC_LOCKED_NORM_NUM,60,95,22,11
+    LTEXT           "Selected Normals",-1,24,117,32,22
+    LTEXT           "NONE",IDC_SELECTED_NORM_NUM,60,120,22,8
+END
+
+IDD_IGNORED_SUBPANEL DIALOG DISCARDABLE  0, 0, 108, 208
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Ignore Selected",IDC_ADD_TO_IGNORED,19,14,69,19
+    PUSHBUTTON      "Un-Ignore Selected",IDC_DELETE_FROM_IGNORED,19,39,69,19
+    PUSHBUTTON      "Reset Ignored",IDC_RESET_IGNORED,19,64,69,19
+    LTEXT           "Ignored Faces",IDC_STATIC,23,123,28,22
+    LTEXT           "NONE",IDC_IGNORED_NUM,59,126,22,11
+    LTEXT           "Total Faces",IDC_STATIC,23,148,22,22
+    LTEXT           "NONE",IDC_TOTAL_FACE_NUM,59,151,22,11
+    LTEXT           "Selected Faces",IDC_STATIC,23,173,32,22
+    LTEXT           "NONE",IDC_SELECTED_IGNORED_NUM,59,176,22,8
+    PUSHBUTTON      "Fetch Selected",IDC_FETCH_SELECTED_IGNORED,19,88,69,19
+END
+
+IDD_NORMALS_SUBPANEL1 DIALOG DISCARDABLE  0, 0, 108, 186
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Spoof Selected",IDC_SPOOF_NORMS,22,14,62,19
+    PUSHBUTTON      "Unspoof Selected",IDC_UNSPOOF_NORMS,22,39,62,19
+    PUSHBUTTON      "Reset All",IDC_RESET_SPOOFED,22,64,62,19
+    LTEXT           "Spoofed Normals",-1,24,92,28,22
+    LTEXT           "NONE",IDC_SPOOFED_NORM_NUM,60,95,22,11
+    LTEXT           "Selected Normals",-1,24,117,32,22
+    LTEXT           "NONE",IDC_SELECTED_SPOOFED_NORM_NUM,60,120,22,8
+END
+
+IDD_WATER_SUBPANEL DIALOG DISCARDABLE  0, 0, 108, 209
+STYLE WS_CHILD
+FONT 8, "MS Sans Serif"
+BEGIN
+    PUSHBUTTON      "Add to Water",IDC_ADD_TO_WATER,23,14,62,19
+    PUSHBUTTON      "Delete from Water",IDC_DELETE_FROM_WATER,23,39,62,19
+    PUSHBUTTON      "Reset Water",IDC_RESET_WATER,23,64,62,19
+    LTEXT           "Water Faces",IDC_STATIC,25,125,22,22
+    LTEXT           "NONE",IDC_WATER_FACE_NUM,61,128,22,11
+    LTEXT           "Total Faces",IDC_STATIC,25,150,22,22
+    LTEXT           "NONE",IDC_TOTAL_FACE_NUM,61,153,22,11
+    LTEXT           "Selected Faces",IDC_STATIC,25,175,32,22
+    LTEXT           "NONE",IDC_SELECTED_FACE_NUM,61,178,22,8
+    PUSHBUTTON      "Fetch Selected",IDC_FETCH_SELECTED_WATER,23,90,62,19
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDD_PANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 133
+    END
+
+    IDD_IDOOR_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 97
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 229
+    END
+
+    IDD_FLOOR_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 219
+    END
+
+    IDD_OBB_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 191
+    END
+
+    IDD_SPOT_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 102
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 150
+    END
+
+    IDD_DOOR_SUBPANEL1, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 97
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 229
+    END
+
+    IDD_NORMALS_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 6
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 179
+    END
+
+    IDD_IGNORED_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 200
+    END
+
+    IDD_NORMALS_SUBPANEL1, DIALOG
+    BEGIN
+        LEFTMARGIN, 6
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 179
+    END
+
+    IDD_WATER_SUBPANEL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 101
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 202
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+#ifndef _MAC
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,1
+ PRODUCTVERSION 1,0,0,1
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x2L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Gas Powered Games\0"
+            VALUE "FileDescription", "SiegeNodeObject\0"
+            VALUE "FileVersion", "1, 0, 0, 1\0"
+            VALUE "InternalName", "SiegeNodeObject\0"
+            VALUE "LegalCopyright", "Copyright © 1999\0"
+            VALUE "OriginalFilename", "SiegeNodeObject.dlo\0"
+            VALUE "ProductName", "Gas Powered Games SiegeNodeObject\0"
+            VALUE "ProductVersion", "1, 0, 0, 1\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+#endif    // !_MAC
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE DISCARDABLE 
+BEGIN
+    IDS_LIBDESCRIPTION      "SiegeNode Creator"
+    IDS_CLASS_NAME          "SiegeNodeObject"
+    IDS_PARAMS              "Parameters"
+END
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

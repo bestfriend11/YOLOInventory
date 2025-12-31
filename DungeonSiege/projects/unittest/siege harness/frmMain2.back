@@ -1,0 +1,1030 @@
+VERSION 5.00
+Object = "{831FDD16-0C5C-11D2-A9FC-0000F8754DA1}#2.0#0"; "MSCOMCTL.OCX"
+Object = "{3B7C8863-D78F-101B-B9B5-04021C009402}#1.2#0"; "RICHTX32.OCX"
+Object = "{F9043C88-F6F2-101A-A3C9-08002B2F49FB}#1.2#0"; "comdlg32.ocx"
+Object = "{6FBA474E-43AC-11CE-9A0E-00AA0062BB4C}#1.0#0"; "SYSINFO.OCX"
+Begin VB.Form frmMain 
+   BorderStyle     =   1  'Fixed Single
+   Caption         =   "Siege Harness"
+   ClientHeight    =   9015
+   ClientLeft      =   150
+   ClientTop       =   750
+   ClientWidth     =   9840
+   Icon            =   "frmMain.frx":0000
+   LinkTopic       =   "Form1"
+   MaxButton       =   0   'False
+   ScaleHeight     =   9015
+   ScaleWidth      =   9840
+   StartUpPosition =   3  'Windows Default
+   Begin VB.Frame frameCaseMain 
+      Height          =   8415
+      Index           =   1
+      Left            =   120
+      TabIndex        =   34
+      Top             =   360
+      Width           =   9615
+      Begin RichTextLib.RichTextBox RichTextBox1 
+         Height          =   7575
+         Left            =   4800
+         TabIndex        =   35
+         Top             =   480
+         Width           =   4695
+         _ExtentX        =   8281
+         _ExtentY        =   13361
+         _Version        =   393217
+         TextRTF         =   $"frmMain.frx":0BC2
+      End
+      Begin MSComctlLib.ListView lstLogCase 
+         Height          =   7575
+         Left            =   240
+         TabIndex        =   36
+         Top             =   480
+         Width           =   4455
+         _ExtentX        =   7858
+         _ExtentY        =   13361
+         View            =   3
+         LabelWrap       =   -1  'True
+         HideSelection   =   -1  'True
+         _Version        =   393217
+         ForeColor       =   -2147483640
+         BackColor       =   -2147483643
+         BorderStyle     =   1
+         Appearance      =   1
+         NumItems        =   3
+         BeginProperty ColumnHeader(1) {BDD1F052-858B-11D1-B16A-00C0F0283628} 
+            Text            =   "Case Name"
+            Object.Width           =   2540
+         EndProperty
+         BeginProperty ColumnHeader(2) {BDD1F052-858B-11D1-B16A-00C0F0283628} 
+            SubItemIndex    =   1
+            Text            =   "Time"
+            Object.Width           =   2540
+         EndProperty
+         BeginProperty ColumnHeader(3) {BDD1F052-858B-11D1-B16A-00C0F0283628} 
+            SubItemIndex    =   2
+            Text            =   "Message"
+            Object.Width           =   2540
+         EndProperty
+      End
+   End
+   Begin MSComctlLib.TabStrip TabStrip1 
+      Height          =   9015
+      Left            =   0
+      TabIndex        =   0
+      Top             =   0
+      Width           =   9855
+      _ExtentX        =   17383
+      _ExtentY        =   15901
+      _Version        =   393216
+      BeginProperty Tabs {1EFB6598-857C-11D1-B16A-00C0F0283628} 
+         NumTabs         =   2
+         BeginProperty Tab1 {1EFB659A-857C-11D1-B16A-00C0F0283628} 
+            Caption         =   "Test Cases"
+            ImageVarType    =   2
+         EndProperty
+         BeginProperty Tab2 {1EFB659A-857C-11D1-B16A-00C0F0283628} 
+            Caption         =   "Result Logs"
+            ImageVarType    =   2
+         EndProperty
+      EndProperty
+   End
+   Begin SysInfoLib.SysInfo SysInfo 
+      Left            =   5880
+      Top             =   7440
+      _ExtentX        =   661
+      _ExtentY        =   661
+      _Version        =   393216
+   End
+   Begin MSComctlLib.ImageList ImageList 
+      Left            =   7320
+      Top             =   7560
+      _ExtentX        =   661
+      _ExtentY        =   661
+      BackColor       =   -2147483643
+      ImageWidth      =   16
+      ImageHeight     =   16
+      MaskColor       =   12632256
+      _Version        =   393216
+      BeginProperty Images {2C247F25-8591-11D1-B16A-00C0F0283628} 
+         NumListImages   =   4
+         BeginProperty ListImage1 {2C247F27-8591-11D1-B16A-00C0F0283628} 
+            Picture         =   "frmMain.frx":0C4D
+            Key             =   ""
+         EndProperty
+         BeginProperty ListImage2 {2C247F27-8591-11D1-B16A-00C0F0283628} 
+            Picture         =   "frmMain.frx":181F
+            Key             =   ""
+         EndProperty
+         BeginProperty ListImage3 {2C247F27-8591-11D1-B16A-00C0F0283628} 
+            Picture         =   "frmMain.frx":18B2
+            Key             =   ""
+         EndProperty
+         BeginProperty ListImage4 {2C247F27-8591-11D1-B16A-00C0F0283628} 
+            Picture         =   "frmMain.frx":1C45
+            Key             =   ""
+         EndProperty
+      EndProperty
+   End
+   Begin MSComDlg.CommonDialog CommonDialog 
+      Left            =   5160
+      Top             =   7560
+      _ExtentX        =   556
+      _ExtentY        =   556
+      _Version        =   393216
+   End
+   Begin VB.Frame frameCaseMain 
+      Height          =   8415
+      Index           =   0
+      Left            =   120
+      TabIndex        =   1
+      Top             =   360
+      Width           =   9615
+      Begin VB.Timer Timer1 
+         Enabled         =   0   'False
+         Interval        =   5000
+         Left            =   960
+         Top             =   7560
+      End
+      Begin VB.Frame frameCaseinfo 
+         Caption         =   "Case Information"
+         Height          =   8025
+         Left            =   5160
+         TabIndex        =   10
+         Top             =   240
+         Width           =   4330
+         Begin VB.TextBox txtMap 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   22
+            Top             =   960
+            Width           =   3375
+         End
+         Begin VB.TextBox txtTeleport 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   21
+            Top             =   1320
+            Width           =   3375
+         End
+         Begin VB.TextBox txtArgs 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   20
+            Top             =   1680
+            Width           =   3375
+         End
+         Begin VB.TextBox txtSkrit 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   19
+            Top             =   2040
+            Width           =   2895
+         End
+         Begin VB.CommandButton cmdEdit 
+            Caption         =   "&Edit"
+            Height          =   370
+            Left            =   480
+            TabIndex        =   18
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdSave 
+            Caption         =   "S&ave"
+            Enabled         =   0   'False
+            Height          =   370
+            Left            =   1440
+            TabIndex        =   17
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdNew 
+            Caption         =   "&New"
+            Height          =   370
+            Left            =   2400
+            TabIndex        =   16
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdExit 
+            Caption         =   "E&xit"
+            Height          =   370
+            Left            =   3360
+            TabIndex        =   15
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdBrowse 
+            Caption         =   "..."
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   3840
+            TabIndex        =   14
+            Top             =   2040
+            Width           =   370
+         End
+         Begin VB.ComboBox cmbArea 
+            Enabled         =   0   'False
+            Height          =   315
+            ItemData        =   "frmMain.frx":2097
+            Left            =   840
+            List            =   "frmMain.frx":2099
+            Style           =   2  'Dropdown List
+            TabIndex        =   13
+            Top             =   2400
+            Width           =   3375
+         End
+         Begin VB.TextBox txtCaseName 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   12
+            Top             =   240
+            Width           =   3375
+         End
+         Begin VB.TextBox txtAuthor 
+            Enabled         =   0   'False
+            Height          =   300
+            Left            =   840
+            TabIndex        =   11
+            Top             =   600
+            Width           =   3375
+         End
+         Begin RichTextLib.RichTextBox rtfDescription 
+            Height          =   2535
+            Left            =   120
+            TabIndex        =   23
+            Top             =   3120
+            Width           =   4095
+            _ExtentX        =   7223
+            _ExtentY        =   4471
+            _Version        =   393217
+            Enabled         =   0   'False
+            ScrollBars      =   3
+            TextRTF         =   $"frmMain.frx":209B
+         End
+         Begin RichTextLib.RichTextBox rtfExpected 
+            Height          =   1455
+            Left            =   120
+            TabIndex        =   24
+            Top             =   5880
+            Width           =   4095
+            _ExtentX        =   7223
+            _ExtentY        =   2566
+            _Version        =   393217
+            Enabled         =   0   'False
+            ScrollBars      =   3
+            TextRTF         =   $"frmMain.frx":211D
+         End
+         Begin VB.Label Label1 
+            Caption         =   "Name"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   33
+            Top             =   240
+            Width           =   495
+         End
+         Begin VB.Label Label2 
+            Caption         =   "Author"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   32
+            Top             =   600
+            Width           =   495
+         End
+         Begin VB.Label Label3 
+            Caption         =   "Map"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   31
+            Top             =   960
+            Width           =   495
+         End
+         Begin VB.Label Label4 
+            Caption         =   "Teleport"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   30
+            Top             =   1320
+            Width           =   615
+         End
+         Begin VB.Label Label5 
+            Caption         =   "Args"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   29
+            Top             =   1680
+            Width           =   615
+         End
+         Begin VB.Label Label6 
+            Caption         =   "Skrit"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   28
+            Top             =   2040
+            Width           =   615
+         End
+         Begin VB.Label Label7 
+            Caption         =   "Expected"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   27
+            Top             =   5640
+            Width           =   855
+         End
+         Begin VB.Label Label8 
+            Caption         =   "Description"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   26
+            Top             =   2880
+            Width           =   975
+         End
+         Begin VB.Label Label10 
+            Caption         =   "Area"
+            Height          =   255
+            Left            =   120
+            TabIndex        =   25
+            Top             =   2400
+            Width           =   615
+         End
+      End
+      Begin VB.Frame frameCases 
+         Caption         =   "Cases"
+         Height          =   8025
+         Left            =   120
+         TabIndex        =   2
+         Top             =   240
+         Width           =   4935
+         Begin VB.CommandButton cmdAdd 
+            Caption         =   "A&dd"
+            Height          =   370
+            Left            =   1080
+            TabIndex        =   7
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdRemove 
+            Caption         =   "Remo&ve"
+            Height          =   370
+            Left            =   2040
+            TabIndex        =   6
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdClear 
+            Caption         =   "&Clear"
+            Height          =   370
+            Left            =   3000
+            TabIndex        =   5
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.CommandButton cmdGo 
+            Caption         =   "&Go!"
+            Height          =   370
+            Left            =   3960
+            TabIndex        =   4
+            Top             =   7440
+            Width           =   850
+         End
+         Begin VB.ListBox lstCases 
+            Height          =   3570
+            Left            =   120
+            TabIndex        =   3
+            Top             =   3720
+            Width           =   4695
+         End
+         Begin MSComctlLib.TreeView tvCases 
+            Height          =   3015
+            Left            =   120
+            TabIndex        =   8
+            Top             =   360
+            Width           =   4695
+            _ExtentX        =   8281
+            _ExtentY        =   5318
+            _Version        =   393217
+            Indentation     =   353
+            Style           =   7
+            Appearance      =   1
+            MouseIcon       =   "frmMain.frx":219F
+         End
+         Begin VB.Label Label9 
+            Caption         =   "Test Case Queue"
+            Height          =   255
+            Left            =   360
+            TabIndex        =   9
+            Top             =   3480
+            Width           =   1935
+         End
+      End
+End
+Attribute VB_Name = "frmMain"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Option Explicit
+Private Sub Form_Load()
+    
+    'CheckIni
+    'workaround for wonky rtf control behavior
+    rtfDescription.Enabled = True
+    rtfDescription.Enabled = False
+    rtfExpected.Enabled = True
+    rtfExpected.Enabled = False
+    frameCaseMain(0).ZOrder (0)
+    Dim lstCaseItem As ListItem
+    Set lstCaseItem = lstLogCase.ListItems.Add(, , "No Cases run")
+    
+    'initialize UI and variable settings
+    cmdNew.Enabled = False
+    cmdEdit.Enabled = False
+    'sBuildType = RELEASE_EXE
+    
+    With CurrentUserInfo
+        GetUserInfoFromSystem .OS, .UserName, .MachineName
+    End With
+    
+
+    
+    'Get the recordset
+    dbOpenTable
+    'build the tree control
+    BuildTree
+
+
+
+End Sub
+
+Private Sub cmdBrowse_Click()
+    
+    With CommonDialog
+        .DialogTitle = "Select a skrit"
+        .Filter = "Skrits (*.skrit)|*.skrit"
+        .ShowOpen
+        .Flags = cdlOFNFileMustExist Or cdlOFNHideReadOnly Or cdlOFNExplorer
+    End With
+        If CommonDialog.FileName > "" Then
+            txtSkrit.Text = CommonDialog.FileName
+        End If
+        
+End Sub
+
+Private Sub cmdGo_Click()
+    Dim iCaseCount As Integer
+    Dim iCount As Integer
+    Dim CurrentCaseInfo As Caseinfo
+    frmLog.Show
+    
+    If lstCases.ListCount = 0 Then
+        MsgBox "Please add the desired test cases to the queue before launching."
+        Exit Sub
+    End If
+    
+  '  If lstCases.Selected(0) = False Then
+  '
+  '      lstCases.Selected(0) = True
+   ' End If
+    lstCases.SetFocus
+    lstCases.Selected(0) = True
+    
+
+    For iCaseCount = 0 To lstCases.ListCount - 1
+        If iCaseCount > 0 Then
+             lstCases.Selected(iCaseCount) = True
+        End If
+        
+
+        CurrentCaseInfo = BuildCaseInfoFromUI
+        bLaunchDungeonSiege "P:\PreCompiled\1.09.2002\CDimage_BITS_01.09.2002_DEV\dungeonsieged.exe fullscreen=true"
+
+    Next
+End Sub
+
+Private Sub cmdSave_Click()
+    Dim InitialCaseName As String
+    Dim MyCaseInfo As Caseinfo
+    
+    'validate that all the fields are filled in
+    If CheckUIForNulls <> "NONULLS" Then
+        MsgBox "Please enter a value for the following: " & CheckUIForNulls
+        Exit Sub
+    End If
+    InitialCaseName = txtCaseName.Text
+    MyCaseInfo = BuildCaseInfoFromUI
+    
+    If eCaseAction = TC_NEW_CASE Then
+        If bCheckCaseExistsInDb(txtCaseName.Text) Then
+            MsgBox "A test case with this name exists.  Please choose a new name or Cancel then select Edit."
+            Exit Sub
+        Else
+            WriteNewCase MyCaseInfo
+            
+            cmdNew.Caption = "&New"
+            cmdSave.Enabled = False
+            
+        End If
+
+    ElseIf eCaseAction = TC_EDIT_CASE Then
+        If bCheckCaseExistsInDb(txtCaseName.Text) Then
+
+            ModifyExistingCase MyCaseInfo
+
+
+        Else:
+            WriteNewCase MyCaseInfo
+            
+        End If
+    cmdEdit.Caption = "&Edit"
+    cmdSave.Enabled = False
+    End If
+    
+    UpdateTreeView
+    tvCases.Enabled = True
+    tvCases.SetFocus
+    tvCases.Nodes(GetIndex(txtCaseName.Text)).Selected = True
+    DisableCaseInfo
+End Sub
+
+
+
+
+
+
+
+
+
+Private Sub cmdClear_Click()
+lstCases.Clear
+End Sub
+
+Private Sub cmdEdit_Click()
+    If cmdEdit.Caption = "&Edit" Then
+        cmdEdit.Caption = "&Cancel"
+        tvCases.Enabled = False
+        cmdSave.Enabled = True
+        cmdBrowse.Enabled = True
+        
+        cmdNew.Enabled = False
+        eCaseAction = TC_EDIT_CASE
+        
+        EnableCaseInfo
+    
+    
+    ElseIf cmdEdit.Caption = "&Cancel" Then
+        cmdEdit.Caption = "&Edit"
+        cmdSave.Enabled = False
+        cmdBrowse.Enabled = False
+        tvCases.Enabled = True
+        cmbArea.Enabled = False
+        cmdNew.Enabled = True
+        tvCases.SetFocus
+        GetCaseInfo tvCases.SelectedItem.Text
+        
+        DisableCaseInfo
+    End If
+End Sub
+
+Private Sub cmdExit_Click()
+Unload Me
+
+
+End Sub
+
+Private Sub cmdNew_Click()
+    If cmdNew.Caption = "&New" Then
+        eCaseAction = TC_NEW_CASE
+        cmdNew.Caption = "&Cancel"
+        cmdSave.Enabled = True
+        cmdBrowse.Enabled = True
+        tvCases.Enabled = False
+        cmdEdit.Enabled = False
+        
+        'sCaseAction = TC_NEW_CASE
+        ClearCaseFileds
+        txtAuthor.Text = CurrentUserInfo.UserName
+        EnableCaseInfo
+
+    
+    ElseIf cmdNew.Caption = "&Cancel" Then
+        cmdNew.Caption = "&New"
+        tvCases.Enabled = True
+        cmdSave.Enabled = False
+        cmdBrowse.Enabled = False
+        'sCaseAction = 0
+        cmdEdit.Enabled = True
+        
+        tvCases.SetFocus
+        GetCaseInfo tvCases.SelectedItem.Text
+        DisableCaseInfo
+
+        
+        
+    End If
+    
+End Sub
+Private Sub DisableCaseInfo()
+        txtArgs.Enabled = False
+        txtAuthor.Enabled = False
+        txtCaseName.Enabled = False
+        txtMap.Enabled = False
+        txtSkrit.Enabled = False
+        txtTeleport.Enabled = False
+        rtfDescription.Enabled = False
+        rtfExpected.Enabled = False
+        cmbArea.Enabled = False
+End Sub
+Private Sub EnableCaseInfo()
+        txtArgs.Enabled = True
+        txtAuthor.Enabled = True
+        txtCaseName.Enabled = True
+        txtMap.Enabled = True
+        txtSkrit.Enabled = True
+        txtTeleport.Enabled = True
+        rtfDescription.Enabled = True
+        rtfExpected.Enabled = True
+        cmbArea.Enabled = True
+End Sub
+Private Sub cmdRemove_Click()
+On Error Resume Next
+Dim Index As Integer
+    Index = lstCases.ListIndex
+    If Index > -1 Then
+        lstCases.RemoveItem Index
+        If Index > 0 Then
+            lstCases.ListIndex = Index - 1
+        Else
+            lstCases.ListIndex = 0
+        End If
+    Else
+        lstCases.ListIndex = lstCases.ListCount - 1
+    End If
+End Sub
+
+
+Private Sub BuildTree()
+    Dim iNodeCounter As Integer
+    Dim iNodeIndex As Integer
+    Dim iCaseNodeIndex As Integer
+    Dim oTreeNode As Node
+
+    
+    Set tvCases.ImageList = Me.ImageList
+    Set oTreeNode = tvCases.Nodes.Add(, , , "Unit Tests", 1)
+    cmbArea.Clear
+
+    
+    
+    For iNodeCounter = 0 To UBound(CaseArray())
+
+            If Not bExists(CaseArray(iNodeCounter).TestArea) Then
+                AddToTree CaseArray(iNodeCounter).TestArea, True, 1
+                 cmbArea.AddItem (CaseArray(iNodeCounter).TestArea)
+
+            End If
+            
+            If Not bExists(CaseArray(iNodeCounter).CaseName) Then
+                iNodeIndex = GetIndex(CaseArray(iNodeCounter).TestArea)
+                AddToTree CaseArray(iNodeCounter).CaseName, False, iNodeIndex
+                
+                CaseArray(iNodeCounter).Index = GetIndex(CaseArray(iNodeCounter).CaseName)
+                
+            End If
+            
+
+    Next iNodeCounter
+    tvCases.Nodes.Item(1).Expanded = True
+End Sub
+
+Private Function bExists(sAreaName As String) As Boolean
+    'Verify that a node in the tree does not exist.
+    'If so, do not add twice.  All cases should have Unique names
+    'In the db.  There will be several area entries,
+    'but it is important that area names are only represented once
+    Dim iCount As Integer
+    Dim oTreeNode As Node
+        
+        For iCount = 1 To tvCases.Nodes.Count
+        Set oTreeNode = tvCases.Nodes.Item(iCount)
+        
+            If oTreeNode.Text = sAreaName Then
+                bExists = True
+                Exit Function
+            Else
+                bExists = False
+            End If
+        
+        Next iCount
+    
+End Function
+Private Sub AddToTree(sNode As String, bIsArea As Boolean, iIndex As Integer)
+    'Adds both the nodes and images to the tree control
+    Dim oTreeCaseNode As Node
+    Dim oTreeAreaNode As Node
+        
+        'First, check to see if the node coming in represents a test area
+        'If so, add a folder, and make it a child of the root node
+        If bIsArea Then
+            Set oTreeAreaNode = tvCases.Nodes.Add(iIndex, tvwChild, , sNode, 2)
+        
+        'Otherwise, set it as a test case and give it the little paper
+        'image
+        ElseIf Not bIsArea Then
+            Set oTreeAreaNode = tvCases.Nodes.Add(iIndex, tvwChild, , sNode, 4)
+        End If
+    
+End Sub
+
+Private Function GetIndex(sText As String) As Integer
+    'Finds the node index for any case in the tree
+    Dim iCount As Integer
+    Dim oTreeNode As Node
+    
+        For iCount = 1 To tvCases.Nodes.Count
+            Set oTreeNode = tvCases.Nodes.Item(iCount)
+            If oTreeNode.Text = sText Then
+                GetIndex = oTreeNode.Index
+                Exit Function
+            End If
+        Next iCount
+End Function
+
+
+
+
+
+Private Sub frameCases_DragDrop(Source As Control, X As Single, Y As Single)
+frameCases.Parent
+End Sub
+
+Private Sub lstCases_Click()
+    'gets the caseinfo and populates the UI if a test in the list
+    'is selected
+    GetCaseInfo lstCases.Text
+End Sub
+
+Private Sub lstCases_KeyDown(KeyCode As Integer, Shift As Integer)
+    
+    'This ub basically deletes cases from the list view
+    Shift = 0
+    'Check for [delete] key_down
+    If KeyCode = 46 Then
+        Call cmdRemove_Click
+    End If
+End Sub
+
+'Private Sub mnuDebug_Click()
+    'switch from release to debug
+ '   If mnuRelease.Checked = True Then
+ '       mnuDebug.Checked = True
+ '       mnuRelease.Checked = False
+'    End If
+'End Sub
+
+Private Sub mnuPaths_Click()
+    frmSettings.Show vbModal
+End Sub
+
+'Private Sub mnuRelease_Click()
+    'switch from debug to release
+'    If mnuDebug.Checked = True Then
+'        mnuRelease.Checked = True
+'        mnuDebug.Checked = False
+'    End If
+
+'End Sub
+
+Private Sub mnuSettings_Click()
+frmSettings.Show vbModal
+End Sub
+
+Private Sub TabStrip1_Click()
+
+frameCaseMain(TabStrip1.SelectedItem.Index - 1).ZOrder (0)
+End Sub
+
+Private Sub tvCases_Click()
+
+    'verifies that a case is indeed the selected node,
+    'then returns the CaseInfo for said case
+    If tvCases.SelectedItem.Children = 0 Then
+        GetCaseInfo (tvCases.SelectedItem.Text)
+        cmdNew.Enabled = True
+        cmdEdit.Enabled = True
+    Else
+        cmdNew.Enabled = False
+        cmdEdit.Enabled = False
+        ClearCaseFileds
+        'cmbArea.Text = ""
+        Exit Sub
+    End If
+End Sub
+
+Private Sub tvCases_Collapse(ByVal Node As MSComctlLib.Node)
+    'Closes the folder graphic when an area node is colapsed
+    If Node.Image = 3 Then
+        Node.Image = 2
+    End If
+
+End Sub
+
+Private Sub tvCases_DblClick()
+    'Checks to make sure a testcase is the active selected
+    'then adds it to the listbox control
+    If tvCases.SelectedItem.Children = 0 Then
+        lstCases.AddItem tvCases.SelectedItem
+    Else
+        Exit Sub
+    End If
+End Sub
+Private Sub cmdAdd_Click()
+    'Checks to make sure a testcase is the active selected
+    'then adds it to the listbox control
+    If tvCases.SelectedItem.Children = 0 Then
+        lstCases.AddItem tvCases.SelectedItem
+    Else
+        Exit Sub
+    End If
+End Sub
+Private Sub GetCaseInfo(sSelectedText As String)
+    Dim iCount As Integer
+    
+    'Traverse the tree and find the case with matching case name
+    For iCount = 0 To UBound(CaseArray())
+        If sSelectedText = CaseArray(iCount).CaseName Then
+            'Once found, populate the ui with the values found in the
+            'corresponding Caseinfo struct
+            With CaseArray(iCount)
+                txtCaseName.Text = .CaseName
+                txtAuthor.Text = .Author
+                txtMap.Text = .Map
+                txtTeleport.Text = .Teleport
+                txtArgs.Text = .Arguments
+                txtSkrit.Text = .Skrit
+                rtfDescription.Text = .Description
+                rtfExpected.Text = .Expected
+                cmbArea.Text = .TestArea
+            End With
+        End If
+    Next iCount
+End Sub
+
+
+Private Sub tvCases_Expand(ByVal Node As MSComctlLib.Node)
+    'Change from closed folder to open folder
+    If Node.Image = 2 Then
+        Node.Image = 3
+    End If
+    
+End Sub
+Private Sub ClearCaseFileds()
+        'simply clears all UI fields for new case, or when selecting
+        'an area node
+        txtArgs.Text = ""
+        txtAuthor.Text = ""
+        txtCaseName.Text = ""
+        txtMap.Text = ""
+        txtSkrit.Text = ""
+        txtTeleport.Text = ""
+        rtfDescription.Text = ""
+        rtfExpected.Text = ""
+End Sub
+
+
+Private Function sBuildCmdStr(sDSType As Integer, MyCaseInfo As Caseinfo) As String
+
+
+End Function
+
+
+Private Sub UpdateTreeView()
+    tvCases.Nodes.Clear
+    dbOpenTable
+    'build the tree control
+    BuildTree
+
+End Sub
+
+Private Function bLaunchDungeonSiege(sCommandLineString As String) As String
+   Dim hInst As Long             ' Instance handle from Shell function.
+   Dim hWndApp As Long           ' Window handle from GetWinHandle.
+   Dim buffer As String          ' Holds caption of Window.
+   Dim numChars As Integer       ' Count of bytes returned.
+   Dim idproc As Long
+   'build the command string
+   
+   
+   
+   ' Shell to an application
+   hInst = Shell(sCommandLineString, vbNormalFocus)
+   
+   ' Begin search for handle
+   hWndApp = GetWinHandle(hInst)
+   
+   If hWndApp <> 0 Then
+      ' Init buffer
+      buffer = Space$(128)
+      
+      ' Get caption of window
+      numChars = GetWindowText(hWndApp, buffer, Len(buffer))
+   
+
+      'MsgBox "You shelled to the Application: " & Left$(buffer, numChars)
+        'MsgBox "Hwnd = " & hWndApp
+        idproc = ProcIDFromWnd(hWndApp)
+  
+        'MsgBox "Idproc " & idproc
+  '  GetWindowThreadProcessId hWndApp, idproc
+    SetFocusAPI (hWndApp)
+        Do While idproc > 0
+           Timer1.Enabled = True
+           Timer1.Interval = 5000
+           DoEvents
+ '       ' Get PID for this HWnd
+        'MsgBox "Still running"
+          idproc = ProcIDFromWnd(hWndApp)
+          FindAndKillPopUpWindows
+          SetFocusAPI (hWndApp)
+          
+          
+        Loop
+        'MsgBox idproc & " is the idproc, ds not running"
+        Timer1.Enabled = False
+        
+   
+   End If
+
+End Function
+Private Function CheckUIForNulls() As String
+    CheckUIForNulls = ""
+    If txtAuthor.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Author,"
+
+    End If
+    
+    If txtCaseName.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Case Name,"
+        
+    End If
+    
+    If txtMap.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Map,"
+   
+    End If
+    
+    If txtSkrit.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Skrit,"
+
+    End If
+    
+    If txtTeleport.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Teleport,"
+    End If
+    
+    If rtfDescription.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Description,"
+    End If
+    
+    If rtfExpected.Text = "" Then
+        CheckUIForNulls = CheckUIForNulls & " Expected."
+    End If
+    
+    If CheckUIForNulls = "" Then
+    CheckUIForNulls = "NONULLS"
+    
+    End If
+End Function
+Private Function BuildCaseInfoFromUI() As Caseinfo
+    Dim TempCaseinfo As Caseinfo
+    
+    If CheckUIForNulls <> "NONULLS" Then
+        MsgBox "Please fill in all case fields, (Arguments is optional)"
+        Exit Function
+    End If
+    
+    With TempCaseinfo
+        .Author = txtAuthor.Text
+        .CaseName = txtCaseName.Text
+        .Description = rtfDescription.Text
+        .Expected = rtfExpected.Text
+        .Map = txtMap.Text
+        .Teleport = txtTeleport.Text
+        .TestArea = cmbArea.Text
+        .Skrit = txtSkrit.Text
+        If txtArgs.Text > "" Then
+            .Arguments = txtArgs.Text
+        End If
+        
+        
+    End With
+    
+    BuildCaseInfoFromUI = TempCaseinfo
+    
+    
+End Function
+
+

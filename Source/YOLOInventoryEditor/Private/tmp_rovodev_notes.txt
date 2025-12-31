@@ -1,0 +1,9 @@
+Added essential Dungeon Siege-like item capabilities:
+- Classification (type, level, rarity)
+- Economy (sell price, weight)
+- Stacking flags clarified
+- Requirements array, Stats array
+- Abilities and Effects (soft class pointers)
+- Tags (GameplayTagContainer)
+- Durability (max/start)
+Editor details view will expose these UPROPERTY arrays for editing.

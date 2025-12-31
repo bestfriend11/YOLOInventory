@@ -1,0 +1,62 @@
+The following is a brief description of each sample application:
+
+ANSI      Demonstrates the SmartHeap C ANSI API.
+
+CPP       A C++ example application that uses SmartHeap operators
+          new and delete, and defines overloaded new and delete
+          operators for a linked list class definition.
+
+LISTLIB   A DLL for linked list management, written in C.
+          Thorough example demonstrating fixed-size memory
+          pools.
+
+LISTAPP   A complete application, written in C, that uses the
+          services of the LISTLIB DLL above.  Demonstrates
+          error detection and recovery, safety levels, garbage
+          detection, and low-memory handling.
+
+DEBUG     A simple demonstration of the Debug SmartHeap APIs.
+
+SHAREMEM  Samples illustrating SmartHeap shared memory APIs.
+
+Each sample includes project files for Visual C++ 6 users and a mak file 
+generated with VC++ 4.2
+
+The following index shows which sample applications demonstrate
+the use of which SmartHeap functions:
+
+Function                Sample(s)
+---------------------------------------------------------------
+calloc                  ANSI, DEBUG
+dbgMemPoolDeferFreeing  CPP, LISTAPP, DEBUG
+dbgMemPoolSetCheckFrequency DEBUG
+dbgMemProtectPtr        DEBUG
+dbgMemReportLeakage     CPP, LISTAPP, DEBUG
+dbgMemSetCheckpoint     DEBUG
+dbgMemSetDefaultErrorOutput DEBUG
+dbgMemSetErrorHandler   CPP, LISTAPP
+dbgMemSetSafetyLevel    CPP, LISTAPP, DEBUG
+delete                  CPP
+free                    ANSI, DEBUG
+malloc                  ANSI
+MemAllocFS              CPP, LISTLIB
+MemAllocPtr             LISTAPP, DEBUG, SHAREMEM
+MemCheckPtr             LISTLIB, DEBUG
+MemDefaultErrorHandler  CPP, LISTAPP
+MemFreePtr              DEBUG, SHAREMEM
+MemPoolAttachShared     SHAREMEM
+MemPoolCount            CPP, LISTAPP, LISTLIB
+MemPoolFree             CPP, LISTLIB, SHAREMEM
+MemPoolInfo             DEBUG
+MemPoolInit             CPP, LISTAPP, DEBUG
+MemPoolInitFS           CPP, LISTLIB
+MemPoolInitNamedShared  SHAREMEM
+MemPoolInitNamedSharedEx SHAREMEM
+MemPoolShrink           CPP, LISTAPP
+MemPoolWalk             ANSI
+MemReAllocPtr           DEBUG
+MemRegisterTask         ANSI, CPP, LISTAPP, LISTLIB
+MemSizePtr              CPP
+MemUnregisterTask       ANSI, CPP, LISTAPP, LISTLIB
+new                     CPP
+realloc                 ANSI, DEBUG

@@ -1,0 +1,32 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  precomp_gpcore.h
+// Author(s):  Scott Bilas
+//
+// Summary  :  Contains the headers that will be precompiled for this project.
+//
+// Copyright © 1999 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+#pragma once
+#ifndef __PRECOMP_GPCORE_H
+#define __PRECOMP_GPCORE_H
+
+//////////////////////////////////////////////////////////////////////////////
+
+#include "gpcore.h"
+#include "gpcoll.h"
+
+#include <string>
+#include <vector>
+#include <map>
+#include <list>
+
+//////////////////////////////////////////////////////////////////////////////
+
+#endif  // __PRECOMP_GPCORE_H
+
+//////////////////////////////////////////////////////////////////////////////

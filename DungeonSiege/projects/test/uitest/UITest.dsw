@@ -1,0 +1,94 @@
+Microsoft Developer Studio Workspace File, Format Version 6.00
+# WARNING: DO NOT EDIT OR DELETE THIS WORKSPACE FILE!
+
+###############################################################################
+
+Project: "GPCore"="..\..\..\LIB Projects\GPCore\GPCore.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/Test/UITest", DTVAAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "GameGUI"="..\..\..\LIB Projects\GameGUI\GameGUI.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/Test/UITest", DTVAAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "Rapi"="..\..\..\LIB Projects\Rapi\Rapi.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/Test/UITest", DTVAAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "UITest"=.\UITest.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/Test/UITest", DTVAAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name GPCore
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Rapi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name GameGUI
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Global:
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/Test/UITest", DTVAAAAA
+    .
+    end source code control
+}}}
+
+Package=<3>
+{{{
+}}}
+
+###############################################################################
+

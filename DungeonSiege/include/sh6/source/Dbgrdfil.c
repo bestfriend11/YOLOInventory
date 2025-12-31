@@ -1,0 +1,16 @@
+/* dbgrdfil.c -- SmartHeap (tm) Default debugging fill values.
+ *
+ * Copyright (C) 1991-1996 Compuware Corporation.
+ *
+ * No part of this source code may be copied, modified or reproduced
+ * in any form without retaining the above copyright notice.
+ * This source code, or source code derived from it, may not be redistributed
+ * without express written permission of the author.
+ *
+ */
+
+/*** Header Files ***/
+
+#include "smrtheap.h"
+
+const unsigned char dbgMemGuardFill = 0;

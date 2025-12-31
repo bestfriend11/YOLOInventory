@@ -1,0 +1,2669 @@
+<html xmlns:v="urn:schemas-microsoft-com:vml"
+xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+
+<head>
+<meta http-equiv=Content-Type content="text/html; charset=windows-1252">
+<meta name=ProgId content=Word.Document>
+<meta name=Generator content="Microsoft Word 9">
+<meta name=Originator content="Microsoft Word 9">
+<link rel=File-List href="./TOC_files/filelist.xml">
+<title>SmartHeapTM</title>
+<!--[if gte mso 9]><xml>
+ <o:DocumentProperties>
+  <o:Author>Larry Whitaker</o:Author>
+  <o:LastAuthor>Larry Whitaker</o:LastAuthor>
+  <o:Revision>29</o:Revision>
+  <o:TotalTime>966</o:TotalTime>
+  <o:Created>2000-09-21T15:19:00Z</o:Created>
+  <o:LastSaved>2000-09-27T03:19:00Z</o:LastSaved>
+  <o:Pages>10</o:Pages>
+  <o:Words>2422</o:Words>
+  <o:Characters>13807</o:Characters>
+  <o:Company>Microquill</o:Company>
+  <o:Lines>115</o:Lines>
+  <o:Paragraphs>27</o:Paragraphs>
+  <o:CharactersWithSpaces>16955</o:CharactersWithSpaces>
+  <o:Version>9.2720</o:Version>
+ </o:DocumentProperties>
+</xml><![endif]--><!--[if gte mso 9]><xml>
+ <w:WordDocument>
+  <w:View>Print</w:View>
+  <w:ActiveWritingStyle Lang="EN-US" VendorID="64" DLLVersion="131077"
+   NLCheck="1">1</w:ActiveWritingStyle>
+ </w:WordDocument>
+</xml><![endif]-->
+<style>
+<!--
+ /* Font Definitions */
+@font-face
+	{font-family:Courier;
+	panose-1:0 0 0 0 0 0 0 0 0 0;
+	mso-font-charset:0;
+	mso-generic-font-family:modern;
+	mso-font-format:other;
+	mso-font-pitch:fixed;
+	mso-font-signature:3 0 0 0 1 0;}
+@font-face
+	{font-family:"Tms Rmn";
+	panose-1:0 0 0 0 0 0 0 0 0 0;
+	mso-font-charset:0;
+	mso-generic-font-family:roman;
+	mso-font-format:other;
+	mso-font-pitch:variable;
+	mso-font-signature:3 0 0 0 1 0;}
+@font-face
+	{font-family:Helv;
+	panose-1:0 0 0 0 0 0 0 0 0 0;
+	mso-font-charset:0;
+	mso-generic-font-family:swiss;
+	mso-font-format:other;
+	mso-font-pitch:variable;
+	mso-font-signature:3 0 0 0 1 0;}
+@font-face
+	{font-family:"Peignot Medium";
+	mso-font-alt:"D Peignot Demi";
+	mso-font-charset:0;
+	mso-generic-font-family:decorative;
+	mso-font-pitch:variable;
+	mso-font-signature:3 0 0 0 1 0;}
+@font-face
+	{font-family:"Albertus Extra Bold";
+	mso-font-charset:0;
+	mso-generic-font-family:swiss;
+	mso-font-pitch:variable;
+	mso-font-signature:3 0 0 0 1 0;}
+ /* Style Definitions */
+p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{mso-style-parent:"";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:12.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+h1
+	{mso-style-parent:"";
+	mso-style-next:Normal;
+	margin-top:48.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:1;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:18.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	mso-font-kerning:0pt;
+	mso-bidi-font-weight:normal;}
+h2
+	{mso-style-parent:"Heading 1";
+	mso-style-next:Normal;
+	margin-top:.25in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:2;
+	tab-stops:.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:16.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	mso-bidi-font-weight:normal;}
+h3
+	{mso-style-parent:"Heading 2";
+	mso-style-next:Normal;
+	margin-top:.25in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:3;
+	tab-stops:.5in 1.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	mso-bidi-font-weight:normal;}
+h4
+	{mso-style-parent:"Heading 2";
+	mso-style-next:Normal;
+	margin-top:12.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:4;
+	tab-stops:.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:normal;}
+h5
+	{mso-style-parent:"Heading 2";
+	mso-style-next:Normal;
+	margin-top:10.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:5;
+	tab-stops:.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	mso-bidi-font-weight:normal;
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+h6
+	{mso-style-next:"Normal Indent";
+	margin-top:10.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-outline-level:6;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-bidi-font-family:"Times New Roman";
+	mso-bidi-font-weight:normal;}
+p.MsoHeading7, li.MsoHeading7, div.MsoHeading7
+	{mso-style-next:"Normal Indent";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-outline-level:7;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Tms Rmn";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.MsoHeading8, li.MsoHeading8, div.MsoHeading8
+	{mso-style-next:"Normal Indent";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-outline-level:8;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Tms Rmn";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.MsoHeading9, li.MsoHeading9, div.MsoHeading9
+	{mso-style-next:"Normal Indent";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-outline-level:9;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Tms Rmn";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.MsoIndex1, li.MsoIndex1, div.MsoIndex1
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:20.15pt;
+	margin-bottom:.0001pt;
+	text-indent:-20.15pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 165.25pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex2, li.MsoIndex2, div.MsoIndex2
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:30.25pt;
+	margin-bottom:.0001pt;
+	text-indent:-20.15pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 165.25pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex3, li.MsoIndex3, div.MsoIndex3
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:40.3pt;
+	margin-bottom:.0001pt;
+	text-indent:-20.15pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 165.25pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex4, li.MsoIndex4, div.MsoIndex4
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.7in;
+	margin-bottom:.0001pt;
+	text-indent:-20.15pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 165.25pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex5, li.MsoIndex5, div.MsoIndex5
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:50.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-10.0pt;
+	mso-pagination:none;
+	tab-stops:right 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex6, li.MsoIndex6, div.MsoIndex6
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:60.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-10.0pt;
+	mso-pagination:none;
+	tab-stops:right 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex7, li.MsoIndex7, div.MsoIndex7
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:70.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-10.0pt;
+	mso-pagination:none;
+	tab-stops:right 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex8, li.MsoIndex8, div.MsoIndex8
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:80.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-10.0pt;
+	mso-pagination:none;
+	tab-stops:right 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoIndex9, li.MsoIndex9, div.MsoIndex9
+	{mso-style-update:auto;
+	mso-style-next:Normal;
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	text-indent:-10.0pt;
+	mso-pagination:none;
+	tab-stops:right 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoToc1, li.MsoToc1, div.MsoToc1
+	{mso-style-update:auto;
+	mso-style-parent:"Heading 1";
+	margin-top:12.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:1.0in dotted 330.5pt right blank 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.MsoToc2, li.MsoToc2, div.MsoToc2
+	{mso-style-update:auto;
+	mso-style-parent:"TOC 1";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:99.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-9.0pt;
+	mso-pagination:widow-orphan;
+	tab-stops:dotted 330.5pt right blank 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoToc3, li.MsoToc3, div.MsoToc3
+	{mso-style-update:auto;
+	mso-style-parent:"TOC 2";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:117.0pt;
+	margin-bottom:.0001pt;
+	text-indent:-9.0pt;
+	mso-pagination:widow-orphan;
+	tab-stops:dotted 330.5pt right blank 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoToc4, li.MsoToc4, div.MsoToc4
+	{mso-style-update:auto;
+	mso-style-parent:"TOC 3";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.75in;
+	margin-bottom:.0001pt;
+	text-indent:-9.0pt;
+	mso-pagination:widow-orphan;
+	tab-stops:dotted 330.5pt right blank 366.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoNormalIndent, li.MsoNormalIndent, div.MsoNormalIndent
+	{margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoFootnoteText, li.MsoFootnoteText, div.MsoFootnoteText
+	{margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoCommentText, li.MsoCommentText, div.MsoCommentText
+	{margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.MsoHeader, li.MsoHeader, div.MsoHeader
+	{mso-style-parent:Footer;
+	margin-top:.25in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 5.1in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:0in 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.MsoFooter, li.MsoFooter, div.MsoFooter
+	{margin-top:.25in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:right 5.1in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.MsoIndexHeading, li.MsoIndexHeading, div.MsoIndexHeading
+	{mso-style-next:"Index 1";
+	margin-top:12.0pt;
+	margin-right:0in;
+	margin-bottom:6.0pt;
+	margin-left:0in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:13.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+span.MsoFootnoteReference
+	{mso-ansi-font-size:8.0pt;
+	mso-text-raise:3.0pt;
+	vertical-align:super;}
+span.MsoCommentReference
+	{mso-ansi-font-size:8.0pt;
+	mso-bidi-font-size:8.0pt;}
+p.MsoTitle, li.MsoTitle, div.MsoTitle
+	{mso-style-next:Normal;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:12.0pt;
+	margin-left:1.25in;
+	text-align:center;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:14.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+a:link, span.MsoHyperlink
+	{color:blue;
+	text-decoration:underline;
+	text-underline:single;}
+a:visited, span.MsoHyperlinkFollowed
+	{color:purple;
+	text-decoration:underline;
+	text-underline:single;}
+p.Notecaution, li.Notecaution, div.Notecaution
+	{mso-style-name:"Note\/caution";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-top-alt:solid windowtext .75pt;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:1.0pt 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Refnormal, li.Refnormal, div.Refnormal
+	{mso-style-name:"Ref normal";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Table, li.Table, div.Table
+	{mso-style-name:Table;
+	margin-top:4.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan lines-together;
+	tab-stops:2.25in 2.5in 2.75in 3.0in 3.25in 3.5in 3.75in 4.0in 4.25in 4.5in 4.75in 5.0in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Tablecolumnheading, li.Tablecolumnheading, div.Tablecolumnheading
+	{mso-style-name:"Table column heading";
+	mso-style-parent:Table;
+	mso-style-next:Table;
+	margin-top:4.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan lines-together;
+	tab-stops:2.25in 2.5in 2.75in 3.0in 3.25in 3.5in 3.75in 4.0in 4.25in 4.5in 4.75in 5.0in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.QuickRefNormal, li.QuickRefNormal, div.QuickRefNormal
+	{mso-style-name:"QuickRef Normal";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.QuickRefCourier, li.QuickRefCourier, div.QuickRefCourier
+	{mso-style-name:"QuickRef Courier";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:1.75in 2.0in 2.25in 2.5in 2.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.Heading3-Noindent, li.Heading3-Noindent, div.Heading3-Noindent
+	{mso-style-name:"Heading 3-No indent";
+	mso-style-parent:"Heading 3";
+	mso-style-next:Normal;
+	margin-top:.25in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	tab-stops:.5in 1.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Refhangheading, li.Refhangheading, div.Refhangheading
+	{mso-style-name:"Ref hang heading";
+	mso-style-next:"Ref normal";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	text-indent:-1.0in;
+	mso-pagination:widow-orphan;
+	tab-stops:1.0in right 5.1in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Tabletitle, li.Tabletitle, div.Tabletitle
+	{mso-style-name:"Table title";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:3.0pt;
+	margin-left:1.25in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Chapternumber, li.Chapternumber, div.Chapternumber
+	{mso-style-name:"Chapter number";
+	mso-style-parent:"Heading 1";
+	margin-top:48.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:18.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.Notecautionreference, li.Notecautionreference, div.Notecautionreference
+	{mso-style-name:"Note\/caution reference";
+	mso-style-parent:"Note\/caution";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-top-alt:solid windowtext .75pt;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:1.0pt 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.QuickRefH1, li.QuickRefH1, div.QuickRefH1
+	{mso-style-name:"QuickRef H1";
+	mso-style-parent:"Heading 3";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	tab-stops:.5in 1.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.QuickRefH2, li.QuickRefH2, div.QuickRefH2
+	{mso-style-name:"QuickRef H2";
+	mso-style-parent:"Heading 3";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	tab-stops:.5in 1.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Refprmhdbold, li.Refprmhdbold, div.Refprmhdbold
+	{mso-style-name:"Ref prm hd bold";
+	mso-style-parent:"Ref normal";
+	mso-style-next:Normal;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Refprmhdital, li.Refprmhdital, div.Refprmhdital
+	{mso-style-name:"Ref prm hd ital";
+	mso-style-parent:"Ref normal";
+	mso-style-next:Normal;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.Refprmtext, li.Refprmtext, div.Refprmtext
+	{mso-style-name:"Ref prm text";
+	mso-style-parent:"Ref normal";
+	mso-style-next:"Ref prm hd ital";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:2.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Refbullet, li.Refbullet, div.Refbullet
+	{mso-style-name:"Ref bullet";
+	mso-style-parent:"Ref normal";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	text-indent:-.25in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Refprmbullet, li.Refprmbullet, div.Refprmbullet
+	{mso-style-name:"Ref prm bullet";
+	mso-style-parent:"Ref prm text";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:2.25in;
+	margin-bottom:.0001pt;
+	text-indent:-.25in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.IndexCodes, li.IndexCodes, div.IndexCodes
+	{mso-style-name:IndexCodes;
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	display:none;
+	mso-hide:all;}
+p.Tableindent, li.Tableindent, div.Tableindent
+	{mso-style-name:"Table indent";
+	mso-style-parent:Table;
+	margin-top:4.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:3.0in;
+	margin-bottom:.0001pt;
+	text-indent:-1.5in;
+	mso-pagination:widow-orphan lines-together;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.TableEntry, li.TableEntry, div.TableEntry
+	{mso-style-name:"Table Entry";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:12.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Tableheading, li.Tableheading, div.Tableheading
+	{mso-style-name:"Table heading";
+	mso-style-next:"Table Entry";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:6.0pt;
+	margin-left:2.25in;
+	text-indent:-2.0in;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	tab-stops:2.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:0in 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Couriersyntax, li.Couriersyntax, div.Couriersyntax
+	{mso-style-name:"Courier syntax";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	tab-stops:1.75in 2.0in 2.25in 2.5in 2.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.Couriercode, li.Couriercode, div.Couriercode
+	{mso-style-name:"Courier code";
+	mso-style-parent:"Ref normal";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:1.75in 2.0in 2.25in 2.5in 2.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.Example, li.Example, div.Example
+	{mso-style-name:Example;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan lines-together;
+	tab-stops:84.95pt 98.65pt 112.3pt 1.75in 138.95pt 152.65pt 166.3pt 2.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Tablecelltext, li.Tablecelltext, div.Tablecelltext
+	{mso-style-name:"Table cell text";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Tablecellheading, li.Tablecellheading, div.Tablecellheading
+	{mso-style-name:"Table cell heading";
+	mso-style-parent:"Table cell text";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Paramtext1cont, li.Paramtext1cont, div.Paramtext1cont
+	{mso-style-name:"Param text 1 cont";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramtext1, li.Paramtext1, div.Paramtext1
+	{mso-style-name:"Param text 1";
+	mso-style-next:"Param text 1 cont";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramname1, li.Paramname1, div.Paramname1
+	{mso-style-name:"Param name 1";
+	mso-style-next:"Param text 1";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Paramtext2cont, li.Paramtext2cont, div.Paramtext2cont
+	{mso-style-name:"Param text 2 cont";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	font-size:12.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramtext2, li.Paramtext2, div.Paramtext2
+	{mso-style-name:"Param text 2";
+	mso-style-parent:"Param text 1";
+	mso-style-next:"Param text 2 cont";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:2.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.BugRefhangheading, li.BugRefhangheading, div.BugRefhangheading
+	{mso-style-name:"BugRef hang heading";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	text-indent:-1.25in;
+	mso-pagination:widow-orphan;
+	tab-stops:1.25in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.BugRefnormal, li.BugRefnormal, div.BugRefnormal
+	{mso-style-name:"BugRef normal";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramname0, li.Paramname0, div.Paramname0
+	{mso-style-name:"Param name 0";
+	mso-style-parent:"Param name 1";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Paramtext0, li.Paramtext0, div.Paramtext0
+	{mso-style-name:"Param text 0";
+	mso-style-parent:"Param text 1";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramtext0cont, li.Paramtext0cont, div.Paramtext0cont
+	{mso-style-name:"Param text 0 cont";
+	mso-style-parent:"Param text 1 cont";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Tabletext, li.Tabletext, div.Tabletext
+	{mso-style-name:"Table text";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:2.0in 2.5in 3.0in 3.5in 4.0in 4.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.FunctionHeader, li.FunctionHeader, div.FunctionHeader
+	{mso-style-name:"Function Header";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	text-indent:-1.0in;
+	mso-pagination:none;
+	tab-stops:1.75in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.FunctionDescription, li.FunctionDescription, div.FunctionDescription
+	{mso-style-name:"Function Description";
+	mso-style-next:"Function Header";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:9.0pt;
+	margin-left:1.0in;
+	mso-pagination:none;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.SectionHeading, li.SectionHeading, div.SectionHeading
+	{mso-style-name:"Section Heading";
+	mso-style-next:"Function Description";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:6.0pt;
+	margin-left:1.25in;
+	page-break-before:always;
+	mso-pagination:none;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:16.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.FuncTableHeader, li.FuncTableHeader, div.FuncTableHeader
+	{mso-style-name:"Func Table Header";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:lines-together;
+	page-break-after:avoid;
+	tab-stops:2.25in 2.5in 2.75in 3.0in 3.25in 3.5in 3.75in 4.0in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:0in 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.FuncTableText, li.FuncTableText, div.FuncTableText
+	{mso-style-name:"Func Table Text";
+	margin-top:3.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	mso-pagination:lines-together;
+	page-break-after:avoid;
+	tab-stops:2.25in 2.5in 2.75in 3.0in 3.25in 3.5in 3.75in 4.0in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.FunctionSyntax, li.FunctionSyntax, div.FunctionSyntax
+	{mso-style-name:"Function Syntax";
+	mso-style-parent:"Function Header";
+	mso-style-next:"Function Header";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	text-indent:-1.25in;
+	mso-pagination:none;
+	tab-stops:1.0in 94.5pt 292.5pt 364.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Courier;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.FunctionNote, li.FunctionNote, div.FunctionNote
+	{mso-style-name:"Function Note";
+	mso-style-parent:"Function Header";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.0in;
+	margin-bottom:.0001pt;
+	text-indent:-27.35pt;
+	mso-pagination:none;
+	tab-stops:1.75in 292.5pt 364.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.headingxx, li.headingxx, div.headingxx
+	{mso-style-name:"heading xx";
+	mso-style-parent:"Heading 2";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:6.0pt;
+	margin-left:0in;
+	mso-pagination:none;
+	page-break-after:avoid;
+	tab-stops:.5in 292.5pt 364.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:16.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Sub-SectionHeading, li.Sub-SectionHeading, div.Sub-SectionHeading
+	{mso-style-name:"Sub-Section Heading";
+	mso-style-next:"Function Description";
+	margin-top:24.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:13.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.ChapterHeading, li.ChapterHeading, div.ChapterHeading
+	{mso-style-name:"Chapter Heading";
+	margin-top:60.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	page-break-before:always;
+	mso-pagination:widow-orphan;
+	tab-stops:418.5pt 441.0pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:0in 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.ChapterTitle, li.ChapterTitle, div.ChapterTitle
+	{mso-style-name:"Chapter Title";
+	margin-top:60.0pt;
+	margin-right:0in;
+	margin-bottom:24.0pt;
+	margin-left:1.25in;
+	mso-pagination:widow-orphan;
+	tab-stops:418.5pt 441.0pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:30.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.TableofContents, li.TableofContents, div.TableofContents
+	{mso-style-name:"Table of Contents";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:27.0pt 81.0pt 1.5in 153.0pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:12.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Helv;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";}
+p.note, li.note, div.note
+	{mso-style-name:note;
+	mso-style-next:Normal;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	border:none;
+	mso-border-top-alt:solid windowtext .75pt;
+	mso-border-bottom-alt:solid windowtext .75pt;
+	padding:0in;
+	mso-padding-alt:1.0pt 0in 1.0pt 0in;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Infinitive, li.Infinitive, div.Infinitive
+	{mso-style-name:Infinitive;
+	mso-style-next:Normal;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	text-indent:-.25in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Numberedstep, li.Numberedstep, div.Numberedstep
+	{mso-style-name:"Numbered step";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.5in;
+	margin-bottom:.0001pt;
+	text-indent:-.25in;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.notheading2, li.notheading2, div.notheading2
+	{mso-style-name:"not heading 2";
+	mso-style-parent:"Heading 2";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:none;
+	page-break-after:avoid;
+	tab-stops:.5in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:16.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.point, li.point, div.point
+	{mso-style-name:point;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:31.5pt;
+	margin-bottom:.0001pt;
+	text-indent:-22.5pt;
+	mso-pagination:widow-orphan;
+	tab-stops:6.0in;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.bullet, li.bullet, div.bullet
+	{mso-style-name:bullet;
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:31.7pt;
+	margin-bottom:.0001pt;
+	text-indent:-13.7pt;
+	mso-pagination:widow-orphan;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:"Times New Roman";
+	mso-fareast-font-family:"Times New Roman";}
+p.Paramname2, li.Paramname2, div.Paramname2
+	{mso-style-name:"Param name 2";
+	mso-style-parent:"Param name 1";
+	mso-style-next:"Param text 2";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.75in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	page-break-after:avoid;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:10.0pt;
+	font-family:Arial;
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;
+	font-style:italic;
+	mso-bidi-font-style:normal;}
+p.Couriernospace, li.Couriernospace, div.Couriernospace
+	{mso-style-name:"Courier no space";
+	mso-style-parent:"Ref normal";
+	margin-top:0in;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:103.7pt 117.35pt 130.3pt 2.0in 157.7pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Couriertightnospace, li.Couriertightnospace, div.Couriertightnospace
+	{mso-style-name:"Courier tight no space";
+	mso-style-parent:"Courier no space";
+	margin:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:.2in .4in .6in .8in 1.0in 103.7pt 117.35pt 130.3pt 157.7pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:8.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Couriertightspaceabove, li.Couriertightspaceabove, div.Couriertightspaceabove
+	{mso-style-name:"Courier tight space above";
+	mso-style-parent:"Courier tight no space";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:.2in .4in .6in .8in 1.0in 103.7pt 117.35pt 130.3pt 157.7pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:8.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Courierspaceabove, li.Courierspaceabove, div.Courierspaceabove
+	{mso-style-name:"Courier space above";
+	mso-style-parent:"Courier no space";
+	mso-style-next:"Courier no space";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:1.25in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:103.5pt 117.0pt 130.5pt 2.0in 157.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+p.Arthur, li.Arthur, div.Arthur
+	{mso-style-name:Arthur;
+	mso-style-parent:"Courier space above";
+	margin-top:6.0pt;
+	margin-right:0in;
+	margin-bottom:0in;
+	margin-left:0in;
+	margin-bottom:.0001pt;
+	mso-pagination:widow-orphan;
+	tab-stops:103.5pt 117.0pt 130.5pt 2.0in 157.5pt;
+	mso-layout-grid-align:none;
+	punctuation-wrap:simple;
+	text-autospace:none;
+	font-size:9.0pt;
+	mso-bidi-font-size:10.0pt;
+	font-family:"Courier New";
+	mso-fareast-font-family:"Times New Roman";
+	mso-bidi-font-family:"Times New Roman";
+	font-weight:bold;
+	mso-bidi-font-weight:normal;}
+@page Section1
+	{size:7.0in 8.5in;
+	margin:59.75pt 59.75pt 45.35pt 59.75pt;
+	mso-header-margin:.5in;
+	mso-footer-margin:.5in;
+	mso-title-page:yes;
+	mso-even-header:url("./TOC_files/header.htm") eh1;
+	mso-header:url("./TOC_files/header.htm") h1;
+	mso-first-header:url("./TOC_files/header.htm") fh1;
+	mso-paper-source:7;}
+div.Section1
+	{page:Section1;}
+@page Section2
+	{size:7.0in 8.5in;
+	margin:59.75pt 59.75pt 45.35pt 59.75pt;
+	mso-header-margin:.5in;
+	mso-footer-margin:.5in;
+	mso-page-numbers:roman-lower;
+	mso-title-page:yes;
+	mso-even-header:url("./TOC_files/header.htm") eh2;
+	mso-header:url("./TOC_files/header.htm") h2;
+	mso-even-footer:url("./TOC_files/header.htm") ef2;
+	mso-footer:url("./TOC_files/header.htm") f2;
+	mso-first-header:url("./TOC_files/header.htm") fh2;
+	mso-first-footer:url("./TOC_files/header.htm") ff2;
+	mso-paper-source:7;}
+div.Section2
+	{page:Section2;}
+@page Section3
+	{size:7.0in 8.5in;
+	margin:59.75pt 59.75pt 45.35pt 59.75pt;
+	mso-header-margin:.5in;
+	mso-footer-margin:.5in;
+	mso-page-numbers:roman-lower;
+	mso-title-page:yes;
+	mso-even-header:url("./TOC_files/header.htm") eh3;
+	mso-header:url("./TOC_files/header.htm") h3;
+	mso-even-footer:url("./TOC_files/header.htm") ef3;
+	mso-footer:url("./TOC_files/header.htm") f3;
+	mso-first-header:url("./TOC_files/header.htm") fh3;
+	mso-first-footer:url("./TOC_files/header.htm") ff3;
+	mso-paper-source:7;}
+div.Section3
+	{page:Section3;}
+@page Section4
+	{size:8.5in 11.0in;
+	margin:1.0in 1.25in 1.0in 1.25in;
+	mso-header-margin:.5in;
+	mso-footer-margin:.5in;
+	mso-even-header:url("./TOC_files/header.htm") eh3;
+	mso-header:url("./TOC_files/header.htm") h3;
+	mso-even-footer:url("./TOC_files/header.htm") ef3;
+	mso-footer:url("./TOC_files/header.htm") f3;
+	mso-first-header:url("./TOC_files/header.htm") fh3;
+	mso-first-footer:url("./TOC_files/header.htm") ff3;
+	mso-paper-source:0;}
+div.Section4
+	{page:Section4;}
+ /* List Definitions */
+@list l0
+	{mso-list-id:-2;
+	mso-list-type:simple;
+	mso-list-template-ids:1427695258;}
+@list l0:level1
+	{mso-level-start-at:0;
+	mso-level-text:*;
+	mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	margin-left:0in;
+	text-indent:0in;}
+@list l1
+	{mso-list-id:164709316;
+	mso-list-template-ids:-295036506;}
+@list l1:level1
+	{mso-level-text:%1;
+	mso-level-tab-stop:.25in;
+	mso-level-number-position:left;
+	margin-left:.25in;
+	text-indent:-.25in;}
+@list l1:level2
+	{mso-level-text:"%1\.%2";
+	mso-level-tab-stop:1.5in;
+	mso-level-number-position:left;
+	margin-left:1.5in;
+	text-indent:-.25in;}
+@list l1:level3
+	{mso-level-text:"%1\.%2\.%3";
+	mso-level-tab-stop:3.0in;
+	mso-level-number-position:left;
+	margin-left:3.0in;
+	text-indent:-.5in;}
+@list l1:level4
+	{mso-level-text:"%1\.%2\.%3\.%4";
+	mso-level-tab-stop:4.25in;
+	mso-level-number-position:left;
+	margin-left:4.25in;
+	text-indent:-.5in;}
+@list l1:level5
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5";
+	mso-level-tab-stop:5.5in;
+	mso-level-number-position:left;
+	margin-left:5.5in;
+	text-indent:-.5in;}
+@list l1:level6
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6";
+	mso-level-tab-stop:7.0in;
+	mso-level-number-position:left;
+	margin-left:7.0in;
+	text-indent:-.75in;}
+@list l1:level7
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7";
+	mso-level-tab-stop:8.25in;
+	mso-level-number-position:left;
+	margin-left:8.25in;
+	text-indent:-.75in;}
+@list l1:level8
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7\.%8";
+	mso-level-tab-stop:9.75in;
+	mso-level-number-position:left;
+	margin-left:9.75in;
+	text-indent:-1.0in;}
+@list l1:level9
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7\.%8\.%9";
+	mso-level-tab-stop:11.0in;
+	mso-level-number-position:left;
+	margin-left:11.0in;
+	text-indent:-1.0in;}
+@list l2
+	{mso-list-id:776288218;
+	mso-list-template-ids:-320562102;}
+@list l2:level1
+	{mso-level-start-at:3;
+	mso-level-text:%1;
+	mso-level-tab-stop:.25in;
+	mso-level-number-position:left;
+	margin-left:.25in;
+	text-indent:-.25in;}
+@list l2:level2
+	{mso-level-text:"%1\.%2";
+	mso-level-tab-stop:1.5in;
+	mso-level-number-position:left;
+	margin-left:1.5in;
+	text-indent:-.25in;}
+@list l2:level3
+	{mso-level-text:"%1\.%2\.%3";
+	mso-level-tab-stop:3.0in;
+	mso-level-number-position:left;
+	margin-left:3.0in;
+	text-indent:-.5in;}
+@list l2:level4
+	{mso-level-text:"%1\.%2\.%3\.%4";
+	mso-level-tab-stop:4.25in;
+	mso-level-number-position:left;
+	margin-left:4.25in;
+	text-indent:-.5in;}
+@list l2:level5
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5";
+	mso-level-tab-stop:5.5in;
+	mso-level-number-position:left;
+	margin-left:5.5in;
+	text-indent:-.5in;}
+@list l2:level6
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6";
+	mso-level-tab-stop:7.0in;
+	mso-level-number-position:left;
+	margin-left:7.0in;
+	text-indent:-.75in;}
+@list l2:level7
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7";
+	mso-level-tab-stop:8.25in;
+	mso-level-number-position:left;
+	margin-left:8.25in;
+	text-indent:-.75in;}
+@list l2:level8
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7\.%8";
+	mso-level-tab-stop:9.75in;
+	mso-level-number-position:left;
+	margin-left:9.75in;
+	text-indent:-1.0in;}
+@list l2:level9
+	{mso-level-text:"%1\.%2\.%3\.%4\.%5\.%6\.%7\.%8\.%9";
+	mso-level-tab-stop:11.0in;
+	mso-level-number-position:left;
+	margin-left:11.0in;
+	text-indent:-1.0in;}
+@list l0:level1 lfo2
+	{mso-level-number-format:bullet;
+	mso-level-numbering:continue;
+	mso-level-text:\F0B7;
+	mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	mso-level-legacy:yes;
+	mso-level-legacy-indent:.25in;
+	mso-level-legacy-space:0in;
+	margin-left:1.75in;
+	text-indent:-.25in;
+	font-family:Symbol;}
+ol
+	{margin-bottom:0in;}
+ul
+	{margin-bottom:0in;}
+-->
+</style>
+</head>
+
+<body lang=EN-US link=blue vlink=purple style='tab-interval:.5in'>
+
+<div class=Section1>
+
+<div style='border:none;border-top:solid windowtext .75pt;padding:1.0pt 0in 0in 0in'>
+
+<p class=MsoTitle align=left style='mso-border-between:.75pt solid windowtext;
+mso-padding-between:1.0pt;margin-top:1.0in;margin-right:0in;margin-bottom:0in;
+margin-left:0in;margin-bottom:.0001pt;text-align:left;tab-stops:right 364.5pt;
+border:none;mso-border-top-alt:solid windowtext .75pt;padding:0in;mso-padding-alt:
+1.0pt 0in 0in 0in'><a name="_Toc308853287"><span style='font-size:48.0pt;
+mso-bidi-font-size:10.0pt;font-family:"Peignot Medium";font-weight:normal'>SmartHeap</span></a><span
+style='mso-bookmark:_Toc308853287'><sup><span style='font-size:8.0pt;
+mso-bidi-font-size:10.0pt;font-family:Arial;mso-bidi-font-family:"Times New Roman"'>TM<o:p></o:p></span></sup></span></p>
+
+</div>
+
+<div style='border:none;border-bottom:solid windowtext 1.5pt;padding:0in 0in 1.0pt 0in'>
+
+<p class=MsoNormal style='mso-border-between:.75pt solid windowtext;mso-padding-between:
+1.0pt;border:none;mso-border-bottom-alt:solid windowtext 1.5pt;padding:0in;
+mso-padding-alt:0in 0in 1.0pt 0in'><span style='mso-bookmark:_Toc308853287'><span
+style='font-family:Arial;mso-bidi-font-family:"Times New Roman"'>Professional,
+Portable Memory Management Library<br>
+and Debugging Toolkit<o:p></o:p></span></span></p>
+
+</div>
+
+<span style='mso-bookmark:_Toc308853287'></span>
+
+<p class=MsoNormal style='margin-top:.25in'><span style='font-size:28.0pt;
+mso-bidi-font-size:12.0pt;font-family:Arial;mso-bidi-font-family:"Times New Roman"'>Programmer’s
+Guide</span><span style='font-size:42.0pt;mso-bidi-font-size:12.0pt;font-family:
+"Peignot Medium"'><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=MsoNormal><span style='font-family:"Albertus Extra Bold"'><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></span></p>
+
+<p class=Heading3-Noindent><span style='font-size:20.0pt;mso-bidi-font-size:
+10.0pt;font-weight:normal'>Version 6<o:p></o:p></span></p>
+
+<span style='font-size:12.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always'>
+</span>
+
+<p class=MsoNormal>Copyright © 1991-2000 Compuware Corporation.<br>
+All Rights Reserved.</p>
+
+<p class=MsoNormal>Printed May 8, 2000</p>
+
+<p class=MsoNormal style='margin-left:.25in;text-indent:-.25in'>SmartHeap is a
+trademark and HeapAgent is a registered trademark of Compuware
+Corporation.<span style="mso-spacerun: yes">  </span></p>
+
+<p class=MsoNormal style='margin-top:3.0pt'>Microsoft, Windows, and Win32 are
+registered trademarks and Visual C++, Win95, Win32s, and Windows NT are
+trademarks of Microsoft Corporation.<span style="mso-spacerun: yes">  </span></p>
+
+<p class=MsoNormal style='margin-top:3.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:.25in;margin-bottom:.0001pt;text-indent:-.25in'>Borland C++ is a
+trademark of Borland International, Inc.<span style="mso-spacerun: yes"> 
+</span></p>
+
+<p class=MsoNormal style='margin-top:3.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:.25in;margin-bottom:.0001pt;text-indent:-.25in'>Watcom C/C++ is a
+trademark of Watcom International Corp.<span style="mso-spacerun: yes"> 
+</span></p>
+
+<p class=MsoNormal style='margin-top:3.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:.25in;margin-bottom:.0001pt;text-indent:-.25in'>All other
+trademarks are the property of their respective holders.</p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+<p class=MsoNormal>We’d like to have your ideas and comments about this
+manual.<span style="mso-spacerun: yes">  </span>Your suggestions help us
+improve our products.<span style="mso-spacerun: yes">  </span>Please send
+comments to:</p>
+
+<p class=MsoNormal style='margin-left:.25in'>MicroQuill Software Publishing,
+Inc.<br>
+11200 Kirkland Way, Suite 310<br>
+Kirkland, Washington<span style="mso-spacerun: yes">  </span>98033</p>
+
+<p class=MsoNormal style='margin-left:.25in;tab-stops:63.0pt'>Voice:<span
+style='mso-tab-count:1'>               </span>(425) 827-7200<br>
+Fax:<span style='mso-tab-count:1'>               </span>(425) 828-4088<br>
+Internet:<span style='mso-tab-count:1'>               </span>info@microquill.com</p>
+
+</div>
+
+<span style='font-size:12.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:right;
+mso-break-type:section-break'>
+</span>
+
+<div class=Section2>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:16.0pt;mso-bidi-font-size:12.0pt;font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>SmartHeap licensing:<span style="mso-spacerun: yes"> 
+</span>questions and answers<o:p></o:p></span></b></p>
+
+<p class=MsoNormal><a name="_Toc316271395"></a><a name="_Toc316271440"></a><a
+name="_Toc316294743"></a><a name="_Toc316374046"><span style='mso-bookmark:
+_Toc316294743'><span style='mso-bookmark:_Toc316271440'><span style='mso-bookmark:
+_Toc316271395'><span style='font-family:Arial;mso-bidi-font-family:"Times New Roman"'>(Please
+read carefully)</span></span></span></span></a><span style='font-family:Arial;
+mso-bidi-font-family:"Times New Roman"'><o:p></o:p></span></p>
+
+<p class=MsoNormal>Because SmartHeap is a library product, many customers have
+called us with questions about multiple users, distribution arrangements,
+royalties, etc.<span style="mso-spacerun: yes">  </span>To help clarify our
+licensing terms, we’ve summarized the “legaleze” of the SmartHeap license into
+a few bullet points that we hope will answer your questions. </p>
+
+<p class=MsoNormal style='margin-left:1.5in;text-indent:-.25in'><b
+style='mso-bidi-font-weight:normal'><span style='font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Q.<span style='mso-tab-count:1'>            </span>How is
+SmartHeap licensed?<o:p></o:p></span></b></p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.5in;margin-bottom:.0001pt;text-indent:-.25in'>A.<span
+style='mso-tab-count:1'>            </span>SmartHeap is licensed on a
+per-developer basis.<span style="mso-spacerun: yes">  </span>A SmartHeap binary
+license includes single-developer access to the SmartHeap header files and/or
+library files for a single developer on a particular machine.<span
+style="mso-spacerun: yes">  </span>This applies even if the header or library
+file name(s) have been changed.<span style="mso-spacerun: yes"> 
+</span>Basically, every developer needing access to or writing code that that
+relies on SmartHeap for memory management needs a license. </p>
+
+<p class=MsoNormal style='margin-top:0in;margin-right:29.7pt;margin-bottom:
+0in;margin-left:1.5in;margin-bottom:.0001pt;text-indent:-.25in'><b
+style='mso-bidi-font-weight:normal'><span style='font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Q.<span style='mso-tab-count:1'>            </span>Is there
+a network version? How can I arrange for more than one developer to use
+SmartHeap?<span style="mso-spacerun: yes">  </span><o:p></o:p></span></b></p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.5in;margin-bottom:.0001pt;text-indent:-.25in'>A.<span
+style='mso-tab-count:1'>            </span>SmartHeap is not available for
+networks.<span style="mso-spacerun: yes">  </span>For organizations requiring
+multiple copies of SmartHeap, MicroQuill has provided multi-copy purchase
+discounts.<span style="mso-spacerun: yes">  </span>The multi-unit prices are
+listed on the attached price list.<span style="mso-spacerun: yes">  </span></p>
+
+<p class=MsoNormal style='margin-left:1.5in;text-indent:-.25in'><b
+style='mso-bidi-font-weight:normal'><span style='font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Q.<span style='mso-tab-count:1'>            </span>Is
+SmartHeap source code available?<o:p></o:p></span></b></p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.5in;margin-bottom:.0001pt;text-indent:-.25in'>A.<span
+style='mso-tab-count:1'>            </span>Yes.<span style="mso-spacerun:
+yes">  </span>Source code licenses are sold in conjunction with or as an
+upgrade to the binary-user license.<span style="mso-spacerun: yes"> 
+</span>However, source licenses do not constitute a user license themselves, so
+source code is only sold with an associated binary license.<span
+style="mso-spacerun: yes">  </span>All source versions include the necessary
+make-files for convenient compiling for that specific hardware and operating
+system combination.</p>
+
+<b style='mso-bidi-font-weight:normal'><span style='font-size:12.0pt;
+font-family:Arial;mso-fareast-font-family:"Times New Roman";mso-bidi-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always'>
+</span></b>
+
+<p class=MsoNormal style='margin-left:1.5in;text-indent:-.25in'><b
+style='mso-bidi-font-weight:normal'><span style='font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Q.<span style='mso-tab-count:1'>            </span>Can I
+distribute the SmartHeap libraries in my application?<span style="mso-spacerun:
+yes">  </span>What about royalties?<o:p></o:p></span></b></p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.5in;margin-bottom:.0001pt;text-indent:-.25in;tab-stops:247.5pt'>A.<span
+style='mso-tab-count:1'>            </span>You may distribute Runtime SmartHeap
+DLL, or executable files created using the Runtime SmartHeap library, as part
+of your application without royalties or fees,<span style="mso-spacerun: yes"> 
+</span><i style='mso-bidi-font-style:normal'>provided</i>:<i style='mso-bidi-font-style:
+normal'><o:p></o:p></i></p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.75in;margin-bottom:.0001pt;text-indent:-.25in;mso-list:l0 level1 lfo2'><![if !supportLists]><span
+style='font-family:Symbol'>·<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span></span><![endif]>The application you develop (which includes the Runtime
+SmartHeap library or DLL) does not itself include redistribution rights.<span
+style="mso-spacerun: yes">  </span>(We place no restrictions on sales channels
+such as dealers and distributors.)</p>
+
+<p class=MsoNormal style='margin-top:2.0pt;margin-right:0in;margin-bottom:0in;
+margin-left:1.75in;margin-bottom:.0001pt;text-indent:-.25in;mso-list:l0 level1 lfo2;
+tab-stops:247.5pt'><![if !supportLists]><span style='font-family:Symbol'>·<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span></span><![endif]>The application you develop doesn’t make memory
+management functions based on SmartHeap calls (or renamed equivalents)
+accessible to its users.<span style="mso-spacerun: yes">  </span>For example,
+you may distribute a communications library that internally makes use of
+SmartHeap for memory management, but provides only communications functions in
+its public interface.<span style="mso-spacerun: yes">  </span>However, a C++
+class library that defined operator new (or a renamed equivalent) based on
+SmartHeap calls for its public classes could not be distributed.</p>
+
+<p class=MsoNormal>There are two cases when the standard SmartHeap license
+doesn’t apply:</p>
+
+<p class=MsoNormal style='margin-left:1.5in;text-indent:-.25in;mso-list:l0 level1 lfo2'><![if !supportLists]><span
+style='font-family:Symbol'>·<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span></span><![endif]>If the application you produce is a library,
+development tool, or any type of program wherein the Runtime SmartHeap
+libraries or the SmartHeap DLL is redistributed by your customers.</p>
+
+<p class=MsoNormal style='margin-left:1.5in;text-indent:-.25in;mso-list:l0 level1 lfo2'><![if !supportLists]><span
+style='font-family:Symbol'>·<span style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+</span></span><![endif]>If the application is a program that that makes memory
+management functions, based on SmartHeap, available to its users, either
+directly or indirectly.<span style="mso-spacerun: yes">  </span></p>
+
+<p class=MsoNormal>In these cases, please contact MicroQuill for the necessary
+redistribution or OEM license. </p>
+
+<p class=MsoNormal>If you have any questions or need additional clarification,
+please be sure to call us.<span style="mso-spacerun: yes">  </span></p>
+
+</div>
+
+<span style='font-size:12.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:right;
+mso-break-type:section-break'>
+</span>
+
+<div class=Section3>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:18.0pt;mso-bidi-font-size:12.0pt;font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Overview<o:p></o:p></span></b></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 1:</span><span
+style='mso-tab-count:1'>                        </span><a href="01_INTRO.htm">Introduction</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 2:</span><span
+style='mso-tab-count:1'>                        </span><a href="02_USING.htm">Using
+SmartHeap</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 3:</span><span
+style='mso-tab-count:1'>                        </span><a href="03_DEBUG.htm">Debug
+SmartHeap</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 4:</span><span
+style='mso-tab-count:1'>                        </span><a href="04_API.htm">Reference</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Appendix A:</span><span
+style='mso-tab-count:1'>                        </span><a href="APPENDXA.htm">Updating
+from previous versions of SmartHeap</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Appendix B:<span
+style="mso-spacerun: yes">  </span></span><a href="APPENDXB.htm">Common
+questions and troubleshooting</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Appendix C:<span
+style="mso-spacerun: yes">  </span></span><a href="APPENDXC.htm">Guidelines for
+evaluating SmartHeap performance</a></p>
+
+<p class=MsoToc1 style='tab-stops:dotted 330.5pt right blank 366.5pt'><a
+href="GLOSSARY.htm">Glossary</a></p>
+
+<p class=MsoNormal><![if !supportEmptyParas]>&nbsp;<![endif]><o:p></o:p></p>
+
+</div>
+
+<span style='font-size:12.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always;
+mso-break-type:section-break'>
+</span>
+
+<div class=Section4>
+
+<p class=MsoNormal><b style='mso-bidi-font-weight:normal'><span
+style='font-size:18.0pt;mso-bidi-font-size:12.0pt;font-family:Arial;mso-bidi-font-family:
+"Times New Roman"'>Contents<o:p></o:p></span></b></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 1:<span
+style="mso-spacerun: yes">  </span></span>Introduction</p>
+
+<p class=MsoToc2><a href="01_INTRO.htm#sh6">New in SmartHeap 6.0</a></p>
+
+<p class=MsoToc2><a href="01_INTRO.htm#sh5">New in SmartHeap 5.0</a></p>
+
+<p class=MsoToc2><a href="01_INTRO.htm#sh4">New in SmartHeap 4.0</a></p>
+
+<p class=MsoToc2><a href="01_INTRO.htm#shsmp">SmartHeap for SMP</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l1 level2 lfo4;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>1.1<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><a
+href="01_INTRO.htm#whatissh">What is SmartHeap?</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l1 level2 lfo4;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>1.2<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><a
+href="01_INTRO.htm#whobenefits">Who can benefit from SmartHeap?</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l1 level2 lfo4;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>1.3<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><a
+href="01_INTRO.htm#about">About this manual</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l1 level2 lfo4;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>1.4<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><a
+href="01_INTRO.htm#notation">Notational conventions</a></p>
+
+<p class=MsoToc2>1.5<span style="mso-spacerun: yes">  </span><a
+href="01_INTRO.htm#ts">Reaching Technical Support</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 2:<span
+style="mso-spacerun: yes">  </span></span>Using SmartHeap</p>
+
+<p class=MsoToc2>2.1<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc315765105">Installing SmartHeap</a></p>
+
+<p class=MsoToc3>2.1.1 <a href="02_USING.htm#_Toc316294749">SmartHeap files
+common to all platforms</a></p>
+
+<p class=MsoToc2>2.2<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc316294752">Getting started with SmartHeap</a></p>
+
+<p class=MsoToc3>2.2.1 <a href="02_USING.htm#_Toc316294753">SmartHeap header
+files</a></p>
+
+<p class=MsoToc3>2.2.2 <a href="02_USING.htm#_Toc316294754">Linking with the
+SmartHeap Library</a></p>
+
+<p class=MsoToc3>2.2.3 <a href="02_USING.htm#_Toc316294755">Memory models
+supported by SmartHeap</a></p>
+
+<p class=MsoToc3>2.2.4 <a href="02_USING.htm#_Toc316294756">Task registration</a></p>
+
+<p class=MsoToc3>2.2.5 <a href="02_USING.htm#_Toc316294757">Using SmartHeap in
+multi-threaded applications</a></p>
+
+<p class=MsoToc2>2.3<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc316294758">Choosing an allocator for your application</a></p>
+
+<p class=MsoToc3>2.3.<a href="02_USING.htm#_Toc316294759">1 Summary of
+SmartHeap API choices</a></p>
+
+<p class=MsoToc3>2.3.2 <a href="02_USING.htm#_Toc316294760">ANSI C memory API</a></p>
+
+<p class=MsoToc3>2.3.3 <a href="02_USING.htm#_Toc316294761">If you do <i
+style='mso-bidi-font-style:normal'>not</i> want SmartHeap to override malloc</a></p>
+
+<p class=MsoToc3>2.3.4 <a href="02_USING.htm#_Toc316294762">C++ memory API</a></p>
+
+<p class=MsoToc3>2.3.5 <a href="02_USING.htm#_Toc316294763">Fixed-size API</a></p>
+
+<p class=MsoToc3>2.3.6 <a href="02_USING.htm#_Toc316294764">Pointer-based API</a></p>
+
+<p class=MsoToc3>2.3.7 <a href="02_USING.htm#_Toc316294765">Handle-based API</a></p>
+
+<p class=MsoToc2>2.4<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc316294766">Using memory pools</a></p>
+
+<p class=MsoToc3>2.4.1 <a href="02_USING.htm#_Toc316294767">Fixed-size memory
+pools</a></p>
+
+<p class=MsoToc3>2.4.2 <a href="02_USING.htm#_Toc316294768">Freeing related
+allocations</a></p>
+
+<p class=MsoToc3>2.4.3 <a href="02_USING.htm#_Toc316294769">Establishing
+working sets</a></p>
+
+<p class=MsoToc3>2.4.4 <a href="02_USING.htm#_Toc316294770">Controlling
+fragmentation</a></p>
+
+<p class=MsoToc3>2.4.5 <a href="02_USING.htm#_Toc316294771">Shared memory</a></p>
+
+<p class=MsoToc3>2.4.6 <a href="02_USING.htm#_Toc316294772">Controlling pool
+size and growth</a></p>
+
+<p class=MsoToc3>2.4.7 <a href="02_USING.htm#_Toc316294773">Statistics</a></p>
+
+<span style='font-size:10.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always'>
+</span>
+
+<p class=MsoToc2>2.5<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc316294774">Runtime error handling</a></p>
+
+<p class=MsoToc3>2.5.1 <a href="02_USING.htm#_Toc316294775">Errors detected by
+SmartHeap</a></p>
+
+<p class=MsoToc3>2.5.2 <a href="02_USING.htm#_Toc316294776">SmartHeap error
+handling</a></p>
+
+<p class=MsoToc2>2.6<span style="mso-spacerun: yes">  </span><a
+href="02_USING.htm#_Toc316294777">Going to market</a></p>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 3:<span
+style="mso-spacerun: yes">  </span></span><a href="03_DEBUG.htm#_Toc315765106">Debug
+SmartHeap</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l2 level2 lfo6;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>3.1<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><a
+href="03_DEBUG.htm#_Toc316271430">About Debug SmartHeap</a></p>
+
+<p class=MsoToc2 style='margin-left:1.5in;text-indent:-.25in;mso-list:l2 level2 lfo6;
+tab-stops:list 1.5in left dotted 330.5pt right blank 366.5pt'><![if !supportLists]>3.2<span
+style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp; </span><![endif]><span
+style="mso-spacerun: yes"> </span><a href="03_DEBUG.htm#_Toc316271432">Setting
+up for Debug SmartHeap</a></p>
+
+<p class=MsoToc2 style='margin-left:1.25in;text-indent:0in'><span
+style="mso-spacerun: yes">        </span>3.2.1 <a
+href="03_DEBUG.htm#_Toc316271433">Linking for Debug SmartHeap3.2.2 Compiling
+for Debug SmartHeap</a></p>
+
+<p class=MsoToc3>3.2.3 <a href="03_DEBUG.htm#_Toc316271435">Recompiling
+persnickety C++ modules</a></p>
+
+<p class=MsoToc2>3.3<span style="mso-spacerun: yes">  </span><a
+href="03_DEBUG.htm#_Toc316271436">Detecting bugs with SmartHeap</a></p>
+
+<p class=MsoToc3>3.3.1 <a href="03_DEBUG.htm#_Toc316271437">Controlling speed
+vs. safety in Debug SmartHeap</a></p>
+
+<p class=MsoToc3>3.3.2 <a href="03_DEBUG.htm#_Toc316271438">Controlling
+deferred freeing in Debug SmartHeap</a></p>
+
+<p class=MsoToc3>3.3.3 <a href="03_DEBUG.htm#_Toc316271439">Retrieving
+SmartHeap debugging information</a></p>
+
+<p class=MsoToc3>3.3.4 <a href="03_DEBUG.htm#_Toc454115803">Preventing bugs</a></p>
+
+<p class=MsoToc3>3.3.5 <a href="03_DEBUG.htm#_Toc454115804">Validating pointers
+and memory pools</a></p>
+
+<p class=MsoToc3>3.3.6 <a href="03_DEBUG.htm#_Toc454115805">Detecting double
+freeing</a></p>
+
+<p class=MsoToc3>3.3.7 <a href="03_DEBUG.htm#_Toc454115806">Detecting memory
+overwrites</a></p>
+
+<p class=MsoToc3>3.3.8 <a href="03_DEBUG.htm#_Toc454115807">Detecting writes
+into free blocks</a></p>
+
+<p class=MsoToc3>3.3.9 <a href="03_DEBUG.htm#_Toc454115808">Detecting reads of
+free blocks</a></p>
+
+<p class=MsoToc3>3.3.10 <a href="03_DEBUG.htm#_Toc454115809">Detecting dangling
+and wild pointers</a></p>
+
+<p class=MsoToc3>3.3.11 <a href="03_DEBUG.htm#_Toc454115810">Detecting
+unexpected frees and reallocs</a></p>
+
+<p class=MsoToc3>3.3.12 <a href="03_DEBUG.htm#_Toc454115811">Marking data as
+read-only</a></p>
+
+<p class=MsoToc3>3.3.13 <a href="03_DEBUG.htm#_Toc454115812">Preventing stack
+scribbling</a></p>
+
+<p class=MsoToc3>3.3.14 <a href="03_DEBUG.htm#_Toc454115813">Detecting leakage
+(garbage)</a></p>
+
+<p class=MsoToc3><span style="mso-spacerun: yes"> </span>3.3.15 <a
+href="03_DEBUG.htm#_Toc454115814">Constipation</a></p>
+
+<p class=MsoToc2>3.4<span style="mso-spacerun: yes">  </span><a
+href="03_DEBUG.htm#_Toc454115815">Debug error handling</a></p>
+
+<p class=MsoToc3>3.4.1 <a href="03_DEBUG.htm#_Toc454115816">Controlling debug
+error output</a></p>
+
+<p class=MsoToc3>3.4.2 <a href="03_DEBUG.htm#_Toc454115817">Writing a custom
+error handler</a></p>
+
+<p class=MsoToc3>3.4.3 <a href="03_DEBUG.htm#_Toc454115818">Tracing SmartHeap
+calls</a></p>
+
+<p class=MsoToc3>3.4.4 <a href="03_DEBUG.htm#_Toc454115819">Debug SmartHeap
+error reports</a></p>
+
+<span style='font-size:12.0pt;mso-bidi-font-size:10.0pt;font-family:Arial;
+mso-fareast-font-family:"Times New Roman";mso-bidi-font-family:"Times New Roman";
+mso-ansi-language:EN-US;mso-fareast-language:EN-US;mso-bidi-language:AR-SA'><br
+clear=all style='page-break-before:always'>
+</span>
+
+<p class=MsoToc1><span style='font-weight:normal'>Chapter 4:<span
+style="mso-spacerun: yes">  </span></span>Reference</p>
+
+<p class=MsoToc2>4.1<span style="mso-spacerun: yes">  </span><a
+href="04_API.DOC#_Toc454115821">Functions by category</a></p>
+
+<p class=MsoToc3>4.1.1 <a href="04_API.htm#_Toc454115822">Task registration</a></p>
+
+<p class=MsoToc3>4.1.2 <a href="04_API.htm#_Toc454115823">Memory pools</a></p>
+
+<p class=MsoToc3>4.1.3 <a href="04_API.htm#_Toc454115824">ANSI standard C API</a></p>
+
+<p class=MsoToc3>4.1.4 <a href="04_API.htm#_Toc454115825">C<span
+style='letter-spacing:-1.5pt'>++</span> API</a></p>
+
+<p class=MsoToc3>4.1.5 <a href="04_API.htm#_Toc454115826">Pointer-based API</a></p>
+
+<p class=MsoToc3>4.1.6 <a href="04_API.htm#_Toc454115827">Fixed-size API</a></p>
+
+<p class=MsoToc3>4.1.7 <a href="04_API.htm#_Toc454115828">Handle-based API</a></p>
+
+<p class=MsoToc3>4.1.8 <a href="04_API.htm#_Toc454115829">Error handling</a></p>
+
+<p class=MsoToc3>4.1.9 <a href="04_API.htm#_Toc454115830">Debugging</a></p>
+
+<p class=MsoToc2>4.2<span style="mso-spacerun: yes">  </span><a
+href="04_API.htm#_Toc454115831">Function reference</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115832">calloc</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115833">dbgMemBreakpoint</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115834">dbgMemCheckAll</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115835">dbgMemCheckPtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115836">dbgMemDeferFreeing</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115837">dbgMemFormatCall</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115838">dbgMemFormatErrorInfo</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115839">dbgMemFreeDeferred</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115840">dbgMemPoolDeferFreeing</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115841">dbgMemPoolFreeDeferred</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115842">dbgMemPoolInfo</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115843">dbgMemPoolSetCheckFrequency</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115844">dbgMemPoolSetDeferQueueLen</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115845">dbgMemPoolSetName</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115846">dbgMemProtectPtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115847">dbgMemPtrInfo</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115848">dbgMemReallocMoves</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115849">dbgMemReportLeakage</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115850">dbgMemReportWrongTaskRef
+(16-bit Windows only)</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115851">dbgMemScheduleChecking</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115852">dbgMemSetCheckFrequency</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115853">dbgMemSetCheckpoint</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115854">dbgMemSetDefaultErrorOutput</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115855">dbgMemSetDeferQueueLen</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115856">dbgMemSetDeferSizeThreshold</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115857">dbgMemSetEntryHandler,
+dbgMemSetExitHandler</a></p>
+
+<span style='font-size:10.0pt;font-family:"Times New Roman";mso-fareast-font-family:
+"Times New Roman";mso-ansi-language:EN-US;mso-fareast-language:EN-US;
+mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always'>
+</span>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115858">dbgMemSetGuardSize,
+dbgMemGuardSize, <br>
+dbgMemSetGuardFill, dbgMemGuardFill,<br>
+dbgMemSetFreeFill, dbgMemFreeFill,<br>
+dbgMemSetInUseFill, dbgMemInUseFill</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115859">dbgMemSetSafetyLevel</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115860">dbgMemSettingsInfo</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115861">dbgMemSuppressFreeFill</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115862">dbgMemTotalCount</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115863">dbgMemTotalSize</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115864">dbgMemWalkHeap</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115865">delete</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115866">free</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115867">malloc</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115868">MemAlloc</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115869">MemAllocFS</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115870">MemAllocPtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115871">MemCheckPtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115872">MemDefaultErrorHandler</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115873">MemDefaultPool,
+MemDefaultPoolBlockSizeFS, <br>
+MemDefaultPoolFlags, MemDefaultPoolPageSize,<br>
+MemInitDefaultPool, MemFreeDefaultPool</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115874">MemErrorUnwind</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115875">MemFix</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115876">MemFree</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115877">MemFreeFS</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115878">MemFreePtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115879">MemHandle</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115880">MemIsMoveable</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115881">MemLock</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115882">MemLockCount</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115883">MemPoolAttachShared</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115884">MemPoolCheck</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115885">MemPoolCount</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115886">MemPoolFirst</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115887">MemPoolFree</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115888">MemPoolInfo</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115889">MemPoolInit</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115890">MemPoolInitFS</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115891">MemPoolInitNamedShared</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115892">MemPoolInitNamedSharedEx</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115893">MemPoolInitRegion</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115894">MemPoolLock</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115895">MemPoolNext</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115896">MemPoolPreAllocate</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115897">MemPoolPreAllocateHandles</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115898">MemPoolSetBlockSizeFS</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115899">MemPoolSetCeiling</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115900">MemPoolSetFloor</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115901">MemPoolSetFreeBytes</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#TOCMPSHT">MemPoolSetHighThreads</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#TOCMPSPS">MemPoolSetPageSize</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115902">MemPoolSetSmallBlockAllocator</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115903">MemPoolSetSmallBlockSize</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115904">MemPoolShrink</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115905">MemPoolSize</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115906">MemPoolUnlock</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115907">MemPoolWalk</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115908">MemProcessSetFreeBytes</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#TOCMPSGI">MemProcessSetGrowIncrement</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#TOCMPSLBT">MemProcessSetLargeBlockThreshold</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115909">MemReAlloc</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115910">MemReAllocPtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115911">MEM_REFERENCE</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115912">MemRegisterTask</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115913">MemSetErrorHandler</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115915">MemSize</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115916">MemSizeRequested</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115917">MemSizePtr</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115918">MemUnfix</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115919">MemUnlock</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115920">MemUnregisterTask</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115921">MemVersion</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115922">new</a></p>
+
+<p class=MsoToc2><a href="04_API.htm#_Toc454115923">realloc</a></p>
+
+<p class=MsoToc2>4.3<span style="mso-spacerun: yes">  </span><a
+href="04_API.htm#_Toc454115924">Error codes</a></p>
+
+</div>
+
+</body>
+
+</html>

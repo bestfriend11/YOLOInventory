@@ -1,0 +1,141 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_DIALOG_VIDEO_CONFIG DIALOG DISCARDABLE  0, 0, 204, 207
+STYLE DS_MODALFRAME | DS_CENTER | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
+CAPTION "Dungeon Siege Video Configuration"
+FONT 8, "MS Sans Serif"
+BEGIN
+    COMBOBOX        IDC_COMBO_DRIVER,16,22,172,113,CBS_DROPDOWNLIST | 
+                    CBS_SORT | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_COMBO_RESOLUTION,16,69,172,104,CBS_DROPDOWNLIST | 
+                    WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK",IDOK,77,183,50,17
+    GROUPBOX        "Video Driver",IDC_STATIC,7,7,190,45
+    GROUPBOX        "Resolution",IDC_STATIC,7,55,190,36
+    LTEXT           "Hardware detected as:",IDC_STATIC,17,38,71,8
+    LTEXT           "Static",IDC_HARDWARENAME,88,38,100,8
+    GROUPBOX        "Shadows",IDC_SHADOWGROUP,7,97,190,37
+    COMBOBOX        IDC_SHADOWCOMBO,16,111,172,43,CBS_DROPDOWNLIST | 
+                    WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Filtering",IDC_FILTERGROUP,7,139,190,37
+    COMBOBOX        IDC_FILTERCOMBO,16,153,172,36,CBS_DROPDOWNLIST | 
+                    WS_VSCROLL | WS_TABSTOP
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDD_DIALOG_VIDEO_CONFIG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 197
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 200
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON                ICON    DISCARDABLE     "icon1.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE DISCARDABLE 
+BEGIN
+    IDS_STRING_HARDWARE     "Hardware"
+    IDS_STRING_HARDWARE_TNL "Hardware TnL"
+    IDS_STRING_UNKNOWN      "Unknown"
+    IDS_STRING_COMPLEX_SHADOWS "Complex Shadows"
+    IDS_STRING_SIMPLE_SHADOWS "Simple Shadows"
+    IDS_STRING_NO_SHADOWS   "No Shadows"
+    IDS_STRING_PARTY_SHADOWS "Party Shadows"
+    IDS_STRING_BILINEAR_FILTERING "Bilinear Filtering"
+    IDS_STRING_TRILINEAR_FILTERING "Trilinear Filtering"
+    IDS_STRING_BELOW_MIN_SPEC_WARN 
+                            "Your hardware configuration is below minimum specification for Dungeon Siege and may not run the game optimally.  This is most likely because:\n    1) Your video hardware does not have enough memory (8MB or better).\n    2) Your video chipset has been detected as not supporting the features required by Dungeon Siege.\nContinuing to play may result in graphical glitches or other problems."
+    IDS_STRING_HARDWARE_WARNING "Hardware Warning"
+END
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

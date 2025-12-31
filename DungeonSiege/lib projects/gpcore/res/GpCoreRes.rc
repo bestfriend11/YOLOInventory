@@ -1,0 +1,274 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "GpCoreRes.rh"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "GpCoreRes.rh\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+ASSERT DIALOGEX 0, 0, 402, 262
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "GP Core"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    ICON            "",IDC_THEICON,7,7,20,20
+    EDITTEXT        IDC_ASSERT_TEXT,36,5,361,85,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_READONLY | NOT WS_BORDER | 
+                    WS_VSCROLL | WS_GROUP,WS_EX_STATICEDGE
+    PUSHBUTTON      "Abort Program",IDABORT,5,98,54,14,WS_GROUP
+    PUSHBUTTON      "B&reak Into Debugger",IDRETRY,63,98,73,14
+    DEFPUSHBUTTON   "&Ignore Once",IDIGNORE,140,98,50,14
+    PUSHBUTTON      "I&gnore Always",IDC_IGNORE_ALWAYS,194,98,51,14
+    PUSHBUTTON      "&Copy To Clipboard",IDC_COPY_ASSERT,249,98,65,14
+    PUSHBUTTON      "&Less",IDC_MORE,347,98,50,14
+    CONTROL         "",IDC_DIVIDER,"Static",SS_BLACKRECT | NOT WS_VISIBLE,7,
+                    117,390,1
+    GROUPBOX        "Ignore",IDC_STATIC,5,119,102,47
+    LTEXT           "Next:",IDC_STATIC,16,131,18,8
+    EDITTEXT        IDC_IGNORE_COUNT,38,129,25,12,ES_AUTOHSCROLL | ES_NUMBER
+    LTEXT           "times for",IDC_STATIC,66,131,27,8
+    PUSHBUTTON      "This Only",IDC_IGNORE_THIS,12,145,42,14
+    PUSHBUTTON      "All",IDC_IGNORE_ALL,60,145,36,14
+    GROUPBOX        "Minidump Report",IDC_STATIC,5,170,102,31
+    PUSHBUTTON      "Ge&nerate",IDC_GENERATE_CRASH_DUMP,12,181,36,14,
+                    BS_CENTER
+    CONTROL         "E&VRYtihnG",IDC_MINIDUMP_VERBOSE,"Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP,52,183,52,10
+    CONTROL         "&Pause app on continue",IDC_PAUSE_ON_CONTINUE,"Button",
+                    BS_AUTOCHECKBOX | WS_GROUP | WS_TABSTOP,12,207,89,10
+    PUSHBUTTON      "Ga&ther Info (PUSH ME!) -->",IDC_TRACE_ACQUIRE,12,222,
+                    99,14,BS_RIGHT | WS_GROUP
+    PUSHBUTTON      "C&opy Trace To Clipboard -->",IDC_TRACE_COPY,12,240,99,
+                    14,BS_RIGHT | WS_DISABLED
+    LTEXT           "",IDC_STATIC,109,120,3,96,NOT WS_GROUP,
+                    WS_EX_DLGMODALFRAME
+    LTEXT           "Stack Trace:",IDC_STACK_TRACE,118,122,42,8,WS_DISABLED
+    EDITTEXT        IDC_TRACE_TEXT,119,132,278,125,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | 
+                    WS_DISABLED | NOT WS_BORDER | WS_VSCROLL | WS_HSCROLL | 
+                    WS_GROUP,WS_EX_STATICEDGE
+END
+
+EDITSINK DIALOGEX 0, 0, 345, 174
+STYLE DS_SETFONT | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | 
+    WS_THICKFRAME
+EXSTYLE WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT
+CAPTION "Console"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    EDITTEXT        IDC_SCROLLBACK,6,6,333,162,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_READONLY | ES_WANTRETURN | NOT WS_BORDER | WS_VSCROLL,
+                    WS_EX_STATICEDGE
+END
+
+TREESINK DIALOGEX 0, 0, 345, 174
+STYLE DS_SETFONT | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | 
+    WS_THICKFRAME
+EXSTYLE WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT
+CAPTION "Inspector"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    CONTROL         "Tree1",IDC_TREE,"SysTreeView32",TVS_HASBUTTONS | 
+                    TVS_HASLINES | TVS_LINESATROOT | TVS_TRACKSELECT | 
+                    WS_BORDER | WS_TABSTOP,6,6,333,111
+    EDITTEXT        IDC_SCROLLBACK,6,119,333,49,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_READONLY | ES_WANTRETURN | NOT 
+                    WS_BORDER | WS_VSCROLL,WS_EX_STATICEDGE
+END
+
+COUNTBOX DIALOGEX 0, 0, 89, 63
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_TOOLWINDOW
+CAPTION "Count"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+END
+
+REPORTSYSMGR DIALOGEX 0, 0, 287, 188
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+EXSTYLE WS_EX_TOOLWINDOW
+CAPTION "Contexts"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    CONTROL         "List2",IDC_LIST,"SysListView32",LVS_REPORT | 
+                    LVS_SORTASCENDING | WS_BORDER | WS_TABSTOP,7,7,273,174
+END
+
+CONSOLE DIALOGEX 0, 0, 345, 174
+STYLE DS_SETFONT | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | 
+    WS_THICKFRAME
+EXSTYLE WS_EX_TOOLWINDOW | WS_EX_CONTROLPARENT
+CAPTION "Console"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    COMBOBOX        IDC_PROMPT,6,156,333,109,CBS_DROPDOWN | WS_VSCROLL | 
+                    WS_TABSTOP
+    EDITTEXT        IDC_SCROLLBACK,6,6,333,142,ES_MULTILINE | ES_AUTOVSCROLL | 
+                    ES_READONLY | ES_WANTRETURN | NOT WS_BORDER | WS_VSCROLL,
+                    WS_EX_STATICEDGE
+END
+
+EXCEPTION DIALOGEX 0, 0, 402, 192
+STYLE DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Fatal Exception Caught!"
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    ICON            "",IDC_THEICON,7,7,20,20
+    EDITTEXT        IDC_EXCEPTION_TEXT,34,7,361,158,ES_MULTILINE | 
+                    ES_AUTOVSCROLL | ES_READONLY | NOT WS_BORDER | 
+                    WS_VSCROLL | WS_GROUP,WS_EX_STATICEDGE
+    PUSHBUTTON      "Abort (Nice)",IDABORT,33,172,52,14,WS_GROUP
+    PUSHBUTTON      "Abort (Nasty)",IDCANCEL,93,172,52,14,WS_GROUP
+    PUSHBUTTON      "R&eport Bug!",IDREPORT,153,172,52,14,WS_GROUP
+    PUSHBUTTON      "B&reak Into Debugger",IDRETRY,213,172,86,14
+    DEFPUSHBUTTON   "&Copy To Clipboard",IDC_COPY_EXCEPTION,307,172,86,14
+END
+
+EXCEPTION_PRE DIALOGEX 0, 0, 143, 54
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_VISIBLE | WS_CAPTION
+CAPTION "Exception Detected!"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    LTEXT           "Gathering exception data...\n\n[Note: this may take a minute or two to complete.]",
+                    IDC_THETEXT,41,13,86,34
+    ICON            "",IDC_THEICON,7,7,21,20
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO 
+BEGIN
+    "ASSERT", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 397
+        VERTGUIDE, 12
+        VERTGUIDE, 105
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 255
+    END
+
+    "EDITSINK", DIALOG
+    BEGIN
+        LEFTMARGIN, 6
+        RIGHTMARGIN, 339
+        TOPMARGIN, 6
+        BOTTOMMARGIN, 168
+    END
+
+    "TREESINK", DIALOG
+    BEGIN
+        LEFTMARGIN, 6
+        RIGHTMARGIN, 339
+        TOPMARGIN, 6
+        BOTTOMMARGIN, 168
+    END
+
+    "COUNTBOX", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 82
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 56
+    END
+
+    "REPORTSYSMGR", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 280
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 181
+    END
+
+    "CONSOLE", DIALOG
+    BEGIN
+        LEFTMARGIN, 6
+        RIGHTMARGIN, 339
+        TOPMARGIN, 6
+        BOTTOMMARGIN, 168
+    END
+
+    "EXCEPTION", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 395
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 185
+    END
+
+    "EXCEPTION_PRE", DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 136
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 47
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

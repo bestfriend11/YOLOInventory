@@ -1,0 +1,9 @@
+# Binaries and Intermediate
+Binaries/
+Intermediate/
+DerivedDataCache/
+
+# Build artifacts
+Saved/
+.vscode/
+.idea/

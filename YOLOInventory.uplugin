@@ -1,0 +1,36 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLO Inventory",
+  "Description": "Node-based inventory asset and editor (Niagara-like graph) for defining items and attributes.",
+  "Category": "Inventory",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": true,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventory",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    },
+    {
+      "Name": "YOLOInventoryEditor",
+      "Type": "Editor",
+      "LoadingPhase": "PostEngineInit"
+    }
+  ],
+  "Plugins": [
+    { "Name": "Niagara", "Enabled": true },
+    { "Name": "StructUtils", "Enabled": true },
+    { "Name": "GameplayAbilities", "Enabled": true }
+  ],
+  "SupportedTargetPlatforms": [
+    "Win64"
+  ],
+  "EngineVersion": "5.7"
+}

@@ -1,0 +1,90 @@
+Microsoft Developer Studio Workspace File, Format Version 6.00
+# WARNING: DO NOT EDIT OR DELETE THIS WORKSPACE FILE!
+
+###############################################################################
+
+Project: "DSVideoConfig"=.\DSVideoConfig.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/DSVideoConfig", GXHGAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name FuBi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name GpCore
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name Rapi
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "FuBi"="..\..\Lib Projects\FuBi\FuBi.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/DSVideoConfig", GXHGAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "GpCore"="..\..\Lib Projects\GpCore\GpCore.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/DSVideoConfig", GXHGAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "Rapi"="..\..\Lib Projects\Rapi\Rapi.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+    begin source code control
+    "$/GPG/Projects/DSVideoConfig", GXHGAAAA
+    .
+    end source code control
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Global:
+
+Package=<5>
+{{{
+}}}
+
+Package=<3>
+{{{
+}}}
+
+###############################################################################
+

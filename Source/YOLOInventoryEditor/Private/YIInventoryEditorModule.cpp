@@ -1,0 +1,242 @@
+#include "YIInventoryEditorModule.h"
+#include "AssetToolsModule.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Modules/ModuleManager.h"
+#include "IAssetTools.h"
+#include "YIItemDefinition.h"
+
+#include "AssetTypeActions_Base.h"
+#include "YIInventoryFactory.h"
+#include "YIItemDefinitionFactory.h"
+#include "AssetTypeActions_YIInventoryBag.h"
+#include "AssetTypeActions_YIAffix.h"
+#include "YIInventoryBagFactory.h"
+#include "ToolMenus.h"
+// #include "YIInventoryAssetEditor.h" // legacy editor removed
+
+#include "GraphPanelNodeFactory_YOLO.h"
+#include "EdGraphUtilities.h"
+#include "Styling/AppStyle.h"
+#include "YIItemDefinition.h"
+#include "YIItemDefinitionEditor.h"
+#include "YIAffixAsset.h"
+#include "YIAffixFactory.h"
+#include "AssetTypeActions_YIAffixPool.h"
+#include "YIAffixPoolFactory.h"
+#include "YIAffixPoolAsset.h"
+
+TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
+
+uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
+
+class FAssetTypeActions_YIInventoryAsset : public FAssetTypeActions_Base
+{
+public:
+	virtual FText GetName() const override { return NSLOCTEXT("YOLOInventory", "AssetTypeName", "YOLO Inventory"); }
+	virtual FColor GetTypeColor() const override { return FColor(200, 80, 220); }
+	virtual UClass* GetSupportedClass() const override { return UYIItemDefinition::StaticClass(); }
+	virtual uint32 GetCategories() override { return GYOLOInventoryAssetCategory; }
+	virtual bool HasActions(const TArray<UObject*>& InObjects) const override { return true; }
+	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor) override;
+};
+
+#include "Toolkits/AssetEditorToolkit.h"
+#include "Toolkits/IToolkitHost.h"
+
+void FAssetTypeActions_YIInventoryAsset::OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor)
+{
+	for (UObject* Obj : InObjects)
+	{
+		if (UYIItemDefinition* Asset = Cast<UYIItemDefinition>(Obj))
+		{
+			TSharedRef<FYIItemDefinitionEditor> Editor = MakeShared<FYIItemDefinitionEditor>();
+			Editor->Init(Asset, EditWithinLevelEditor);
+		}
+	}
+}
+
+class FAssetTypeActions_YIItemDefinition : public FAssetTypeActions_Base
+{
+public:
+	virtual FText GetName() const override { return NSLOCTEXT("YOLOInventory", "ItemDefAssetTypeName", "Item Definition"); }
+	virtual FColor GetTypeColor() const override { return FColor(120, 170, 255); }
+	virtual UClass* GetSupportedClass() const override { return UYIItemDefinition::StaticClass(); }
+	virtual uint32 GetCategories() override { return GYOLOInventoryAssetCategory; }
+	virtual bool HasActions(const TArray<UObject*>& InObjects) const override { return false; }
+	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor) override
+	{
+		for (UObject* Obj : InObjects)
+		{
+			if (UYIItemDefinition* Asset = Cast<UYIItemDefinition>(Obj))
+			{
+				TSharedRef<FYIItemDefinitionEditor> Editor = MakeShared<FYIItemDefinitionEditor>();
+				Editor->Init(Asset, EditWithinLevelEditor);
+			}
+		}
+	}
+};
+void FYOLOInventoryEditorModule::StartupModule()
+{
+	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	GYOLOInventoryAssetCategory = AssetTools.RegisterAdvancedAssetCategory(FName("YOLOInventory"), NSLOCTEXT("YOLOInventory", "AssetCategory", "YOLO Inventory"));
+	RegisterAssetTypeActions();
+	GYOLONodeFactory = MakeShareable(new FGraphPanelNodeFactory_YOLO());
+
+	// // Ensure an example Affix asset exists for authoring docs/demo
+	// {
+	// 	FString PackageName = TEXT("/Game/YOLOInventory/Affixes/Affix_Example");
+	// 	FAssetRegistryModule& Arm = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	// 	FAssetData Existing = Arm.Get().GetAssetByObjectPath(*FString::Printf(TEXT("%s.%s"), *PackageName, TEXT("Affix_Example")));
+	// 	if (!Existing.IsValid())
+	// 	{
+	// 		IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	// 		FString Name, Path; Tools.CreateUniqueAssetName(PackageName, TEXT(""), Name, Path);
+	// 		UYIAffixFactory* Factory = NewObject<UYIAffixFactory>();
+	// 		UClass* Class = UYIAffixAsset::StaticClass();
+	// 		UObject* NewAsset = Tools.CreateAsset(FPackageName::GetLongPackageAssetName(Name), FPackageName::GetLongPackagePath(Path), Class, Factory);
+	// 		if (UYIAffixAsset* Affix = Cast<UYIAffixAsset>(NewAsset))
+	// 		{
+	// 			Affix->DisplayName = NSLOCTEXT("YOLOInventory", "AffixExampleName", "Example Affix");
+	// 			Affix->Description = NSLOCTEXT("YOLOInventory", "AffixExampleDesc", "Example modifier used by YOLOInventory. Edit Min/Max and TooltipFormat.");
+	// 			Affix->TooltipFormat = NSLOCTEXT("YOLOInventory", "AffixExampleFmt", "+{0}% Damage");
+	// 			Affix->MinValue = 5.f; Affix->MaxValue = 10.f;
+	// 			Affix->Modify();
+	// 		}
+	// 	}
+	// }
+
+	// // Ensure an example Affix Pool asset exists for authoring/demo
+	// {
+	// 	FString PoolPkg = TEXT("/Game/YOLOInventory/Affixes/Pool_Example");
+	// 	FAssetRegistryModule& Arm2 = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	// 	FAssetData Existing = Arm2.Get().GetAssetByObjectPath(*FString::Printf(TEXT("%s.%s"), *PoolPkg, TEXT("Pool_Example")));
+	// 	if (!Existing.IsValid())
+	// 	{
+	// 		IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	// 		FString Name, Path; Tools.CreateUniqueAssetName(PoolPkg, TEXT(""), Name, Path);
+	// 		UYIAffixPoolFactory* Factory = NewObject<UYIAffixPoolFactory>();
+	// 		UClass* Class = UYIAffixPoolAsset::StaticClass();
+	// 		UObject* NewAsset = Tools.CreateAsset(FPackageName::GetLongPackageAssetName(Name), FPackageName::GetLongPackagePath(Path), Class, Factory);
+	// 		if (UYIAffixPoolAsset* Pool = Cast<UYIAffixPoolAsset>(NewAsset))
+	// 		{
+	// 			// stub: leave empty to edit in project
+	// 			Pool->Modify();
+	// 		}
+	// 	}
+	// }
+
+	FEdGraphUtilities::RegisterVisualNodeFactory(GYOLONodeFactory);
+
+	// Register Window -> YOLO Inventory menu and toolbar buttons
+	static bool bYOLOMenusExtended = false;
+	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateLambda([]()
+	{
+		static bool bExtended = false; if (bExtended) return; bExtended = true;
+		UToolMenu* WindowMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Window");
+		FToolMenuSection& Sec = WindowMenu->AddSection("YOLOInventory", NSLOCTEXT("YOLOInventory","WindowMenu","YOLO Inventory"));
+		auto AddMenuEntry = [&Sec](const FName& TabId, const FText& Label)
+		{
+			const FName EntryName = FName(*FString::Printf(TEXT("YOLOInventory_Open_%s"), *TabId.ToString()));
+			// removed old editor menu entries
+		};
+		AddMenuEntry(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","MenuPalette","Palette"));
+		AddMenuEntry(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","MenuGraph","Graph"));
+		AddMenuEntry(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","MenuScript","Script"));
+		AddMenuEntry(FName("YOLOInventory_Details"), NSLOCTEXT("YOLOInventory","MenuDetails","Details"));
+
+		if (UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar"))
+		{
+			FToolMenuSection& TSec = Toolbar->AddSection("YOLOInventoryToolbar", NSLOCTEXT("YOLOInventory","Toolbar","YOLO Inventory"));
+			auto AddTool = [&TSec](const FName& TabId, const FText& Label, const FName& IconName)
+			{
+				const FName EntryName = FName(*FString::Printf(TEXT("YOLOInventory_Tool_%s"), *TabId.ToString()));
+				// removed toolbar buttons for old editor
+			};
+			AddTool(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","ToolPalette","Palette"), "Icons.Details");
+			AddTool(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","ToolGraph","Graph"), "GraphEditor.Event_16x");
+			AddTool(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","ToolScript","Script"), "Kismet.Tabs.Palette");
+			AddTool(FName("YOLOInventory_Details"), NSLOCTEXT("YOLOInventory","ToolDetails","Details"), "LevelEditor.Tabs.Details");
+		}
+
+		// Add Tools menu action to validate unique item codes
+		if (UToolMenu* ToolsMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools"))
+		{
+			FToolMenuSection& Sec2 = ToolsMenu->AddSection("YOLOInventoryTools", NSLOCTEXT("YOLOInventory","Tools","YOLO Inventory"));
+			Sec2.AddMenuEntry("YOLO_ValidateUniqueCodes",
+				NSLOCTEXT("YOLOInventory","ValidateCodes","Validate Unique Item Codes"),
+				NSLOCTEXT("YOLOInventory","ValidateCodes_TT","Scan all UYIItemDefinition assets and ensure UniqueCode is non-zero and unique. Auto-fix assigns new codes where needed."),
+				FSlateIcon(),
+				FToolMenuExecuteAction::CreateLambda([](const FToolMenuContext&)
+				{
+					// old editor removed
+					UClass* LibClass = StaticLoadClass(UObject::StaticClass(), nullptr, TEXT("/Script/YOLOInventoryEditor.YIItemEditorLibrary"));
+					if (LibClass)
+					{
+						UFunction* Fn = LibClass->FindFunctionByName(TEXT("EnsureUniqueCodes"));
+						if (Fn)
+						{
+							UObject* CDO = LibClass->GetDefaultObject();
+							struct { bool bAutoFix; bool ReturnValue; } Parms{ true, false };
+							CDO->ProcessEvent(Fn, &Parms);
+						}
+					}
+				})
+			);
+		}
+	}));
+}
+
+void FYOLOInventoryEditorModule::ShutdownModule()
+{
+	UnregisterAssetTypeActions();
+	if (GYOLONodeFactory.IsValid())
+	{
+		FEdGraphUtilities::UnregisterVisualNodeFactory(GYOLONodeFactory);
+		GYOLONodeFactory.Reset();
+	}
+}
+
+void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
+{
+	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	{
+		TSharedRef<FAssetTypeActions_YIInventoryAsset> Action = MakeShared<FAssetTypeActions_YIInventoryAsset>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIInventoryBag> Action = MakeShared<FAssetTypeActions_YIInventoryBag>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIItemDefinition> Action = MakeShared<FAssetTypeActions_YIItemDefinition>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIAffix> Action = MakeShared<FAssetTypeActions_YIAffix>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIAffixPool> Action = MakeShared<FAssetTypeActions_YIAffixPool>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+}
+
+void FYOLOInventoryEditorModule::UnregisterAssetTypeActions()
+{
+	if (FModuleManager::Get().IsModuleLoaded("AssetTools"))
+	{
+		IAssetTools& AssetTools = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools").Get();
+		for (auto& Action : RegisteredAssetTypeActions)
+		{
+			AssetTools.UnregisterAssetTypeActions(Action.ToSharedRef());
+		}
+	}
+	RegisteredAssetTypeActions.Empty();
+}
+
+IMPLEMENT_MODULE(FYOLOInventoryEditorModule, YOLOInventoryEditor)

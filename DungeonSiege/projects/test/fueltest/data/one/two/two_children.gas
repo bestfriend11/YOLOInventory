@@ -1,0 +1,39 @@
+[t:actor,n:beta]
+{
+	bottom_item1	= hooha1;
+	bottom_item2	= hooha2;
+	bottom_item3	= hooha3;
+
+	misc_item*	= misc1;
+	misc_item*	= misc2;
+	misc_item*	= misc3;
+
+	[bottom_level_child]
+	{
+		bottom_child_item1	= hooha1;
+		bottom_child_item2	= hooha2;
+		bottom_child_item3	= hooha3;
+
+		misc_child_item*	= misc1;
+		misc_child_item*	= misc2;
+		misc_child_item*	= misc3;
+
+	}
+
+	[misc_cihld*]
+	{
+		mics_child_param1 = 1;
+	}
+
+	[misc_cihld*]
+	{
+		mics_child_param2 = 2;
+	}
+
+	[misc_cihld*]
+	{
+		mics_child_param3 = 3;
+	}
+}
+
+

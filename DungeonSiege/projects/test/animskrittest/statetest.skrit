@@ -1,0 +1,103 @@
+// Persistent 
+aspect m_keys$;
+
+event OnConstruct$
+{
+	out.print( "\nCreate the machine\n" );
+	out.print( "\n... load the keys?\n" );
+}
+
+event OnDestroy$
+{
+	out.print( "\nDestroyed a test machine\n" );
+}
+
+startup state InitialState$ 
+{
+	event OnEnterState$
+	{
+		out.print( "\nInitialize machine\n" );
+	}
+
+	event AttachKeys$ (aspect asp$, prskeys keys$)
+	{
+		out.print( "\nAttaching Keys\n" );
+		out.print( "Keys:" );
+		int num$ = 0;
+		int total_tracks$ = keys$.GetNumTracks();
+		while (num$ < total_tracks$) {
+			out.printf( "Track[%2d] %s\n", num$, keys$.GetTrackName() );
+			num$++;
+		}
+		out.print( "\n\n" );
+		SetState StartRunning$;
+	}
+
+}
+
+state StartRunning$
+{
+
+	event OnEnterState$
+	{
+		out.print( "\nStart Running\n" );
+	}
+
+	event Poke$ (float v$)
+	{
+ 		out.printf( "\nYou poked StartRunning with %f\n",v$ );
+		if (v$ > 1.0) {
+			SetState UpAndRunning$;
+	 	}
+	}
+
+}
+
+state UpAndRunning$
+{
+ 
+	transition
+	{
+	-> StopRunning$ : Ping = { out.print( "\nTired of Running\n" );  }
+	}
+
+	event OnEnterState$
+	{
+		out.print( "\nUp and running\n" );
+	}
+
+	event Poke$ (float v$)
+	{
+ 		out.printf( "\nYou poked UpAndRunning with %f\n",v$ );
+		if (v$ > 1.0) {
+			SetState StopRunning$;
+		}
+	}
+
+}
+
+state StopRunning$
+{
+
+	transition
+	{
+	-> StartRunning$ : Ping = { out.print( "\nReady to Run again\n" );  }
+	}
+
+	event OnEnterState$
+	{
+		out.print( "\nStopped running\n" );
+	}
+
+	event Poke$ (float v$)
+	{
+ 		out.printf( "\nYou poked StopRunning with %f\n",v$ );
+		if (v$ > 1.0) {
+			out.print( "\nPrepare to Run again\n" );
+			SetState StartRunning$;
+		}
+	}
+
+}
+
+	

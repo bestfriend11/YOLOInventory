@@ -1,0 +1,67 @@
+Microsoft Visual Studio Solution File, Format Version 7.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DeCrasho", "DeCrasho.vcproj", "{98C4D395-8C8B-41B5-B4BF-721108B69A31}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FuBi", "..\..\lib projects\fubi\FuBi.vcproj", "{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GpCore", "..\..\lib projects\gpcore\GPCore.vcproj", "{53B5859D-7428-47D3-90D0-04925E3F5FF1}"
+EndProject
+Global
+	GlobalSection(SourceCodeControl) = preSolution
+		SccNumberOfProjects = 3
+		SccProjectUniqueName0 = DeCrasho.vcproj
+		SccProjectName0 = \u0022$/GPG/Projects/DeCrasho\u0022,\u0020RQIGAAAA
+		SccLocalPath0 = .
+		SccProvider0 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName1 = ..\\..\\lib\u0020projects\\fubi\\FuBi.vcproj
+		SccProjectName1 = \u0022$/GPG/Lib\u0020Projects/FuBi\u0022,\u0020NJEBAAAA
+		SccLocalPath1 = ..\\..\\lib\u0020projects\\fubi
+		SccProvider1 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName2 = ..\\..\\lib\u0020projects\\gpcore\\GPCore.vcproj
+		SccProjectName2 = \u0022$/GPG/LIB\u0020Projects/GpCore\u0022,\u0020PTLAAAAA
+		SccLocalPath2 = ..\\..\\lib\u0020projects\\gpcore
+		SccProvider2 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+	EndGlobalSection
+	GlobalSection(SolutionConfiguration) = preSolution
+		ConfigName.0 = Debug
+		ConfigName.1 = Profiling
+		ConfigName.2 = Release
+		ConfigName.3 = Retail
+	EndGlobalSection
+	GlobalSection(ProjectDependencies) = postSolution
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.0 = {53B5859D-7428-47D3-90D0-04925E3F5FF1}
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.1 = {9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Debug.ActiveCfg = Debug|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Debug.Build.0 = Debug|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Profiling.ActiveCfg = Release|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Profiling.Build.0 = Release|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Release.ActiveCfg = Release|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Release.Build.0 = Release|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Retail.ActiveCfg = Release|Win32
+		{98C4D395-8C8B-41B5-B4BF-721108B69A31}.Retail.Build.0 = Release|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Debug.ActiveCfg = Debug|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Debug.Build.0 = Debug|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Profiling.ActiveCfg = Profiling|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Profiling.Build.0 = Profiling|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Release.ActiveCfg = Release|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Release.Build.0 = Release|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Retail.ActiveCfg = Retail|Win32
+		{9B6D6DA4-0E00-468C-84D8-2ED1C47E3108}.Retail.Build.0 = Retail|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Debug.ActiveCfg = Debug|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Debug.Build.0 = Debug|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Profiling.ActiveCfg = Profiling|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Profiling.Build.0 = Profiling|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Release.ActiveCfg = Release|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Release.Build.0 = Release|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Retail.ActiveCfg = Retail|Win32
+		{53B5859D-7428-47D3-90D0-04925E3F5FF1}.Retail.Build.0 = Retail|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal

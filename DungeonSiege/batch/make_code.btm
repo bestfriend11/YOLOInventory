@@ -1,0 +1,255 @@
+:: //////////////////////////////////////////////////////////////////////////
+:: //
+:: // File     :  make_game.btm
+:: // Author(s):  Scott Bilas
+:: //
+:: // NOTE     :  This batch file requires the 4NT shell to execute
+:: //
+:: // Copyright © 2001 Gas Powered Games, Inc.  All rights reserved.
+:: //------------------------------------------------------------------------
+:: //  $Revision:: $              $Date:$
+:: //------------------------------------------------------------------------
+:: //////////////////////////////////////////////////////////////////////////
+
+@echo off
+setlocal
+
+call %@PATH[ %_BATCHNAME ]\set_config.btm
+if errorlevel 1 quit
+
+set buildlog=%out\Logs\MakeCode.log
+set projects=%tree\gpg\projects
+
+*del /q /e %buildlog
+
+:: //////////////////////////////////////////////////////////////////////////
+
+echo ======================================================================
+echo.
+iff %official_build_box==y then
+	echos Delete local source tree?     (y/n):
+	inkey /c /k"yn" %%dellocal
+endiff
+echos Delete temp directory?        (y/n):
+inkey /c /k"yn" %%deltemp
+echos Sync P4 into local workspace? (y/n):
+inkey /c /k"yn" %%syncp4
+echos Build Debug Dungeon Siege?    (y/n):
+inkey /c /k"yn" %%buildgamed
+echos Build Release Dungeon Siege?  (y/n):
+inkey /c /k"yn" %%buildgamer
+echos Build Retail Dungeon Siege?   (y/n):
+inkey /c /k"yn" %%buildgame
+echos Build Debug Siege Editor?     (y/n):
+inkey /c /k"yn" %%buildeditord
+echos Build Release Siege Editor?   (y/n):
+inkey /c /k"yn" %%buildeditorr
+echos Build Anim Viewer?            (y/n):
+inkey /c /k"yn" %%buildviewer
+echo.
+echo ======================================================================
+
+if %dellocal==y set p4refresh=-f
+
+iff %stop_virus_scanner==y then
+	echo Stopping virus scanners
+	net stop "Network Associates Alert Manager"
+	net stop "Network Associates Task Manager"
+	net stop "Network Associates McShield"
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %dellocal==y then
+	echo.
+	echo Deleting local source tree...
+	*del /q /e /y    /x /z "%tree\gpg"
+	*del /q /e /y /s /x /z "%tree\gpg\bin"
+	*del /q /e /y /s /x /z "%tree\gpg\dll"
+	*del /q /e /y /s /x /z "%tree\gpg\include"
+	*del /q /e /y /s /x /z "%tree\gpg\lib"
+	*del /q /e /y /s /x /z "%tree\gpg\lib projects"
+	*del /q /e /y /s /x /z "%tree\gpg\projects"
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %deltemp==y then
+	echo.
+	echo Deleting temp directory...
+	if direxist %codetemp *del /q /e /y /s /x /z %codetemp\lib
+	if direxist %codetemp *del /q /e /y /s /x /z %codetemp\tattoo
+	if direxist %codetemp *del /q /e /y /s /x /z %codetemp\siegeeditor
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %syncp4==y then
+	echo.
+	echo Syncing P4 into local workspace...
+	echo.
+	p4 sync %p4refresh %p4tree/gpg/...#head
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+echo.
+echo Preparing for build...
+echo.
+iff %syncp4==y then
+	echo Rebuilding msdev.opt
+	perl %tree\build\make_msdev_opt.pl %tree\gpg
+endiff
+echo.
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildgamed==y then
+	echo.
+	echo Building Dungeon Siege [Debug]...
+	echo.
+	*del /q /e /z %out\DungeonSiegeD.exe;DungeonSiegeD.pdb
+	iff %vctype==7 then
+		devenv %projects\tattoo\exe\exe.sln /build debug /safemode /out %buildlog
+	else
+		msdev %projects\tattoo\exe\exe.dsw /Y3 /USEENV /MAKE "_Exe - Win32 Debug" | tee /a %buildlog
+	endiff
+	cdd %projects\tattoo\exe\debug
+	set exename=DungeonSiegeD
+	gosub Extract
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildgamer==y then
+	echo.
+	echo Building Dungeon Siege [Release]...
+	echo.
+	*del /q /e /z %out\DungeonSiegeR.exe;DungeonSiegeR.pdb
+	iff %vctype==7 then
+		devenv %projects\tattoo\exe\exe.sln /build release /safemode /out %buildlog
+	else
+		msdev %projects\tattoo\exe\exe.dsw /Y3 /USEENV /MAKE "_Exe - Win32 Release" | tee /a %buildlog
+	endiff
+	cdd %projects\tattoo\exe\release
+	set exename=DungeonSiegeR
+	gosub Extract
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildgame==y then
+	echo.
+	echo Building Dungeon Siege [Retail]...
+	echo.
+	*del /q /e /z %out\DungeonSiege.exe;DungeonSiege.pdb
+	iff %vctype==7 then
+		devenv %projects\tattoo\exe\exe.sln /build retail /safemode /out %buildlog
+	else
+		msdev %projects\tattoo\exe\exe.dsw /Y3 /USEENV /MAKE "_Exe - Win32 Retail" | tee /a %buildlog
+	endiff
+	cdd %projects\tattoo\exe\retail
+	set exename=DungeonSiege
+	gosub Extract
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildeditord==y then
+	echo.
+	echo Building Siege Editor [Debug]...
+	echo.
+	*del /q /e /z %out\SiegeEditorD.exe;SiegeEditorD.pdb
+	iff %vctype==7 then
+		devenv %projects\siegeeditor\siegeeditor.sln /build debug /safemode /out %buildlog
+	else
+		msdev %projects\siegeeditor\siegeeditor.dsw /Y3 /USEENV /MAKE "SiegeEditor - Win32 Debug" | tee /a %buildlog
+	endiff
+	cdd %projects\siegeeditor\debug
+	set exename=SiegeEditorD
+	gosub Extract
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildeditorr==y then
+	echo.
+	echo Building Siege Editor [Release]...
+	echo.
+	*del /q /e /z %out\SiegeEditor.exe;SiegeEditor.pdb
+	iff %vctype==7 then
+		devenv %projects\siegeeditor\siegeeditor.sln /build release /safemode /out %buildlog
+	else
+		msdev %projects\siegeeditor\siegeeditor.dsw /Y3 /USEENV /MAKE "SiegeEditor - Win32 Release" | tee /a %buildlog
+	endiff
+	cdd %projects\siegeeditor\release
+	set exename=SiegeEditor
+	gosub Extract
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildviewer==y then
+	echo.
+	echo Building Anim Viewer...
+	echo.
+	msdev %projects\animviewer\animviewer.dsw /Y3 /USEENV /MAKE "AnimViewer - Win32 Release" | tee /a %buildlog
+	msdev %projects\animviewer\animviewer.dsw /Y3 /USEENV /MAKE "AnimViewer - Win32 Debug" | tee /a %buildlog
+	echo.
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %stop_virus_scanner==y then
+	net start "Network Associates Alert Manager"
+	net start "Network Associates Task Manager"
+	net start "Network Associates McShield"
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+iff %buildgame==y .OR. %buildgamer==y .OR. %buildgamed==y .OR. %buildeditord==y .OR. %buildeditorr==y .OR. %buildviewer==y then
+	echo.
+	echo ======================================================================
+	echo.
+	echo --== Summary ==--
+	echo.
+	type %buildlog | find /i "warning(s)"
+endiff
+
+:: //////////////////////////////////////////////////////////////////////////
+
+goto done
+
+:: //////////////////////////////////////////////////////////////////////////
+
+:Extract
+iff exist %exename.exe then
+	echos Extracting debug info...
+	copy /q %exename.exe %exename.exe.bak
+	echos .
+	rebase -q -b 0x00400000 -x . %exename.exe | tee /a %buildlog
+	echos .
+	move /q %exename.pdb %out\%exename.pdb
+	echos .
+	move /q %exename.exe %out\%exename.exe
+	echos .
+	rename /q %exename.exe.bak %exename.exe
+	echo.
+	%tree\tools\fubipacker -file %out\%exename.exe | tee /a %buildlog
+endiff
+return
+
+:: //////////////////////////////////////////////////////////////////////////
+
+echo.
+echo Done!
+:done

@@ -1,0 +1,159 @@
+Microsoft Visual Studio Solution File, Format Version 7.00
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AnimViewer", "AnimViewer.vcproj", "{7173AE75-9865-4B85-869E-1E7DFC5E6768}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Flamethrower", "..\..\Lib Projects\Flamethrower\Flamethrower.vcproj", "{6DCBB2D7-1FC8-4F54-9BC6-E1F150F212D6}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FuBi", "..\..\LIB Projects\FuBi\FuBi.vcproj", "{384935D3-D3E8-431E-A17E-DDB53CE9DBE8}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GPGSound", "..\..\Lib Projects\GPGSound\GPGSound.vcproj", "{26C6EC8D-C062-44AC-A0B6-A0CC3AA57AB4}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GameGUI", "..\..\Lib Projects\GameGUI\GameGUI.vcproj", "{4007C2C3-81C1-42ED-9541-62E739429EC7}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GpCore", "..\..\LIB Projects\GPCore\GPCore.vcproj", "{058E5CAC-794A-4C91-B81D-6C392A578009}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IME", "..\..\Lib Projects\Ime\ime.vcproj", "{7869B6AC-0BF7-4873-AAFE-3B0EBE48CAFE}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NeMa", "..\..\LIB Projects\NeMa\NeMa.vcproj", "{AF3AA43E-3539-412A-BCAC-A9C006752F7E}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetPipe", "..\..\Lib Projects\NetPipe\NetPipe.vcproj", "{9F8EA888-0547-4733-86F1-A1424E106733}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Rapi", "..\..\LIB Projects\Rapi\Rapi.vcproj", "{857D9C11-FC35-45EE-AB5C-2AD651EB6012}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Siege", "..\..\Lib Projects\Siege\Siege.vcproj", "{FF260DEF-502B-4977-B94E-0DD7EFC810EB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Skrit", "..\..\LIB Projects\Skrit\Skrit.vcproj", "{11D91FFD-6D38-436B-819E-88660D591E18}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_Services", "..\Tattoo\Services\_Services.vcproj", "{24B2ED60-A4FC-4963-A331-BB09A20817D1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "_World", "..\Tattoo\World\_World.vcproj", "{356069EF-CEE3-4055-97F8-70580EF4DDB0}"
+EndProject
+Global
+	GlobalSection(SourceCodeControl) = preSolution
+		SccNumberOfProjects = 14
+		SccProjectUniqueName0 = AnimViewer.vcproj
+		SccProjectName0 = \u0022$/GPG/Projects/AnimViewer\u0022,\u0020BIEGAAAA
+		SccLocalPath0 = .
+		SccProvider0 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName1 = ..\\..\\Lib\u0020Projects\\Flamethrower\\Flamethrower.vcproj
+		SccProjectName1 = \u0022$/GPG/LIB\u0020Projects/Flamethrower\u0022,\u0020JSJAAAAA
+		SccLocalPath1 = ..\\..\\Lib\u0020Projects\\Flamethrower
+		SccProvider1 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName2 = ..\\..\\LIB\u0020Projects\\FuBi\\FuBi.vcproj
+		SccProjectName2 = \u0022$/GPG/Lib\u0020Projects/FuBi\u0022,\u0020NJEBAAAA
+		SccLocalPath2 = ..\\..\\LIB\u0020Projects\\FuBi
+		SccProvider2 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName3 = ..\\..\\Lib\u0020Projects\\GPGSound\\GPGSound.vcproj
+		SccProjectName3 = \u0022$/GPG/Lib\u0020Projects/GPGSound\u0022,\u0020PXGGAAAA
+		SccLocalPath3 = ..\\..\\Lib\u0020Projects\\GPGSound
+		SccProvider3 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName4 = ..\\..\\Lib\u0020Projects\\GameGUI\\GameGUI.vcproj
+		SccProjectName4 = \u0022$/GPG/LIB\u0020Projects/GameGUI\u0022,\u0020ABTAAAAA
+		SccLocalPath4 = ..\\..\\Lib\u0020Projects\\GameGUI
+		SccProvider4 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName5 = ..\\..\\LIB\u0020Projects\\GPCore\\GPCore.vcproj
+		SccProjectName5 = \u0022$/GPG/LIB\u0020Projects/GpCore\u0022,\u0020PTLAAAAA
+		SccLocalPath5 = ..\\..\\LIB\u0020Projects\\GPCore
+		SccProvider5 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName6 = ..\\..\\Lib\u0020Projects\\Ime\\ime.vcproj
+		SccProjectName6 = \u0022$/GPG/Lib\u0020Projects/ime\u0022,\u0020CRGGAAAA
+		SccLocalPath6 = ..\\..\\Lib\u0020Projects\\Ime
+		SccProvider6 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName7 = ..\\..\\LIB\u0020Projects\\NeMa\\NeMa.vcproj
+		SccProjectName7 = \u0022$/GPG/LIB\u0020Projects/NeMa\u0022,\u0020ARSAAAAA
+		SccLocalPath7 = ..\\..\\LIB\u0020Projects\\NeMa
+		SccProvider7 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName8 = ..\\..\\Lib\u0020Projects\\NetPipe\\NetPipe.vcproj
+		SccProjectName8 = \u0022$/GPG/LIB\u0020Projects/NetPipe\u0022,\u0020HGPFAAAA
+		SccLocalPath8 = ..\\..\\Lib\u0020Projects\\NetPipe
+		SccProvider8 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName9 = ..\\..\\LIB\u0020Projects\\Rapi\\Rapi.vcproj
+		SccProjectName9 = \u0022$/GPG/LIB\u0020Projects/Rapi\u0022,\u0020NKLAAAAA
+		SccLocalPath9 = ..\\..\\LIB\u0020Projects\\Rapi
+		SccProvider9 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName10 = ..\\..\\Lib\u0020Projects\\Siege\\Siege.vcproj
+		SccProjectName10 = \u0022$/GPG/LIB\u0020Projects/Siege\u0022,\u0020NEZAAAAA
+		SccLocalPath10 = ..\\..\\Lib\u0020Projects\\Siege
+		SccProvider10 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName11 = ..\\..\\LIB\u0020Projects\\Skrit\\Skrit.vcproj
+		SccProjectName11 = \u0022$/GPG/Lib\u0020Projects/Skrit\u0022,\u0020NJEBAAAA
+		SccLocalPath11 = ..\\..\\LIB\u0020Projects\\Skrit
+		SccProvider11 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName12 = ..\\Tattoo\\Services\\_Services.vcproj
+		SccProjectName12 = \u0022$/GPG/Projects/Tattoo/Services\u0022,\u0020APVAAAAA
+		SccLocalPath12 = ..\\Tattoo\\Services
+		SccProvider12 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+		SccProjectUniqueName13 = ..\\Tattoo\\World\\_World.vcproj
+		SccProjectName13 = \u0022$/GPG/Projects/Tattoo/World\u0022,\u0020ZOVAAAAA
+		SccLocalPath13 = ..\\Tattoo\\World
+		SccProvider13 = MSSCCI:Perforce\u0020SCM
+		CanCheckoutShared = true
+	EndGlobalSection
+	GlobalSection(SolutionConfiguration) = preSolution
+		ConfigName.0 = Debug
+		ConfigName.1 = Release
+	EndGlobalSection
+	GlobalSection(ProjectDependencies) = postSolution
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.0 = {AF3AA43E-3539-412A-BCAC-A9C006752F7E}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.1 = {058E5CAC-794A-4C91-B81D-6C392A578009}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.2 = {384935D3-D3E8-431E-A17E-DDB53CE9DBE8}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.3 = {11D91FFD-6D38-436B-819E-88660D591E18}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.4 = {857D9C11-FC35-45EE-AB5C-2AD651EB6012}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.5 = {356069EF-CEE3-4055-97F8-70580EF4DDB0}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.6 = {FF260DEF-502B-4977-B94E-0DD7EFC810EB}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.7 = {26C6EC8D-C062-44AC-A0B6-A0CC3AA57AB4}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.8 = {24B2ED60-A4FC-4963-A331-BB09A20817D1}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.9 = {6DCBB2D7-1FC8-4F54-9BC6-E1F150F212D6}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.10 = {9F8EA888-0547-4733-86F1-A1424E106733}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.11 = {4007C2C3-81C1-42ED-9541-62E739429EC7}
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.12 = {7869B6AC-0BF7-4873-AAFE-3B0EBE48CAFE}
+	EndGlobalSection
+	GlobalSection(ProjectConfiguration) = postSolution
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.Debug.ActiveCfg = Debug|Win32
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.Debug.Build.0 = Debug|Win32
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.Release.ActiveCfg = Release|Win32
+		{7173AE75-9865-4B85-869E-1E7DFC5E6768}.Release.Build.0 = Release|Win32
+		{6DCBB2D7-1FC8-4F54-9BC6-E1F150F212D6}.Debug.ActiveCfg = Debug|Win32
+		{6DCBB2D7-1FC8-4F54-9BC6-E1F150F212D6}.Release.ActiveCfg = Release|Win32
+		{384935D3-D3E8-431E-A17E-DDB53CE9DBE8}.Debug.ActiveCfg = Debug|Win32
+		{384935D3-D3E8-431E-A17E-DDB53CE9DBE8}.Release.ActiveCfg = Release|Win32
+		{26C6EC8D-C062-44AC-A0B6-A0CC3AA57AB4}.Debug.ActiveCfg = Debug|Win32
+		{26C6EC8D-C062-44AC-A0B6-A0CC3AA57AB4}.Release.ActiveCfg = Release|Win32
+		{4007C2C3-81C1-42ED-9541-62E739429EC7}.Debug.ActiveCfg = Debug|Win32
+		{4007C2C3-81C1-42ED-9541-62E739429EC7}.Release.ActiveCfg = Release|Win32
+		{058E5CAC-794A-4C91-B81D-6C392A578009}.Debug.ActiveCfg = Debug|Win32
+		{058E5CAC-794A-4C91-B81D-6C392A578009}.Release.ActiveCfg = Release|Win32
+		{7869B6AC-0BF7-4873-AAFE-3B0EBE48CAFE}.Debug.ActiveCfg = Debug|Win32
+		{7869B6AC-0BF7-4873-AAFE-3B0EBE48CAFE}.Release.ActiveCfg = Release|Win32
+		{AF3AA43E-3539-412A-BCAC-A9C006752F7E}.Debug.ActiveCfg = Debug|Win32
+		{AF3AA43E-3539-412A-BCAC-A9C006752F7E}.Release.ActiveCfg = Release|Win32
+		{9F8EA888-0547-4733-86F1-A1424E106733}.Debug.ActiveCfg = Debug|Win32
+		{9F8EA888-0547-4733-86F1-A1424E106733}.Release.ActiveCfg = Release|Win32
+		{857D9C11-FC35-45EE-AB5C-2AD651EB6012}.Debug.ActiveCfg = Debug|Win32
+		{857D9C11-FC35-45EE-AB5C-2AD651EB6012}.Release.ActiveCfg = Release|Win32
+		{FF260DEF-502B-4977-B94E-0DD7EFC810EB}.Debug.ActiveCfg = Debug|Win32
+		{FF260DEF-502B-4977-B94E-0DD7EFC810EB}.Release.ActiveCfg = Release|Win32
+		{11D91FFD-6D38-436B-819E-88660D591E18}.Debug.ActiveCfg = Debug|Win32
+		{11D91FFD-6D38-436B-819E-88660D591E18}.Release.ActiveCfg = Release|Win32
+		{24B2ED60-A4FC-4963-A331-BB09A20817D1}.Debug.ActiveCfg = Debug|Win32
+		{24B2ED60-A4FC-4963-A331-BB09A20817D1}.Release.ActiveCfg = Release|Win32
+		{356069EF-CEE3-4055-97F8-70580EF4DDB0}.Debug.ActiveCfg = Debug|Win32
+		{356069EF-CEE3-4055-97F8-70580EF4DDB0}.Release.ActiveCfg = Release|Win32
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+	EndGlobalSection
+	GlobalSection(ExtensibilityAddIns) = postSolution
+	EndGlobalSection
+EndGlobal
