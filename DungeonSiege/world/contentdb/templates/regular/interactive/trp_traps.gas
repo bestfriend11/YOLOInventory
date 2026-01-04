@@ -1,0 +1,1291 @@
+[t:template,n:trp_arrow]
+{
+	category_name = "trap";
+	doc = "trap_arrow";
+	specializes = trap;
+	[attack]
+	{
+		ammo_attach_bone = weapon_grip;
+		ammo_template = trap_arrow;
+		damage_max = 1;
+		damage_min = 1;
+	}
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("trap_dust_explosion");
+				condition* = receive_world_message("we_req_activate");
+			}
+		}
+	}
+	[on_client] {}
+	[trp_launch]
+	{
+	}
+}
+[t:template,n:trp_explosion]
+{
+	category_name = "trap";
+	doc = "trap_explosion";
+	specializes = trap;
+	[attack]
+	{
+	}
+	[on_client] {}
+	[trp_explosion]
+	{
+		effect_script = explosive_trap;
+		magnitude = 3;
+		radius = 3;
+	}
+}
+[t:template,n:trp_fireball]
+{
+	category_name = "trap";
+	doc = "trap_fireball";
+	specializes = trap;
+	[attack]
+	{
+	}
+	[on_client] {}
+	[trp_trackball]
+	{
+		effect_script = fireball_trap;
+	}
+}
+[t:template,n:trp_fireball_explosive]
+{
+	category_name = "trap";
+	doc = "trap_fireball_explosive";
+	specializes = trap;
+	[attack]
+	{
+	}
+	[on_client] {}
+	[trp_trackball]
+	{
+		effect_script = fireball_explosive_trap;
+		explosive = TRUE;
+	}
+}
+[t:template,n:trp_firetrap]
+{
+	category_name = "trap";
+	doc = "trap_firetrap";
+	specializes = trap_auto;
+	[on_client] {}
+	[trp_firetrap]
+	{
+	}
+}
+[t:template,n:trp_flame]
+{
+	category_name = "trap";
+	doc = "trap_flame";
+	specializes = trap;
+	[on_client] {}
+	[trp_particle]
+	{
+		duration = 1;
+		effect_script = flame_trap;
+		ignite = TRUE;
+	}
+}
+[t:template,n:trp_frost]
+{
+	category_name = "trap";
+	doc = "trap_frost";
+	specializes = trap;
+	[on_client] {}
+	[trp_particle]
+	{
+		duration = 1;
+		effect_script = frost_trap;
+		ignite = TRUE;
+	}
+}
+[t:template,n:trp_gas]
+{
+	category_name = "trap";
+	doc = "trap_gas";
+	specializes = trap;
+	[on_client] {}
+	[trp_particle]
+	{
+		duration = 1;
+		effect_script = gas_trap;
+		ignite = FALSE;
+	}
+}
+[t:template,n:trp_generator]
+{
+	category_name = "trap";
+	doc = "trap_generator";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_gas;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_flame;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_frost;
+				}
+				[all*]
+				{
+					chance = 0.12;
+					il_main = trp_star;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_fireball;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_fireball_explosive;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_explosion;
+				}
+				[all*]
+				{
+					chance = .11;
+					il_main = trp_arrow;
+				}
+				[all*]
+				{
+					chance = 0.11;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_arrow]
+{
+	category_name = "trap";
+	doc = "trap_generator_arrow";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_arrow;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_arrow_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_arrow_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_arrow;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_arrow_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_arrow_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_arrow;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_arrow_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_arrow_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_arrow;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_explosion]
+{
+	category_name = "trap";
+	doc = "trap_generator_explosion";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_explosion;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_explosion_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_explosion_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_explosion;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_explosion_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_explosion_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_explosion;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_explosion_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_explosion_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_explosion;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_explosion_urn]
+{
+	category_name = "trap";
+	doc = "trap_generator_explosion_urn";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.4;
+					il_main = trp_explosion;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_fireball;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_fireball;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_fireball;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_fireball;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_explosive]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_explosive";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_fireball_explosive;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_explosive_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_explosive_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_fireball_explosive;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_explosive_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_explosive_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_fireball_explosive;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_explosive_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_explosive_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_fireball_explosive;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_explosive_urn]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_explosive_urn";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.4;
+					il_main = trp_fireball_explosive;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_fireball_urn]
+{
+	category_name = "trap";
+	doc = "trap_generator_fireball_urn";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.4;
+					il_main = trp_fireball;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_firetrap]
+{
+	category_name = "trap";
+	doc = "trap_generator_firetrap";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_firetrap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_flame]
+{
+	category_name = "trap";
+	doc = "trap_generator_flame";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_flame;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_flame_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_flame_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_flame;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_flames]
+{
+	category_name = "trap";
+	doc = "trap_generator_flames";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.5;
+					il_main = trp_flame;
+				}
+				[all*]
+				{
+					chance = 0.5;
+					il_main = trp_frost;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_frost]
+{
+	category_name = "trap";
+	doc = "trap_generator_frost";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_frost;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_frost_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_frost_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_frost;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_gas]
+{
+	category_name = "trap";
+	doc = "trap_generator_gas";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_gas;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_gas_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_gas_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_gas;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_gas_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_gas_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_gas;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_gas_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_gas_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_gas;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_gas_urn]
+{
+	category_name = "trap";
+	doc = "trap_generator_gas_urn";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.4;
+					il_main = trp_gas;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_star]
+{
+	category_name = "trap";
+	doc = "trap_generator_star";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_star;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_star_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_star_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_star;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_star_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_star_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_star;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_star_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_star_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_star;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_zap]
+{
+	category_name = "trap";
+	doc = "trap_generator_zap";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 1;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_zap_barrel]
+{
+	category_name = "trap";
+	doc = "trap_generator_zap_barrel";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.15;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_zap_chest]
+{
+	category_name = "trap";
+	doc = "trap_generator_zap_chest";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.3;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_zap_crate]
+{
+	category_name = "trap";
+	doc = "trap_generator_zap_crate";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+                    chance = 0.22;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_generator_zap_urn]
+{
+	category_name = "trap";
+	doc = "trap_generator_zap_urn";
+	specializes = trap;
+	[generator_object_pcontent]
+	{
+		auto_drop = FALSE;
+		create_msg = we_entered_world;
+		send_goid = TRUE;
+		throw_object = FALSE;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					chance = 0.4;
+					il_main = trp_zap;
+				}
+			}
+		}
+	}
+}
+[t:template,n:trp_star]
+{
+	category_name = "trap";
+	doc = "trap_star";
+	specializes = trap;
+	[attack]
+	{
+		aiming_error_range_x = 4;
+		aiming_error_range_y = 4;
+		ammo_attach_bone = weapon_grip;
+		ammo_template = trap_star;
+		damage_max = 1;
+		damage_min = 1;
+		use_aiming_error = TRUE;
+	}
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("star_launch_sparks");
+				condition* = receive_world_message("we_req_activate");
+			}
+		}
+	}
+	[on_client] {}
+	[trp_launch]
+	{
+		velocity = 15;
+	}
+}
+[t:template,n:trp_zap]
+{
+	category_name = "trap";
+	doc = "trap_zap";
+	specializes = trap;
+	[on_client] {}
+	[trp_lightning]
+	{
+		duration = 0.15;
+		effect_script = zap_trap;
+	}
+}

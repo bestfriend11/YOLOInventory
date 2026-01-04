@@ -1,0 +1,161 @@
+[t:template,n:base_rune]
+{
+	category_name = "treasure";
+	doc = "base rune template";
+	specializes = treasure;
+	[aspect]
+	{
+		model = m_i_glb_key-01;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_jewelry;
+			}
+		}
+	}
+	[common]
+	{
+		screen_name = "Rune";
+	}
+}
+[t:template,n:rune_glb_01]
+{
+	doc = "rune_hourglass";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-01;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_001;
+	}
+}
+[t:template,n:rune_glb_02]
+{
+	doc = "rune_diamond";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-02;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_002;
+	}
+}
+[t:template,n:rune_glb_03]
+{
+	doc = "rune_triangle";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-03;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_003;
+	}
+}
+[t:template,n:rune_glb_04]
+{
+	doc = "rune_round";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-04;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_004;
+	}
+}
+[t:template,n:rune_glb_05]
+{
+	doc = "rune_hexagon";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-05;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_005;
+	}
+}
+[t:template,n:rune_glb_06]
+{
+	doc = "rune_square";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-06;
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_rune_006;
+	}
+}
+[t:template,n:gen_trella_rune]
+{
+	doc = "generator_trella_rune";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-02;
+		force_no_render = true;
+		is_visible = false;
+		is_selectable = false;
+	}
+	[common]
+	{
+		screen_name = "Rune of Diamonds";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = trella_rune;
+	}
+}
+[t:template,n:trella_rune]
+{
+	category_name = "quest";
+	doc = "rune_diamond";
+	extra_doc = "Specialty quest item for use in the trella_rune quest in mine_town of MP world";
+	specializes = base_rune;
+	[aspect]
+	{
+		model = m_i_glb_key-02;
+	}
+	[common]
+	{
+		screen_name = "Rune of Diamonds";
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+		
+		[instance_triggers]
+		{
+			[*]
+			{
+				action* = change_quest_state("quest_trella_rune","active",1);
+			  b can_self_destruct = true;
+				condition* = receive_world_message("we_picked_up",0,"on_first_message"), doc("[*one-shot check (trigger is one-shot)*]");
+			  f delay = 0.000000;
+			  b flip_flop = false;
+			  b multi_player = true;
+			  b no_trig_bits = false;
+				occupants_group = ;
+			  f reset_duration = 0.000000;
+			  b single_player = true;
+			  b single_shot = true;
+			  b start_active = true;
+			}
+		}
+	}
+	[gui]
+	{
+		can_sell = FALSE;
+		inventory_icon = b_gui_ig_i_it_rune_002;
+	}
+	[single_pickup] {}
+}

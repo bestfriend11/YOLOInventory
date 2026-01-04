@@ -1,0 +1,158 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_auto_object_exploding..skrit
+// Author(s):  Uncle Ernsie, Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "Object with blows up when receiving a message then spawns a monster.";
+property string _required_component$ = "placement";
+
+property Scid   		Initial_Command$							doc = "Scid of Command Object if applicable";
+property Scid   		Spawnpoint$									doc = "Scid of Spawnpoint Object if applicable";
+property string 		Child_Template_Name$ 						doc = "Template Name of actor you want to spawn.";
+property float          Break_Delay$                            	doc = "Delay before breaking the object.";
+property float          Spawn_Delay$                            	doc = "Delay before spawning monster.";
+property float          Health_on_Creation$  		= 10			doc = "Original health of object when created.";
+property float 			Health_Modifier$  	 		= 500			doc = "Amount to damage the object when sent a WE_REQ_ACTIVATE.";
+property float			trigger_range$		 		= 10.0			doc = "When a party member is within this radius, the generator will activate.";
+property bool			sfx_on$						= true			doc = "Is the closing dust effect on?";
+property bool   		sfx_at_spawnpoint$    		= false         doc = "Do you want to use the spawnpoint for the effect location?";
+property string			sfx_type$					= "grate_dust"	doc = "Must Specify SiegeFx Script if Close Sfx On";
+property string 		sfx_params$					= ""			doc = "Parameters for the SiegeFx script";
+
+owner                                = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+event OnGoDrawDebugHud$
+{
+
+	World.DrawDebugSphere( owner.Go.Placement.Position,
+						   trigger_range$,
+						   MakeColor( 1.0, 0.0, 0.0 ),
+						   Debug.Format( "Child_Template_Name: %s\nHealth_on_Creation: %f\nHealth_Modifier: %f\nTrigger_Range: %f\n",
+						   Child_Template_Name$, Health_on_Creation$, Health_Modifier$, trigger_range$ ) );
+
+    if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 SpawnPoint$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Spawnpoint" );
+    }
+
+    if ( ( Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() ) && ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() ) )
+    {
+		World.DrawDebugDirectedLine( Spawnpoint$.go.Placement.Position,
+									 Initial_Command$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+}
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(Child_Template_Name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, Child_Template_Name$ );
+	}
+}
+
+startup state WaitForSetup$
+{
+	event OnGoUpdate$( float /*deltaTime$*/ )
+	{
+        //Set Life of Object On Construction
+    	Rules.ChangeLife( owner.goid, Health_on_Creation$);
+		SetState Wait$;
+	}
+}
+
+state Wait$
+{
+    transition -> SpawnActor$: OnTimer( 1 );
+	transition -> Wait$: OnTimer( 2 );
+
+    event OnEnterState$
+    {
+		if ( AiQuery.DoesSphereHaveHumanControlledOccupants( owner.Go.Placement.Position, 10))
+        {
+        	this.CreateTimer( 1, Spawn_Delay$ );
+        }
+		else
+		{
+            This.CreateTimer( 2, 0.25 );
+        }
+	}
+}
+
+state SpawnActor$
+{
+	event OnEnterState$
+	{
+		this.CreateTimer( 1, Break_Delay$ );
+		
+		if (!stringtool.isempty(Child_Template_Name$))
+        {
+			//Spawn Actor in Place of Object
+			GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+
+			if ( SpawnPoint$.getgoid.isvalid())
+			{
+				SiegePos SpawnPos$ = Spawnpoint$.go.placement.position;
+				cloneReq$.StartingPos	= SpawnPos$;
+                cloneReq$.SetStartingOrient = Spawnpoint$.Go.Placement.Orientation;
+			}
+			else
+			{
+				SiegePos SpawnPos$ = owner.go.placement.position;
+				cloneReq$.StartingPos	= SpawnPos$;
+                cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+			}
+
+			cloneReq$.SnapToTerrain = true;
+           	Goid newGoid$	= GoDb.SCloneGo( cloneReq$ );
+
+			//If valid give clone an initial command
+			if ( Initial_Command$.getgoid.isvalid() )
+            {
+				newGoid$.Go.Mind.SetInitialCommand( Initial_Command$ );
+            }
+		}
+	}
+	
+	transition -> BlowItUp$: OnTimer( 1 );
+}
+
+state BlowItUp$
+{
+	event OnEnterState$
+	{
+		//Damage Object when Expl Message Received
+   		Rules.DamageGo(  owner.goid, owner.goid, owner.goid, Health_Modifier$, true, true );
+
+		if (sfx_on$)
+		{
+			if (( sfx_at_spawnpoint$ ) && ( SpawnPoint$.getgoid.isvalid() ))
+            {
+				SiegeFx.SRunScript( sfx_type$, Spawnpoint$.Goid, Spawnpoint$.Goid, sfx_params$, Spawnpoint$.Goid, WE_UNKNOWN );
+    		}
+            else
+            {
+				SiegeFx.SRunScript( sfx_type$, owner.Goid, owner.Goid, sfx_params$, owner.Goid, WE_UNKNOWN );
+			}
+		}
+	}
+}
+
+
+

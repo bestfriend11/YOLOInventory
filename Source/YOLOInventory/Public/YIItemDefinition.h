@@ -82,6 +82,12 @@ public:
 	UPROPERTY(EditAnywhere, Category="Affixes", meta=(ToolTip="Affix assets that are implicitly applied to every instance of this definition"))
 	TArray<TSoftObjectPtr<class UYIAffixAsset>> TemplateAffixes;
 
+	// Runtime generator constraints for randomized modifiers
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affixes|Roll", meta=(ClampMin="0", ToolTip="Minimum number of randomized modifiers to roll for this item"))
+	int32 MinRandomModifiers = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affixes|Roll", meta=(ClampMin="0", ToolTip="Maximum number of randomized modifiers to roll for this item"))
+	int32 MaxRandomModifiers = 0;
+
 	// Optional pools for randomized prefixes/suffixes
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affixes", meta=(ToolTip="Optional affix pool used to sample prefixes for randomized item generation"))
 	TSoftObjectPtr<class UYIAffixPoolAsset> PrefixPool;

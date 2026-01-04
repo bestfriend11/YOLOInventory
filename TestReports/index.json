@@ -1,0 +1,179 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "DODOCO",
+			"instance": "830E11E445FBBEE24CC091A2D5700684",
+			"instanceName": "DODOCO-17584",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (23H2) [10.0.22631.5768] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce GTX 560",
+			"cPUModel": "AMD Phenom(tm) II X6 1090T Processor",
+			"rAMInGB": 32,
+			"renderMode": "SM6",
+			"rHI": "",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2026.01.03-18.33.17",
+	"succeeded": 10,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 0.16571559011936188,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "auto-packs items largest-first to reduce fragmentation",
+			"fullTestPath": "YOLOInventory.Bag.Core.auto-packs items largest-first to reduce fragmentation",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016137197613716125,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "computes effective sizes with clamping and rounding",
+			"fullTestPath": "YOLOInventory.Bag.Core.computes effective sizes with clamping and rounding",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016558799892663956,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "drops items when minify scale increases and keeps non-overlapping",
+			"fullTestPath": "YOLOInventory.Bag.Core.drops items when minify scale increases and keeps non-overlapping",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016567200422286987,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "finds fits in grid and list mode",
+			"fullTestPath": "YOLOInventory.Bag.Core.finds fits in grid and list mode",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016562100499868393,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "merges, respects max stack, and enforces unique-per-type",
+			"fullTestPath": "YOLOInventory.Bag.Core.merges, respects max stack, and enforces unique-per-type",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.01648470014333725,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "rotates items only when allowed and fitting",
+			"fullTestPath": "YOLOInventory.Bag.Core.rotates items only when allowed and fitting",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.01673559844493866,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "splits and combines stacks with removal when empty",
+			"fullTestPath": "YOLOInventory.Bag.Core.splits and combines stacks with removal when empty",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016548298299312592,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "supports CanPlaceAtIgnoring and MoveItem respecting overlaps",
+			"fullTestPath": "YOLOInventory.Bag.Core.supports CanPlaceAtIgnoring and MoveItem respecting overlaps",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016744200140237808,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "validates placement, overlap, and list mode",
+			"fullTestPath": "YOLOInventory.Bag.Core.validates placement, overlap, and list mode",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016627401113510132,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "validates RectsOverlap utility edges",
+			"fullTestPath": "YOLOInventory.Bag.Core.validates RectsOverlap utility edges",
+			"tags": [],
+			"state": "Success",
+			"deviceInstance": [
+				"830E11E445FBBEE24CC091A2D5700684"
+			],
+			"duration": 0.016750101000070572,
+			"dateTime": "2026.01.03-18.33.17",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

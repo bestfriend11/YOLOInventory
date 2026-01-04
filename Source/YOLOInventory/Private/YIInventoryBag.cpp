@@ -328,15 +328,32 @@ bool UYIInventoryBag::FindFirstFit(const FIntPoint Size, FIntPoint& OutPos) cons
 void UYIInventoryBag::AutoPack()
 {
 	if (GridSize.X <= 0 || GridSize.Y <= 0) return;
-	TArray<FYIBagItem> NewOrder;
-	NewOrder.Reserve(Items.Num());
-	for (const FYIBagItem& It : Items)
+	// Sort by footprint area descending so larger items get placed first (reduces fragmentation).
+	TArray<FYIBagItem> Sorted = Items;
+	Sorted.Sort([this](const FYIBagItem& A, const FYIBagItem& B)
+	{
+		const FIntPoint EffA = GetEffectiveSize(A.Size);
+		const FIntPoint EffB = GetEffectiveSize(B.Size);
+		const int32 AreaA = EffA.X * EffA.Y;
+		const int32 AreaB = EffB.X * EffB.Y;
+		if (AreaA != AreaB) return AreaA > AreaB;
+		// Tie-breaker: wider first, then original ordering remains stable
+		return EffA.X > EffB.X;
+	});
+
+	// Place into the bag one-by-one using current occupancy as we go
+	Items.Reset();
+	Items.Reserve(Sorted.Num());
+	for (const FYIBagItem& It : Sorted)
 	{
 		FYIBagItem Tmp = It;
 		FIntPoint Pos;
-		if (FindFirstFit(Tmp.Size, Pos)) { Tmp.Pos = Pos; NewOrder.Add(Tmp); }
-		else { NewOrder.Add(Tmp); }
+		if (FindFirstFit(Tmp.Size, Pos))
+		{
+			Tmp.Pos = Pos;
+		}
+		Items.Add(Tmp);
 	}
-	Items = NewOrder;
-	MarkPackageDirty(); OnChanged.Broadcast();
+	MarkPackageDirty();
+	OnChanged.Broadcast();
 }

@@ -1,0 +1,1521 @@
+///////////////////////////////////////////////////////////////
+// BARREL (wooden) base	template
+
+[t:template,n:base_container_barrel]
+{
+	specializes		= container;
+	doc				= "Barrel base template";
+
+	common:screen_name	= "Barrel";
+	common:		rollover_display = true;
+
+	[aspect]
+	{
+		is_usable	= false;
+		life_state	= LS_ALIVE_CONSCIOUS;
+		max_life	= 1;
+		material	= wood;
+		life		= 1;
+		voice:die:	* =	s_e_env_break_container_wood;
+	}
+
+	[physics]
+	{
+		[break_particulate]
+		{
+		frag_glb_wood_01	= 1;
+		frag_glb_wood_02	= 1;
+		frag_glb_wood_03	= 1;
+		frag_glb_wood_04	= 1;
+		frag_glb_metal_01	= 2;
+		}
+	}
+}
+
+///////////////////////////////////////////////////////////////
+// BARREL (wooden) leaf	templates
+
+[t:template,n:barrel_glb]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_base";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_barrel;
+
+}
+[t:template,n:barrel_glb_inv]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_indestructable";
+	category_name	= "container";
+
+	common:screen_name	= "Indestructable barrel";
+
+	aspect:model		= m_i_glb_barrel;
+	aspect:is_invincible = true;
+
+}
+
+[t:template,n:barrel_glb_floating_03]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_floating_vertical";
+	category_name	= "container";
+
+	aspect:model		= m_i_glb_barrel-03;
+	aspect:textures:0	= b_i_glb_barrel;
+	[body]
+	{
+		initial_chore =	chore_default;
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_default]
+			{
+				skrit =	infinite_loop;
+				[anim_files] { 00=barrel-03-float; }
+			}
+		}
+	}
+}
+
+[t:template,n:barrel_glb_floating_04]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_floating_horiz";
+	category_name	= "container";
+
+	aspect:model		= m_i_glb_barrel-04;
+	aspect:textures:0	= b_i_glb_barrel;
+	[body]
+	{
+		initial_chore =	chore_default;
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_default]
+			{
+				skrit =	infinite_loop;
+				[anim_files] { 00=barrel-04-float; }
+			}
+		}
+	}
+}
+
+[t:template,n:barrel_glb_open]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_open";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_barrel-open;
+
+}
+
+[t:template,n:barrel_glb_with_lid]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_with lid";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_barrel-lid;
+
+}
+
+
+[t:template,n:barrel_glb_powder_keg]
+{
+	specializes		= base_container_barrel;
+	doc				= "powder_keg";
+	category_name	= "container";
+
+	[attack]
+	{
+		area_damage_radius = 7;
+		damage_min = 5000;
+		damage_max = 5000;
+	}
+
+	[physics]
+	{
+		explosion_magnitude		= 10;
+		break_effect			= barrel_explosion;
+		explode_when_killed		= true;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		damage_all				= true;
+	}
+
+	aspect:model	= m_i_glb_keg-powder;
+
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				action*	= start_camera_fx("camera_barrel_explode");
+				condition* = receive_world_message("we_exploded");
+				flip_flop =	false;
+				reset_duration = 0.000000;
+				single_shot	= true;
+			}
+		}
+	}
+}
+
+[t:template,n:barrel_glb_powder_keg_nice]
+{
+	specializes		= base_container_barrel;
+	doc				= "powder_keg_nice";
+	category_name	= "container";
+
+	[attack]
+	{
+		area_damage_radius = 7;
+		damage_min = 5000;
+		damage_max = 5000;
+	}
+
+	[physics]
+	{
+		explosion_magnitude	= 10;
+		break_effect		= barrel_explosion;
+		explode_when_killed	= true;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+	}
+
+	aspect:model	= m_i_glb_keg-powder;
+
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				action*	= start_camera_fx("camera_barrel_explode");
+				condition* = receive_world_message("we_exploded");
+				flip_flop =	false;
+				reset_duration = 0.000000;
+				single_shot	= true;
+			}
+		}
+
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = change_actor_life(-10.000000,"party_member_within_sphere",0);
+				condition* = party_member_within_sphere(3.000000);
+				condition* = receive_world_message("we_killed",0);
+			  f delay = 0.000000;
+			  b flip_flop = false;
+				occupants_group = ;
+			  f poll_frequency = 0.000000;
+			  f reset_duration = 0.000000;
+			  b single_shot = false;
+			  b start_active = true;
+			}
+		}
+    }
+}
+
+[t:template,n:cask_glb_ale]
+{
+	specializes		= base_container_barrel;
+	doc				= "cask	of ale";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_cask-ale;
+
+}
+
+[t:template,n:barrel_cav_01]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_metalbound_lt";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_barrel-01;
+}
+
+[t:template,n:barrel_cav_02]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_metalbound_dk";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_barrel-02;
+}
+[t:template,n:barrel_csl_webbed_01]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_webbed";
+	category_name	= "indoor";
+	[aspect]
+	{
+		model	= m_i_csl_barrel-webbed-01;
+	}
+}
+[t:template,n:barrel_csl_webbed_02]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_webbed_crushed";
+	category_name	= "indoor";
+	[aspect]
+	{
+		model	= m_i_csl_barrel-webbed-02;
+	}
+}
+[t:template,n:barrel_ice_01]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_base_ice";
+		category_name	= "container";
+
+	[aspect]
+	{
+		model	= m_i_glb_barrel;
+		[textures]	{0=b_i_ice_barrel;}
+	}
+}
+[t:template,n:barrel_ice_supplies_01]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_weathered_ice";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_barrel-01;
+		[textures]	{ 0 = b_i_ice_supplies-01; }
+	}
+}
+[t:template,n:barrel_ice_supplies_02]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_weathered_ice_side";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_barrel-02;
+		[textures]	{ 0 = b_i_ice_supplies-01; }
+	}
+}
+[t:template,n:barrel_swp_01]
+{
+	specializes		= base_container_barrel;
+	doc				= "barrel_mossy";
+		category_name	= "container";
+
+	[aspect]
+	{
+		model	= m_i_swp_barrel-01;
+		[textures]	{0=b_i_swp_barrel-01;}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////
+// WOODEN container	base template
+
+[t:template,n:base_container_wood]
+{
+	specializes		= container;
+	doc				= "Crate";
+
+	common:screen_name	= "Crate";
+	common:		rollover_display = true;
+
+	[aspect]
+	{
+		material = wood;
+		is_usable =	false;
+		life_state = LS_ALIVE_CONSCIOUS;
+		max_life = 1;
+		life		= 1;
+		voice:die:	* =	s_e_env_break_container_wood;
+	}
+	[physics]
+	{
+		//break_sound =	s_e_IH_break_wood_solid;
+		[break_particulate]
+		{
+		frag_glb_wood_01	= 1;
+		frag_glb_wood_02	= 1;
+		frag_glb_wood_03	= 1;
+		frag_glb_wood_04	= 1;
+		frag_glb_wood_05	= 1;
+		frag_glb_wood_06	= 1;
+		}
+	}
+}
+
+////// CRATES //////////
+[t:template,n:crate_glb_phrak]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_phrak";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_crate;
+
+	[generator_in_object]
+	{
+		child_template_name	= phrak;
+	}
+
+}
+[t:template,n:crate_glb_phrak2]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_phrak2";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_crate;
+
+	[generator_object_pcontent]
+	{
+		auto_drop = false;
+	}
+
+}
+
+
+[t:template,n:crate_glb]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_base";
+	category_name	= "container";
+
+	aspect:model	= m_i_glb_crate;
+
+
+}
+
+[t:template,n:crate_cav_large]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_cross_lg";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_crate-lg;
+}
+
+[t:template,n:crate_cav_small]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_cross_sm";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_crate-sm;
+}
+
+[t:template,n:crate_cav_02]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_metalbound_sm";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_crate-02;
+}
+
+[t:template,n:crate_cav_03]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_metalbound_lg";
+	category_name	= "container";
+
+	aspect:model	= m_i_cav_crate-03;
+}
+[t:template,n:crate_csl_webbed_01]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_webbed";
+	category_name	= "indoor";
+	[aspect]
+	{
+		model	= m_i_csl_crate-webbed-01;
+	}
+}
+[t:template,n:crate_grs_01]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_rustic";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-krug;
+		[textures]	{0=b_i_glb_crate-krug;}
+	}
+}
+
+[t:template,n:crate_grs_02]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_cedar_with	cloth";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-03;
+		[textures]	{0=b_i_glb_crate-03;}
+	}
+}
+
+[t:template,n:crate_grs_03]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_stained";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-krug;
+		[textures]	{0=b_i_glb_crate-02;}
+	}
+}
+
+[t:template,n:crate_ice_01]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_ice";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-01;
+		[textures]	{0=b_i_ice_supplies-01;}
+	}
+}
+
+[t:template,n:crate_ice_02]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_base_ice";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate;
+		[textures]	{0=b_i_ice_crate;}
+	}
+}
+[t:template,n:crate_ice_03]
+{
+	specializes		= base_container_wood;
+	doc				= "footlocker_ice";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-02;
+		[textures]	{0=b_i_ice_supplies-01;}
+	}
+}
+[t:template,n:crate_swp_01]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_rustic_mossy";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-krug;
+		[textures]	{0=b_i_swp_crate-01;}
+	}
+}
+
+[t:template,n:crate_des_01]
+{
+	specializes		= base_container_wood;
+	doc				= "crate_weathered_strong";
+		category_name		= "container";
+	[aspect]
+	{
+		model	= m_i_glb_crate-krug;
+		[textures]	{0=b_i_des_crate-01;}
+	}
+}
+
+
+[t:template,n:trunk_csl_long]
+{
+	specializes		= base_container_wood;
+	doc				= "chest_long_black";
+	category_name	= "container";
+
+	common:screen_name	= "Trunk";
+
+	aspect:model	= m_i_glb_trunk-long;
+}
+
+[t:template,n:trunk_glb_long]
+{
+	specializes			= base_container_wood;
+	doc					= "chest_wood_long";
+	category_name		= "container";
+
+	aspect:model		= m_i_glb_trunk-long;
+	aspect:textures:0	= b_i_glb_trunk-long;
+}
+
+[t:template,n:trunk_csl_golden]
+{
+	specializes			= base_container_wood;
+	doc					= "chest_long_gld";
+	category_name		= "container";
+
+	aspect:model		= m_i_glb_trunk-long;
+	aspect:textures:0	= b_i_csl_trunk-golden;
+}
+
+////// OTHER ///////////////
+[t:template,n:casket_cav_01]
+{
+	specializes			= base_container_wood;
+	doc					= "casket";
+	category_name		= "container";
+
+	common:screen_name	= "Casket";
+
+	aspect:model		= m_i_cav_casket-01;
+}
+
+[t:template,n:cage_grs_01]
+{
+	specializes			= base_container_wood;
+	doc					= "cage_round_wood";
+	category_name		= "container";
+
+	common:screen_name	= "Wood Cage";
+
+	aspect:model		= m_i_grs_cage-wood-01;
+
+	[generator_in_object]
+	{
+		child_template_name	= cage_grs_wood_break_01;
+	}
+}
+[t:template,n:footlocker_glb_01]
+{
+	specializes 		= base_container_wood;
+	doc 				= "chest_footlocker";
+    category_name       = "container";
+
+	aspect:model 		= m_i_glb_footlocker-01;
+}
+[t:template,n:cage_glb_breakable]
+{
+	specializes		= base_breakable_wood;
+	doc				= "phrak in	cage";
+	category_name		= "evil_d";
+
+	[generator_in_object]
+	{
+		child_template_name	= cage_glb_break;
+	}
+
+	[aspect]
+	{
+		model			= m_i_glb_cage;
+		is_collidable	= true;
+		scale_base 		= 0.55;
+		does_block_path = true;
+		megamap_icon	= <aspect_mesh>;
+	}
+	[generator_cage] {}
+	[physics]
+	{
+		explosion_magnitude	= 1.75;
+		[break_particulate]
+		{
+			//frag_glb_cage_01 = 1;
+			frag_glb_cage_02 = 1;
+			frag_glb_cage_03 = 1;
+			frag_glb_cage_04 = 6;
+			frag_glb_cage_05 = 1;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////
+// STONE container base	template
+[t:template,n:base_container_stone]
+{
+	specializes		= container;
+	doc				= "Stone container template";
+
+	common:screen_name	= "Container";
+	common:rollover_display	= true;
+
+	[aspect]
+	{
+		is_usable	= false;
+		life_state	= LS_ALIVE_CONSCIOUS;
+		max_life	= 1;
+		life		= 1;
+	}
+
+	[physics]
+	{
+		fire_resistance		= 1.0;
+
+		break_dependents	= true;
+		break_sound	= s_e_env_break_container_stone;
+
+		[break_particulate]
+		{
+		frag_glb_stone_01	= 1;
+		frag_glb_stone_02	= 1;
+		frag_glb_stone_03	= 1;
+		frag_glb_stone_04	= 1;
+		frag_glb_stone_05	= 1;
+		frag_glb_stone_06	= 1;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////
+//	stone container	leaf templates
+
+//$$container_cav_01 and 02 no longer break, but now open 
+//$$and have been moved to ctn_chest.gas	-CarlosN 9/18/01
+
+////////////////////////////////////////////////////////////////////////////////
+// CLAY BREAKABLE CONTAINERS
+[t:template,n:base_container_clay]
+{
+	specializes		= container;
+	doc				= "Stone container template";
+
+	common:screen_name	= "Container";
+	common:rollover_display	= true;
+
+	[aspect]
+	{
+		is_usable	= false;
+		life_state	= LS_ALIVE_CONSCIOUS;
+		max_life	= 1;
+		life		= 1;
+	}
+
+	[physics]
+	{
+		fire_resistance		= 1.0;
+
+		break_dependents	= true;
+		break_sound	= s_e_env_break_container_clay;
+
+		[break_particulate]
+		{
+		frag_glb_stone_01	= 1;
+		frag_glb_stone_02	= 1;
+		frag_glb_stone_03	= 1;
+		frag_glb_stone_04	= 1;
+		frag_glb_stone_05	= 1;
+		frag_glb_stone_06	= 1;
+		}
+	}
+}
+[t:template,n:base_pot_cav_01]
+{
+	specializes		= base_container_clay;
+	doc				= "pot_green swirls";
+	category_name	= "container";
+
+	common:screen_name	= "Pot";
+
+	aspect:model	= m_i_cav_pot-01;
+
+
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_14 = 5;
+			frag_glb_pot_clay_15 = 6;
+		}
+	}
+}
+[t:template,n:pot_cav_01]
+{
+	specializes		= base_pot_cav_01;
+	doc				= "pot_green swirls";
+	category_name	= "container";
+}
+[t:template,n:base_pot_cav_02]
+{
+	specializes		= base_container_clay;
+	doc				= "pot_pink	faces";
+	category_name	= "container";
+
+	common:screen_name	= "Pot";
+
+	aspect:model	= m_i_cav_pot-02;
+
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_16 = 2;
+			frag_glb_pot_clay_17 = 6;
+		}
+	}
+}
+[t:template,n:pot_cav_02]
+{
+	specializes		= base_pot_cav_02;
+	doc				= "pot_pink	faces";
+	category_name	= "container";
+}
+[t:template,n:base_pot_cav_03]
+{
+	specializes		= base_container_clay;
+	doc				= "vase_obsidian";
+	category_name		= "container";
+	common:screen_name	= "Pot";
+	[aspect]
+	{
+		model	= m_i_glb_vase-01;
+		[textures]	{0=b_i_lav_vase-obsidian;}
+	}
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_18 = 1;
+			frag_glb_pot_clay_19 = 5;
+			frag_glb_pot_clay_20 = 6;
+		}
+	}
+}
+[t:template,n:pot_cav_03]
+{
+	specializes		= base_pot_cav_03;
+	doc				= "vase_obsidian";
+	category_name		= "container";
+}
+[t:template,n:base_pot_des_clay_01]
+{
+	specializes			= base_container_clay;
+	doc					= "pot_clay_med_blue";
+	category_name		= "container";
+	aspect:model		= m_i_des_pot-clay-01;
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_12 = 4;
+			frag_glb_pot_clay_13 = 3;
+		}
+	}
+}
+[t:template,n:pot_des_clay_01]
+{
+	specializes			= base_pot_des_clay_01;
+	doc					= "pot_clay_med_blue";
+	category_name		= "container";
+}
+[t:template,n:base_pot_des_clay_02]
+{
+	specializes			= base_container_clay;
+	doc					= "pot_clay_lg_green";
+	category_name		= "container";
+	aspect:model		= m_i_des_pot-clay-02;
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_05 = 3;
+			frag_glb_pot_clay_06 = 4;
+			frag_glb_pot_clay_07 = 3;
+		}
+	}
+}
+[t:template,n:pot_des_clay_02]
+{
+	specializes			= base_pot_des_clay_02;
+	doc					= "pot_clay_lg_green";
+	category_name		= "container";
+}
+[t:template,n:base_pot_des_clay_03]
+{
+	specializes			= base_container_clay;
+	doc					= "pot_clay_lg_terracotta";
+	category_name		= "container";
+	aspect:model		= m_i_des_pot-clay-03;
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_01 = 2;
+			frag_glb_pot_clay_02 = 2;
+			frag_glb_pot_clay_03 = 3;
+			frag_glb_pot_clay_04 = 2;
+		}
+	}
+}
+[t:template,n:pot_des_clay_03]
+{
+	specializes			= base_pot_des_clay_03;
+	doc					= "pot_clay_lg_terracotta";
+	category_name		= "container";
+}
+[t:template,n:base_pot_des_clay_04]
+{
+	specializes			= base_container_clay;
+	doc					= "pot_clay_sm_peach";
+	category_name		= "container";
+	aspect:model		= m_i_des_pot-clay-04;
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_11 = 6;
+		}
+	}
+}
+[t:template,n:pot_des_clay_04]
+{
+	specializes			= base_pot_des_clay_04;
+	doc					= "pot_clay_sm_peach";
+	category_name		= "container";
+}
+[t:template,n:base_pot_des_clay_05]
+{
+	specializes			= base_container_clay;
+	doc					= "pot_clay_lg_raku";
+	category_name		= "container";
+	aspect:model		= m_i_des_pot-clay-05;
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_pot_clay_08 = 2;
+			frag_glb_pot_clay_09 = 3;
+			frag_glb_pot_clay_10 = 2;
+		}
+	}
+}
+[t:template,n:pot_des_clay_05]
+{
+	specializes			= base_pot_des_clay_05;
+	doc					= "pot_clay_lg_raku";
+	category_name		= "container";
+}
+[t:template,n:urn_cav_01]
+{
+	specializes		= base_container_clay;
+	doc				= "urn_short_gold";
+	category_name	= "container";
+
+	common:screen_name	= "Urn";
+
+	aspect:model	= m_i_cav_urn-01;
+
+
+}
+
+[t:template,n:urn_cav_02]
+{
+	specializes		= base_container_clay;
+	doc				= "urn_tall_blue_pink";
+	category_name	= "container";
+
+	common:screen_name	= "Urn";
+
+	aspect:model	= m_i_cav_urn-02;
+
+
+}
+[t:template,n:vase_glb_02]
+{
+	specializes		= base_container_clay;
+	doc				= "vase_red_ornate";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_vase-02;
+	}
+	[generator_in_object]
+	{
+		child_template_name	= vase_glb_broken_02;
+	}
+}
+[t:template,n:vase_glb_03]
+{
+	specializes		= base_container_clay;
+	doc				= "vase_tan_ornate";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_vase-03;
+	}
+}
+[t:template,n:vase_glb_04]
+{
+	specializes		= base_container_clay;
+	doc				= "vase_blue_ornate";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_vase-04;
+	}
+}
+[t:template,n:vase_glb_05]
+{
+	specializes		= base_container_clay;
+	doc				= "vase_peach_ornate";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_glb_vase-05;
+	}
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+///////////////////////////////////////////////////////////////
+// METAL container base	template
+
+[t:template,n:base_container_metal]
+{
+	specializes		= container;
+	doc				= "metal container template";
+
+	common:screen_name	= "Container";
+	common:rollover_display	= true;
+
+
+	[aspect]
+	{
+		is_usable	= false;
+		life_state	= LS_ALIVE_CONSCIOUS;
+		max_life	= 15;
+		life		= 15;
+	}
+
+	[physics]
+	{
+		//fire_resistance =	1.0;
+
+		break_sound	= s_e_IH_break_wood_solid;
+
+		[break_particulate]
+		{
+		frag_glb_metal_01	= 1;
+		frag_glb_metal_02	= 1;
+		frag_glb_metal_03	= 1;
+		frag_glb_metal_04	= 1;
+		frag_glb_metal_05	= 1;
+		frag_glb_metal_06	= 1;
+		}
+	}
+}
+///////////////////////////////////////////////////////////////
+//	METAL container	leaf templates
+
+[t:template,n:barrel_gob_01]
+{
+	specializes		= base_container_metal;
+	doc				= "barrel_metal_horiz";
+	category_name	= "container";
+
+	common:screen_name	= "Metal Barrel";
+
+	aspect:model	= m_i_gob_barrel-01;
+}
+
+[t:template,n:barrel_gob_02]
+{
+	specializes		= base_container_metal;
+	doc				= "barrel_metal_sm";
+	category_name	= "container";
+
+	common:screen_name	= "Metal Barrel";
+
+	aspect:model	= m_i_gob_barrel-02;
+}
+
+[t:template,n:barrel_gob_03]
+{
+	specializes		= base_container_metal;
+	doc				= "barrel_metal_lg";
+	category_name	= "container";
+
+	common:screen_name	= "Metal Barrel";
+
+	aspect:model	= m_i_gob_barrel-03;
+}
+
+[t:template,n:barrel_gob_exp]
+{
+	specializes		= base_container_metal;
+	doc				= "barrel_metal_exp";
+	category_name	= "container";
+	[aspect]
+	{
+		model	= m_i_gob_barrel-02;
+		textures:0	= b_i_gob_barrel-exp;
+	}
+	[attack]
+	{
+		area_damage_radius = 4;
+		damage_min = 500;
+		damage_max = 500;
+	}
+	[common]
+	{
+		screen_name	= "Metal Barrel";
+		[template_triggers]
+		{
+			[*]
+			{
+				action*	= start_camera_fx("camera_barrel_explode");
+				condition* = receive_world_message("we_exploded");
+				flip_flop =	false;
+				reset_duration = 0.000000;
+				single_shot	= true;
+			}
+		}
+	}
+	[physics]
+	{
+		explosion_magnitude	= 7;
+		break_effect		= barrel_explosion;
+		explode_when_killed	= true;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		damage_all			= true;
+	}
+}
+
+[t:template,n:crate_gob_01]
+{
+	specializes		= base_container_metal;
+	doc				= "crate_metal_sm";
+	category_name	= "container";
+
+	common:screen_name	= "Metal Crate";
+
+	aspect:model	= m_i_gob_crate-01;
+}
+
+///////////	NON-BREAKABLE CONTAINERS //////////////////////////////////////
+
+///////////	NON-BREAKABLE RACKS	//////////////////////////////////////
+
+[t:template,n:rack_csl_armor_gen_01]
+{
+	category_name =	"container";
+	doc	= "rack_csl_armor item spewer";
+	specializes	= prop;
+	[aspect]
+	{
+		model =	m_i_csl_rack-armor;
+		[textures]	{0=b_i_csl_rack-armor;}
+	}
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Armor Stand";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= #armor/3-6;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+
+}
+[t:template,n:rack_csl_weapons_gen_01]
+{
+	category_name =	"container";
+	doc	= "rack_csl_weapons	item spewer";
+	specializes	= prop;
+	[aspect]
+	{
+		model =	m_i_csl_rack-weapon;
+		[textures]
+		{
+			0 =	b_w_weapons;
+			1 =	b_i_csl_rack-weapon;
+		}
+	}
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Weapon Rack";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= #melee/3-6;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}
+
+//////////// CONTAINER-BREAKS or PIECES	////////////////////////////////////
+
+[t:template,n:barrel_cav_break_01]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "barrel_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_cav_barrel-01-break;
+		[textures]	{0=b_i_cav_barrel-01;}
+	}
+}
+
+[t:template,n:barrel_glb_break]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "barrel_base_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_glb_barrel-break;
+		[textures]	{0=b_i_glb_barrel;}
+	}
+}
+
+[t:template,n:container_cav_break_01]
+{
+	specializes			= non_interactive_blocking;
+	doc					= "monument_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_cav_container-01-break;
+		[textures]	{0=b_i_cav_container-01;}
+	}
+}
+
+[t:template,n:crate_glb_break]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "crate_base_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_glb_crate-break;
+		[textures]	{0=b_i_glb_crate;}
+	}
+}
+
+
+[t:template,n:urn_cav_break_01]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "urn_base_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_cav_urn-01-break;
+		[textures]	{0=b_i_cav_urn-01;}
+	}
+}
+
+[t:template,n:urn_cav_break_02]
+{
+	specializes			= non_interactive_blocking;
+	doc					= "urn_tall_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_cav_urn-02-break;
+		[textures]	{0=b_i_cav_urn-02;}
+	}
+}
+
+[t:template,n:cage_glb_break]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "cage_glb_break";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_glb_cage-break;
+		[textures]	{0=b_i_glb_cage;}
+		is_collidable		= false;
+		scale_base = 0.55;
+	}
+}
+
+[t:template,n:cage_grs_wood_break_01]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "cage_round_wood_broken";
+	category_name		= "container";
+
+	[aspect]
+	{
+		model		= m_i_grs_cage-wood-01-break;
+		[textures]	{0=b_i_glb_fence-log;}
+	}
+}
+[t:template,n:vase_glb_broken_02]
+{
+	specializes	= non_interactive_nonblocking;
+	doc	= "vase_red_ornate_broken";
+	category_name = "container";
+
+	[aspect]
+	{
+		model = m_i_glb_vase-broken-02;
+	}
+}
+[t:template,n:vase_glb_broken_03]
+{
+	specializes	= non_interactive_nonblocking;
+	doc	= "vase_tan_ornate_broken";
+	category_name = "container";
+
+	[aspect]
+	{
+		model = m_i_glb_vase-broken-03;
+	}
+}
+[t:template,n:vase_glb_broken_04]
+{
+	specializes	= non_interactive_nonblocking;
+	doc	= "vase_blue_ornate_broken";
+	category_name = "container";
+
+	[aspect]
+	{
+		model = m_i_glb_vase-broken-04;
+	}
+}
+[t:template,n:vase_glb_broken_05]
+{
+	specializes	= non_interactive_nonblocking;
+	doc	= "vase_peach_ornate_broken";
+	category_name = "container";
+
+	[aspect]
+	{
+		model = m_i_glb_vase-broken-05;
+	}
+}
+//////////// Bookcase	////////////////////////////////////
+
+[t:template,n:bookcase_glb_gen_01]
+{
+	category_name =	"container";
+	doc	= "bookcase_lorebook_crypts";
+	specializes	= prop;
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		does_block_path = true;
+	}
+
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Bookcase";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= book_glb_lore_crypt;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}
+[t:template,n:bookcase_glb_gen_02]
+{
+	category_name =	"container";
+	doc	= "bookcase_lorebook_droog";
+	specializes	= prop;
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		does_block_path = true;
+	}
+
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Bookcase";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= book_glb_lore_droog;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}
+[t:template,n:bookcase_glb_gen_03]
+{
+	category_name =	"container";
+	doc	= "bookcase_lorebook_swords";
+	specializes	= prop;
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		does_block_path = true;
+	}
+
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Bookcase";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= book_glb_lore_swords;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}
+[t:template,n:bookcase_glb_gen_04]
+{
+	category_name =	"container";
+	doc	= "bookcase_lorebook_utraean";
+	specializes	= prop;
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		does_block_path = true;
+	}
+
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Bookcase";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= book_glb_lore_Utraean;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}[t:template,n:bookcase_glb_gen_05]
+{
+	category_name =	"container";
+	doc	= "bookcase_lorebook_circle";
+	specializes	= prop;
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		does_block_path = true;
+	}
+
+	[generator_object_pcontent]
+	{
+		create_msg = WE_REQ_USE;
+		one_shot = true;
+	}
+	[common]
+	{
+		screen_name = "Bookcase";
+		rollover_display = true;
+	}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= book_glb_lore_circle;
+					chance = 1.0;
+				}
+			}
+		}
+	}
+}

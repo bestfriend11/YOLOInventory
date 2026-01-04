@@ -1,0 +1,108 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_object_exploding..skrit
+// Author(s):  Uncle Ernsie, Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "Object with blows up when receiving a message then spawns a monster.";
+property string _required_component$ = "placement";
+
+property Scid   		Initial_Command$						doc = "Scid of Command Object if applicable";
+property Scid   		Spawnpoint$								doc = "Scid of Spawnpoint Object if applicable";
+property string 		Child_Template_Name$ 					doc = "Template Name of actor you want to spawn.";
+property float          Break_Delay$                            doc = "Delay before breaking the object.";
+property float          Spawn_Delay$                            doc = "Delay before spawning monster.";
+property float          Health_on_Creation$  = 10				doc = "Original health of object when created.";
+property float 			Health_Modifier$  	 = 500              doc = "Amount to damage the object when sent a WE_REQ_ACTIVATE.";
+
+owner                                = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(Child_Template_Name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, Child_Template_Name$ );
+	}
+}
+
+startup state WaitForSetup$
+{
+	event OnGoUpdate$( float /*deltaTime$*/ )
+	{
+        //Set Life of Object On Construction
+    	Rules.ChangeLife( owner.goid, Health_on_Creation$);
+		SetState Wait$;
+	}
+}
+
+state Wait$
+{
+	transition -> SpawnActor$: OnTimer( 1 );
+	
+	trigger OnGoHandleMessage$( WE_REQ_ACTIVATE )
+	{
+		this.CreateTimer( 1, Spawn_Delay$ );
+	}
+}
+
+state SpawnActor$
+{
+	event OnEnterState$
+	{
+		this.CreateTimer( 1, Break_Delay$ );
+		
+		if (!stringtool.isempty(Child_Template_Name$))
+        {
+			//Spawn Actor in Place of Object
+			GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+
+			if ( SpawnPoint$.getgoid.isvalid())
+			{
+				SiegePos SpawnPos$ = Spawnpoint$.go.placement.position;
+				cloneReq$.StartingPos	= SpawnPos$;
+                cloneReq$.SetStartingOrient = Spawnpoint$.Go.Placement.Orientation;
+			}
+			else
+			{
+				SiegePos SpawnPos$ = owner.go.placement.position;
+				cloneReq$.StartingPos	= SpawnPos$;
+                cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+			}
+
+			cloneReq$.SnapToTerrain = true;
+           	Goid newGoid$	= GoDb.SCloneGo( cloneReq$ );
+
+			//If valid give clone an initial command
+			if ( Initial_Command$.getgoid.isvalid() )
+            {
+				newGoid$.Go.Mind.SetInitialCommand( Initial_Command$ );
+            }
+		}
+	}
+	
+	transition -> BlowItUp$: OnTimer( 1 );
+}
+
+state BlowItUp$
+{
+	event OnEnterState$
+	{
+		//Damage Object when Expl Message Received
+   		Rules.DamageGo(  owner.goid, owner.goid, owner.goid, Health_Modifier$, true, true );
+	}
+}
+
+
+

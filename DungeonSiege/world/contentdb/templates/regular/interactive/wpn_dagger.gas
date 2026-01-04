@@ -1,0 +1,183 @@
+[t:template,n:base_dagger]
+{
+	doc = "Dagger";
+	specializes = weapon_melee;
+	[aspect]
+	{
+		material = steeledge;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_sword;
+			}
+		}
+	}
+	[attack]
+	{
+		attack_class = ac_sword;
+		is_melee = true;
+		reload_delay = 0;
+		skill_class = melee;
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = grip;
+			middle = ap_trace02;
+			tip = ap_trace01;
+		}
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_dg_st;
+		equip_slot = es_weapon_hand;
+	}
+}
+[t:template,n:dg_g_c_1h_avg]
+{
+	category_name = "weapon";
+	doc = "Dagger";
+	specializes = base_dagger;
+	[aspect]
+	{
+		model = m_w_dag_001;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 8.000000;
+	  f damage_min = 4.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Dagger";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_dgr_003;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[c_fin]
+		{
+		  f damage_max = 13.000000;
+		  f damage_min = 4.000000;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_dgr_004;
+			inventory_width = 1;
+			model = m_w_dag_001;
+		  f modifier_max = 2.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 46.000000;
+		  f damage_min = 15.000000;
+			equip_requirements = strength:16;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_dgr_006;
+			inventory_width = 1;
+			model = m_w_dag_001;
+		  f modifier_max = 9.000000;
+		  f modifier_min = 6.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 27.000000;
+		  f damage_min = 9.000000;
+			equip_requirements = strength:13;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_dgr_005;
+			inventory_width = 1;
+			model = m_w_dag_001;
+		  f modifier_max = 5.000000;
+		  f modifier_min = 4.000000;
+		}
+	}
+}
+[t:template,n:dg_g_c_1h_fun]
+{
+	category_name = "weapon";
+	doc = "Blunt Dagger";
+	specializes = base_dagger;
+	[aspect]
+	{
+		model = m_w_dag_001;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 5.000000;
+	  f damage_min = 2.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Blunt Dagger";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_dgr_001;
+		inventory_width = 1;
+	}
+}
+[t:template,n:dg_g_c_1h_low]
+{
+	category_name = "weapon";
+	doc = "Rusty Dagger";
+	specializes = base_dagger;
+	[aspect]
+	{
+		model = m_w_dag_002;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 4.000000;
+	  f damage_min = 1.000000;
+	}
+	[common]
+	{
+		allow_modifiers = false;
+		screen_name = "Rusty Dagger";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_dgr_002;
+		inventory_width = 1;
+	}
+}
+[t:template,n:dg_g_d_1h_fun]
+{
+	category_name = "weapon";
+	doc = "Knife";
+	specializes = base_dagger;
+	[aspect]
+	{
+		model = m_w_dag_003;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+		damage_max = 4;
+		damage_min = 2;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Knife";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_dgr_007;
+		inventory_width = 1;
+	}
+}

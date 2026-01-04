@@ -1,0 +1,247 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_dumb_guy.skrit
+// Author(s):  Uncle Ernsie (Modified from Gen Basic), Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "Make a dumb guy into a smart guy generator.";
+property string _required_component$ = "placement";
+
+// exported properties
+property string 			child_template_name$		= "Krug_Grunt"			doc ="Template Name of Actor to Spawn.";
+property eActorAlignment	alignment_spawn$ 			= aa_neutral			doc ="Alignment of Monster when Spawned.";
+property eLifeState         life_state_spawn$           = ls_ignore				doc ="Life State of Monster when Spawned.";
+property bool				invincible_spawn$			= false					doc ="Is this actor invincible after getting We_Req_Use?";
+property bool				collide_spawn$				= true					doc ="Is this actor invincible after getting We_Req_Use?";
+
+property eActorAlignment 	alignment_activated$ 		= aa_evil				doc ="Alignment of Monster when Activated.";
+property eLifeState         life_state_activated$       = ls_alive_conscious    doc ="Life State of Monster when Activated.";
+property scid				initial_command_activated$							doc = "Scid of command to give actor when activated.";
+property scid				send_to_scid_activated$								doc = "Scid to send message to when activated.";
+property eWorldEvent		send_message_activated$		= WE_REQ_ACTIVATE		doc = "Message to send when activated.";
+property bool				invincible_activated$		= false					doc ="Is this actor invincible after getting Activated?";
+property bool				collide_activated$		    = true					doc ="Can this actor be hit after getting Activated?";
+
+property eActorAlignment    alignment_deactivated$      = aa_evil               doc ="Extra Alignment Change on Deactivate.";
+property eLifeState         life_state_deactivated$     = ls_alive_conscious    doc ="Life State of Monster when Activated.";
+property scid				initial_command_deactivated$						doc = "Scid of command to give actor when deactivated.";
+property scid				send_to_scid_deactivated$							doc = "Scid to send message to when deactivated.";
+property eWorldEvent		send_message_deactivated$	= WE_REQ_ACTIVATE		doc = "Message to send when deactivated.";
+property bool				invincible_deactivated$		= false					doc ="Is this actor invincible after getting Deactivated?";
+property bool				collide_deactivated$		= true					doc ="Can this actor be hit after getting Deactivated?";
+
+property bool             	change_alignment$           = true                  doc ="When True Alignment will be effected on spawn/activate.";
+property bool             	change_life_state$          = true                  doc ="When True Life_State will be effected on spawn/activate.";
+property bool             	change_selection$          	= true                  doc ="When True Selection States will be effected on spawn/activate.";
+property bool             	change_visibility$         	= false                 doc ="When True Actor will spawn invisible and become visible on activate.";
+property bool             	change_invincibility$       = false                 doc ="When True Invincibility will be effected on spawn/activate.";
+property bool             	change_collide$       		= false                 doc ="When True Collision with this Go will be effected on spawn/activate.";
+
+// kidlet death message stuff
+property	scid 		msg_scid$ 									doc = "Scid to send message to when CC'd trigger message is recieved";
+property	eWorldEvent msg_type$				= WE_REQ_ACTIVATE	doc = "message to send when trigger is recieved";
+property	eWorldEvent trigger_msg$			= WE_KILLED			doc = "CC'd message to trigger on";
+property	bool		get_child_cc$			= false				doc = "Recieve cc'd messages from the kidlet.";
+property	eWorldEvent kill_msg$				 					doc = "when recieve this message kill children";
+
+owner = GoSkritComponent;
+
+Goid newGoid$;
+
+//////////////////////////////////////////////////////////////////////////////
+// global state
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(child_template_name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, child_template_name$ );
+	}
+}
+
+event OnGoHandleCcMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if ( get_child_cc$ )
+	{
+		if ( e$ == trigger_msg$)
+		{	
+			if ( msg_scid$.isvalid() )
+			{
+				SendWorldMessage( msg_type$, owner.Goid, msg_scid$ );
+			}
+		}
+	}
+}
+	
+event OnGoHandleMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if( e$ == kill_msg$ )
+	{
+		int i$ = 0;
+		while( i$ < owner.Go.Children.Size() )
+		{
+			if(owner.Go.Children.Get( i$ ).goid.IsValid() )
+			{
+				SendWorldMessage( WE_REQ_DIE, owner.goid, owner.Go.Children.Get( i$ ).goid );
+			}
+	        i$ += 1;
+	    }
+		
+		SetState Exiting$;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+startup state Waiting$
+{
+	#only( game )
+    [[
+		trigger OnGoHandleMessage$( WE_ENTERED_WORLD )
+		{
+			// make a new child
+			GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+			cloneReq$.StartingPos = owner.Go.Placement.Position;
+    	    cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+			cloneReq$.SnapToTerrain = true;
+			newGoid$ = GoDb.SCloneGo( cloneReq$ );
+
+//			report.genericf("Trying to disable expiration\n");
+			newGoid$.go.DisableAutoExpiration;
+
+    	    if (change_alignment$)
+    	    {
+				// set initial (spawned) alignment
+				newGoid$.go.actor.ssetalignment( alignment_spawn$ );
+    	    }
+    	    if (change_life_state$)
+    	    {
+    	    	newGoid$.Go.Aspect.SSetLifeState = life_state_spawn$;
+    	    }
+			if (change_selection$)
+    	    {
+				newGoid$.Go.Aspect.SSetIsSelectable( false );
+    	    }
+    	    if (change_visibility$)
+        	{
+				newGoid$.Go.Aspect.SSetIsVisible( false );
+        	}
+        	if (change_invincibility$)
+			{
+				newGoid$.Go.Aspect.IsInvincible = invincible_spawn$;
+			}
+        	if (change_collide$)
+			{
+				newGoid$.Go.Aspect.IsCollidable = collide_spawn$;
+			}
+        	// need to watch what we spawn so we can kill it later.
+        	if ( get_child_cc$ )
+			{
+				GoDb.StartWatching( owner.Goid, newGoid$);
+			}
+			SetState Spawned$;
+		}
+    ]]
+}
+
+state Spawned$
+{
+	trigger OnGoHandleMessage$( WE_REQ_ACTIVATE )
+	{
+        if( newGoid$.IsValid() )
+        {
+		    if (change_alignment$)
+		    {
+		        //Reset Mind
+				newGoid$.Go.Mind.ResetSensors();
+				// set activated alignment
+				newGoid$.go.actor.ssetalignment( alignment_activated$ );
+		    }
+			if (change_life_state$)
+		    {
+		    	newGoid$.Go.Aspect.SSetLifeState = life_state_activated$;
+		    }
+			if (change_selection$)
+		    {
+				newGoid$.Go.Aspect.SSetIsSelectable( true );
+		    }
+		    if (change_visibility$)
+		    {
+				newGoid$.Go.Aspect.SSetIsVisible( true );
+		    }
+		    if (change_invincibility$)
+   			{
+				newGoid$.Go.Aspect.IsInvincible = invincible_activated$;
+  			}
+			if (change_collide$)
+   			{
+				newGoid$.Go.Aspect.IsCollidable = collide_activated$;
+  			}
+			if ( initial_command_activated$.getgoid.isvalid() )
+		    {
+				newGoid$.Go.Mind.SetInitialCommand( initial_command_activated$ );
+			}
+			if ( send_to_scid_activated$.isvalid() )
+		    {
+				SendWorldMessage( send_message_activated$, owner.Goid, send_to_scid_activated$ );
+			}
+		}
+	}
+
+	trigger OnGoHandleMessage$( WE_REQ_DEACTIVATE )
+	{
+        if( newGoid$.IsValid() )
+        {
+	        if (change_alignment$)
+	        {
+	            //Reset Mind
+				newGoid$.Go.Mind.ResetSensors();
+	        	// set activated alignment
+				newGoid$.go.actor.ssetalignment( alignment_deactivated$ );
+	        }
+			if (change_life_state$)
+	        {
+	        	newGoid$.Go.Aspect.SSetLifeState = life_state_deactivated$;
+	        }
+			if (change_selection$)
+	        {
+				newGoid$.Go.Aspect.SSetIsSelectable( true );
+		    }
+		    if (change_invincibility$)
+   			{
+				newGoid$.Go.Aspect.IsInvincible = invincible_deactivated$;
+  			}
+			 if (change_collide$)
+   			{
+				newGoid$.Go.Aspect.IsCollidable = collide_deactivated$;
+  			}
+			if ( initial_command_deactivated$.getgoid.isvalid() )
+		    {
+				newGoid$.Go.Mind.SetInitialCommand( initial_command_deactivated$ );
+			}
+			if ( send_to_scid_deactivated$.isvalid() )
+		    {
+				SendWorldMessage( send_message_deactivated$, owner.Goid, send_to_scid_deactivated$ );
+			}
+		}
+	}
+}
+
+State Exiting$
+{}
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////

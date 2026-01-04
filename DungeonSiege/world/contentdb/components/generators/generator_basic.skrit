@@ -1,0 +1,224 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_basic.skrit
+// Author(s):  Scott Bilas, Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property	bool   _server_only$				= true;
+property	string _doc$						= "A basic generator";
+property	string _required_component$			= "placement";
+
+bool		initial_spawn_over$ 				= false;
+float		command_state$              		= 1;
+
+// exported properties
+property	Scid   	Initial_Command$								doc = "Scid of Command Object if applicable";
+property	Scid   	Initial_Command2$   							doc = "Second Command Object Scid if applicable";
+property	Scid   	Initial_Command3$   							doc = "Third Command Object Scid if applicable";
+
+property	string 	child_template_name$;
+
+property	int    	num_children_incubating$	= 1;
+property	int    	max_alive_children$     	= 1;
+property	float  	spawn_period$           	= 1.0;
+
+property	scid 		msg_scid$ 									doc = "Scid to send message to when CC'd trigger message is recieved";
+property	eWorldEvent msg_type$				= WE_REQ_ACTIVATE	doc = "message to send when trigger is recieved";
+property	eWorldEvent trigger_msg$			= WE_KILLED			doc = "CC'd message to trigger on";
+
+property	bool		get_child_cc$			= false				doc = "Recieve cc'd messages from the kidlet.";
+property	eWorldEvent kill_msg$				 					doc = "when recieve this message kill children";
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// global state
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(child_template_name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, child_template_name$ );
+	}
+}
+
+event OnGoHandleCcMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if ( get_child_cc$ )
+	{
+		if ( e$ == trigger_msg$)
+		{	
+			if ( msg_scid$.isvalid() )
+			{
+				SendWorldMessage( msg_type$, owner.Goid, msg_scid$ );
+			}
+		}
+	}
+}
+	
+event OnGoHandleMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if( e$ == kill_msg$ )
+	{
+		int i$ = 0;
+		while( i$ < owner.Go.Children.Size() )
+		{
+			if(owner.Go.Children.Get( i$ ).goid.IsValid() )
+			{
+				SendWorldMessage( WE_REQ_DIE, owner.goid, owner.Go.Children.Get( i$ ).goid );
+			}
+	        i$ += 1;
+	    }
+		
+		SetState Finished$;
+	}
+}
+
+event OnGoDrawDebugHud$
+{
+	World.DrawDebugSphere( owner.Go.Placement.Position,
+						   1.5,
+						   MakeColor( 0.8, 0.0, 0.0 ),
+						   Debug.Format( "incubating: %d\nspawn period: %f\nmax alive: %d\nspawn template: %s",
+										 num_children_incubating$, spawn_period$, max_alive_children$, child_template_name$  ) );
+
+    if ( Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 Initial_Command$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+     if ( Initial_Command2$.IsValid() && Initial_Command2$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 Initial_Command2$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+    if ( Initial_Command3$.IsValid() && Initial_Command3$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 Initial_Command3$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+startup state Inactive$
+{
+	transition -> Active$: OnGoHandleMessage( WE_REQ_ACTIVATE );
+}
+
+state Active$
+{
+	transition -> Inactive$: OnGoHandleMessage( WE_REQ_DEACTIVATE );
+
+	event OnEnterState$
+	{
+		if ( num_children_incubating$ > 0 )
+		{
+   			if (!initial_spawn_over$)
+			{
+				this.CreateTimer( 1, 0 );
+				initial_spawn_over$ = true;
+			}
+            else
+            {
+				this.CreateTimer( 1, spawn_period$ );
+            }
+		}
+		else
+		{
+			SetState( Inactive$ );
+		}
+	}
+
+	transition -> Active$: OnTimer( 1 ) =
+	{
+		
+		// $ much of this code could be eliminated if && or || were to short-
+		//   circuit, but that's not supported yet in skrit...
+
+		// see that we're not past our live pool size
+		bool doit$ = false;
+		if ( max_alive_children$ == 0 )
+		{
+			doit$ = true;
+		}
+		else if ( AiQuery.GetCount( owner.Go, QT_ALIVE_CONSCIOUS, owner.Go.Children ) < max_alive_children$ )
+		{
+			doit$ = true;
+		}
+
+		// ready?
+		if ( doit$ )
+		{
+			// make a new child
+			GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+			cloneReq$.StartingPos = owner.Go.Placement.Position;
+			cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+			cloneReq$.SnapToTerrain = true;
+       		Goid newGoid$	= GoDb.SCloneGo( cloneReq$ );
+
+			if ( get_child_cc$ )
+			{
+				GoDb.StartWatching( owner.Goid, newGoid$);
+			}
+
+            if (command_state$ == 1)
+            {
+				//If valid give clone an initial command
+				if ( Initial_Command$.getgoid.isvalid() )
+           		{
+					newGoid$.Go.Mind.SetInitialCommand( Initial_Command$ );
+           		}
+
+				if ( Initial_Command2$.getgoid.isvalid() )
+                {
+                    command_state$ = 2;
+				}
+			}
+            else if (command_state$ == 2)
+            {
+				newGoid$.Go.Mind.SetInitialCommand( Initial_Command2$ );
+
+				if ( Initial_Command3$.getgoid.isvalid() )
+           		{
+                    command_state$ = 3;
+           		}
+            }
+			else if (command_state$ == 3)
+			{
+				if ( Initial_Command3$.getgoid.isvalid() )
+                {
+					newGoid$.Go.Mind.SetInitialCommand( Initial_Command3$ );
+                }
+
+                command_state$ = 1;
+			}
+			
+			// one less
+			num_children_incubating$ -= 1;
+        }
+	}
+}
+
+state Finished$
+{ }
+
+//////////////////////////////////////////////////////////////////////////////

@@ -22,6 +22,11 @@
       "Name": "YOLOInventoryEditor",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit"
+    },
+    {
+      "Name": "YOLOInventoryTests",
+      "Type": "Developer",
+      "LoadingPhase": "Default"
     }
   ],
   "Plugins": [

@@ -1,0 +1,415 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_advanced_a2.skrit
+// Author(s):  Eric Tams, Uncle Ernsie
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//
+// ScidBits Key.
+// lower 16 bits, number remaining creatures to spawn
+// 17th bit = modified
+// 18th bit = active
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "Advanced Gen which Supports Two Anims, Accel/Decel, and External Spawnpoints";
+property string _required_component$ = "placement";
+
+//Internal Properties
+bool	anim_over$      = false;
+//bool	 accel_over$	= false;
+
+// exported properties
+//----Movement--------
+property Scid   	Spawnpoint$									doc = "Scid of Spawnpoint Object if applicable";
+property Scid   	Initial_Command$							doc = "Scid of Command Object if applicable";
+//----Generator-------
+property string 	child_template_name$						doc = "Template name of the child you want to spawn.";
+property int    	num_children_incubating$	= 1				doc = "How many children total do you want to spawn?";
+property float  	spawn_period$            	= 2.0			doc = "Period between spawns.  Accel/Decel effects this number.";
+property int    	max_alive_children$      	= 1        		doc = "Maximum number of children which can be alive at a time.";
+property float  	spawn_range$             	= 0.5			doc = "A radius around the spawnpoint/or generator used for collision detection.";
+property float  	trigger_range$             	= -1.0			doc = "When a party member is within this radius, the generator will activate.";
+//----Anims-----------
+property bool		anim_one_shot$				= false			doc = "Only play the spawn animation once before we start to spawn actors.";
+property int 		anim_chore_start$    		= 'SPWN'		doc = "Play this anim chore before spawning the actor.";
+property int	 	anim_chore_end$      		= 'REST'	   	doc = "Play this anim chore after spawning the actor.";
+property bool   	accelerate$          		= true			doc = "Acceleration on?";
+property int    	accel_delay$         		= 1				doc = "Number of spawn cycles before accelerating.";
+property float  	accel_rate$      	 		= 0.2			doc = "Rate of accel/decel. (Modifies Spawn_Period).";
+property int		accel_count$         		= 10			doc = "Number of spawn cycles at peak accel before decel.";
+property float  	accel_cap$           		= 0.2			doc = "When the Spawn_Period is less than this number accel stops.";
+property float  	decel_cap$  				= 2.0      		doc = "When the Spawn_Period is greater than this number decel stops.";
+//----Sound-----------
+property bool   	sound_start$            	= true			doc = "Play the opening sound?";
+property bool   	sound_end$              	= true			doc = "Play the closing sound?";
+//----Close Effects----
+property bool		close_sfx_on$				= true			doc = "Is the closing dust effect on?";
+property bool   	close_sfx_at_spawnpoint$    = true          doc = "Do you want to use the spawnpoint for the effect location?";
+property string		close_sfx$					= "grate_dust"	doc = "Must Specify SiegeFx Script if Close Sfx On";
+property string 	close_sfx_params$			= ""			doc = "Parameters for the SiegeFx script";  //Rick do I need this?  -J
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// global states
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(child_template_name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, child_template_name$ );
+	}
+}
+
+event OnGoDrawDebugHud$
+{
+	World.DrawDebugSphere( owner.Go.Placement.Position,
+						   spawn_range$,
+						   MakeColor( 1.0, 0.0, 0.0 ),
+						   Debug.Format( "accel_delay: %d\naccel_count: %d\nincubating: %d\nspawn period: %f\nmax alive: %d\nspawn template: %s",
+										 accel_delay$, accel_count$, num_children_incubating$, spawn_period$, max_alive_children$, child_template_name$  ) );
+
+
+    if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 SpawnPoint$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Spawnpoint" );
+    }
+
+    if ( ( Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() ) && ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() ) )
+    {
+		World.DrawDebugDirectedLine( Spawnpoint$.go.Placement.Position,
+									 Initial_Command$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// functions
+
+bool TryAnim$( int FourCC$ )
+{
+	int Anim$ = owner.Go.Aspect.AspectHandle.Blender.GetSubAnimIndex(CHORE_MISC,FourCC$);
+		
+	if (Anim$ >= 0)
+	{
+		eReqRetCode ret$ = MCPManager.MakeRequest( owner.Goid, PL_PLAYANIM, CHORE_MISC, Anim$, 0 );
+		return true;	
+	}
+	return false;
+}
+
+bool spawn_guy$
+{
+	accel_cap$ = Math.MaxFloat(0.2, accel_cap$);
+		
+    bool blocked$ = false;
+
+    if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() && ( spawn_range$ > 0.0 ) ) 
+    {
+		if ( AiQuery.DoesSphereHaveHumanControlledOccupants (Spawnpoint$.Go.Placement.Position, spawn_range$) )
+    	{
+			Report.ReportF("jedi","[%8.3f] Blocked = True on [Opening$] for %s, using Range:%g Scid: 0x%08x\n",WorldTime.time,owner.goid.go.templatename,spawn_range$,SpawnPoint$);
+        	blocked$ = true;
+		}
+	}
+    else if ( AiQuery.DoesSphereHaveHumanControlledOccupants ( owner.go.placement.position, spawn_range$ ) )
+    {
+		Report.ReportF("jedi","[%8.3f] Blocked = True on [Opening$] for %s\n",WorldTime.time,owner.goid.go.templatename);
+        blocked$ = true;
+	}
+
+	Report.ReportF("jedi","[%8.3f] Blocking Check for %s\n",WorldTime.time,owner.goid.go.templatename);
+    //This is supposed to be a false check but is broken right now.  -J
+	if ( !blocked$ )
+	{
+		// one less monster
+		num_children_incubating$ = num_children_incubating$ - 1;
+	
+		Report.ReportF("jedi","kids left: %d\n",num_children_incubating$);
+		
+		//open the grate
+   		Report.ReportF("jedi","[%8.3f] Animate Open for %s\n",WorldTime.time,owner.goid.go.templatename);
+
+		if (!anim_over$)
+		{
+			TryAnim$('spwn');
+			if (anim_one_shot$)
+            {
+              	anim_over$ = true;
+         	}
+         }
+		//Play Open Sound
+		if ( sound_start$ == true )
+    	{
+			owner.Go.SPlayMaterialSound( "gen_start", "generic", true);
+		}
+
+        // make a new child
+		GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+
+		if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+		{
+			SiegePos SpawnPos$ = Spawnpoint$.go.placement.position;
+			cloneReq$.StartingPos	= SpawnPos$;
+            cloneReq$.SetStartingOrient = Spawnpoint$.Go.Placement.Orientation;
+		}
+		else
+		{
+			SiegePos SpawnPos$ = owner.go.placement.position;
+			cloneReq$.StartingPos	= SpawnPos$;
+            cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+		}
+
+  		Report.ReportF("jedi","[%8.3f] Clone Monster for %s\n",WorldTime.time,owner.goid.go.templatename);
+		cloneReq$.SnapToTerrain = true;
+        Goid newGoid$	= GoDb.SCloneGo( cloneReq$ );
+
+		Report.ReportF("jedi","[%8.3f] Give Monster Initial_Command$ for %s\n",WorldTime.time,owner.goid.go.templatename);
+		//If valid give clone an initial command
+		if ( Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() )
+        {
+			newGoid$.Go.Mind.SetInitialCommand( Initial_Command$ );
+        }
+
+		if (accel_delay$ > 0)
+		{
+			accel_delay$ -= 1;
+		}
+		return true;
+	}
+	return false;
+}
+
+void Close_gen$
+{
+	if (!anim_over$)
+	{
+   		Report.ReportF("jedi","[%8.3f] Animate Closed for %s\n",WorldTime.time,owner.goid.go.templatename);
+		TryAnim$('rest');
+	}
+
+    //Play Close Sound
+	if ( sound_end$ == true )
+    {
+		owner.Go.SPlayMaterialSound( "gen_end", "generic", true);
+	}
+
+	//Play a dust anim if valid
+	if ((close_sfx_at_spawnpoint$) && (close_sfx_on$))
+	{
+		Goid spawnGoid$ = SpawnPoint$.Goid;
+
+		if ( spawnGoid$.isvalid() )
+		{
+       		SiegeFx.SRunScript( close_sfx$, spawnGoid$, spawnGoid$, close_sfx_params$, spawnGoid$, WE_UNKNOWN );
+		}
+	}
+    else if (close_sfx_on$)
+	{
+   		SiegeFx.SRunScript( close_sfx$, owner.Goid, owner.Goid, close_sfx_params$, owner.Goid, WE_UNKNOWN );
+	}
+
+	Report.ReportF("jedi","[%8.3f] Transition [Closing$ -> CheckSpawn$] for %s\n",WorldTime.time,owner.goid.go.templatename);
+}
+
+void Calc_Accel$
+{
+	Report.ReportF("jedi","[%8.3f] Entered Accel$ for %s\n",WorldTime.time,owner.goid.go.templatename);
+    if (accel_delay$ <= 0)
+    {
+    	if ( (accel_count$ > 0) && (spawn_period$ > accel_cap$))
+    	{
+    		spawn_period$ = Math.MaxFloat( spawn_period$ - accel_rate$, accel_cap$);
+    		accel_count$ -= 1;
+    	} else {
+    		accel_count$ = 0;
+    		spawn_period$ = Math.MinFloat( spawn_period$ + accel_rate$, decel_cap$);
+    	}
+    }
+	Report.ReportF("jedi","[%8.3f] Transition [Accel$ -> Closing$] for %s\n",WorldTime.time,owner.goid.go.templatename);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+Trigger OnGoHandleMessage$( WE_LEFT_WORLD )
+{
+	owner.Go.RemoveAllChildren;
+	
+	int bits$ = Godb.GetScidBits( owner.scid );
+	
+	bits$ &= 0xFFFF0000;
+	
+	if( ( num_children_incubating$ <= 10000 ) && ( num_children_incubating$ >= 0 ) )
+	{
+		bits$ += num_children_incubating$;
+	}
+	
+	Godb.SetScidBits( owner.scid, bits$ );
+}
+
+startup state Startup$
+{
+	Trigger OnGoHandleMessage$( WE_ENTERED_WORLD )
+	{
+		#only( game )
+		[[
+		if( num_children_incubating$ > 10000 ) // sanity check
+		{
+			Report.ErrorF("Sanity Check.\nGenerator: 0x%08x has over 10000 incubating children!!\n",MakeInt( owner.scid ) );
+			num_children_incubating$ = 10000;
+		}
+		
+		int bits$ = Godb.GetScidBits( owner.scid );
+		
+//		report.genericf("In Bits: 0x%08x, %d\n", bits$, bits$);
+		
+		if( !( bits$ == 0 ) )
+		{
+			int num_left$ = bits$ & 0x0000FFFF;
+			
+			if( num_left$ < num_children_incubating$ )
+			{
+				num_children_incubating$ = num_left$;
+				if( anim_one_shot$ )
+				{
+					TryAnim$('spwn');
+					anim_over$ = true;
+				}
+			} 
+			if ( Godb.GetScidBit( owner.scid, 17 ) ) //generator is active
+			{
+				SetState CheckSpawn$;
+				return;
+			}
+		}
+		SetState Inactive$;
+		]]
+	}
+	event OnExitState$
+	{
+		Godb.SetScidBit( owner.scid, 16, true);
+	}
+}
+
+state Inactive$
+{
+	transition -> CheckSpawn$: OnGoHandleMessage( WE_REQ_ACTIVATE );
+	transition -> CheckSpawn$: OnTimer( 1 );
+	transition -> Inactive$: OnTimer( 2 );
+
+	event OnEnterState$
+	{
+		Godb.SetScidBit( owner.scid, 17, false );
+
+		if( Trigger_Range$ > 0.0 )
+		{
+			if ( AiQuery.DoesSphereHaveHumanControlledOccupants( owner.Go.Placement.Position, Trigger_Range$))
+	        {
+	        	this.CreateTimer( 1, 0.5 );
+	        }
+			else
+			{
+	            This.CreateTimer( 2, 0.25 );
+			}
+		}
+	}
+}
+
+state CheckSpawn$
+{
+    transition -> Inactive$: OnGoHandleMessage( WE_REQ_DEACTIVATE );
+	
+	trigger OnTimer$( 1 )
+	{
+		if ( AiQuery.GetCount( owner.Go, QT_ALIVE_CONSCIOUS, owner.Go.Children ) < max_alive_children$ )
+		{
+			Report.ReportF("jedi","[%8.3f] Transition [CheckSpawn$ -> Opening$] for %s\n",WorldTime.time,owner.goid.go.templatename);
+			SetState Opening$;
+		} else {
+			this.CreateTimer( 1, spawn_period$ );
+		}
+	}
+	
+	event OnEnterState$
+	{
+		Godb.SetScidBit( owner.scid, 17, true );
+		
+		if ( num_children_incubating$ > 0 )
+		{
+			Report.ReportF("jedi","[%8.3f] Incubating Check for %s\n",WorldTime.time,owner.goid.go.templatename);
+    		this.CreateTimer( 1, spawn_period$ );
+		}
+		else
+		{
+			Report.ReportF("jedi","[%8.3f] Transition [CheckSpawn$ -> Exiting$] for %s\n",WorldTime.time,owner.goid.go.templatename);
+			SetState Exiting$;
+		}
+    }
+}
+
+State Opening$
+{
+	transition -> Accel$: OnTimer( 1 );
+	transition -> Accel$: OnGoHandleMessage( WE_ANIM_DONE );
+
+    event OnEnterState$
+    {
+		this.CreateTimer( 1, spawn_period$ );
+		
+		if( !spawn_guy$ )
+		{
+			SetState CheckSpawn$;
+		}
+	}
+}
+
+State Accel$
+{
+    event OnEnterState$
+    {
+		if ( accelerate$ )
+		{   	
+	   		Calc_Accel$;
+	    }
+	    SetState Closing$;
+	}
+}
+
+State Closing$
+{
+	event OnEnterState$
+	{
+   		Close_gen$;
+   		
+		SetState CheckSpawn$;
+	}
+}
+
+State Exiting$
+{
+	event OnEnterState$
+	{
+		Godb.SetScidBit( owner.scid, 17, false );
+		num_children_incubating$ = 0;
+	}
+}
+
+
+
+
+
+

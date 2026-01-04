@@ -1,0 +1,166 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_random.skrit
+// Author(s):  Scott Bilas, Eric Tams, Chad Queen
+//
+// Copyright © 2001 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property	bool   _server_only$				= true;
+property	string _doc$						= "A basic generator";
+property	string _required_component$			= "placement";
+
+bool		initial_spawn_over$ 				= false;
+
+property	int    	num_children_incubating$	= 1;
+property	int    	max_alive_children$     	= 1;
+property	float  	spawn_period$           	= 1.0;
+
+property	float	spawn_radius$				= -1.0				doc = "If greater then one will spawn baddie in this radius.";
+
+property	scid 		msg_scid$ 									doc = "Scid to send message to when CC'd trigger message is recieved";
+property	eWorldEvent msg_type$				= WE_REQ_ACTIVATE	doc = "message to send when trigger is recieved";
+property	eWorldEvent trigger_msg$			= WE_KILLED			doc = "CC'd message to trigger on";
+
+property	bool		get_child_cc$			= false				doc = "Recieve cc'd messages from the kidlet.";
+property	eWorldEvent kill_msg$				 					doc = "when recieve this message kill children";
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// global state
+
+event OnGoHandleCcMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if ( get_child_cc$ )
+	{
+		if ( e$ == trigger_msg$)
+		{	
+			if ( msg_scid$.isvalid() )
+			{
+				SendWorldMessage( msg_type$, owner.Goid, msg_scid$ );
+			}
+		}
+	}
+}
+	
+event OnGoHandleMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if( e$ == kill_msg$ )
+	{
+		int i$ = 0;
+		while( i$ < owner.Go.Children.Size() )
+		{
+			if(owner.Go.Children.Get( i$ ).goid.IsValid() )
+			{
+				SendWorldMessage( WE_REQ_DIE, owner.goid, owner.Go.Children.Get( i$ ).goid );
+			}
+	        i$ += 1;
+	    }
+		
+		SetState Finished$;
+	}
+}
+
+event OnGoDrawDebugHud$
+{
+	World.DrawDebugSphere( owner.Go.Placement.Position,
+						   1.5,
+						   MakeColor( 0.8, 0.0, 0.0 ),
+						   Debug.Format( "incubating: %d\nspawn period: %f\nmax alive: %d\n",
+										 num_children_incubating$, spawn_period$, max_alive_children$ ) );    
+}
+
+
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+
+startup state Inactive$
+{
+	transition -> Active$: OnGoHandleMessage( WE_REQ_ACTIVATE );
+}
+
+
+state Active$
+{
+	transition -> Inactive$: OnGoHandleMessage( WE_REQ_DEACTIVATE );
+
+	event OnEnterState$
+	{
+		if ( num_children_incubating$ > 0 )
+		{
+   			if (!initial_spawn_over$)
+			{
+				this.CreateTimer( 1, 0 );
+				initial_spawn_over$ = true;
+			}
+            else
+            {
+				this.CreateTimer( 1, spawn_period$ );
+            }
+		}
+		else
+		{
+			SetState( Inactive$ );
+		}
+	}
+
+	transition -> Active$: OnTimer( 1 ) =
+	{
+		
+		// $ much of this code could be eliminated if && or || were to short-
+		//   circuit, but that's not supported yet in skrit...
+
+		// see that we're not past our live pool size
+		bool doit$ = false;
+		if ( max_alive_children$ == 0 )
+		{
+			doit$ = true;
+		}
+		else if ( AiQuery.GetCount( owner.Go, QT_ALIVE_CONSCIOUS, owner.Go.Children ) < max_alive_children$ )
+		{
+			doit$ = true;
+		}
+
+		// ready?
+		if ( doit$ )
+		{
+			// make a new child
+			owner.go.inventory.AddDelayedPcontent();
+
+			if( ( owner.go.children.size > 0 ) )
+			{
+				Go item$ = owner.go.children.get( owner.Go.Children.Size() - 1 );
+				owner.go.inventory.RSRemove( item$, true );	
+				owner.go.AddChild( item$ );
+				if( spawn_radius$ > 0.0 )
+				{
+					if( item$.HasMind )
+					{
+						if( AIQuery.FindSpotRelativeToSource( owner.Go, 0, spawn_radius$, 1, item$.Mind.TempPos1 ) )
+						{
+							item$.Placement.SSetPosition( item$.Mind.TempPos1, true);
+						}
+					}
+				}
+			}
+			
+			// one less
+			num_children_incubating$ -= 1;
+        }
+	}
+}
+
+state Finished$
+{ }
+
+//////////////////////////////////////////////////////////////////////////////

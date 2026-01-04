@@ -1,0 +1,651 @@
+[t:template,n:base_hammer]
+{
+	doc = "Hammer";
+	specializes = weapon_melee;
+	[aspect]
+	{
+		material = steelblunt;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_mace;
+			}
+		}
+	}
+	[attack]
+	{
+		attack_class = ac_hammer;
+		is_melee = true;
+		reload_delay = 0;
+		skill_class = melee;
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_001;
+		equip_slot = es_weapon_hand;
+	}
+}
+[t:template,n:hm_g_c_1h1m_avg]
+{
+	doc = "Hammer";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_009;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 10.000000;
+	  f damage_min = 7.000000;
+	}
+	[common]
+	{
+		screen_name = "Hammer";
+	}
+	[gui]
+	{
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_014;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 1.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 17.000000;
+		  f damage_min = 11.000000;
+			equip_requirements = strength:12;
+			inventory_icon = b_gui_ig_i_w_hmr_015;
+			model = m_w_hmr_009;
+		  f modifier_max = 3.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 85.000000;
+		  f damage_min = 57.000000;
+			equip_requirements = strength:26;
+			inventory_icon = b_gui_ig_i_w_hmr_017;
+			model = m_w_hmr_011;
+		  f modifier_max = 22.000000;
+		  f modifier_min = 16.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 51.000000;
+		  f damage_min = 34.000000;
+			equip_requirements = strength:18;
+			inventory_icon = b_gui_ig_i_w_hmr_016;
+			model = m_w_hmr_009;
+		  f modifier_max = 14.000000;
+		  f modifier_min = 9.000000;
+		}
+		[o_avg]
+		{
+		  f damage_max = 24.000000;
+		  f damage_min = 16.000000;
+			equip_requirements = strength:13;
+			inventory_icon = b_gui_ig_i_w_hmr_026;
+			model = m_w_hmr_010;
+		  f modifier_max = 6.000000;
+		  f modifier_min = 2.000000;
+		}
+		[o_fin]
+		{
+		  f damage_max = 36.000000;
+		  f damage_min = 24.000000;
+			equip_requirements = strength:16;
+			inventory_icon = b_gui_ig_i_w_hmr_027;
+			model = m_w_hmr_011;
+		  f modifier_max = 10.000000;
+		  f modifier_min = 5.000000;
+		}
+		[o_mag]
+		{
+		  f damage_max = 108.000000;
+		  f damage_min = 72.000000;
+			equip_requirements = strength:30;
+			inventory_icon = b_gui_ig_i_w_hmr_029;
+			model = m_w_hmr_011;
+		  f modifier_max = 25.000000;
+		  f modifier_min = 20.000000;
+		}
+		[o_str]
+		{
+		  f damage_max = 68.000000;
+		  f damage_min = 45.000000;
+			equip_requirements = strength:22;
+			inventory_icon = b_gui_ig_i_w_hmr_028;
+			model = m_w_hmr_010;
+		  f modifier_max = 19.000000;
+		  f modifier_min = 12.000000;
+		}
+	}
+}
+[t:template,n:hm_g_c_1h1m_fun]
+{
+	doc = "Common Hammer";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_008;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 7.000000;
+	  f damage_min = 5.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Common Hammer";
+	}
+	[gui]
+	{
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_013;
+		inventory_width = 1;
+	}
+}
+[t:template,n:hm_g_c_1h1m_low]
+{
+	doc = "Worn Hammer";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_008;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 4.000000;
+	  f damage_min = 2.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Worn Hammer";
+	}
+	[gui]
+	{
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_012;
+		inventory_width = 1;
+	}
+}
+[t:template,n:hm_g_c_2h1m_avg]
+{
+	doc = "Mallet";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_012;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 91.000000;
+	  f damage_min = 75.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+		screen_name = "Mallet";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_002;
+		equip_requirements = strength:24;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_020;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 4.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 102.000000;
+		  f damage_min = 84.000000;
+			equip_requirements = strength:26;
+			inventory_icon = b_gui_ig_i_w_hmr_021;
+			model = m_w_hmr_013;
+		  f modifier_max = 11.000000;
+		  f modifier_min = 2.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 250.000000;
+		  f damage_min = 204.000000;
+			equip_requirements = strength:51;
+			inventory_icon = b_gui_ig_i_w_hmr_023;
+			model = m_w_hmr_015;
+		  f modifier_max = 50.000000;
+		  f modifier_min = 36.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 178.000000;
+		  f damage_min = 146.000000;
+			equip_requirements = strength:39;
+			inventory_icon = b_gui_ig_i_w_hmr_022;
+			model = m_w_hmr_014;
+		  f modifier_max = 35.000000;
+		  f modifier_min = 19.000000;
+		}
+		[o_avg]
+		{
+		  f damage_max = 125.000000;
+		  f damage_min = 103.000000;
+			equip_requirements = strength:30;
+			inventory_icon = b_gui_ig_i_w_hmr_032;
+			model = m_w_hmr_015;
+		  f modifier_max = 19.000000;
+		  f modifier_min = 7.000000;
+		}
+		[o_fin]
+		{
+		  f damage_max = 152.000000;
+		  f damage_min = 124.000000;
+			equip_requirements = strength:34;
+			inventory_icon = b_gui_ig_i_w_hmr_034;
+			model = m_w_hmr_012;
+		  f modifier_max = 27.000000;
+		  f modifier_min = 12.000000;
+		}
+		[o_mag]
+		{
+		  f damage_max = 290.000000;
+		  f damage_min = 238.000000;
+			equip_requirements = strength:58;
+			inventory_icon = b_gui_ig_i_w_hmr_036;
+			model = m_w_hmr_015;
+		  f modifier_max = 61.000000;
+		  f modifier_min = 44.000000;
+		}
+		[o_str]
+		{
+		  f damage_max = 211.000000;
+		  f damage_min = 173.000000;
+			equip_requirements = strength:45;
+			inventory_icon = b_gui_ig_i_w_hmr_035;
+			model = m_w_hmr_014;
+		  f modifier_max = 43.000000;
+		  f modifier_min = 29.000000;
+		}
+	}
+}
+[t:template,n:hm_g_c_2h1m_fun]
+{
+	doc = "Damaged Mallet";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_012;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 87.000000;
+	  f damage_min = 71.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Damaged Mallet";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_002;
+		equip_requirements = strength:24;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_019;
+		inventory_width = 2;
+	}
+}
+[t:template,n:hm_g_c_2h1m_low]
+{
+	doc = "Crude Mallet";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_012;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 84.000000;
+	  f damage_min = 68.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Crude Mallet";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_002;
+		equip_requirements = strength:23;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_018;
+		inventory_width = 2;
+	}
+}
+[t:template,n:hm_g_c_2h2m_avg]
+{
+	doc = "Maul";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_016;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 80.000000;
+	  f damage_min = 66.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+		screen_name = "Maul";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_003;
+		equip_requirements = strength:22;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_038;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 3.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 94.000000;
+		  f damage_min = 77.000000;
+			equip_requirements = strength:24;
+			inventory_icon = b_gui_ig_i_w_hmr_039;
+			model = m_w_hmr_017;
+		  f modifier_max = 10.000000;
+		  f modifier_min = 2.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 238.000000;
+		  f damage_min = 194.000000;
+			equip_requirements = strength:49;
+			inventory_icon = b_gui_ig_i_w_hmr_042;
+			model = m_w_hmr_019;
+		  f modifier_max = 48.000000;
+		  f modifier_min = 34.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 166.000000;
+		  f damage_min = 136.000000;
+			equip_requirements = strength:37;
+			inventory_icon = b_gui_ig_i_w_hmr_040;
+			model = m_w_hmr_017;
+		  f modifier_max = 32.000000;
+		  f modifier_min = 18.000000;
+		}
+		[o_mag]
+		{
+		  f damage_max = 279.000000;
+		  f damage_min = 229.000000;
+			equip_requirements = strength:56;
+			inventory_icon = b_gui_ig_i_w_hmr_044;
+			model = m_w_hmr_021;
+		  f modifier_max = 58.000000;
+		  f modifier_min = 42.000000;
+		}
+		[o_str]
+		{
+		  f damage_max = 200.000000;
+		  f damage_min = 164.000000;
+			equip_requirements = strength:43;
+			inventory_icon = b_gui_ig_i_w_hmr_043;
+			model = m_w_hmr_020;
+		  f modifier_max = 40.000000;
+		  f modifier_min = 27.000000;
+		}
+	}
+}
+[t:template,n:hm_g_c_2h2m_fun]
+{
+	doc = "Sledgehammer";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_016;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 78.000000;
+	  f damage_min = 64.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Sledgehammer";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_003;
+		equip_requirements = strength:22;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_037;
+		inventory_width = 2;
+	}
+}
+[t:template,n:hm_ra_g_c_1h1m_fin]
+{
+	doc = "Head Hammer";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_009;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 22.000000;
+	  f damage_min = 15.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Head Hammer";
+	}
+	[gui]
+	{
+		equip_requirements = strength:12;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_045;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 4.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 92.000000;
+		  f damage_min = 61.000000;
+			equip_requirements = strength:26;
+			inventory_icon = b_gui_ig_i_w_hmr_017;
+			model = m_w_hmr_011;
+		  f modifier_max = 24.000000;
+		  f modifier_min = 17.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 56.000000;
+		  f damage_min = 37.000000;
+			equip_requirements = strength:18;
+			inventory_icon = b_gui_ig_i_w_hmr_046;
+			model = m_w_hmr_009;
+		  f modifier_max = 15.000000;
+		  f modifier_min = 9.000000;
+		}
+		[o_mag]
+		{
+		  f damage_max = 145.000000;
+		  f damage_min = 97.000000;
+			equip_requirements = strength:36;
+			inventory_icon = b_gui_ig_i_w_hmr_047;
+			model = m_w_hmr_011;
+		  f modifier_max = 121.000000;
+		  f modifier_min = 1.000000;
+		}
+	}
+}
+[t:template,n:hm_ra_g_c_2h1m_fin]
+{
+	doc = "Wound Mallet";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_014;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 113.000000;
+	  f damage_min = 93.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Wound Mallet";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_002;
+		equip_requirements = strength:27;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_048;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 12.000000;
+		  f modifier_min = 2.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 412.000000;
+		  f damage_min = 292.000000;
+			equip_requirements = strength:50;
+			inventory_icon = b_gui_ig_i_w_hmr_051;
+			model = m_w_hmr_015;
+		  f modifier_max = 370.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 185.000000;
+		  f damage_min = 151.000000;
+			equip_requirements = strength:39;
+			inventory_icon = b_gui_ig_i_w_hmr_049;
+			model = m_w_hmr_013;
+		  f modifier_max = 36.000000;
+		  f modifier_min = 20.000000;
+		}
+		[o_str]
+		{
+		  f damage_max = 219.000000;
+		  f damage_min = 179.000000;
+			equip_requirements = strength:45;
+			inventory_icon = b_gui_ig_i_w_hmr_050;
+			model = m_w_hmr_014;
+		  f modifier_max = 44.000000;
+		  f modifier_min = 30.000000;
+		}
+	}
+}
+[t:template,n:hm_ra_g_c_2h2m_fin]
+{
+	doc = "Head Ram";
+	specializes = base_hammer;
+	[aspect]
+	{
+		model = m_w_hmr_017;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 99.000000;
+	  f damage_min = 81.000000;
+		is_two_handed = true;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Head Ram";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_003;
+		equip_requirements = strength:24;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_hmr_052;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 11.000000;
+		  f modifier_min = 2.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 245.000000;
+		  f damage_min = 201.000000;
+			equip_requirements = strength:49;
+			inventory_icon = b_gui_ig_i_w_hmr_054;
+			model = m_w_hmr_019;
+		  f modifier_max = 50.000000;
+		  f modifier_min = 35.000000;
+		}
+		[o_str]
+		{
+		  f damage_max = 208.000000;
+		  f damage_min = 170.000000;
+			equip_requirements = strength:43;
+			inventory_icon = b_gui_ig_i_w_hmr_053;
+			model = m_w_hmr_053;
+		  f modifier_max = 42.000000;
+		  f modifier_min = 28.000000;
+		}
+	}
+}

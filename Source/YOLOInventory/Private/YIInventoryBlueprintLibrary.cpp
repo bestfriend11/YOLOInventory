@@ -55,6 +55,8 @@ bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsse
 	{
 		Rolled *= Affix->ValueByLevel.GetRichCurveConst()->Eval(Level, 1.f);
 	}
+	// Apply affix power level as an additional multiplier
+	Rolled *= FMath::Max(1, Affix->PowerLevel);
 	FYIAffixInstance NewInst;
 	NewInst.Source = Affix;
 	NewInst.TierRolled = FMath::Max(1, Affix->Tier);
@@ -123,6 +125,18 @@ bool UYIInventoryBlueprintLibrary::HasEvolutionCapability(const UYIItemDefinitio
 
 bool UYIInventoryBlueprintLibrary::GenerateAffixesForInstance(FYIBagItem& Item, int32 Level, int32 Seed, int32 NumPrefixes, int32 NumSuffixes)
 {
+	// If caller didn't specify counts, use definition's Min/MaxRandomModifiers to derive totals
+	UYIItemDefinition* DefForCounts = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
+	if (DefForCounts && NumPrefixes <= 0 && NumSuffixes <= 0)
+	{
+		FRandomStream CStream(Seed ^ 0x5F3759DF);
+		const int32 MinMods = FMath::Max(0, DefForCounts->MinRandomModifiers);
+		const int32 MaxMods = FMath::Max(MinMods, DefForCounts->MaxRandomModifiers);
+		const int32 TotalMods = (MaxMods > MinMods) ? CStream.RandRange(MinMods, MaxMods) : MinMods;
+		// Split approximately half/half between prefix/suffix, bias prefix when odd
+		NumPrefixes = TotalMods / 2 + (TotalMods & 1);
+		NumSuffixes = TotalMods - NumPrefixes;
+	}
 	UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
 	if (!Def) return false;
 

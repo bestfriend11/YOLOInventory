@@ -1,0 +1,1696 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  world:global:contentdb:rules:components.gas
+// Author(s):  Scott Bilas
+//
+// Summary  :  Contains the definitions (schemas) for all possible components
+//             and constraints that validate them.
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// Documentation
+
+/*	+++																	+++
+	+++							  COMPONENTS							+++
+	+++																	+++
+
+	*** Overview ***
+
+		A 'component' is a basic building block of a game object. Various
+		components are defined that implement certain tasks in the game engine.
+		For example, the 'physics' component contains parameters that tune the
+		physics engine for an object (fire parameters, gravity, etc.).
+
+		Components are combined in a template to build up a game object that may
+		be instantiated in the Siege Editor or from within C++/Skrit code. They
+		will typically closely mirror their equivalent C++/Skrit code object.
+		Data defined by components (directly or indirectly) will typically be
+		used only for initialization purposes.
+
+		A component specifies a set of parameters and attributes and constraints
+		for those parameters. For example, the 'body' component has a parameter
+		named 'model', which is specified like this:
+
+		[t:component,n:body]
+		{
+			//...
+
+			[model]
+			{
+				type      = string;
+				default   = m_i_glb_placeholder;
+				constrain = choose_file( m_* );
+				doc       = "What Nema aspect to use for visual representation";
+			}
+
+			// ...
+		}
+
+		Here the 'model' parameter is defined as type 'string', has a default
+		value of 'm_i_glb_placeholder', must be selected from one of the meshes
+		found that start with 'm_', and is documented as given. This parameter
+		definition is known as a 'schema' and serves several purposes.
+
+		First it documents the game's data structure. All possible parameters,
+		their types, and default values are given (with a few 'internal'
+		exceptions). Second, it enables Siege Editor to treat the data
+		generically by detecting types, and when used with 'chooser' constraints
+		SE can provide context-sensitive data entry helpers. And finally, the
+		constraints allow data verification to be done, either at game runtime
+		or by an external tool.
+
+	*** Format ***
+
+		[t:component,n:component_name]
+		{
+			// the type of 'component' is required. the name (replace
+			// 'component_name' with your component's name) must be unique
+			// across all components. it should be human-readable, as it's used
+			// for unique addressing and data transfer.
+
+			doc = "This component represents an object's ability to spew";
+
+				// this is a string that describes the component. siege editor
+				// may use this to provide help in its dialogs where useful.
+
+			required_component* = other_component_name;
+
+				// this is a string or set of strings that defines a dependency.
+				// a template that uses the component being defined must also
+				// use the components in the required_component* set.
+
+			internal* = sound;
+
+				// this is a string or set of strings that says that a
+				// particular name is allowed to be used as a block or value. in
+				// order to maintain data integrity the content validator
+				// routines will give errors upon finding entries that are not
+				// part of the official schema. certain blocks and values will
+				// be used by the c++ code but not be exposable via standard
+				// schema, so tag those with "internal" and doc the format of
+				// the block/value in place of the schema.
+
+			internal_component = true;
+
+				// this is a bool that says that the entire current component is
+				// internal in the same way that internal* says that a
+				// particular element of a component is internal.
+
+			[parameter_name]
+			{
+				// this is the name of the parameter that is being added to this
+				// component's schema.
+
+				type = float;
+
+					// this is the type of the parameter. generally this will be
+					// a float, int, bool, or string. there are other special
+					// types supported: Vector, SiegePos, Quat, and a set of
+					// enums.
+
+				default = 1.234;
+
+					// (optional) this is the default value to use for the
+					// parameter if not overridden in a template or chosen in
+					// Siege Editor. always try to give a default value that
+					// will allow construction of a valid component.
+
+				flags = REQUIRED;
+
+					// (optional) this sets particular flags for the parameter.
+					// possible values are covered in a later section.
+
+				constrain = positive_nonzero;
+
+					// (optional) a constraint allows limiting the choices
+					// available for a parameter. the constraint may be a built-
+					// in algorithm, a list in a fuel block, or a piece of skrit
+					// code. constraints are covered in a later section.
+
+				doc = "This parameter controls happiness";
+
+					// this documents the parameter and is required. make it as
+					// descriptive as possible - Siege Editor and various other
+					// interfaces will use this attribute to give context and
+					// help when modifying/dumping parameters on game objects.
+			}
+		}
+
+		*** Parameter flags ***
+
+			These are possible flags to be used in a component's 'flags'
+			attribute. Combine flags together by using the '|' operator
+			(example: flags = REQUIRED | LOCALIZE).
+
+			REQUIRED
+
+				This is a 'required' parameter that cannot accept a default
+				value. For example, actors cannot be placed in the world without
+				a valid SiegePos, so that parameter is marked as REQUIRED.
+				Hopefully parameters flagged this way will be very rare. Try to
+				always allow a default value to work.
+
+			LOCALIZE
+
+				This is a flag on a parameter that says it refers to a string
+				that will potentially be printed on the screen. The parameter
+				name, by the way, should follow the convention where 'screen_'
+				is prefixed. This flag is used to tell the system to do a
+				translation on the string when it's read in. It will also be
+				scanned by an external tool to build the translation database
+				for localization efforts.
+
+			ADVANCED
+
+				Flag a parameter with this to tell Siege Editor or other editing
+				interfaces to put this parameter in an 'advanced' section of the
+				editing dialogs. This will help to reduce clutter for
+				infrequently-overridden parameters. This cannot be used with the
+				REQUIRED or HIDDEN flags.
+
+			HIDDEN
+
+				Put this on parameters that should normally be hidden from the
+				Siege Editor or other editing interfaces. This cannot be used
+				with the REQUIRED or ADVANCED flags. Hidden parameters are meant
+				to be tweaks that generally only engineers mess with during
+				testing.
+
+	+++																	+++
+	+++							 CONSTRAINTS							+++
+	+++																	+++
+
+		!! NOTE !!
+
+		Constraints didn't make it into the game. All of this info is meant
+		for future versions, and does not apply to RTM DS.
+
+	*** Overview ***
+
+		TODO fill in
+
+		TODO include notes of verify vs. choose
+
+		$ note: constraints stored inside a component are just supported as a
+				convenience - find them with a 2-deep search. components,
+				constraints, templates, and all other top-level names must be
+				unique.
+
+	*** Intrinsics ***
+
+		range[ 0, 10 )
+
+			// 0 <= n < 10
+
+		range[ -15, 15 ]
+
+			// -15 <= n <= 15
+
+		range( 0 + ]
+
+			// > 0
+
+		range( -10 - ]
+
+			// <= -10
+
+		positive
+
+			// >= 0
+
+		positive_nonzero
+
+			// > 0
+
+		negative
+
+			// <= 0
+
+		negative_nonzero
+
+			// < 0
+
+		choose( 0, 1, 2, 4 )
+
+			// n == 0 || n == 1 || n == 2 || n == 4
+
+		choose( fueladdr )
+
+			// fuel block containing data (as "choose" values) or algorithm
+			// (as skrit = [[]])
+
+		choose( "abc", "def" )
+
+			// s == "abc" || s == "def"
+
+		choose_file( filespec )
+
+			// choose a filename (with no extension) where filespec may be a
+			// wildcard filespec, or it may be a wildcard naming key, which will
+			// build a wildcard filespec
+
+		verify( fueladdr )
+
+			// fuel block containing skrit algorithm to verify number
+
+		verify( [[ x$ < 100 ]] )
+
+			// inline bool expression that takes "x$"
+
+	*** Lists ***
+
+		[t:constraint,n:constraint_name]
+		{
+			[choose]
+			{
+				* = a_value;
+				* = another_value;
+				* = still_another_value;
+				* = last_value;
+			}
+		}
+
+		[t:constraint,n:something]
+		{
+			// $ alternate choose method that allows embedding other data for
+			//   different queries. note that 'doc' is allowed, which siege edit
+			//   can query to help out selection choices.
+
+			[choose]
+			{
+				[a_value]              {  other_data = ...;  doc = ...;  }
+				[another_value]        {  other_data = ...;  doc = ...;  }
+				[still_another_value]  {  other_data = ...;  doc = ...;  }
+				[last_value]           {  other_data = ...;  doc = ...;  }
+			}
+		}
+
+	*** Skrits ***
+
+		[t:constraint,n:something_else]
+		{
+			skrit =
+			[[
+				bool Choose$( Constraint constraint$ )
+				{
+					constraint$.AddString( "something 1" );
+					constraint$.AddString( "something 2" );
+					return ( true );
+				}
+			]];
+		}
+
+		[t:constraint,n:something_else2]
+		{
+			skrit =
+			[[
+				bool Verify$( int x$ )
+				{
+					return ( (x$ != 4) && (x$ < 100) );
+				}
+			]];
+		}
+*/
+
+//////////////////////////////////////////////////////////////////////////////
+// Component definitions
+
+[t:component,n:actor]
+{
+	doc = "Interactive intelligent actor";
+	required_component* = attack;
+	required_component* = body;
+	required_component* = defend;
+	required_component* = physics;
+	required_component* = inventory;
+
+// Options.
+
+	[can_level_up]			{  type = bool;		default = false;	doc = "Can this object 'level up'?";  }
+	[is_hero]				{  type = bool;		default = false;	doc = "Can this actor be chosen from the character screen as a hero?";  }
+	[drops_spellbook]		{  type = bool;		default = true;		doc = "If killed with a spellbook in inventory, should we drop it or nuke it?";  }
+	[can_be_picked_up]		{  type = bool;		default = false;	doc = "Can this actor be picked up and placed inside inventory?";  }
+	[can_show_health]		{  type = bool;		default = false;	doc = "Does this actor show its health status on cursor rollover?"; }
+
+// Traditional RPG attributes.
+
+	// inherent traits
+	[alignment]				{  type = eActorAlignment;	default = aa_neutral;									doc = "Moral alignment of actor";  }
+	[race]					{  type = string;			default = other;	constrain = choose( actor_race );	doc = "Race of actor";  }
+	[is_male]				{  type = bool;				default = true;	  										doc = "True for male character ( or undetermined ), false for female."; }
+	[screen_class]			{  type = string;			flags = LOCALIZE;										doc = "Starting class for actor"; }
+
+	// magic resistance
+	[is_possessable]		{  type = bool;				default = true;											doc = "Whether or not this actor can be possessed."; }
+	[is_charmable]			{  type = bool;				default = true;											doc = "Wehther or not this actor can be charmed."; }
+
+	// chance to hit bonus
+	[chance_to_hit_bonus_start]				{  type = int;		default = 10;		doc = "Number of times this actor must be killed before the bonus will take effect.";  }
+	[chance_to_hit_bonus_kill_step]			{  type = int;		default = 1;		doc = "Number of times this actor must be killed before increasing the attacker's chance to hit bonus.";  }
+	[chance_to_hit_bonus_increment]			{  type = float;	default = 0.01;		doc = "Increment the attacker's chance to hit bonus against actor by this amount.";  }
+	[chance_to_hit_bonus_max]				{  type = float;	default = 0.2;		doc = "Maximum level of attacker's chance to hit bonus against this actor.";  }
+
+// General.
+
+	[portrait_icon]			{  type = string;			constrain = choose_file( b_gui_ig_i_ic_c_* );			doc = "Bitmap displayed when dragging or in inventory";  }
+
+	internal* = skills;
+	/*
+		the "skills" block is a list of skills for this actor.
+
+		format:
+
+		[skills]
+		{
+			// skill_name= Experience level, experience points, starting level
+			// Calculations are based on the curve defined for the skill in formulas.gas
+
+			skill_name	= level, xp, optional starting level
+
+			strength	= 0, 0, 10;		// actual level is 10, no experience points were awarded, 100 xp needed to get to level 11
+			intelligence= 2, 0, 10;		// actual level is 12, leveled up 2 times starting from 10, 480 xp need to get to level 13
+			dexterity	= 10, 0, 0;		// actual level is 10, has leveled up 10 times starting from 0, 2000 xp needed to get to level 11
+
+			[override]
+			{
+				skill_name	= level, xp, optional starting level
+
+				combat_magic	= 100, 0;	// level is 100, experience points are derived from level and awarded to strength, dexterity, and
+										// intelligence according to the influences defined by the skill
+ 			}
+		}
+	*/
+
+	[t:constraint,n:actor_race]
+	{
+		[choose]
+		{
+			* = human;
+			* = giant;
+			* = elf;
+			* = dwarf;
+			* = krug;
+			* = other;
+		}
+	}
+}
+
+
+[t:component,n:aspect]
+{
+	doc = "Runtime visual representation for an object";
+	required_component* = placement;
+
+// Options.
+
+	// rendering
+	[is_visible]				{  type = bool;		default = true;		doc = "Is this object visible (does it render)?";  }
+	[draw_shadow]				{  type = bool;		default = false;	doc = "Should this object draw a shadow when rendered?";  }
+	[interest_only]				{  type = bool;		default = false;	doc = "Should this object draw only when it is in the sphere of interest?"; }
+	[rollover_highlight]		{  type = bool;		default = true;		doc = "Should this object highlight on rollover.";	}
+
+	// physics
+	[is_collidable]				{  type = bool;		default = false;	doc = "Is this object collidable with other objects like projectiles?";  }
+	[does_block_path]			{  type = bool;		default = false;	doc = "Does this object prevent another from walking through it?";  }
+	[is_invincible]				{  type = bool;		default = false;	doc = "Is this object immune to damage?";  }
+
+	// gui
+	[is_selectable]				{  type = bool;		default = false;	doc = "Is object selectable from the GUI?";  }
+	[does_block_camera]			{  type = bool;		default = false;	doc = "Does this object block the camera from moving through it?";  }
+	[is_usable]					{  type = bool;		default = false;	doc = "Can this item be 'used?'  i.e. opened, closed, turned on/off."; }
+	[is_ghost_usable]			{  type = bool;		default = false;	doc = "Can this item be used by a ghost?"; }
+	[use_range]					{  type = float;	default = 0;		doc = "Range at which an actor must be to 'use' this object."; }
+
+	// other
+	[is_gagged]					{  type = bool;		default = false;	doc = "Is this object gagged from making sounds? Useful for quieting monsters until they activate.";  }
+	[megamap_override]			{  type = bool;     default = false;    doc = "Should this object draw on the megamap no matter what?";  }
+	[megamap_orient]			{  type = bool;     default = false;    doc = "Does this object's icon orient to the object on the megamap?";  }
+	[dynamically_lit]			{  type = bool;		default = true;		doc = "Should this object be affected by dynamic light?";  }
+
+// General.
+
+	// rendering
+	[model]						{  type = string;		default = m_i_glb_placeholder;	constrain = choose_file( m_* );			doc = "What Nema aspect to use for visual representation";  }
+	[draw_selection_indicator]	{  type = bool;			default = true;															doc = "Specifies whether or not an indicator should be drawn"; }
+	[selection_indicator_scale]	{  type = float;		default = 1.0;					constrain = positive_nonzero;			doc = "Scalar for determining selection indicator radius";  }
+	[scale_base]				{  type = float;		default = 1.0;					constrain = positive_nonzero;			doc = "Base scale to use for rendering - modify this in base template only";  }
+	[scale_multiplier]			{  type = float;		default = 1.0;					constrain = positive_nonzero;			doc = "Multiplier modifier to apply to the scale - modify this in instances only";  }
+	[bounding_volume_scale]		{  type = float;		default = 1.0;					constrain = positive_nonzero;			doc = "Scalar multiplier for adjusting the bounding volumes of objects";  }
+	[lodfi_upper]				{  type = float;		default = -1.0;					constrain = range[ 0.0, 1.0 ];			doc = "Upper bound for level of detail for items - will always render if object detail level higher than this (set -1 for critical/global)";  }
+	[lodfi_lower]				{  type = float;		default = -1.0;					constrain = range[ 0.0, 1.0 ];			doc = "Lower bound for level of detail for items - will not render at all if object detail level lower than this";  }
+	[material]					{  type = string;										/*constrain = choose( material );*/		doc = "Material that this is made from - used for sound map";  }
+	[megamap_icon]				{  type = string;		default = <none>;				constrain = choose_file( b_* );			doc = "What icon to use for megamap representation";  }
+	[ghost_alpha]				{  type = int;			default = 128;					constrain = positive_nonzero;			doc = "Draw the character mesh at this alpha level when it is a ghost ( 0 - invisible, 255 - fully opaque ).";  }
+	[cam_fade_alpha]			{  type = int;			default = 65;					constrain = positive_nonzero;			doc = "When this object is faded by the camera, this indicates what alpha level is will fade to ( 0 - invisible, 255 - fully opaque ).";  }
+
+
+	// life
+	// max_life = (str * str_percent * constant) + (dex * dex_percent * constant ) + (int * int_percent * constant )
+	[life_state]				{  type = eLifeState;	default = ls_ignore;													doc = "Living state of the object, or life_ignore if not applicable";  }
+	[max_life]					{  type = float;		default = 0;					constrain = positive;					doc = "Maximum life (hit points) the object has or the amount of damage it can take before breaking apart";  }
+	[life]						{  type = float;		default = 0;															doc = "Initial hit points";  }
+	[life_recovery_unit]		{  type = float;		default = 0;															doc = "Life recovery units added per period (calculated continuously)";  }
+	[life_recovery_period]		{  type = float;		default = 0;					constrain = positive_nonzero;			doc = "Life recovery period in seconds";  }
+	[expired_template_name]		{  type = string;										constrain = choose( template );			doc = "Template to replace current object with when it expires";  }
+
+	// $ max_mana is calculated for characters that can level up using the
+	//   formula:  (str-9 * str_percent * constant)
+	//           + (dex-9 * dex_percent * constant)
+	//           + (int-9 * int_percent * constant)
+
+	// mana
+	[max_mana]				{  type = float;			default = 0;					constrain = positive;					doc = "Maximum mana that this actor may acquire";  }
+	[mana]					{  type = float;			default = 0;															doc = "Initial mana (defaults to max_mana)";  }
+	[mana_recovery_unit]	{  type = float;			default = 0;															doc = "Mana units added per period (calculated continuously)";  }
+	[mana_recovery_period]	{  type = float;			default = 0;					constrain = positive_nonzero;			doc = "Mana recovery period in seconds";  }
+
+
+	// misc
+	[experience_value]			{  type = float;		default = 0;															doc = "Number of experience points awarded if destroyed/killed";  }
+	[gold_value]				{  type = int;			default = 0;					constrain = positive;					doc = "Value of object in gold pieces";  }
+	[force_no_render]			{  type = bool;			default = false;														doc = "Force this object not to render, but do everything else"; }
+
+	internal* = textures;
+	/*
+		the "textures" block is for texture replacement, where the number
+		must match up with what nema is expecting.
+
+		format:
+
+		[textures]
+		{
+			0 = b_c_gah_fb_skin_01;
+			1 = b_c_pos_a2_m_lthr-stud-grn;
+		}
+	*/
+
+	internal* = voice;
+	/*
+		$ see docs in world/global/sounds/sounddb.gas.
+	*/
+}
+
+
+[t:component,n:attack]
+{
+	doc = "Parameters related to attacking";
+
+	required_component* = common;
+
+// Options.
+
+	[requires_line_of_sight]	{  type = bool;  default = false;  doc = "Must have a line of sight on the target in order to attack it";  }
+	[is_melee]					{  type = bool;  default = false;  doc = "Attack available in close combat";  }
+	[is_projectile]				{  type = bool;  default = false;  doc = "Attack available to ranged combat";  }
+	[is_one_shot]				{  type = bool;  default = false;  doc = "Attacks once and then is done - subsequent attacks must be explicit";  }
+	[is_two_handed]				{  type = bool;  default = false;  doc = "Requires two hands to operate";  }
+
+// General.
+
+	[ammo_template]				{  type = string;		default = ;			constrain = choose( template );			doc = "Go clone source to spawn from for ammo";  }
+	[ammo_attaches_to_weapon] 	{  type = bool;			default = false;											doc = "True if attaching to projectile launcher, false if held in hand"; }
+	[ammo_attach_bone]			{  type = string;		default = "ap_grip";										doc = "Name of bone to use when attaching relative to ammo or projectile launcher"; }
+	[ammo_appears_jit] 		 	{  type = bool;			default = false;											doc = "True if ammo is created right before the instant that it is shot"; }
+
+	[area_damage_radius]		{  type = float;		default = 0.0;		constrain = positive;					doc = "Spherical collateral damage radius";  }
+	[attack_class]				{  type = eAttackClass;	flags = REQUIRED;											doc = "Classification of attack";  }
+	[reload_delay]				{  type = float;		default = 0.0;		constrain = positive;					doc = "Duration of each attack iteration, i.e. a single blow";  }
+	[attack_range]				{  type = float;		default = 0.5;		constrain = positive;					doc = "Minimum range the GO must be to target in order to gamage it";  }
+	[damage_min]				{  type = float;		default = 1.0;		constrain = positive;					doc = "Minimum damage amount this object can do before modifiers";  }
+	[damage_max]				{  type = float;		default = 1.0;		constrain = positive;					doc = "Maximum damage amount this object can do before modifiers";  }
+	[critical_hit_chance]		{  type = float;		default = 0;		constrain = range[ 0, 1 ];				doc = "Chance of immediately killing on attack (0.0-1.0)";  }
+
+	// damage bonuses
+	[damage_bonus_min_melee]   	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to melee combat"; }
+	[damage_bonus_max_melee]   	{ type = float; 		default = 0;		constrain = positive;					doc = "Additional damage to add to melee combat"; }
+	[damage_bonus_min_ranged]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to ranged combat"; }
+	[damage_bonus_max_ranged]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to ranged combat"; }
+	[damage_bonus_min_cmagic]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to combat magic combat"; }
+	[damage_bonus_max_cmagic]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to combat magic combat"; }
+	[damage_bonus_min_nmagic]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to nature magic combat"; }
+	[damage_bonus_max_nmagic]  	{ type = float;			default = 0;		constrain = positive;					doc = "Additional damage to add to nature magic combat"; }
+
+
+	// $ skill_class is defined in the attack component as well! values that
+	//   may go here are defined in formulas.gas
+	[skill_class]				{  type = string;																	doc = "What skill to award experience to for usage";  }
+
+	[melee_aim_pi_time]		   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the AIM melee if targeting something PI radians away."; }
+	[melee_swing_time]		   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the SWING melee state"; }
+	[melee_recover_time]   	   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the RECOVER melee state"; }
+	[melee_fidget_time]		   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the FIDGET melee state"; }
+
+	[ranged_ready_weapon_time] 	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the READY_WEAPON ranged attack state"; }
+	[ranged_aim_time]		   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the AIM ranged attack state"; }
+	[ranged_fire_time]		   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the FIRE ranged attack state"; }
+	[ranged_reload_time]	   	{  type = float;		default = 1.0;												doc = "Amount of time to spend in the RELOAD ranged attack state"; }
+
+	[use_aiming_error]			{  type = bool;  		default = false;  											doc = "Attack will use aditional Error specified by aming_error_range_[x|y]";  }
+	[aiming_error_range_x]		{  type = float;		default = 0.0;		constrain = positive;					doc = "Random range (-x,x) in degrees to perturb aim by to make less accurate"; }
+	[aiming_error_range_y]		{  type = float;		default = 0.0;		constrain = positive;					doc = "Random range (-y,y) in degrees to perturb aim by to make less accurate"; }
+}
+
+
+[t:component,n:body]
+{
+	doc = "More complex representation for an object, typically used on actors";
+	required_component* = aspect;
+
+// General.
+
+	[armor_version]					{  type = string;				constrain = choose( armor_version );	doc = "Modifier for shape of armor to use";  }
+	[angular_turning_velocity]		{  type = float;				default = 360;							doc = "Turning velocity of creature in degrees per second";  }
+	[can_turn_and_move]				{  type = bool;					default = true;							doc = "Can this object turn and move at the same time?";  }
+	[initial_chore]					{  type = eAnimChore;			default = chore_none;					doc = "Initial chore to run when the object is constructed";  }
+
+	[min_move_velocity]				{  type = float;				default = 1.0;							doc = "Minimum movement velocity for this actor."; }
+	[avg_move_velocity]				{  type = float;				default = 1.0;							doc = "Average movement velocity for this actor."; }
+	[max_move_velocity]				{  type = float;				default = 1.0;							doc = "Maximum movement velocity for this actor."; }
+
+	[terrain_movement_permissions]	{  type = eLogicalNodeFlags;	default = lf_size1_mover | lf_size2_mover | lf_size3_mover | lf_size4_mover | lf_dirt;						doc = "Walk-mask permissions for path-finding."; }
+
+	internal* = bone_translator;
+	/*
+		the "bone_translator" block is a map of 3ds max bone names to the
+		reserved names expected by the simulation. current possible names
+		are (these are defined in the BoneTranslator::eBone enum):
+
+			kill_bone
+			weapon_bone
+			shield_bone
+			body_anterior
+			body_mid
+			body_posterior
+			tip
+			middle
+			handle
+
+		format:
+
+		[bone_translator]
+		{
+			kill_bone      = bip01_spine2;			// native name = 3ds max name
+			weapon_bone    = weapon_grip;
+			shield_bone    = shield_grip;
+			body_anterior  = bip01_head;
+			body_mid       = bip01_spine2;
+			body_posterior = bip01;
+		}
+	*/
+
+	internal* = chore_dictionary;
+	/*
+		the "chore_dictionary" block is a set of subblocks that describe the
+		set of available chores that this body can run and the parameters that
+		define those chores. current possible names for the chores are (these
+		are defined in the nema::eAnimChore enum):
+
+			chore_default (this is required by all body components)
+			chore_walk
+			chore_run
+			chore_die
+			chore_defend
+			chore_attack
+			chore_magic
+			chore_fidget
+			chore_rotate
+			chore_open
+			chore_close
+
+		format:
+
+		[chore_dictionary]
+		{
+			chore_prefix = a_c_gah_fg_fs;			// prefix (for convenience) on anim files
+
+			[chore_default]							// name of the chore
+			{
+				skrit = basic_default;				// name of skrit to run the chore
+				chore_stances = 2, 3;				// comma-delimited list of stances that the set of anim files supports
+
+				[anim_files]
+				{
+					00 = rl;						// name of prs file which prefix is prepended to (the key name is used only to order the anim names which is dependent upon the skrit that uses them)
+					10 = dfs;
+				}
+			}
+
+			[chore_walk]
+			{
+				// ...
+			}
+		}
+	*/
+
+	internal* = weapon_scales;
+	/*
+		The "weapon_scales" component allows weapon meshes to be scaled to
+		fit the characters that equip them
+
+		In order to accomodate this, the characters need to have a lookup
+		table that lists the scale values
+
+		This is an OPTIONAL component, if it is missing all scales are
+		assumed to be 1,1,1 (x,y,z).
+
+		format:
+
+		[weapon_scales]
+		{
+			as_single_melee		= 0.8, 0.8, 0.8;
+			as_two_handed_melee	= 0.8, 0.8, 0.8;
+			as_two_handed_sword	= 0.8, 0.8, 0.8;
+			as_staff			= 1.0, 1.0, 1.0;
+			as_bow_and_arrow	= 0.8, 0.8, 0.8;
+			as_minigun			= 0.8, 0.8, 0.8;
+			as_shield_only		= 0.9, 0.9, 0.9;
+		}
+	*/
+
+	[t:constraint,n:armor_version]
+	{
+		[choose]
+		{
+			[farmboy]   {  code = gah_fb;  }
+			[farmgirl]  {  code = gah_fg;  }
+			[dwarf]     {  code = gbn_df;  }
+			[skeleton]  {  code = ecm_sk;  }
+		}
+	}
+}
+
+
+[t:component,n:common]
+{
+	doc = "Common attributes for all game objects";
+
+	[screen_name]				{  type = string;							flags = LOCALIZE;												doc = "Text seen in-game upon mouse over";  }
+	[description]				{  type = string;							flags = LOCALIZE;												doc = "Text seen in-game on some tooltips"; }
+	[dev_instance_text]			{  type = qstring;							flags = DEV;													doc = "Extra instance-specific descriptive text that can be used for debug HUD, etc";  }
+	[forced_expiration_class]	{  type = string;	default = immediate;	flags = ADVANCED;	constrain = choose( expiration_class );		doc = "Forced expiration class (such as when killed) of this object for scheduled deletion";  }
+	[auto_expiration_class]		{  type = string;	default = immediate;	flags = ADVANCED;	constrain = choose( expiration_class );		doc = "Automatic expiration class (when cached out of world) of this object for scheduled deletion";  }
+	[membership]				{  type = string;																							doc = "Comma-deliniated list of groups of which this Go is a member."; }
+	[is_pcontent_allowed]		{  type = bool;		default = true;			flags = ADVANCED;												doc = "Should this template be considered in a pcontent query?";  }
+	[pcontent_special_type]		{  type = string;							flags = ADVANCED;												doc = "Should this template be considered a special item for pcontent queries? Types are 'rare' and 'unique' currently.";  }
+	[allow_modifiers]			{  type = bool;		default = true;			flags = ADVANCED;												doc = "Allow modifiers to be attached to this when generating content?";  }
+	[rollover_display]			{  type = bool;		default = false;																		doc = "Will this object display its screenname in game on rollover?";  }
+	[rollover_life]				{  type = bool;		default = false;																		doc = "Will this object display its life stats on rollover?"; }
+	[is_single_player]			{  type = bool;		default = true;																			doc = "Whether or not this object is allowed in a single player game";  }
+	[is_multi_player]			{  type = bool;		default = true;																			doc = "Whether or not this object is allowed in a multi player game";  }
+	[rollover_help_key]			{  type = string;																							doc = "Key value for user education tooltip to use, if any."; }
+
+	internal* = template_triggers;
+	internal* = instance_triggers;
+	/*
+		$$ FINISH
+		condition*					=	; // Condition such as, receive_world_message
+		action*						=	; // When activated do, such as call_sfx_script
+		delay						=	; // amount of time in seconds before trigger will activate
+		poll_frequency				=	; // amount of time in seoncds to elapsed before performing conditional evaluations
+		reset_duration				=	; // Duration in seconds before auto-reseting
+		single_shot					=	; // Should this trigger fire once only
+		flip_flop					=	; // boolean value true if flip_flop trigger type
+
+		format:
+
+		[template_triggers]
+		{
+			[*]
+			{
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+				action*    = call_sfx_script("sight_light");
+			}
+
+			[*]
+			{
+				condition* = receive_world_message("we_damaged");
+				action*    = call_sfx_script("melee_hit_2");
+			}
+		}
+
+		instance_triggers is the same except it will appear in instances,
+		not in templates and vice versa.
+	*/
+
+	[t:constraint,n:expiration_class]
+	{
+		// docs:
+		//
+		// delay_seconds - seconds to count down before expiring.
+		//
+		// range_seconds - this is a plus-or-minus modifier on the duration so
+		//                 we can vary the expiration time a little. useful for
+		//                 ammo and death & decay.
+
+		[choose]
+		{
+			[normal]        {  delay_seconds = 600;                       doc = "Normal delay - non-magic items, monsters";  }
+			[dead]          {  delay_seconds = 5;     range_seconds = 1;  doc = "Object that has died but not started decaying yet";  }
+			[decay_fresh]   {  delay_seconds = 5;     range_seconds = 1;  doc = "Delay for freshly decaying object";  }
+			[decay_bones]   {  delay_seconds = 5;     range_seconds = 1;  doc = "Delay for bones object";  }
+			[decay_dust]    {  delay_seconds = 5;     range_seconds = 1;  doc = "Delay for dust object";  }
+			[siegefx_target]{  delay_seconds = 5;                         doc = "Delay for reference points for SiegeFx static targets";  }
+			[magic]         {  delay_seconds = 1800;                      doc = "Long delay - magic items";  }
+			[never]         {  delay_seconds = -1;                        doc = "Permanent object - uniques, heroes, etc.";  }
+			[immediate]     {  delay_seconds = 1;                         doc = "(Mostly) immediate expiration for non-interactive content - give it a couple seconds actually to stabilize though";  }
+			[tombstone]     {  delay_seconds = 60;                        doc = "Delay for tombstone expiration.";  }
+		}
+	}
+}
+
+
+[t:component,n:conversation]
+{
+	doc = "Conversation data to use when talking to this object";
+
+	[can_talk]					{ type = bool;			default = true;												doc = "This says whether or not a person with a conversation is allowed to speak."; }
+
+	internal* = conversations;
+	/*
+		format:
+
+		// This block contains all the possible conversations an object can discuss
+		[conversations]
+		{
+			// List all possible conversation names here.  The body of the conversations
+			// are located in the the region in which the go itself resides.
+			* = ...;
+		}
+	*/
+}
+
+
+[t:component,n:defend]
+{
+	doc = "Parameters related to defending";
+
+	required_component* = common;
+
+	// options
+	[is_critical_hit_immune]	{  type = bool;			default = false;											doc = "Whether or not this object is immune to critical hits";  }
+	[damage_threshold]			{  type = float;		default = 0;												doc = "Any damage below the specified amount has no effect";  }
+
+	// general
+	[defend_class]				{  type = eDefendClass;	flags = REQUIRED;											doc = "Classification of defense";  }
+	[defense]					{  type = float;		default = 0;		constrain = positive;					doc = "General toughness of this object to absorb damage from an attack";  }
+	[armor_type]				{  type = string;																	doc = "Specific armor modifier type (for mesh) - a1, a7, etc.";  }
+	[armor_style]				{  type = string;																	doc = "Texture modifier to use for armor";  }
+}
+
+
+[t:component,n:edit]
+{
+	doc = "Special edit component only used by tools";
+}
+
+
+[t:component,n:fader]
+{
+	doc = "A component that takes an aspect and fades it";
+
+	required_component* = placement;
+}
+
+
+[t:component,n:follower]
+{
+	doc = "A component that can follow (carry out) an MCP plan";
+
+	required_component* = aspect;
+}
+
+
+[t:component,n:gizmo]
+{
+	doc = "Development gizmo for representing/manipulating an object in non-retail modes";
+
+	required_component* = placement;
+
+	[model]						{  type = string;		default = m_i_glb_waypoint-10;	constrain = choose_file( m_* );		doc = "What Nema aspect to use for visual representation of this gizmo";  }
+	[texture]					{  type = string;		default = ;						constrain = choose_file( b_* );		doc = "What texture to map onto the gizmo model (only 1 allowed! blank for no texture)";  }
+	[is_visible]				{  type = bool;			default = true;														doc = "Is this gizmo visible (does it render)?";  }
+	[scale]						{  type = float;		default = 1.0;					constrain = positive_nonzero;		doc = "Scale factor for rendering";  }
+	[alpha]						{  type = float;		default = 1.0;					constrain = range[ 0.0, 1.0 ];		doc = "Global alpha level for this object";  }
+	[diffuse_color]				{  type = Vector;		default = 1.0, 1.0, 1.0;		constrain = color;					doc = "R/G/B diffuse color to use for rendering";  }
+	[use_diffuse_color]			{  type = bool;			default = true;														doc = "Set this to render using diffuse color";  }
+}
+
+
+[t:component,n:gold]
+{
+	doc = "Gold that may change its appearance based on count";
+
+	required_component* = aspect;
+
+	internal* = ranges;
+	/*
+		the "ranges" block is a *required* set of ranges to use when defining
+		the appearance of gold based on its quantity. the quantity is the
+		minimum amount of gold required to show that aspect.
+
+		note that the format is min = model, texture; where model is always
+		required and is the aspect to use, and texture is the optional texture
+		to use for slot 0. texture can be left out.
+
+		format:
+
+		[ranges]
+		{
+			0    = m_i_glb_gold_small;							// 0-99 (use default texture)
+			100  = m_i_glb_gold_medium;							// 100-999 (use default texture)
+			1000 = m_i_glb_gold_big;							// 1000-4999 (use default texture)
+			5000 = m_i_glb_gold_big, b_i_glb_gold_extrabig;		// 5000+ note that we're overriding the texture here
+		}
+
+	*/
+}
+
+
+[t:component,n:gui]
+{
+	doc = "Objects with GUI may be placed in inventory";
+	required_component* = aspect;
+
+	[inventory_icon]			{  type = string;		default = b_gui_ig_i_it_def;	constrain = choose_file( b_gui_ig_i_* );		doc = "Bitmap displayed when dragging or in inventory";  }
+	[active_icon]				{  type = string;		default = b_gui_ig_i_ic_def;	constrain = choose_file( b_gui_ig_i_ic_w_* );	doc = "Bitmap displayed in quick-select window";  }
+	[inventory_max_stackable]	{  type = int;			default = 1;					constrain = positive_nonzero;					doc = "Maximum items of this type that may be stacked in an inventory slot";  }
+	[inventory_width]			{  type = int;			default = 1;					constrain = positive_nonzero;					doc = "Width in boxes inside inventory";  }
+	[inventory_height]			{  type = int;			default = 1;					constrain = positive_nonzero;					doc = "Height in boxes inside inventory";  }
+	[equip_requirements]		{  type = string;																						doc = "Minimum skill requirements in order to equip this item";  }
+	[equip_slot]				{  type = eEquipSlot;	default = es_none;																doc = "Equipment slot this object uses";  }
+	[is_droppable]				{  type = bool;			default = true;																	doc = "Can this item be dropped on the ground?"; }
+	[is_lorebook]				{  type = bool;			default = false;																doc = "Is this a lore book?  ( Right-click on to use )"; }
+	[lore_key]					{  type = string;																						doc = "Name of lore that this lore book refers to. ( stored in the map )"; }
+	[is_identified]				{  type = bool;			default = true;																	doc = "Is this object identified."; }
+	[tooltip_color]				{  type = string;																						doc = "Color of the tooltip for this object, leave empty to use default. Color is looked up at config:global_settings:tooltip_colors."; }
+	[can_sell]					{  type = bool;			default = true;																	doc = "Is this item able to be sold in stores?"; }
+
+	/*
+		docs for equip_requirements:
+
+			use a comma-delimited format, where each entry is of the form
+			skill:number where skill is the name of the skill required, and
+			number is the minimum level of that skill required in order to equip
+			the item.
+
+			sample:
+
+			equip_requirements = strength:10,nature magic:5;
+
+			note that the requirement levels can be negative for modifiers if
+			you want to have a modifier decrease the requirements for an item.
+	*/
+}
+
+
+[t:component,n:inventory]
+{
+	doc = "Defines contents and size of inventory";
+
+	required_component* = common;
+
+	[custom_head]    			{  type = string;														                                    doc = "Different characters can have different heads - h1, h2, etc. (or blank)";  }
+
+	[grid_width]				{  type = int;						default = 1;		flags = ADVANCED;	constrain = positive_nonzero;	doc = "Width of object's inventory in grid squares";  }
+	[grid_height]				{  type = int;						default = 1;		flags = ADVANCED;	constrain = positive_nonzero;	doc = "Height of object's inventory in grid squares";  }
+	[is_pack_only]				{  type = bool;						default = false;														doc = "Set to true if this object cannot equip anything";  }
+	[gold]						{  type = int;						default = 0;							constrain = positive_nonzero;	doc = "How many gold pieces in this inventory";  }
+	[selected_active_location]	{  type = eInventoryLocation;		default = il_active_melee_weapon;										doc = "Which active slot has been selected (by the user from the active box)";  }
+	[spew_equipped_kill_count]	{  type = string;					default = 1,5;															doc = "Comma-delimited list of kill counts for this template that will result in an equipped item spew (rather than simple inventory spew)";  }
+	[drop_at_use_point]			{  type = bool;						default = false;														doc = "When this object drops its contents, will it use a use point ( if any ) for the drop position?"; }
+
+	internal* = equipment;
+	/*
+		the "equipment" block is a set of equipped items mapped from equipment
+		slot to item template name.
+
+		format:
+
+		[equipment]
+		{
+			es_weapon_hand = ax_1h1b_low;
+			es_ring_0      = super_ring;
+		}
+	*/
+
+	internal* = other;
+	/*
+		the "other" block is a set of non-equipped items that are just in the
+		inventory. just a set of template names.
+
+		format:
+
+		[other]
+		{
+			il_main = a_potion;
+			il_active_melee_weapon = farmgirl_special_pleasure_toy_avg;
+		}
+	*/
+
+	internal* = ranges;
+	/*
+		the "ranges" block is a *required* set of ranges to use when defining
+		the appearance of a go's aspect based on the fullness of its inventory
+		(il_main). the ratio is from 0.0 to 1.0 and each level defines the
+		maximum fullness required to use that aspect/texture.
+
+		note that the format is min = model, texture; where model is always
+		required and is the aspect to use, and texture is the optional texture
+		to use for slot 0. texture can be left out.
+
+		format:
+
+		[ranges]
+		{
+			0.25 = m_c_na_pm_pos_1;					// empty pack mule
+			0.50 = m_c_na_pm_pos_2;					// pack mule with some stuff
+			0.75 = m_c_na_pm_pos_3;					// mid-full pack mule
+			1.00 = m_c_na_pm_pos_4;					// full pack mule
+		}
+	*/
+
+	internal* = pcontent;
+	/*
+		the "pcontent" block is an additional set of parameterized content that
+		is randomly generated, guided by these rules. pcontent is added to an
+		inventory by selecting from groups, where we will either select all of
+		the groups' entries as candidates for inclusion or will choose one from
+		the list. entries in a group may either be an item for individual
+		template choice (assigned to an inventory location or equip slot), or
+		may be subgroups for recursive fun. note that the inventory locations
+		are the "preferred" locations, and if a slot is already full then it
+		will end up unequipped, sitting in il_main if a weapon, and
+		il_all_spells if a spell.
+
+		if an "all" group is selected, then all of its items and groups are
+		available as candidates for adding to inventory. if a subgroup has a
+		"chance" defined, then that will be evaluated to decide whether or not
+		to include the group.
+
+		if a "oneof" group is selected, then one of its items or groups is
+		selected based on probability. by default, all have the same chance of
+		being selected (a group with 3 items would give each item a 33% chance
+		of selection) but by assigning "chance" values to the subgroups you can
+		change this. the total chance for a group must be <= 1.0. note that a
+		total chance of < 1.0 means that it's possible none of the items will be
+		selected and the group will be ignored.
+
+		if a "gold" group is selected, then you get gold. umm, yeah. it pays
+		attention to min, max and chance for whether or not you get gold, and
+		how much. no items or subgroups within the gold group will get any
+		attention from the pcontent system.
+
+		if a group is selected, then min/max is used to multiply the group's
+		final subselections for addition to the inventory.
+
+		note that the top-level group (called pcontent) is treated as an "all".
+
+		format:
+
+		[pcontent]
+		{
+			[all*|oneof*]
+			{
+				il_main = template_name;
+				es_weapon_hand = pcontent_name;
+				[all*]  {  ... }
+
+				min = 20;
+				max = 20;
+				chance = 0.2;
+			}
+
+			[gold*]
+			{
+				min = 100;
+				max = 1000;
+				chance = 0.5;
+			}
+		}
+	*/
+
+	internal* = delayed_pcontent;
+	/*
+		this is exactly the same as the "pcontent" block except that it is not
+		automatically executed when the object it's part of is created. instead,
+		the delayed pcontent is created and added to inventory when
+		AddDelayedPcontent() is called on the GoInventory component.
+	*/
+
+	internal* = store_pcontent;
+	/*
+		this is exactly the same as the "pcontent" block except that it is used
+		for stores. just take the contents of the [pcontent] block above and
+		put it all into subblocks, one for each tab, where the name can be
+		anything, but it probably will make more sense to name them after the
+		actual tabs.
+
+		each block can have one extra field "full_ratio", which is a 0.0-1.0
+		float that determines how full the tab may be. it defaults to the
+		setting in the store_pcontent block, which itself defaults to 1.0. upon
+		adding content, the store will repeatedly query its pcontent system,
+		adding items until it reaches the full_ratio. set the full_ratio to 0 to
+		disable this repeated-add feature.
+
+		format:
+
+		[store_pcontent]
+		{
+			full_ratio = 0.8;
+
+			[armor]
+			{
+				[all*]
+				{
+					...
+				}
+			}
+
+			[weapons]
+			{
+				...
+			}
+
+			[magic]
+			{
+				...
+			}
+
+			[shields]
+			{
+				...
+			}
+		}
+	*/
+}
+
+
+[t:component,n:magic]
+{
+	doc = "Parameters controlling magic";
+
+	[magic_class]				{  type = eMagicClass;			flags = REQUIRED;											doc = "Classification of magic object";  }
+	[mana_cost]					{  type = float;				default = 0;		constrain = positive;					doc = "This object costs this much mana to use";  }
+	[mana_cost_modifier]		{  type = string;				default = ;													doc = "Result of this formula is added to mana_cost"; }
+	[mana_cost_ui]				{  type = string;				default = ;													doc = "Result of this formula is used for the UI to display when there is only the caster an spell - no target"; }
+	[mana_cost_ui_modifier]		{  type = string;				default = ;													doc = "Result of this formula is used for the UI to display when there is only the caster an spell - no target"; }
+	[cast_experience]			{  type = string;				default = ;													doc = "Amount of experience to award upon successful cast"; }
+	[speed_bias]				{  type = float;				default = 1.0;		constrain = positive;					doc = "Speed bias to apply to an actor's animations when cast on it";  }
+	[cast_range]				{  type = float;				default = 1.0;		constrain = positive;					doc = "Max range at which the spell can be cast."; }
+	[cast_reload_delay]			{  type = float; 				default = 1.0;		constrain = positive;					doc = "Period of one iteration of casting this if it's a spell."; }
+	[requires_line_of_sight]	{  type = bool;  				default = false;  											doc = "Does this spell require line of sight to target in order to be cast";  }
+	[is_one_shot]				{  type = bool;  				default = false;  											doc = "Cast only once per cast request";  }
+	[one_use]					{  type = bool;					default = false;											doc = "For spells - Is it a one-use scroll?"; }
+	[command_cast]				{  type = bool;					default = false;											doc = "For spells - Can this spell only be cast explicitly by the user; actor will not auto-cast spell."; }
+	[effect_duration]	   		{  type = string;				default = ;													doc = "Formula specifying how long a spell effect will last"; }
+	[state_name]				{  type = string;				default = ;													doc = "For spells - the name of the state the target will be in if the spell is a success"; }
+	[caster_state_name]			{  type = string;				defautl = ;													doc = "For spells - the name of the state the caster will be in if the spell is a success"; }
+	[require_state_check]		{  type = bool;  				default = true;  											doc = "For spells - checks to see if the target actor is already in state_name";  }
+	[does_damage_per_second]	{  type = bool;					default = false;											doc = "For spells - does this spell do damage per second?"; }
+
+	// $ skill_class is defined in the attack component as well! Values that may go here are defined in formulas.gas
+	[skill_class]				{  type = string;																			doc = "What skill to award experience to for usage";  }
+	[required_level]			{  type = float;				default = 0;		constrain = positive;					doc = "Minimum skill level required to cast this spell"; }
+	[pcontent_level]			{  type = float;				default = 0;		constrain = positive;					doc = "Level to use for pcontent choosing if required_level does not apply (like for potions)"; }
+	[max_level]					{  type = float;				default = 10;		constrain = positive;					doc = "Maximum skill level this spell can ever be cast at"; }
+	[target_type_flags]			{  type = eTargetTypeFlags;		default = TT_ACTOR;											doc = "What type of target this magic is cast on"; }
+	[target_type_flags_not]		{  type = eTargetTypeFlags;		default = TT_NONE;											doc = "target_type_flags AND target_type_flags != 0 then cast ok"; }
+	[usage_context_flags] 		{  type = eUsageContextFlags;	default = UC_PASSIVE;										doc = "Attitude of spell as relates to combat"; }
+	[apply_enchantments]		{  type = bool;					default = true;												doc = "If false the skrit component applys the enchantments"; }
+
+	// Coefficients for skill advancement level formula
+	[coefficient_a]				{  type = float;				default = 95;		constrain = positive;					doc = "Coefficient a for skill advancement level formula"; }
+	[coefficient_b]				{  type = float;				default = 5;		constrain = positive;					doc = "Coefficient b for skill advancement level formula"; }
+
+	[attack_damage_modifier_min]{  type = string;				default = ;													doc = "Result of this formula is added to the attack damage min";  }
+	[attack_damage_modifier_max]{  type = string;				default = ;													doc = "Result of this formula is added to the attack damage max";  }
+
+	[cast_sub_animation]		{  type = int;					default = 0;												doc = "Storage for what cast animation to use to cast this spell"; }
+
+	internal* = enchantments;
+	/*
+		$$ i just noticed that these docs are really out of date. look at the
+		code and fix them. -sb
+
+		the "enchantment" block describes enchantments that will be applied to
+		go's when the go that owns this component is used.
+
+		format:
+
+		[enchantments]
+		{
+			[*]
+			{
+				alteration			= alter_life;
+				value				= 50;
+				max_value			= 50;
+				description			= heal spell;
+
+				duration			= 0;
+				frequency			= 0;
+				initial_delay		= 0;
+
+				is_enhancement		= true;
+				is_permanent		= true;
+				is_transmissible	= false;
+				is_single_instance	= false;
+				is_active			= false;
+			}
+
+			[*]
+			{
+				// ...
+			}
+		}
+
+		alteration					=	; // Alteration type: LIFE
+										; // ALTER_MAX_LIFE,
+										; // ALTER_LIFE,
+										; // ALTER_LIFE_RECOVERY_UNIT,
+										; // ALTER_LIFE_RECOVERY_PERIOD,
+										; // ALTER_MAX_MANA,
+										; // ALTER_MANA,
+										; // ALTER_MANA_RECOVERY_UNIT,
+										; // ALTER_MANA_RECOVERY_PERIOD,
+										; // ALTER_STRENGTH,
+										; // ALTER_INTELLIGENCE,
+										; // ALTER_DEXTERITY,
+										; // ALTER_MELEE,
+										; // ALTER_RANGED,
+										; // ALTER_NATURE_MAGIC,
+										; // ALTER_COMBAT_MAGIC,
+										; // ALTER_DAMAGE_MIN,
+										; // ALTER_DAMAGE_MAX,
+										; // ALTER_ARMOR,
+										; // ALTER_INVINCIBILITY,
+		description					=	; // Unique description - used for filtering out similar enchantment types
+		effect_script				=	; // Name of effect script to execute upon each alteration
+		effect_script_equip			=	; // Name of effect script to execute upon initial application like equipping
+		effect_script_hit			= 	; // Name of effect script to execute when a hit is scored by the weapon
+		effect_script_hit_params	=	; // script params to accompany the effect_script_hit
+		value						=	; // Context sensitive value - like a scalar or a constant
+		multiply_value				=	; // Boolean value, if set to true then the value is multiplied instead of being added to what it modifies
+		max_value					=	; // The max value can be in a given context - value <= max_value
+		duration					=	; // Duration in seconds (#infinite is infinite)
+		frequency					=	; // How much duration in between each alteration
+		transfer_efficiency			=	; // How efficient a transfer is (MANA alteration only)
+		initial_delay				=	; // Initial delay in seconds before alteration actually starts
+		is_enhancement				=	; // (def: true)  false if it is an affliction - like poison, true if it's a good alteration
+		is_permanent				=	; // (def: false) Effects are permanent and won't be undone
+		is_transmissible			=	; // (def: false) Can be transmitted to another game object if comes in contact
+		is_single_instance			=	; // (def: true)  Only one instance of this type of alteration at a time, the rest
+										; // are queued up and activate after the current one expires.
+		is_active					=	; // (UNIMPLEMENTED) Should this alteration be activated immediately upon it's hosts
+										; // instantiation?
+		is_value_limited			=	; // This flag is for fractional usage - sipping healing potions
+
+		is_source_transfer			=	; // For mana transference - transfers from the caster to the target
+		is_target_transfer			=	; // For mana transference - transfers from the target to the caster
+		is_offensive_transfer		=	; // For life/mana transference - trys to transfer more than the supply
+
+		*Note: Numeric items can have emebedded formulas evaluated at runtime using the following macros:
+		(example: max_value = (#combat_magic+1.0)*#int/(3+2*#dex)
+
+		#infinite						; // * for use with duration - defines an infinite amount of time
+
+
+		// --- Target
+
+		#life							; // How much life the object has
+		#life_recovery_unit				; // Unit of life to recover per life_recovery_period
+		#life_recovery_period			; // The amount of time before a life_recovery_unit is regenerated
+		#mana							; // How much mana the object has
+		#mana_recovery_unit				; // Unit of mana to recover per mana_recovery_period
+		#mana_recovery_period			; // The amount of time before a mana_recovery_unit is regenerated
+		#str							; // What the strength is for the object with bonuses
+		#int							; // What the intelligences is of the object, with bonuses
+		#dex							; // What the dexterity is of the object with bonuses
+		#ranged							; // The ranged skill level of the object
+		#melee							; // The melee skill level of the object
+		#combat_magic_level				; // The combat magic skill level of the object
+		#nature_magic_level			    ; // The nature magic skill level of the object
+
+		#base_damage					; // The base damage the object has with bonuses
+		#base_defense					; // The base defense the object has with bonuses
+		#highest_skill					; // The highest skill level of any known skill for the target
+
+
+		// --- Caster
+
+		#src_life						; // How much life the caster has
+		#src_life_recovery_unit			; // Unit of life to recover per life_recovery_period
+		#src_life_recovery_period		; // The amount of time before a life_recovery_unit is regenerated
+		#src_mana						; // How much mana the caster has
+		#src_mana_recovery_unit			; // Unit of mana to recover per mana_recovery_period
+		#src_mana_recovery_period		; // The amount of time before a mana_recovery_unit is regenerated
+		#src_str						; // What the strength is for the caster with bonuses
+		#src_int						; // What the intelligences is of the caster, with bonuses
+		#src_dex						; // What the dexterity is of the caster with bonuses
+		#src_ranged						; // The ranged skill level of the caster
+		#src_melee						; // The melee skill level of the caster
+		#src_combat_magic_level			; // The combat magic skill level of the caster
+		#src_nature_magic_level		    ; // The nature magic skill level of the caster
+		#src_spell_level				; // The casters level for the spell that is being cast
+
+		#src_base_damage				; // The base damage of the caster
+		#src_base_defese				; // The base defense of the caster
+		#src_highest_skill				; // The highest skill level of any known skill for the caster
+
+
+		// --- Spell
+
+		#spell_req_level				; // The required spell level for this spell
+		#spell_max_level				; // The maximum level the spell can be
+
+		#src_combat_magic				; // Combat magic level clamped to max level for the spell being cast
+		#src_nature_magic				; // Nature magic level clamped to max level for the spell being cast
+		#magic							; // Resolves to clamped combat or nature magic for the spell being cast
+		*/
+}
+
+
+[t:component,n:messages]
+{
+	internal_component = true;
+
+	/*
+		the "messages" component is a set of localized messages that can be used
+		to draw screen messages for players.
+
+		format:
+
+		[messages]
+		{
+			[happy]
+			{
+				screen_text = "I am so happy!!";
+			}
+
+			[sad]
+			{
+				screen_text = "I am so sad :(";
+			}
+		}
+
+		to retrieve the text, use:
+
+			owner.go.getmessage( "happy" )
+
+		and to print it onscreen, use the report.screen series of functions.
+	*/
+}
+
+
+[t:component,n:mind]
+{
+	////////////////////////////////////////////////////////////////////////////////
+	//	if you need to change any of this, talk to me first -Bartosz
+
+	doc = "The mind will make the actor act.";
+
+	////////////////////////////////////////
+	//	sensor params
+
+	[actor_life_ratio_low_threshold]					{  type = float; 	 			default = 0;														doc = "Sets ratio threshold for considering life 'low'";  }
+	[actor_life_ratio_high_threshold]					{  type = float; 	 			default = 0;														doc = "Sets ratio threshold for considering life 'high'"; }
+	[actor_mana_ratio_low_threshold]					{  type = float; 	 			default = 0;														doc = "Sets ratio threshold for considering life 'low'";  }
+	[actor_mana_ratio_high_threshold]					{  type = float; 	 			default = 0;														doc = "Sets ratio threshold for considering life 'high'"; }
+	[com_channels]										{  type = string;  																					doc = "Comma-deliniated list of Membership members this Go will open a com-channel to, i.e. to call for help."; }
+	[com_range]											{  type = float;				default = 0;														doc = "Range up to which actor can talk to other actors i.e. call for help."; }
+	[flee_count]										{  type = int;					default = 0;														doc = "How many iterations of fleeing can this actor perform."; }
+	[initial_command]									{  type = scid;					default = 0;												doc = "Points to static content skrit command to be given to actor after creation."; }
+	[sensor_scan_period]								{  type = float;				default = 0.25; 		constrain = positive;   flags = REQUIRED;   doc = "Period of actor min'd scan/process/react thinkg cycle.  In seconds."; }
+	[sight_fov]											{  type = float; 	 			default = 0;														doc = "Sight field-of-view in degrees";  }
+	[sight_range]										{  type = float; 	 			default = 0;    		constrain = positive;	flags = REQUIRED;	doc = "Sight distance";  }
+	[sight_origin_height]								{  type = float;				default	= 0;			constrain = positive;						doc = "Actors's sight usually originates at the head bone.  This overrides that and LOS will originate from actor's terrain-snapped position plus this height."; }
+	[visibility_memory_duration]						{  type = float;				default = 0;														doc = "How long will the actor remember the engaged target -after- it's no longer in his line-of-sight."; }
+	[flee_distance]										{  type = float;				default = 0;														doc = "How far will the actor flee, per flee instance."; }
+	[inner_comfort_zone_range]							{  type = float;				default = 0;														doc = "Inner comfort zone"; }
+	[job_travel_distance_limit]						 	{  type = float;				default = 0;			constrain = positive;                       doc = "When any job moves an actor this distance, a WE_JOB_TRAVEL_DISTANCE_REACHED event will be sent."; }
+	[melee_engage_range]								{  type = float; 	 			default = 0;				 										doc = "Max distance at which actor will engage enemy with melee weapon or unarmed";  }
+	[outer_comfort_zone_range]							{  type = float;				default = 0;														doc = "Outer comfort zone"; }
+	[personal_space_range]								{  type = float; 	 			default = 0.5;			constrain = positive;	flags = REQUIRED;  	doc = "Defines a constant volume which is an abstract of the actor's body volume."; }
+	[ranged_engage_range]								{  type = float; 	 			default = 0;				 										doc = "Max distance at which actor will engage enemy with renged weapon";  }
+	[limited_movement_range]							{  type = float;				default = 0;			constrain = positive; 						doc = "When an movement orders are 'limited', actor will try to stay within this range of the last user-assigned command.  For human-controlled actors only."; }
+
+	////////////////////////////////////////
+	//	job definitions
+
+	[jat_brain]											{  type = string;	 			default = jat_none;		doc = "Defines the brain, which is a supervisor job that is always running independently of action jobs."; 	}
+	[jat_attack_object]									{  type = string;	 			default = jat_none;		doc = "Generic attack-an-object action."; 	}
+	[jat_attack_object_melee]							{  type = string;	 			default = jat_none;		doc = "Attack an object with a melee weapon"; 	}
+	[jat_attack_object_ranged]							{  type = string;	 			default = jat_none;		doc = "Attack an object with a ranged weapon"; 	}
+	[jat_attack_position]								{  type = string;	 			default = jat_none;		doc = "Generic attack-a-position.  Will call melee or ranged attack, based on actor's selected weapon";	}
+	[jat_attack_position_melee]							{  type = string;	 			default = jat_none;		doc = "Attack a position with a melee weapon";	}
+	[jat_attack_position_ranged]						{  type = string;	 			default = jat_none;		doc = "Attack a position with a ranged weapon";	}
+	[jat_cast]											{  type = string;	 			default = jat_none;		doc = "Cast a spell on an object"; 	}
+	[jat_cast_position]									{  type = string;	 			default = jat_none;		doc = "Cast a spell on a position"; 	}
+	[jat_die]											{  type = string;	 			default = jat_none;		doc = "Actors' last job.  They automatically do this when they die."; }
+	[jat_drink]											{  type = string;	 			default = jat_none;		doc = "Drink.  Usually a potion."; }
+	[jat_do_se_command]									{  type = string;	 			default = jat_none;		doc = "The actor will run this job in order to execute a SE command."; 	}
+	[jat_drop]											{  type = string;	 			default = jat_none;		doc = "Drop an item"; 	}
+	[jat_equip]											{  type = string;	 			default = jat_none;		doc = "Equip an item"; 	}
+	[jat_face]											{  type = string;	 			default = jat_none;		doc = "Face an object or a position."; }
+	[jat_fidget]										{  type = string;	 			default = jat_none;		doc = "Fidget action"; 	}
+	[jat_flee_from_object]								{  type = string;				default = jat_none;		doc = "Flee from an object... run for your life."; }
+	[jat_follow]										{  type = string;	 			default = jat_none;		doc = "Follow an actor"; 	}
+	[jat_gain_consciousness]							{  type = string;	 			default = jat_none;		doc = "Actor gains consciousness.  Gets up.  Considers himself lucky."; }
+	[jat_get]											{  type = string;	 			default = jat_none;		doc = "Get/collect an item"; 	}
+	[jat_give]											{  type = string;	 			default = jat_none;		doc = "Give an item"; 	}
+	[jat_guard]											{  type = string;	 			default = jat_none;		doc = "Guard an actor"; 	}
+	[jat_listen]										{  type = string;	 			default = jat_none;		doc = "Walk over to someone, ask them to talk, listen until they finish"; }
+	[jat_move]											{  type = string;	 			default = jat_none;		doc = "Move to a position"; 	}
+	[jat_patrol]										{  type = string;	 			default = jat_none;		doc = "Patrol to a posision"; 	}
+	[jat_play_anim]										{  type = string;				default	= jat_none;		doc = "Play a specific chore/anim."; }
+	[jat_set_combat_orders]								{  type = string;				default = jat_none;		doc = "Set the standing combat orders."; }
+	[jat_set_movement_orders]							{  type = string;				default = jat_none;		doc = "Set the standing movement orders."; }
+	[jat_startup]										{  type = string;	 			default = jat_none;		doc = "Some actors may want to have a startup job that runs once before any other actions can take place.";	}
+	[jat_stop]											{  type = string;	 			default = jat_none;		doc = "Stop doing anything"; 	}
+	[jat_talk]											{  type = string;	 			default = jat_none;		doc = "Just stand there and talk AT someone."; }
+	[jat_unconscious]									{  type = string;	 			default = jat_none;		doc = "Loose consciousness, and stay in this job until it's time to gain consciousness."; }
+	[jat_use]											{  type = string;	 			default = jat_none;		doc = "Use an item"; 	}
+
+
+	////////////////////////////////////////
+	//	job params
+
+	[disposition_orders]								{  type = eActorDisposition;	default = ad_defensive;	doc = "Influence actor general mood";  }
+	[combat_orders]										{  type = eCombatOrders;		default = co_free;		doc = "Influence actor auto combat actions";  }
+	[movement_orders]									{  type = eMovementOrders;		default = mo_free;		doc = "Influence actor auto movement actions";  }
+	[focus_orders]										{  type = eFocusOrders;			default = fo_closest;	doc = "Influence actor auto targeting actions";  }
+
+	[min_comfort_delay_threshold]						{  type = float;				default = 3.0;			doc = "When this amount of time (or less) passes since last enemy spotted, the actor will feel least comfortable.";  }
+	[max_comfort_delay_threshold]						{  type = float;				default = 6.0;			doc = "When this amount of time (or more) passes since last enemy spotted, the actor will feel most comfortable.";  }
+
+	////////////////////////////////////////
+	//	job permissions
+
+	[actor_auto_fidgets]                   					{  type = bool; 	   			default = false; 		doc = "Actor will automatically run his fidget job if not doing anything."; }
+
+	[actor_may_attack]										{  type = bool;					default = true;			doc = "Basic dynamic permission for performing any offensive acts."; }
+	[actor_may_be_attacked]									{  type = bool;					default = true;			doc = "Basic dynamic permission being the object of any offensive acts."; }
+
+	[actor_auto_defends_others]                   			{  type = bool; 	   			default = false; 		doc = "Actor has permission to auto-defend others."; }
+	[actor_auto_heals_others_life]                			{  type = bool; 	   			default = false; 		doc = "Actor has permission to auto-heal others"; }
+	[actor_auto_heals_others_mana]                			{  type = bool; 	   			default = false; 		doc = "Actor has permission to auto-heal others"; }
+	[actor_auto_heals_self_life]                  			{  type = bool; 	   			default = false; 		doc = "Actor has permission to heal self"; }
+	[actor_auto_heals_self_mana]                  			{  type = bool; 	   			default = false; 		doc = "Actor has permission to heal self"; }
+	[actor_auto_picks_up_items]                   			{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+
+	[actor_weapon_preference]							    {  type = eWeaponPreference;	default = wp_invalid; 	doc = "When possible, the actor will prefer to use this type of weapon."; }
+
+	[actor_auto_switches_to_karate]							{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[actor_auto_switches_to_melee]							{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[actor_auto_switches_to_ranged]							{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[actor_auto_switches_to_magic]							{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+
+	[actor_auto_uses_stored_items]							{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+
+	[actor_auto_xfers_mana]                       			{  type = bool; 	   			default = false; 		doc = "Actor has permission to auto xfer mana to others"; }
+	[actor_auto_reanimates_friends]							{  type = bool;					default = false;        doc = "Actor has permission to reanimate dead friends if he has the appropriate spell."; }
+	[actor_balanced_attack_preference]						{  type = float;				default = 0;			doc = "Probability that actor will prefer to fight 1 on 1"; }
+	[on_enemy_entered_icz_attack]             				{  type = bool; 	   			default = false; 		doc = "Actor will attack enemies in his inner comfort zone"; }
+	[on_enemy_entered_icz_flee]               				{  type = bool; 	   			default = false; 		doc = "Actor will flee from enemies in his inner comfort zone"; }
+	[on_enemy_entered_icz_switch_to_melee]     				{  type = bool; 	   			default = false; 		doc = "Actor will switch to melee weapon if not already using one when an enemy enters his ICZ"; }
+	[on_enemy_entered_ocz_attack]              				{  type = bool; 	   			default = false; 		doc = "Actor will attack enemies in his outer comfort zone"; }
+	[on_enemy_entered_ocz_flee]               				{  type = bool; 	   			default = false; 		doc = "Actor will flee from enemies in his outer comfort zone"; }
+	[on_enemy_entered_weapon_engage_range_attack]			{  type = bool;			    	default	= true;			doc	= "Actor will attack enemies once they are in weapon engage range."; }
+	[on_enemy_spotted_alert_friends]						{  type = bool;		   			default = false;		doc = "Actor will alert friends when he sees an enemy";  }
+	[on_enemy_spotted_attack]								{  type = bool;		   			default = true;			doc = "Actor can attack enemy if sightet - depending on standing orders"; }
+	[on_engaged_fled_abort_attack]							{  type = bool;		   			default = false;		doc = "Actor will continue to attack a fleeing victim."; }
+	[on_engaged_lost_consciousness_abort_attack]			{  type = bool;		   			default = false;		doc = "Actor will stop his attack when the engaged looses consciousness."; }
+	[on_engaged_lost_loiter]               					{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[on_engaged_lost_return_to_job_origin] 					{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[on_friend_entered_icz_attack]             				{  type = bool; 	   			default = false; 		doc = "Actor will attack friends in his inner comfort zone"; }
+	[on_friend_entered_icz_flee]               				{  type = bool; 	   			default = false; 		doc = "Actor will flee from friends in his inner comfort zone"; }
+	[on_friend_entered_ocz_attack]             				{  type = bool; 	   			default = false; 		doc = "Actor will attack friends in his outer comfort zone"; }
+	[on_friend_entered_ocz_flee]               				{  type = bool; 	   			default = false; 		doc = "Actor will flee from friends in his outer comfort zone"; }
+	[on_job_reached_travel_distance_abort_attack] 			{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[on_life_ratio_low_flee]								{  type = bool;		   			default = false;		doc = "Actor will run away when life ratio is low";  }
+	[on_mana_ratio_low_flee]								{  type = bool; 	   			default = false; 		doc = "Self exp."; }
+	[on_alert_projectile_near_missed_flee]					{  type = bool;					default	= false;		doc = "When someone shoots at actor and misses, the actor will flee"; }
+	[on_alert_projectile_near_missed_attack]				{  type = bool;					default	= false;		doc = "When someone shoots at actor and misses, the actor will attack the shooter"; }
+}
+
+
+[t:component,n:party]
+{
+	doc = "A party groups a set of Go's together and applies intelligence on a higher level";
+
+	required_component* = mind;
+	required_component* = placement;
+
+	[hot_radius]		{  type = float;		default = 4.0;			doc = "Radius around focus character to pull in hot group";  }
+	[light_iradius]		{  type = float;		default = 4.0;			doc = "Inner radius of party light";  }
+	[light_oradius]		{  type = float;		default = 7.0;			doc = "Outer radius of party light";  }
+	[light_vertoffset]	{  type = float;		default = 1.0;			doc = "Amount, in meters, to vertically offset the party light";  }
+	[light_color]		{  type = int;			default = 0xFFFFFFFF;	doc = "Color of the party light";  }
+
+	// $$ doc this!!
+	internal* = add_members;
+}
+
+
+[t:component,n:pcontent]
+{
+	internal_component = true;
+
+	/*
+		the "pcontent" component is a set of rules to modify content further
+		once it has been generated.
+
+		pcontent is a set of blocks, each of which defines a potential candidate
+		for further customizing the generated content. note that the optional
+		items below will take their defaults from the object's existing
+		component fields. also note that the block names are arbitrary, but the
+		name may match a rule, which is used to further tune either the block
+		choice or modifications applied.
+
+		format:
+
+		[pcontent]
+		{
+			[base]											// $ special "base" rule that adds modifier_min/max and/or force_item_power to the base type
+			{
+				modifier_min = 1;							// (optional)
+				modifier_max = 4;							// (optional)
+				force_item_power = 10;						// (optional)
+			}
+
+			[c_fine]
+			{
+				modifier_min     = 1;						// minimum modifier power to choose this item
+				modifier_max     = 2;						// maximum modifier power to choose this item
+				force_item_power = 15;						// force this power level to be assigned to this item (optional)
+				inventory_icon   = b_gui_ig_i_w_swd_fine;	// icon to use for this item (optional)
+				inventory_width  = 1;						// width of icon (optional)
+				inventory_height = 3;						// height of icon (optional)
+				model            = m_w_swd_fine;			// model override to use for this item (optional)
+				texture          = b_w_swd_fine;			// texture override to use for this item (optional)
+
+				// for weapons only
+				damage_min = 10;							// (weapons only) modifies the damage_min if choose this variation
+				damage_max = 20;							// (weapons only) modifies the damage_max if choose this variation
+
+				// for armor only
+				defense = 5;								// (armor only) modifies defense if choose this variationn
+			}
+
+			[o_fun]
+			{
+				modifier_min   = 2;
+				modifier_max   = 10;
+				inventory_icon = b_gui_ig_i_w_swd_ornate;
+			}
+		}
+	*/
+}
+
+
+[t:component,n:physics]
+{
+	doc = "Variables to tune the physics engine for an object";
+	required_component* = aspect;
+
+	// AI
+	[impact_alert_distance]	{  type = float;	default = 4.0;						constrain = positive;					doc = "If the intended target's distance from impact is within this range send a world message to it from the shooter"; }
+
+	// fire
+	[fire_resistance]		{  type = float;	default = 0;						constrain = range[ 0, 1 ];				doc = "Percent of calculated damage that gets through to this object"; }
+	[fire_burn_threshold]	{  type = float;	default = 0;						constrain = positive;					doc = "Amount of fire damage that can be taken without catching on fire"; }
+	[fire_effect]			{  type = string;	default = generic_physics_fire;		/*constrain = choose( physics_effect );*/	doc = "SiegeFx script to call that makes sense for this object";  }
+	[fire_effect_params] 	{  type = string;	default = [scale(1.0)][ignite()fdamage(.5,1.2,.8)];						doc = "SiegeFx script parameters to be passed to the fire effect script, the first parameter in []'s effects both the fire and the smoke, the second parameter only effects the fire.";  }
+	[fire_charred_template]	{  type = string;	default = ;																	doc = "Charred template to clone from when this Go dies by fire";  }
+
+	// physics
+	[sim_duration]			{  type = float;	default = 45;						constrain = positive;					doc = "The max amount of time that will elapse before removing this object from simulation"; }
+	[damage_all]			{  type = bool;   	default = false;                    										doc = "Explosion from this object will damage all if true and stop damage filtration from initiator";  }
+	[break_dependents]	 	{  type = bool;   	default = false;                    										doc = "Causes any object that is within the bounding volume of this object to break when it starts to simulate or break";  }
+	[break_effect]			{  type = string;	default = ;							/*constrain = choose( physics_effect );*/	doc = "Flamethrower script to play when breaking apart";  }
+	[break_sound]			{  type = string;	default = ;							constrain = choose_file( s_e_* );		doc = "Sound effect to play after breaking";  }
+	[explosion_magnitude]	{  type = float;    default = 0.0;                      constrain = positive;					doc = "Magnitude used to determine initial velocity of exploding particles";  }
+	[angular_magnitude]		{  type = float;    default = 3.0;                       										doc = "Magnitude used to determine random angular velocity of exploding particles";  }
+	[deflection_angle]		{  type = float;	default = 1.0;						constrain = range[ 0, 1 ];				doc = "Radian angle - 0 sticks (perpendicular), 1 glances (parallel)";  }
+	[elasticity]			{  type = float;	default = 0.45;						constrain = range[ 0, 1 ];				doc = "Coefficient of restitution";  }
+	[friction]				{  type = float;	default = 0.45;																doc = "Coefficient of friction";  }
+	[mass]					{  type = float;	default = 0.0;						constrain = positive;					doc = "Mass in kg";  }
+	[explode_when_killed]	{  type = bool;		default = false;															doc = "Explodes when killed"; }
+	[explode_when_expired]	{  type = bool;		default = false;															doc = "Explodes when timeout is reached"; }
+	[bone_box_collision]  	{  type = bool;		default = false;															doc = "True to check collision against smaller bone bounding boxes for more accurate collision results"; }
+
+	// ammo
+	[velocity]				{  type = float; 	default = 0.0;						constrain = positive;					doc = "Initial velocity of ammo when fired"; }
+	[angular_velocity] 		{  type = vector; 	default = 0.0, 0.0, 0.0;			constrain = positive;					doc = "Angular velocity"; }
+	[randomize_velocity]	{  type = bool;   	default = false;                    										doc = "Randomizes initial angular velocity in a +/- range when being fired as a projectile";  }
+	[gravity]				{  type = float;	default = 6.864655;					constrain = positive;					doc = "Gravity constant to be used with this object"; }
+	[explode_if_hit_go]		{  type = bool;		default = false;															doc = "Explodes if collision with game object occurs"; }
+	[explode_if_hit_terrain]{  type = bool;		default = false;															doc = "Explodes if collision with ground occurs"; }
+	[orient_to_trajectory]	{  type = bool;		default = false; 															doc = "Make this object point in the direction that it travels"; }
+	[pass_through]			{  type = bool;		default = false; 															doc = "Collision with other gos occur but won't stick or glance, passes through"; }
+
+	// dropping
+	[toss_velocity]			{  type = float;	default = 3.0; 						constrain = positive;					doc = "How hard to toss the item into the air upwards"; }
+	[toss_spin]				{  type = vector;	default = 1.0, 0.0, 1.0;													doc = "Random range to use to spin item"; }
+
+	// gib
+	[gib_gore_good]			{  type = bool;     default = true;                                                             doc = "true means always gib, false means check gore settings. true for mechanical, false for flesh"; }
+   	[gib_min_damage]		{  type = float;	default = 10000000000.0;				constrain = positive;					doc = "Minimum amount of damage that must be done before doing gib_threshold calculation"; }
+	[gib_threshold]			{  type = float;	default = 10000000000.0;				constrain = positive;					doc = "If damage done is > (max_life*gib_threshold) then gibbing will occur"; }
+
+	internal* = break_particulate;
+	/*
+		the "break_particulate" block is a list of particles and instance
+		counts of those particles that will be spawned when the object is
+		'sploded.
+
+		format:
+
+		[break_particulate]
+		{
+			// wood
+			frag_wood_1 = 2;		// spawn 2 particles of template frag_wood_1
+			frag_wood_2 = 2;		// ...
+
+			// metal
+			frag_steel_0 = 2;
+			frag_steel_big = 2;
+
+			// other
+			frag_donkey_doo = 4;
+		}
+	*/
+
+	[t:constraint,n:physics_effect]
+	{
+		// $ this can be put into c++ as a more general query function.
+		// $ style: select * from world:global:effects:physics where name = xxx
+
+		skrit =
+		[[
+			bool Choose$( Constraint$ constraint )
+			{
+				bool success$ = false;
+
+				FuelHandle fuel$ = FuelDb.Open( "world:global:effects:physics" );
+				if ( fuel$ )
+				{
+					FuelHandleList list$ = fuel$.ListChildBlocksByName( "effect_script*" );
+					for ( FuelHandle iter$ = list$.Begin() ; iter$ != list$.End() ; ++iter$ )
+					{
+						string name$ = iter$.GetString( "name" );
+						if ( !name$.empty() )
+						{
+							constraint$.AddString( name$ );
+							success$ = true;
+						}
+					}
+				}
+				return ( success$ );
+			}
+		]];
+	}
+}
+
+
+[t:component,n:placement]
+{
+	doc = "Placement (position and orientation) of the object in the world";
+	required_component* = common;
+
+	[position]					{  type = SiegePos;	flags = REQUIRED;		doc = "Current world position: +X = east, +Y = up, +Z = north, Node = Siege database GUID";  }
+	[orientation]				{  type = Quat;		default = 0, 0, 0, 1;	doc = "Current orientation: X, Y, Z, W";  }
+	[use_point_scids]           {  type = String;                           doc = "Comma delimited list of use point scids"; }
+	[drop_point_scids]          {  type = String;                           doc = "Comma delimited list of drop point scids"; }
+	[is_gui_go]					{  type = bool;		default = false;		doc = "Flag so that Flamethrower ignores the node that this go is in for effects on UI gos"; }
+}
+
+
+[t:component,n:potion]
+{
+	doc = "Represents a potion that may change its visual appearance based on 'fullness'";
+
+	required_component* = aspect;
+	required_component* = magic;
+
+	[inventory_icon_2]			{  type = string;	constrain = choose_file( b_gui_ig_i_* );	doc = "Secondary bitmap used as an overlay when filling potions";  }
+
+	internal* = ranges;
+	/*
+		the "ranges" block is a *required* set of ranges to use when defining
+		the appearance of a potion's fullness based on its quantity. each number
+		is a ratio (0.0-1.0) of fullness and defines the maximum fullness
+		required to use that aspect/texture.
+
+		note that the format is max = texture; where texture is the texture
+		to use for slot 0 (it is required).
+
+		format:
+
+		[ranges]
+		{
+			0.25 = b_i_glb_empty;						// empty texture
+			0.50 = b_i_glb_low;							// 33% full texture
+			0.75 = b_i_glb_mid;							// 66% full texture
+			1.00 = b_i_glb_full;						// 100% full texture
+		}
+	*/
+}
+
+
+[t:component,n:store]
+{
+	doc = "Store that buys and sells goods";
+
+	[can_sell_self] 		{  type = bool;		default = false;	doc = "If you choose to sell yourself, people can hire you as well as any party members.  You cannot be a regular store if this is true, however.";  }
+	[activate_range]		{  type = float;	default = 20.0;		doc = "If the character other than the one who initiated the store is selected, how close must they be to the store in order for it to remain active?"; }
+	[item_markup]			{  type = float;	default = 0.1;		doc = "Amount the store marks up its price on items"; }
+
+	internal* = item_restock;
+	/*
+		the "item_regen" block contains template names of items that should
+		auto-regen in the store and the amount of them that should regenerate
+
+		note that the format is regen_template_name = number_to_regen; where
+		number_to_regen is how many to regenerate and and regen_template_name
+		is the name of the template
+
+		format:
+
+		[item_restock]
+		{
+			potion_health  = 5;
+			potion_mana = 10;
+		}
+	*/
+
+	required_component* = placement;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////

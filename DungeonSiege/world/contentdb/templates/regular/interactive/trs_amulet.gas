@@ -1,0 +1,268 @@
+[t:template,n:amulet_common]
+{
+	doc = "Template common to all amulets";
+	specializes = amulet;
+
+	[pcontent]
+	{
+		[b_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_006;
+			modifier_max = 12;
+			modifier_min = 11;
+		}
+		[b_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_007;
+			modifier_max = 13;
+			modifier_min = 12;
+		}
+		[b_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_008;
+			modifier_max = 14;
+			modifier_min = 13;
+		}
+		[b_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_003;
+			modifier_max = 3;
+			modifier_min = 1;
+		}
+		[b_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_004;
+			modifier_max = 4;
+			modifier_min = 3;
+		}
+		[b_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_005;
+			modifier_max = 5;
+			modifier_min = 4;
+		}
+		[b_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_009;
+			modifier_max = 50;
+			modifier_min = 40;
+		}
+		[b_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_010;
+			modifier_max = 60;
+			modifier_min = 50;
+		}
+		[g_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_024;
+			modifier_max = 20;
+			modifier_min = 18;
+		}
+		[g_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_025;
+			modifier_max = 30;
+			modifier_min = 20;
+		}
+		[g_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_026;
+			modifier_max = 40;
+			modifier_min = 30;
+		}
+		[g_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_021;
+			modifier_max = 9;
+			modifier_min = 8;
+		}
+		[g_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_022;
+			modifier_max = 10;
+			modifier_min = 9;
+		}
+		[g_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_023;
+			modifier_max = 11;
+			modifier_min = 10;
+		}
+		[g_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_027;
+			modifier_max = 120;
+			modifier_min = 100;
+		}
+		[g_o_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_029;
+			modifier_max = 500;
+			modifier_min = 150;
+		}
+		[s_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_015;
+			modifier_max = 15;
+			modifier_min = 14;
+		}
+		[s_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_016;
+			modifier_max = 16;
+			modifier_min = 15;
+		}
+		[s_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_017;
+			modifier_max = 18;
+			modifier_min = 16;
+		}
+		[s_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_012;
+			modifier_max = 6;
+			modifier_min = 5;
+		}
+		[s_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_013;
+			modifier_max = 7;
+			modifier_min = 6;
+		}
+		[s_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_014;
+			modifier_max = 8;
+			modifier_min = 7;
+		}
+		[s_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_018;
+			modifier_max = 80;
+			modifier_min = 70;
+		}
+		[s_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_019;
+			modifier_max = 90;
+			modifier_min = 80;
+		}
+		[s_o_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_020;
+			modifier_max = 100;
+			modifier_min = 90;
+		}
+	}
+}
+
+[t:template,n:amulet_horseshoe]
+{
+	specializes = amulet;
+	doc = "Horseshoe Amulet";
+	common:screen_name	= "Goldsniffer's Amulet";
+    common:is_pcontent_allowed = false;
+    gui:inventory_icon = b_gui_ig_i_it_amulet_030;
+    aspect:gold_value		= 1220;
+
+	[magic]
+	{
+		[enchantments]
+		{
+			[*]
+			{
+				alteration			= alter_dexterity;
+				value				= 2;
+				description			= "+2 to Dexterity";
+				duration			= #infinite;
+				is_permanent		= true;
+				is_single_instance	= false;
+			}
+		}
+	}
+}
+[t:template,n:amulet_keeper]
+{
+	specializes = amulet;
+	doc = "Keeper Amulet";
+	common:screen_name	= "Elder Wood Amulet";
+    common:is_pcontent_allowed = false;
+    gui:inventory_icon = b_gui_ig_i_it_amulet_005;
+    aspect:gold_value		= 3820;
+
+	[magic]
+	{
+		[enchantments]
+		{
+			[*]
+			{
+			alteration			= alter_mana_bonus;
+			value				= 3;
+			description			= "Adds 3 Mana per hit";
+			duration			= #infinite;
+			is_permanent		= true;
+			is_single_instance	= false;
+			}
+		}
+	}
+}
+[t:template,n:amulet_ra_common]
+{
+	doc = "Template common to all amulets";
+	specializes = amulet;
+    common:pcontent_special_type = rare, unique;
+
+	[pcontent]
+	{
+    	[b_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_030;
+			modifier_max = 17;
+			modifier_min = 1;
+		}
+        [b_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_031;
+			modifier_max = 79;
+			modifier_min = 59;
+		}
+        [b_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_032;
+			modifier_max = 149;
+			modifier_min = 125;
+		}
+        [s_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_033;
+			modifier_max = 37;
+			modifier_min = 18;
+		}
+        [s_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_034;
+			modifier_max = 100;
+			modifier_min = 80;
+		}
+        [s_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_035;
+			modifier_max = 500;
+			modifier_min = 150;
+		}
+        [g_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_036;
+			modifier_max = 58;
+			modifier_min = 38;
+		}
+        [g_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_amulet_037;
+			modifier_max = 124;
+			modifier_min = 101;
+		}
+    }
+}

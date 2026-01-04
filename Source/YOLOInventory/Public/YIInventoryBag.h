@@ -7,7 +7,6 @@
 // #include "YIContainerInterface.h"
 #include "YIInventoryBag.generated.h"
 
-class UYIInventoryAsset; // legacy
 class UYIItemDefinition;
 
 USTRUCT(BlueprintType)

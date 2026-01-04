@@ -1,0 +1,76 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  world\contentdb\membership_seed.gas
+// Author(s):  Scott Bilas
+//
+// Summary  :  Contains a set of membership names to seed the internal
+//             membership database. Because memberships can be added on the
+//             fly at any time, it can cause MP issues when sync'd on the
+//             network. By pre-seeding the db with all the ones the game uses
+//             in advance, we can minimize all noticeable out-of-sync on
+//             clients.
+//
+// Copyright © 2002 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+[membership_seed]
+{
+	* = bandit;
+	* = coil;
+	* = droog;
+	* = gargoyle;
+	* = gargoyle_friend;
+	* = gobbot;
+	* = gremal;
+	* = hero;
+	* = immune_align_change;
+	* = immune_charm;
+	* = immune_control;
+	* = immune_explode;
+	* = immune_freeze;
+	* = immune_polymorph;
+	* = interest;
+	* = krug;
+	* = krug_guard;
+	* = monster;
+	* = party_bandit_ranged;
+	* = party_braak_boss;
+	* = party_braak_desert_boss;
+	* = party_dark_lunger_boss;
+	* = party_furok_boss;
+	* = party_gorack_boss;
+	* = party_ice_archer;
+	* = party_klaw_boss;
+	* = party_krug_commander;
+	* = party_krug_grunt_boss;
+	* = party_krug_scavenger_boss;
+	* = party_krug_scout_boss;
+	* = party_krug_shaman;
+	* = party_larch_boss;
+	* = party_lava_imp_02;
+	* = party_lava_imp_03;
+	* = party_maljin_ranged;
+	* = party_mucosa_boss;
+	* = party_sand_mage;
+	* = party_scorpion_boss;
+	* = party_skeleton_guard_boss;
+	* = party_skeleton_mercenary_archer;
+	* = party_spiked_dweller;
+	* = party_spiked_maw_boss;
+	* = party_swamp_creature_boss;
+	* = party_swamp_slinger;
+	* = party_trog_warrior_boss;
+	* = party_troll_swamp_boss;
+	* = party_water_lunger_boss;
+	* = party_wolf_black_boss;
+	* = party_wolf_gray_boss;
+	* = party_wraith;
+	* = party_wraith_mage;
+	* = phrak;
+	* = rat;
+	* = seck;
+	* = skeleton;
+}

@@ -1,0 +1,763 @@
+[t:template,n:base_book_spell]
+{
+	category_name = "mbook";
+	doc = "spellbook base template";
+	specializes = spellbook;
+	[aspect]
+	{
+		model = m_i_glb_book-magic-02;
+	}
+	[common]
+	{
+		screen_name = "Spell Book";
+	}
+}
+[t:template,n:book_glb_magic_01]
+{
+	doc = "book_magic_sm_symbol";
+	specializes = base_book_spell;
+    [common]
+	{
+		allow_modifiers = false;
+	}
+	[magic]
+	{
+		pcontent_level = 0;
+	}
+}
+[t:template,n:book_glb_magic_04]
+{
+	doc = "book_magic_wizard";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-04;
+		}
+	}
+	[gui]
+	{
+
+		inventory_icon = b_gui_ig_i_it_magic-book-04;
+	}
+	[magic]
+	{
+		pcontent_level = 10;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 1;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_05]
+{
+	doc = "book_magic_runes";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-05;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:12;
+		inventory_icon = b_gui_ig_i_it_magic-book-05;
+	}
+	[magic]
+	{
+		pcontent_level = 20;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 2;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_06]
+{
+	doc = "book_magic_medusa";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-06;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:13;
+		inventory_icon = b_gui_ig_i_it_magic-book-06;
+	}
+	[magic]
+	{
+		pcontent_level = 30;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 3;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_07]
+{
+	doc = "book_magic_face";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-07;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:16;
+		inventory_icon = b_gui_ig_i_it_magic-book-07;
+	}
+	[magic]
+	{
+		pcontent_level = 40;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 4;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_08]
+{
+	doc = "book_magic_embossed";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-08;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:18;
+		inventory_icon = b_gui_ig_i_it_magic-book-07;
+	}
+	[magic]
+	{
+		pcontent_level = 50;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 5;
+			f modifier_min = 1;
+		}
+	}
+}
+/*[t:template,n:book_glb_magic_09]
+{
+	doc = "book_magic_lips";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-09;
+		}
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_magic-book-09;
+	}
+	[magic]
+	{
+		pcontent_level = 60;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 6;
+			f modifier_min = 1;
+		}
+	}
+}*/
+[t:template,n:book_glb_magic_10]
+{
+	doc = "book_magic_fiery";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-10;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:20;
+		inventory_icon = b_gui_ig_i_it_magic-book-10;
+	}
+	[magic]
+	{
+		pcontent_level = 70;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 7;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_11]
+{
+	doc = "book_magic_bejeweled";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-11;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:26;
+		inventory_icon = b_gui_ig_i_it_magic-book-11;
+	}
+	[magic]
+	{
+		pcontent_level = 80;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 8;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_12]
+{
+	doc = "book_magic_bejeweled_ornate";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-12;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:30;
+		inventory_icon = b_gui_ig_i_it_magic-book-12;
+	}
+	[magic]
+	{
+		pcontent_level = 90;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 9;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_13]
+{
+	doc = "book_magic_town";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-13;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:33;
+		inventory_icon = b_gui_ig_i_it_magic-book-13;
+	}
+	[magic]
+	{
+		pcontent_level = 100;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 10;
+			f modifier_min = 1;
+		}
+	}
+}
+
+[t:template,n:book_glb_magic_Tas]
+{
+	doc = "book_magic_town";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-13;
+		}
+	}
+	[common]
+	{
+		screen_name = "Spell Book";
+        is_pcontent_allowed = false;
+	}
+
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_magic-book-13;
+	}
+
+	[magic]
+	{
+		[enchantments]
+		{
+			[*]
+			{
+				alteration			= alter_intelligence;
+				value				= 1;
+				description			= "Adds 1 to Intelligence";
+				duration			= #infinite;
+				is_permanent		= true;
+				is_single_instance	= false;
+			}
+		}
+	}
+
+}
+
+[t:template,n:book_glb_magic_14]
+{
+	doc = "book_magic_runic_plain";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-14;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:35;
+		inventory_icon = b_gui_ig_i_it_magic-book-14;
+	}
+	[magic]
+	{
+		pcontent_level = 110;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 11;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_15]
+{
+	doc = "book_magic_pheonix";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-15;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:38;
+		inventory_icon = b_gui_ig_i_it_magic-book-15;
+	}
+	[magic]
+	{
+		pcontent_level = 120;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 12;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_16]
+{
+	doc = "book_magic_eye_evil";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-16;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:40;
+		inventory_icon = b_gui_ig_i_it_magic-book-16;
+	}
+	[magic]
+	{
+		pcontent_level = 130;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 13;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_17]
+{
+	doc = "book_magic_sunray";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-17;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:44;
+		inventory_icon = b_gui_ig_i_it_magic-book-17;
+	}
+	[magic]
+	{
+		pcontent_level = 140;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 14;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_18]
+{
+	doc = "book_magic_celestial";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-18;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:49;
+		inventory_icon = b_gui_ig_i_it_magic-book-18;
+	}
+	[magic]
+	{
+		pcontent_level = 150;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 15;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_19]
+{
+	doc = "book_magic_skull";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-19;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:52;
+		inventory_icon = b_gui_ig_i_it_magic-book-19;
+	}
+	[magic]
+	{
+		pcontent_level = 160;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 16;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_20]
+{
+	doc = "book_magic_coat of arms";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-20;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:54;
+		inventory_icon = b_gui_ig_i_it_magic-book-20;
+	}
+	[magic]
+	{
+		pcontent_level = 170;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 17;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_21]
+{
+	doc = "book_magic_flowers";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-21;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:56;
+		inventory_icon = b_gui_ig_i_it_magic-book-21;
+	}
+	[magic]
+	{
+		pcontent_level = 180;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 18;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_22]
+{
+	doc = "book_magic_lightning";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-22;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:59;
+		inventory_icon = b_gui_ig_i_it_magic-book-22;
+	}
+	[magic]
+	{
+		pcontent_level = 190;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 19;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_23]
+{
+	doc = "book_magic_broken_heart";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-23;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:60;
+		inventory_icon = b_gui_ig_i_it_magic-book-23;
+	}
+	[magic]
+	{
+		pcontent_level = 200;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 20;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_24]
+{
+	doc = "book_magic_celtic";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-24;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:62;
+		inventory_icon = b_gui_ig_i_it_magic-book-24;
+	}
+	[magic]
+	{
+		pcontent_level = 210;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 21;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_25]
+{
+	doc = "book_magic_cathedral";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-25;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:65;
+		inventory_icon = b_gui_ig_i_it_magic-book-25;
+	}
+	[magic]
+	{
+		pcontent_level = 220;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 22;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_26]
+{
+	doc = "book_magic_cos";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-26;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:67;
+		inventory_icon = b_gui_ig_i_it_magic-book-26;
+	}
+	[magic]
+	{
+		pcontent_level = 230;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 23;
+			f modifier_min = 1;
+		}
+	}
+}
+[t:template,n:book_glb_magic_27]
+{
+	doc = "book_magic_rusted";
+	specializes = base_book_spell;
+	[aspect]
+	{
+		[textures]
+		{
+			0 = b_i_glb_book-magic-27;
+		}
+	}
+	[gui]
+	{
+        equip_requirements = intelligence:70;
+		inventory_icon = b_gui_ig_i_it_magic-book-27;
+	}
+	[magic]
+	{
+		pcontent_level = 240;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			f modifier_max = 24;
+			f modifier_min = 1;
+		}
+	}
+}

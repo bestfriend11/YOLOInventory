@@ -1,0 +1,310 @@
+[t:template,n:ring_common]
+{
+	doc = "Template common to all rings";
+	specializes = ring;
+
+	[pcontent]
+	{
+		[b_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_006;
+			modifier_max = 11;
+			modifier_min = 10;
+		}
+		[b_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_007;
+			modifier_max = 12;
+			modifier_min = 11;
+		}
+		[b_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_008;
+			modifier_max = 13;
+			modifier_min = 12;
+		}
+		[b_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_003;
+			modifier_max = 2;
+			modifier_min = 1;
+		}
+		[b_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_004;
+			modifier_max = 3;
+			modifier_min = 2;
+		}
+		[b_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_005;
+			modifier_max = 4;
+			modifier_min = 3;
+		}
+		[b_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_009;
+			modifier_max = 50;
+			modifier_min = 40;
+		}
+		[b_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_010;
+			modifier_max = 60;
+			modifier_min = 50;
+		}
+		[b_o_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_011;
+			modifier_max = 70;
+			modifier_min = 60;
+		}
+		[g_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_024;
+			modifier_max = 20;
+			modifier_min = 18;
+		}
+		[g_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_025;
+			modifier_max = 30;
+			modifier_min = 20;
+		}
+		[g_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_026;
+			modifier_max = 40;
+			modifier_min = 30;
+		}
+		[g_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_021;
+			modifier_max = 8;
+			modifier_min = 7;
+		}
+		[g_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_022;
+			modifier_max = 9;
+			modifier_min = 8;
+		}
+		[g_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_023;
+			modifier_max = 10;
+			modifier_min = 9;
+		}
+		[g_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_027;
+			modifier_max = 120;
+			modifier_min = 100;
+		}
+		[g_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_028;
+			modifier_max = 150;
+			modifier_min = 120;
+		}
+		[g_o_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_029;
+			modifier_max = 500;
+			modifier_min = 150;
+		}
+		[s_c_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_015;
+			modifier_max = 14;
+			modifier_min = 13;
+		}
+		[s_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_016;
+			modifier_max = 15;
+			modifier_min = 14;
+		}
+		[s_c_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_017;
+			modifier_max = 18;
+			modifier_min = 15;
+		}
+		[s_d_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_012;
+			modifier_max = 5;
+			modifier_min = 4;
+		}
+		[s_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_013;
+			modifier_max = 6;
+			modifier_min = 5;
+		}
+		[s_d_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_014;
+			modifier_max = 7;
+			modifier_min = 6;
+		}
+		[s_o_avg]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_018;
+			modifier_max = 80;
+			modifier_min = 70;
+		}
+		[s_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_019;
+			modifier_max = 90;
+			modifier_min = 80;
+		}
+		[s_o_mag]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_020;
+			modifier_max = 100;
+			modifier_min = 90;
+		}
+	}
+}
+
+[t:template,n:ring_lloyd]
+{
+	specializes = ring;
+	doc = "Lloyd's Ring";
+	common:screen_name	= "Lloyd's Ring";
+    common:is_pcontent_allowed = false;
+    gui:inventory_icon = b_gui_ig_i_it_ring_005;
+    aspect:gold_value		= 220;
+
+	[magic]
+	{
+		[enchantments]
+		{
+			[*]
+			{
+				alteration			= alter_ARMOR;
+				value				= 3;
+				description			= "+3 to Armor";
+				duration			= #infinite;
+				is_permanent		= true;
+				is_single_instance	= false;
+			}
+		}
+	}
+}
+[t:template,n:gen_ring_utraean]
+{
+	doc = "generator_utraean_signet_ring";
+	specializes = ring;
+	category_name = "quest";
+	[aspect]
+	{
+		is_visible = false;
+		force_no_render = true;
+		is_selectable = false;
+	}
+    common:is_pcontent_allowed = false;
+	[generator_multiple_mp]
+	{
+		child_template_name = ring_utraean;
+	}
+}
+[t:template,n:ring_utraean]
+{
+	specializes = ring;
+	doc = "utraean_signet_ring";
+	common:screen_name	= "Signet Ring of the Utraean Protectors";
+    category_name = "quest";
+    common:is_pcontent_allowed = false;
+    common:forced_expiration_class = never;
+    common:auto_expiration_class = never;
+    aspect:gold_value		= 220;
+	[gui]
+	{
+		can_sell = FALSE;
+		inventory_icon = b_gui_ig_i_it_ring_005;
+	}
+	[magic]
+	{
+		[enchantments]
+		{
+			[*]
+			{
+				alteration			= alter_ARMOR;
+				value				= 3;
+				description			= "+3 to Armor";
+				duration			= #infinite;
+				is_permanent		= true;
+				is_single_instance	= false;
+			}
+		}
+	}
+	[single_pickup] {}
+}
+[t:template,n:ring_ra_common]
+{
+	doc = "Template common to all rings";
+	specializes = ring;
+    common:pcontent_special_type = rare, unique;
+
+	[pcontent]
+	{
+    	[b_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_030;
+			modifier_max = 22;
+			modifier_min = 1;
+		}
+        [b_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_031;
+			modifier_max = 80;
+			modifier_min = 62;
+		}
+        [b_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_032;
+			modifier_max = 130;
+			modifier_min = 114;
+		}
+        [s_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_033;
+			modifier_max = 42;
+			modifier_min = 23;
+		}
+        [s_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_034;
+			modifier_max = 97;
+			modifier_min = 81;
+		}
+        [s_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_035;
+			modifier_max = 149;
+			modifier_min = 131;
+		}
+        [g_d_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_036;
+			modifier_max = 61;
+			modifier_min = 43;
+		}
+        [g_c_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_037;
+			modifier_max = 114;
+			modifier_min = 98;
+		}
+        [g_o_fin]
+		{
+			inventory_icon = b_gui_ig_i_it_ring_038;
+			modifier_max = 500;
+			modifier_min = 150;
+		}
+    }
+}

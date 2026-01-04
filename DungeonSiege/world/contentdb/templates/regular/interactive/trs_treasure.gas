@@ -1,0 +1,305 @@
+//////////////////////////////////////////////////////////////////////////////
+// Treasure templates
+
+[t:template,n:gold]
+{
+	specializes			= treasure;
+	doc					= "Gold coins";
+   	category_name       = "treasure";
+    [aspect]
+	{
+		model		= m_i_glb_coin-01;
+		gold_value   = 8;
+		voice:put_down:* = s_e_gui_put_down_gold;
+	}
+
+	gui:inventory_icon			= b_gui_ig_i_it_gold-pile;
+	gui:inventory_max_stackable	= 10;
+
+	[common]
+	{
+		screen_name = "Gold";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script( "gold_sparkle" );
+				condition* = receive_world_message("we_dropped");
+			}
+		}
+	}
+
+	[gold]
+	{
+		[ranges]
+		{
+			0   = m_i_glb_coin-01, b_i_glb_gold;
+			30	= m_i_glb_coin-02, b_i_glb_gold;
+			100 = m_i_glb_coin-03, b_i_glb_gold;
+
+		}
+	}
+}
+[t:template,n:skull_glb_01]
+{
+	specializes			= treasure;
+	doc					= "skull";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_skull-01;
+	aspect:textures:0 	= b_i_glb_frag-bones;
+	common:screen_name	= "Skull";
+
+	[gui]
+	{
+		inventory_icon	= b_gui_ig_i_it_skull-01;
+		inventory_width 	= 1;
+		inventory_height 	= 1;
+	}
+}
+[t:template,n:skull_glb_02]
+{
+	specializes			= treasure;
+	doc					= "skull_02-sfx";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_frag-bone-06;
+
+	common:screen_name	= "Skull";
+	[gui]
+	{
+		inventory_icon	= b_gui_ig_i_ic_c_sk_g;
+		inventory_width 	= 1;
+		inventory_height 	= 2;
+	}
+}
+[t:template,n:artifact_glb_01]
+{
+	specializes			= treasure;
+	doc					= "Artifact";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_artifact-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Artifact";
+
+	gui:inventory_icon	= b_gui_ig_i_it_artifact_01;
+}
+[t:template,n:artifact_glb_02]
+{
+	specializes			= treasure;
+	doc					= "Artifact";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_artifact-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Artifact";
+	[generic_emitter_act]
+	{
+		other_effect = "scroll_key";
+	}
+	gui:inventory_icon	= b_gui_ig_i_it_artifact_01;
+}
+/////////////////////////
+
+[t:template,n:jewel_glb_01]
+{
+	specializes			= treasure;
+	doc					= "jewel_sm_red";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_jewel-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Jewel";
+
+	gui:inventory_icon	= b_gui_ig_i_it_jewel_01;
+}
+
+[t:template,n:jewel_glb_02]
+{
+	specializes			= treasure;
+	doc					= "jewel_sm_blue_pink";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_jewel-02;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Jewel";
+
+	gui:inventory_icon	= b_gui_ig_i_it_jewel_02;
+}
+
+[t:template,n:jewel_glb_03]
+{
+	specializes			= treasure;
+	doc					= "jewel_lg_yllw";
+    category_name       = "treasure";
+
+
+	aspect:model		= m_i_glb_jewel-03;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Jewel";
+
+	gui:inventory_icon	= b_gui_ig_i_it_jewel_03;
+}
+
+[t:template,n:jewel_glb_04]
+{
+	specializes			= treasure;
+	doc					= "jewel_med_red";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_crystal;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Gem";
+
+	gui:inventory_icon	= b_gui_ig_i_it_gem;
+}
+
+[t:template,n:scroll_glb_map]
+{
+	specializes			= treasure;
+	doc					= "map_world";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_map-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_scroll;
+
+	common:screen_name	= "Map";
+
+	gui:inventory_icon	= b_gui_ig_i_it_map_01;
+}
+
+[t:template,n:scroll_glb_spell]
+{
+	specializes			= treasure;
+	doc					= "scroll_glb_spell";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_scroll;
+	aspect:voice:put_down:* = s_e_gui_put_down_scroll;
+
+	common:screen_name	= "Scroll";
+
+	gui:inventory_icon	= b_gui_ig_i_it_scroll;
+}
+
+[t:template,n:charm_glb_01]
+{
+	specializes			= treasure;
+	doc					= "trinket_diamond";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_charm-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Charm";
+
+	gui:inventory_icon	= b_gui_ig_i_it_charm_01;
+}
+
+[t:template,n:cross_glb_01]
+{
+	specializes			= treasure;
+	doc					= "trinket_ankh";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_cross-01;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Ankh";
+
+	gui:inventory_icon	= b_gui_ig_i_it_cross_01;
+}
+
+[t:template,n:cross_glb_02]
+{
+	specializes			= treasure;
+	doc					= "trinket_ankh_02";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_cross-02;
+	aspect:voice:put_down:* = s_e_gui_put_down_jewelry;
+
+	common:screen_name	= "Ankh";
+
+	gui:inventory_icon	= b_gui_ig_i_it_cross_01;
+}
+
+[t:template,n:cross_level_up]
+{
+	specializes			= non_interactive_nonblocking;
+	doc					= "used in level up anim, don't place.";
+    category_name       = "treasure";
+
+	aspect:model		= m_i_glb_cross-02;
+
+	common:screen_name	= "Ankh";
+}
+
+[t:template,n:fury_eye]
+{
+	specializes			= treasure;
+	doc					= "fury_eye";
+    category_name       = "treasure";
+
+	[aspect]
+	{
+		model		= m_i_glb_frag-fury-eye;
+		textures:0	= b_i_glb_fury-frag-eye;
+		gold_value	= 1000;
+	}
+
+	common:screen_name	= "Fury's Eye";
+
+	[gui]
+	{
+		inventory_icon		= b_gui_ig_i_it_fury-eye;
+		inventory_width		= 2;
+		inventory_height	= 2;
+	}
+}
+[t:template,n:key_glb_star]
+{
+	specializes 		= treasure;
+	doc 				= "key_cos";
+   	category_name       = "interactive";
+
+   	[common]
+   	{
+   		screen_name	= "Star Key";
+   		auto_expiration_class = never;
+   		forced_expiration_class = never;
+   		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script( "star_key" );
+				condition* = receive_world_message("we_dropped");
+			}
+		}
+	}
+	gui:inventory_icon	= b_gui_ig_i_it_key-star;
+
+	[aspect]
+	{
+		model			= m_i_glb_key-star;
+		[textures]		{ 0 = b_i_glb_key-star; }
+		voice:put_down:* = s_e_gui_put_down_jewelry;
+	}
+	[gui] { can_sell = false; }
+}
+[t:template,n:azunite_scholar_artifact_01]
+{
+	specializes			= artifact_glb_01;
+	doc					= "azunite_scholar_quest_artifact";
+    category_name       = "treasure";
+
+	[common] { screen_name	= "Azunite Artifact"; }
+	[gui] { can_sell = false; }
+}

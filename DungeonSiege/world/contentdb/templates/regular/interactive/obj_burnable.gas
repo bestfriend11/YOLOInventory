@@ -1,0 +1,150 @@
+///////////////////////////////////////////////////////////////
+//  Burnable, non_interacive object templates
+//  burnable \Burn"a*ble\, a. Combustible. --Cotgrave.
+
+[t:template,n:base_burnable]
+{
+	specializes				=	non_interactive_nonblocking;
+	doc						=	"Base template for burnable objects.";
+
+
+	[aspect]
+	{
+		life_state		= LS_ALIVE_CONSCIOUS;
+		life			= 10;
+		max_life		= 10;
+	}
+}
+
+///////////////////////////////////////////////////////////////
+//  Burnable leaf templates
+
+
+//// CORNSTALKS ///////////////
+[t:template,n:cornstalk_grs_01]
+{
+	specializes			=	base_burnable;
+	doc					=	"grs_cornstalk_med";
+    category_name       =   "foliage";
+
+	aspect:model		= m_i_glb_cornstalk-01;
+
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_grs_02]
+{
+	specializes			=	base_burnable;
+	doc					=	"grs_cornstalk_bent_hi";
+    category_name       =   "foliage";
+
+	aspect:model		= m_i_glb_cornstalk-02;
+
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_grs_03]
+{
+	specializes			=	base_burnable;
+	doc					=	"grs_cornstalk_sm";
+    category_name       =   "foliage";
+
+	aspect:model		= m_i_glb_cornstalk-03;
+
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_grs_04]
+{
+	specializes			=	base_burnable;
+	doc					=	"grs_cornstalk_lg";
+    category_name       =   "foliage";
+
+	aspect:model		= m_i_glb_cornstalk-04;
+
+	physics:fire_charred_template	= cornstalk_grs_burnt_02;
+}
+
+[t:template,n:cornstalk_grs_05]
+{
+	specializes			=	base_burnable;
+	doc					=	"grs_cornstalk_bent_lo";
+    category_name       =   "foliage";
+
+	aspect:model		= m_i_glb_cornstalk-05;
+
+	physics:fire_charred_template	= cornstalk_grs_burnt_02;
+}
+
+[t:template,n:cornstalk_glb_grn_01]
+{
+	specializes		=	base_burnable;
+	doc				=	"grs_cornstalk_med_grn";
+    	category_name       =  	 "foliage";
+
+	[aspect]
+	{
+		model	= 	m_i_glb_cornstalk-01;
+		[textures] { 0=b_i_grs_cornstalk-grn; }
+	}
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_glb_grn_02]
+{
+	specializes		=	base_burnable;
+	doc				=	"grs_cornstalk_bent_hi_grn";
+    	category_name       =  	 "foliage";
+
+	[aspect]
+	{
+		model	= 	m_i_glb_cornstalk-02;
+		[textures] { 0=b_i_grs_cornstalk-grn; }
+	}
+	physics:fire_charred_template	= cornstalk_grs_burnt_02;
+}
+
+[t:template,n:cornstalk_glb_grn_03]
+{
+	specializes		=	base_burnable;
+	doc				=	"cornstalk_sm_grn";
+    	category_name       =  	 "foliage";
+
+	[aspect]
+	{
+		model	= 	m_i_glb_cornstalk-03;
+		[textures] { 0=b_i_grs_cornstalk-grn; }
+	}
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_glb_grn_04]
+{
+	specializes		=	base_burnable;
+	doc				=	"cornstalk_lg_grn";
+    	category_name       =  	 "foliage";
+
+	[aspect]
+	{
+		model	= 	m_i_glb_cornstalk-04;
+		[textures] { 0=b_i_grs_cornstalk-grn; }
+	}
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+[t:template,n:cornstalk_glb_grn_05]
+{
+	specializes		=	base_burnable;
+	doc				=	"cornstalk_bent_lo_grn";
+    	category_name       =  	 "foliage";
+
+	[aspect]
+	{
+		model	= 	m_i_glb_cornstalk-05;
+		[textures] { 0=b_i_grs_cornstalk-grn; }
+	}
+	physics:fire_charred_template	= cornstalk_grs_burnt_01;
+}
+
+////////////////////////////////////////////////////////////////
+

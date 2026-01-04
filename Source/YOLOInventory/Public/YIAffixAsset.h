@@ -87,6 +87,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Roll", meta=(ToolTip="Maximum roll value for this affix"))
     float MaxValue = 0.f;
 
+    /** Additional power factor for this affix (acts as a multiplier during roll). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Roll", meta=(ClampMin="0", ToolTip="Power level multiplier applied to the rolled value during generation (1 = no change)"))
+    int32 PowerLevel = 1;
+
     /** Curve that maps item level to rolled value (sampled during generation). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Roll", meta=(ToolTip="Curve mapping level to a roll multiplier/value"))
     FRuntimeFloatCurve ValueByLevel;

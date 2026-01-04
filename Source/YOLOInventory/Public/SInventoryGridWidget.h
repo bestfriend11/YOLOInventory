@@ -27,6 +27,9 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
+	// SWidget
+	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
+
 public:
 	// Click callback (set during Construct)
 	FOnCellClicked OnCellClicked;
@@ -36,6 +39,7 @@ public:
 	void SetWholeItemHover(bool bEnable) { bWholeItemHover = bEnable; }
 	void SetWholeItemSelection(bool bEnable) { bWholeItemSelection = bEnable; }
 	void SetWrapNavigation(bool bEnable) { bWrapNavigation = bEnable; }
+	void SetUseGlobalDragGhost(bool bEnable) { bUseGlobalDragGhost = bEnable; }
 
 	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
@@ -68,6 +72,7 @@ private:
 	// Helpers
 	FVector2D ToPixel(const FIntPoint& Cell) const { return FVector2D(Cell)*CellSize; }
 	FIntPoint ToCell(const FVector2D& LocalPos) const { return FIntPoint(FMath::FloorToInt(LocalPos.X/CellSize.X), FMath::FloorToInt(LocalPos.Y/CellSize.Y)); }
+	FIntPoint ToCellLocal(const FVector2D& LocalPos, const FVector2D& LocalCell) const { return FIntPoint(FMath::FloorToInt(LocalPos.X/LocalCell.X), FMath::FloorToInt(LocalPos.Y/LocalCell.Y)); }
 	void RebuildOccupancy();
 	int32 GetItemIndexAtCell(const FIntPoint& Cell) const;
 	void UpdateHoverSelection();
@@ -76,6 +81,7 @@ private:
 	bool bWholeItemHover = true;
 	bool bWholeItemSelection = true;
 	bool bWrapNavigation = false;
+	bool bUseGlobalDragGhost = false;
 
 	// Callbacks (set during Construct)
 	FOnHoveredItemChanged OnHoveredItemChanged;
@@ -93,6 +99,6 @@ private:
 	mutable FSlateBrush GhostBrush;
 	mutable bool bGhostHasIcon = false;
 
-	void UpdateGhostPlacement(const FVector2D& LocalCursor);
+	void UpdateGhostPlacement(const FVector2D& LocalCursor, const FVector2D& LocalCell);
 	bool EvaluateGhostPlacement(const FIntPoint& TopLeft, int32& OutOverlapIdx) const;
 };

@@ -1,0 +1,890 @@
+[t:template,n:base_chest]
+{
+	category_name = "base template";
+	doc = "chest base template";
+	specializes = container;
+	[aspect]
+	{
+		material = steel;
+		does_block_path = true;
+	}
+	[common]
+	{
+		rollover_display = true;
+		forced_expiration_class = immediate;
+		auto_expiration_class = immediate;
+		screen_name="Chest";
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+	[base_chest]  {}
+}
+[t:template,n:base_chest_use_toggle]
+{
+	category_name = "base template";
+	doc = "chest base template";
+	specializes = container;
+	[aspect]
+	{
+		material = steel;
+		does_block_path = true;
+	}
+	[common]
+	{
+		rollover_display = true;
+		forced_expiration_class = immediate;
+		auto_expiration_class = immediate;
+		screen_name="Chest";
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+	[base_chest]  
+	{
+		wait_for_activate = true;
+	}
+}
+
+[t:template,n:bed_glb_move_02]
+{
+	category_name 	= "container";
+	doc 			= "bed_logs_move";
+	specializes 	= base_chest;
+
+	common:screen_name = "Bed";
+
+	[aspect]
+	{
+		model = m_i_glb_bed-02;
+		use_range = 3.0;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = a_i_glb;
+
+			[chore_open]
+			{
+				skrit	= transition;
+				anim_files:00= bed-02-move;
+			}
+		}
+	}
+}
+[t:template,n:bookcase_glb_open_01]
+{
+	category_name = "container";
+	doc = "bookcase_open";
+	specializes = base_chest;
+
+	common:screen_name = "Bookcase";
+
+	[aspect]
+	{
+		model = m_i_glb_bookcase-01;
+		material = ;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=bookcase-01-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_glb_of_drawers_open_01]
+{
+	category_name = "container";
+	doc = "chest_of drawers_open";
+	specializes = base_chest;
+
+	common:screen_name = "Chest of Drawers";
+
+	[aspect]
+	{
+		model = m_i_glb_chest-of-drawers-01;
+		textures:0 = b_i_csl_chest-03;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-of-drawers-01-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_csl_01]
+{
+	category_name = "container";
+	doc = "chest_wood_ornate";
+	specializes = base_chest;
+	[aspect] 
+	{ 
+		model=m_i_glb_chest; 
+		material = steel;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+	[common] { screen_name="Ornate Chest"; }
+}
+[t:template,n:chest_csl_02]
+{
+	category_name = "container";
+	doc = "chest_metal_ornate_sm";
+	specializes = base_chest;
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-02;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-02-open; }
+			}
+		}
+	}
+	[common] { screen_name="Small Metal Chest"; }
+}
+[t:template,n:chest_csl_03]
+{
+	category_name = "container";
+	doc = "chest_wood_plain";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		textures:0 = b_i_glb_chest-01;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_csl_04]
+{
+	category_name = "container";
+	doc = "chest_cherry_gold";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		model=m_i_csl_chest-04;
+		[textures] {0 = b_i_csl_chest-02;}
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_csl;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-04-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_csl_05]
+{
+	category_name = "container";
+	doc = "chest_cherry_ornate";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_csl_chest-04; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_csl_06]
+{
+	category_name = "container";
+	doc = "chest_cedar";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_csl_chest-03; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_csl_07]
+{
+	category_name = "container";
+	doc = "chest_gold_ornate";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_csl_chest-05; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_csl_08]
+{
+	category_name = "container";
+	doc = "chest_wood_stained";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-07;
+		[textures]		{ 0 = b_i_csl_chest-06; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-07-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_wood_use_toggle]
+{
+	category_name = "container";
+	doc = "chest_wood_use_toggle";
+	specializes = base_chest_use_toggle;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = wood;
+		model = m_i_glb_chest-07;
+		[textures]		{ 0 = b_i_csl_chest-06; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-07-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_cav_01]
+{
+	category_name = "container";
+	doc = "chest_weathered_ornate";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-06;
+		[textures]		{ 0 = b_i_glb_chest-stone; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-06-open; }
+			}
+		}
+	}
+}
+[t:template,n:chest_cav_02]
+{
+	category_name = "container";
+	doc = "chest_skull";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_csl_chest-skull; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_gob_01]
+{
+	category_name = "container";
+	doc = "chest_metal";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-05;
+		[textures]		{ 0 = b_i_gob_chest-01; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_ice_01]
+{
+	category_name = "container";
+	doc = "chest_cedar_ice";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_ice_chest-open; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_grs_01]
+{
+	category_name = "container";
+	doc = "chest_oak_ornate";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-03;
+		[textures]		{ 0 = b_i_glb_chest-01; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_grs_02]
+{
+	category_name = "container";
+	doc = "chest_mossy";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-04;
+		[textures]		{ 0 = b_i_glb_chest-open-02; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_ice;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:chest_grs_03]
+{
+	category_name = "container";
+	doc = "chest_stump";
+	specializes = base_chest;
+	[common] { screen_name="Chest"; }
+	[aspect]
+	{
+		material = steel;
+		model = m_i_glb_chest-stump;
+		[textures]		{ 0 = b_i_glb_chest-stump; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=chest-stump-open; }
+			}
+		}
+	}
+}
+
+[t:template,n:container_cav_01]
+{
+	specializes		= base_chest;
+	doc				= "box_stone pcontent generator	with skeleton";
+	category_name	= "container";
+
+	common:	screen_name	= "Monument";
+
+	aspect:model	= m_i_cav_container-01;
+	aspect:material = stone;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_cav;
+			[chore_open]
+			{
+				skrit = random_transition;
+				[anim_files]
+				{
+					00=container-01-open-01;
+					01=container-01-open-02;
+				}
+			}
+		}
+	}
+
+	[inventory]
+	{
+		[pcontent]
+		{
+			[oneof*]
+			{
+				[oneof*]
+				{
+					il_main	= #melee/11-13;
+					il_main	= #armor/23-28;
+					chance = 0.25;
+				}
+//				[all*]  // ask Jake if we still want this, will require a little work. -ET
+//				{
+//					il_main	= skeleton;
+//					chance = 0.45;
+//				}
+				[gold*]
+				{
+					min	= 10;
+					max	= 30;
+					chance = 0.1;
+					piles = 3 - 4;
+					min_pile = 2;
+				}
+            }
+		}
+	}
+}
+[t:template,n:container_cav_02]
+{
+	specializes		= base_chest;
+	doc				= "box_stone no	skeleton";
+	category_name	= "container";
+
+	common:	screen_name	= "Monument";
+
+	aspect:model	= m_i_cav_container-01;
+	aspect:material = stone;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_cav;
+			[chore_open]
+			{
+				skrit = random_transition;
+				[anim_files]
+				{
+					00=container-01-open-01;
+					01=container-01-open-02;
+				}
+			}
+		}
+	}
+	[inventory]
+	{
+		[equipment]	 {	}
+		[other]	 {	}
+
+		[pcontent]
+		{
+			[oneof*]
+			{
+				[all*]
+				{
+					il_main	= #melee/3-6;
+					chance = 0.25;
+				}
+			}
+			[gold*]
+			{
+				min	= 1;
+				max	= 15;
+				chance = 0.1;
+			}
+		}
+	}
+}
+
+[t:template,n:crate_gob_02]
+{
+	specializes		= base_chest;
+	doc				= "crate_metal_lg";
+	category_name	= "container";
+
+	common:screen_name	= "Metal Crate";
+
+	aspect:model	= m_i_gob_crate-02;
+	aspect:material = steel;
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_gob;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=crate-02-open; }
+			}
+		}
+	}
+}
+[t:template,n:locker_glb_open_01]
+{
+	category_name = "container";
+	doc = "locker_open";
+	specializes = base_chest;
+
+	common:screen_name	= "Locker";
+
+	[aspect]
+	{
+		model = m_i_glb_locker-01;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00=locker-01-open; }
+			}
+		}
+	}
+}
+[t:template,n:sarcophagus_cav_01]
+{
+	specializes			= base_chest;
+	doc					= "sarcophagus_stone_ornate";
+    category_name       = "container";
+
+	common:screen_name	= "Sarcophagus";
+
+	aspect:model		= m_i_cav_sarcophagus-01;
+	aspect:material 	= stone;
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_cav;
+			[chore_open]
+			{
+				skrit = random_transition;
+				[anim_files]
+				{
+					00=sarcophagus-open-01;
+					01=sarcophagus-open-02;
+				}
+			}
+		}
+	}
+	[inventory]
+	{
+		[pcontent]
+		{
+			[oneof*]
+			{
+				[oneof*]
+				{
+					chance = 0.3;
+					il_main = #weapon/10-12;
+					il_main = #armor/12-18;
+				}
+				[gold*]
+				{
+					chance = 0.2;
+					max = 40;
+					min = 16;
+					piles = 2 - 4;
+					min_pile = 4;
+				}
+				[oneof*]
+				{
+					chance = 0.2;
+					il_main = potion_mana_small;
+					il_main = potion_health_small;
+				}
+			}
+		}
+	}
+}
+
+[t:template,n:sarcophagus_stone_use_toggle]
+{
+	specializes			= base_chest_use_toggle;
+	doc					= "sarcophagus_stone_use_toggle";
+    category_name       = "container";
+
+	common:screen_name	= "Sarcophagus";
+
+	aspect:model		= m_i_cav_sarcophagus-01;
+	aspect:material 	= stone;
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_cav;
+			[chore_open]
+			{
+				skrit = random_transition;
+				[anim_files]
+				{
+					00=sarcophagus-open-01;
+					01=sarcophagus-open-02;
+				}
+			}
+		}
+	}
+	[inventory]
+	{
+		[pcontent]
+		{
+			[oneof*]
+			{
+				[oneof*]
+				{
+					chance = 0.3;
+					il_main = #weapon/10-12;
+					il_main = #armor/12-18;
+				}
+				[gold*]
+				{
+					chance = 0.2;
+					max = 40;
+					min = 16;
+				}
+				[oneof*]
+				{
+					chance = 0.2;
+					il_main = potion_mana_small;
+					il_main = potion_health_small;
+				}
+			}
+		}
+	}
+	[messages]
+	{
+		[locked]
+		{
+			screen_text = "This sarcophagus appears to be sealed with Utraean glyphs.";
+		}
+	}
+}
+
+[t:template,n:sarcophagus_csl_02]
+{
+	category_name		= "container";
+	doc					= "sarcophagus_wood	with lid";
+	specializes			= base_chest;
+
+	common:screen_name	= "Sarcophagus";
+
+	aspect:model		= m_i_csl_sarcophagus-02;
+	aspect:material 	= stone;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_csl;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00 = sarcophagus-02-open; }
+			}
+		}
+	}
+}
+[t:template,n:sarcophagus_csl_03]
+{
+	category_name = "container";
+	doc = "casket_stone with lid";
+	specializes = base_chest;
+
+	common:screen_name = "Casket";
+
+	aspect:model = m_i_csl_sarcophagus-03;
+	aspect:material 	= stone;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_csl;
+			[chore_open]
+			{
+				skrit = transition;
+				[anim_files] { 00 = sarcophagus-03-open; }
+			}
+		}
+	}
+}

@@ -1,0 +1,1102 @@
+[t:template,n:base_arrow]
+{
+	doc = "Base arrow template";
+	specializes = ammo;
+	[aspect]
+	{
+		is_selectable = false;
+		max_life = 15;
+		life = 15;
+		life_state = LS_ALIVE_CONSCIOUS;
+		material = arrow;
+		megamap_icon = <none>;
+	}
+	[attack]
+	{
+		attack_class = ac_arrow;
+		ammo_attach_bone	=	ap_grip;
+		is_projectile = true;
+		skill_class = ranged;
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("arrow_tracer");
+				condition* = receive_world_message("we_weapon_launched");
+			}
+		}
+	}
+	[physics]
+	{
+		orient_to_trajectory = true;
+		angular_velocity = 0,0,20.0;
+		elasticity = 0.925;
+		fire_resistance = 1;
+		deflection_angle = 0;
+		fire_effect_params = [scale(0.4)][ignite()fdamage(.5,1.2,.8)];
+		sim_duration = 7;
+	}
+}
+[t:template,n:arrow]
+{
+	doc = "Basic arrow";
+	specializes = base_arrow;
+	[aspect] { model=m_w_arw_001; }
+	[common] { screen_name="Arrow"; }
+}
+[t:template,n:trap_arrow]
+{
+	doc = "Basic arrow";
+	specializes = base_arrow;
+	[aspect] 
+	{ 
+		model=m_w_arw_001;
+	}
+	[common] 
+	{ 
+		screen_name="Arrow"; 
+		is_pcontent_allowed = false;
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("trap_arrow_tracer");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+}
+[t:template,n:arrow_exp_temp]
+{
+	doc = "Arrow with explosive properties";
+	specializes = base_arrow;
+	[aspect] { model=m_w_arw_001; }
+	[common]
+	{
+		screen_name = "Black powder arrow";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("fuse_sparks");
+				action* = call_sfx_script("arrow_tracer");
+				condition* = receive_world_message("we_weapon_launched");
+			}
+		}
+	}
+	[physics]
+	{
+		break_effect = generic_explosion;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		explode_when_expired = true;
+		explosion_magnitude = 3.5;
+	}
+}
+[t:template,n:arrow_exp_trap]
+{
+	doc = "Arrow with explosive properties";
+	specializes = base_arrow;
+	[aspect] { model=m_w_arw_001; }
+	[attack]
+	{
+		area_damage_radius = 1;
+		damage_max = 8;
+		damage_min = 5;
+	}
+	[common]
+	{
+		screen_name = "Trap arrow";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("fuse_sparks");
+				action* = call_sfx_script("arrow_tracer");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		break_effect = generic_explosion;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		explosion_magnitude = 3.5;
+	}
+}
+[t:template,n:arrow_ice]
+{
+	doc = "Ice arrow";
+	specializes = base_arrow;
+	[aspect] { model=m_w_arw_003; }
+	[common] { screen_name="Ice Arrow"; }
+}
+[t:template,n:base_bolt]
+{
+	doc = "Base bolt template";
+	specializes = ammo;
+	[aspect]
+	{
+		is_selectable = false;
+		max_life = 15;
+		life = 15;
+		life_state = LS_ALIVE_CONSCIOUS;
+		megamap_icon = <none>;
+		model=m_w_arw_002;
+	}
+	[attack]
+	{
+		attack_class = ac_bolt;
+		ammo_attach_bone = ap_grip;
+		is_projectile = true;
+		skill_class = ranged;
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("bolt_tracer");
+				condition* = receive_world_message("we_weapon_launched");
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,20.0;
+		elasticity = 0.925;
+		gravity = 3.5;
+		orient_to_trajectory = true;
+		fire_resistance = 1;
+		sim_duration = 7;
+		deflection_angle = 0;
+		fire_effect_params = [scale(0.4)][ignite()fdamage(.5,1.2,.8)];
+	}
+}
+[t:template,n:bolt]
+{
+	doc = "Bolt, crossbow";
+	specializes = base_bolt;
+	[common] { screen_name="Bolt"; }
+}
+[t:template,n:minigun_bolt]
+{
+	doc = "minigun bolt";
+	specializes = base_bolt;
+	[common]
+	{
+		screen_name="Bolt";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("bolt_tracer");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+}
+[t:template,n:frag_shot]
+{
+	doc = "Weapon frag template";
+	specializes = base_bolt;
+	[aspect]
+	{
+		model = m_i_glb_frag-krug-01;
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+		}
+	}
+	[common]
+	{
+		screen_name = "Gore Chunk";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("gib_blood");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+}
+[t:template,n:magic_arrow]
+{
+	doc = "Magic arrow";
+	specializes = base_arrow;
+	[aspect] { model=m_w_arw_001; }
+	[attack]
+	{
+		damage_max = 6;
+		damage_min = 3;
+	}
+	[common]
+	{
+		screen_name = "Magic Arrow";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("magic_arrow_tracer");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+}
+[t:template,n:spike_mine_worm]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_014;
+		scale_base = 0.5;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		screen_name = "Spike";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("mine_worm_spike_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,10.0;
+		gravity = 3;
+	}
+}
+[t:template,n:spike_spiked_maw]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_025;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Spike";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("spiked_maw_spike_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		orient_to_trajectory = true;
+		angular_velocity = 0,0,10.0;
+		gravity = 3;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		break_sound = s_e_hit_woodblunt_med2;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+
+		[break_particulate]
+		{
+			frag_spiked_maw_spike = 4;
+		}
+	}
+}
+[t:template,n:spike_maljin]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_026;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Spike";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("maljin_spike_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		orient_to_trajectory = true;
+		angular_velocity = 0,0,10.0;
+		gravity = 3;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:spear_gargoyle]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_016;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		screen_name = "Spear";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("gargoyle_spear_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,10.0;
+		gravity = 3;
+	}
+}
+[t:template,n:rock_krug_ammo]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stonesmall;
+		model=m_w_misc_018;
+		is_selectable	= false;
+		[voice]
+		{
+			[attack] { * = s_e_swing_01; }
+		}
+	}
+	[attack]
+	{
+		damage_max = 0;
+		damage_min = 0;
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Rock";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("rock_tracer");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		angular_velocity = 8,8,8;
+		randomize_velocity = TRUE;
+		elasticity = 0.5;
+		deflection_angle = .2;
+		orient_to_trajectory = FALSE;
+	}
+}
+[t:template,n:braak_boulder]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_021;
+		is_selectable	= false;
+		scale_base = 1.0;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Boulder";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("boulder_dust");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		angular_velocity = 8,8,8;
+		randomize_velocity = TRUE;
+		elasticity = 0.9;
+		deflection_angle = 1;
+		orient_to_trajectory = FALSE;
+		break_effect = boulder_explosion;
+		break_sound = s_e_explode_rockbeast;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = false;
+		explode_when_expired = false;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:trap_star]
+{
+	specializes = base_grenade;
+	[aspect]
+	{
+		material = metal;
+		model=m_w_misc_027;
+		is_selectable	= false;
+		scale_base = 2.0;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("star_sparks");
+				condition* = receive_world_message("we_glanced");
+			}
+		}
+	}
+	[physics]
+	{
+		gravity = 4;
+		angular_velocity = 0,60,0;
+		elasticity = 0.95;
+		break_effect = star_sparks;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = false;
+		explode_when_expired = false;
+	}
+}
+[t:template,n:swamp_slinger_moss]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_018; // $$ using a rock until I can get a moss ball. -ET
+		is_selectable	= false;
+		force_no_render = true;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Moss";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("moss_goo");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		angular_velocity = 8,8,8;
+		randomize_velocity = TRUE;
+		elasticity = 0.9;
+		deflection_angle = 1;
+		orient_to_trajectory = FALSE;
+		break_effect = moss_explosion;
+		break_sound = s_e_hit_woodblunt_med2;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = false;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:goo_walker_flesh]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_022;
+		is_selectable	= false;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Flesh";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("gib_blood");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		angular_velocity = 8,8,8;
+		randomize_velocity = TRUE;
+		elasticity = 0.3;
+		deflection_angle = 1;
+		orient_to_trajectory = FALSE;
+		break_effect = melee_hit_2;
+		break_sound = s_e_hit_woodblunt_med2;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = false;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:skrub_spit]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_024;
+		is_selectable	= false;
+		scale_base = 1.0;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Spit";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("skrubb_spit");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		angular_velocity = 0,0,8;
+		elasticity = 0.8;
+		deflection_angle = 1;
+		break_effect = skrubb_spit_splat;
+		break_sound = s_e_hit_woodblunt_med2;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:skrub_spit_small]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_024;
+		is_selectable	= false;
+		scale_base = 0.5;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Spit";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("skrubb_spit_small");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		gravity = 4;
+		angular_velocity = 0,0,8;
+		elasticity = 0.8;
+		deflection_angle = 1;
+		break_effect = skrubb_spit_splat_small;
+		break_sound = s_e_hit_woodblunt_med2;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:skrub_spit_farm]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		material = stone;
+		model=m_w_misc_024;
+		is_selectable	= false;
+		scale_base = 0.4;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 2;
+		skill_class = "Combat Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Spit";
+
+		[template_triggers]
+		{
+			[*]
+			{
+				  action* = call_sfx_script("skrubb_spit_farm");
+				  condition* = receive_world_message("WE_ENTERED_WORLD");
+				  single_shot = true;
+			}
+		}
+	}
+
+	[physics]
+	{
+		gravity = 4;
+		angular_velocity = 0,0,8;
+		elasticity = 0.8;
+		deflection_angle = 1;
+		break_effect = skrubb_spit_splat_farm;
+		break_sound = s_e_hit_woodblunt_med2;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+	}
+}
+[t:template,n:spear_lunger]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_019;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		screen_name = "Spear";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("lunger_spear_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,10.0;
+		gravity = 3;
+	}
+}
+[t:template,n:phrak_dart]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_023;
+		scale_base = 1.0;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		screen_name = "Dart";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("phrak_dart_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,30.0;
+		gravity = 3;
+	}
+}
+[t:template,n:metal_shard]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_020;
+		scale_base = 2.0;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		screen_name = "Shard";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("metal_shard_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 16,16,16;
+		elasticity = 0.3;
+		explode_if_hit_go = false;
+		explode_if_hit_terrain = false;
+		explode_when_expired = false;
+		randomize_velocity = TRUE;
+		orient_to_trajectory = FALSE;
+		gravity = 6;
+	}
+}
+[t:template,n:soul_lance]
+{
+	specializes = base_arrow;
+	[aspect]
+	{
+		model=m_w_misc_023;
+		scale_base = 1.0;
+		force_no_render = true;
+		draw_selection_indicator = false;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+		skill_class = "Combat Magic";
+	}
+	[body]
+	{
+		[bone_translator]
+		{
+			handle = ap_grip;
+			middle = ap_tip;
+			tip = ap_tip;
+		}
+	}
+	[common]
+	{
+		screen_name = "Lance";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("soul_lance_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,10.0;
+		gravity = 0;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		break_effect = ice_explosion;
+		sim_duration = 10;
+	}
+}
+[t:template,n:ice_shard]
+{
+	doc = "ice fragment";
+	specializes = base_arrow;
+	[attack]
+	{
+		damage_max = 14;
+		damage_min = 14;
+		skill_class = "Nature Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		screen_name = "Shard";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("ice_shard_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		orient_to_trajectory = true;
+		angular_velocity = 0,0,20.0;
+		break_effect = ice_explosion;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		explode_when_expired 	= true;
+		gravity = 3;
+
+	}
+}
+[t:template,n:rock_fist]
+{
+	doc = "rock fist";
+	specializes = base_arrow;
+	[aspect]
+	{
+		model = m_w_misc_028;
+		scale_base = 0.66;
+		textures:0 = b_w_misc_stone-fist;
+	}
+	[attack]
+	{
+		skill_class = "Nature Magic";
+	}
+	[common]
+	{
+		is_pcontent_allowed = FALSE;
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("rock_fist_dust");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 0,0,0;
+		orient_to_trajectory = true;
+		break_effect = dust_explosion_large;
+		break_sound = s_e_explode_rockbeast;
+		explode_if_hit_go		= true;
+		explode_if_hit_terrain	= true;
+		explode_when_expired 	= true;
+		gravity = 3;
+	}
+}
+[t:template,n:ice_shard_01]
+{
+	specializes = ice_shard;
+	[aspect]
+	{
+		model=m_i_glb_frag-ice-09;
+		scale_base = 1.5;
+	}
+}
+[t:template,n:ice_shard_02]
+{
+	specializes = ice_shard;
+	[aspect]
+	{
+		model=m_i_glb_frag-ice-10;
+		scale_base = 3;
+	}
+	physics:explode_if_hit_terrain	= false;
+	explode_if_hit_go				= false;
+}
+[t:template,n:ice_shard_03]
+{
+	specializes = ice_shard;
+	[aspect]
+	{
+		model=m_i_glb_frag-ice-11;
+		scale_base = 1;
+	}
+}
+[t:template,n:ice_shard_04]
+{
+	specializes = ice_shard;
+	[aspect] { model=m_i_glb_frag-ice-12; }
+}
+[t:template,n:ice_shard_05]
+{
+	specializes = ice_shard;
+	[aspect] { model=m_i_glb_frag-ice-13; }
+}
+[t:template,n:ice_shard_06]
+{
+	specializes = ice_shard;
+	[aspect]
+	{
+		model=m_i_glb_frag-ice-11;
+		scale_base = 3;
+	}
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("ice_shard_trace");
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+			}
+		}
+	}
+}

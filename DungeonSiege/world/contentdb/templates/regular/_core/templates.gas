@@ -1,0 +1,1006 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  world\contentdb\templates\templates.gas
+// Author(s):  Scott Bilas
+//
+// Summary  :  Contains the core templates that will be reused to generate all
+//             of the objects in the game.
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: actors
+
+[t:template,n:actor]
+{
+	doc = "Generic brained objects";
+
+	[actor]		{  }
+
+	[aspect]
+	{
+		is_collidable   = true;
+		is_selectable	= true;
+		draw_shadow     = true;
+		life_state      = ls_alive_conscious;
+		material        = flesh;
+		megamap_icon	= <aspect_mesh>;
+
+/*		scale_base:default =
+		[[
+			MakeVector( Math.RandomFloat( 0.95, 1.05 ),
+						Math.RandomFloat( 0.95, 1.05 ),
+						Math.RandomFloat( 0.95, 1.05 ) )
+		]];
+*/
+	}
+
+	[attack]
+	{
+		is_melee = true;
+		attack_class = ac_beastfu;
+		skill_class = "Melee";
+	}
+
+	[body]
+	{
+		initial_chore = chore_fidget;
+	}
+
+	[common]
+	{
+		forced_expiration_class = normal;
+		auto_expiration_class = normal;
+	}
+
+	[defend]
+	{
+		defend_class = dc_skin;
+	}
+
+	[inventory]	{  }
+
+	[mind]
+	{
+		jat_brain	= world\ai\jobs\common\brain_hero.skrit;
+
+		////////////////////////////////////////
+		//	jobs mappings
+
+		// $$ optimization : not all actors need every job...
+
+		jat_attack_object			= world\ai\jobs\common\job_attack_object.skrit;
+		jat_attack_object_melee 	= world\ai\jobs\common\job_attack_object_melee.skrit;
+		jat_attack_object_ranged	= world\ai\jobs\common\job_attack_object_ranged.skrit;
+		jat_attack_position			= world\ai\jobs\common\job_attack_position.skrit;
+		jat_attack_position_ranged	= world\ai\jobs\common\job_attack_position_ranged.skrit;
+		jat_cast	    			= world\ai\jobs\common\job_cast.skrit;
+		jat_cast_position  			= world\ai\jobs\common\job_cast_position.skrit;
+		jat_die           			= world\ai\jobs\common\job_die.skrit;
+		jat_drink					= world\ai\jobs\common\job_drink.skrit;
+		jat_do_se_command			= world\ai\jobs\common\job_do_se_command.skrit;
+		jat_drop          			= world\ai\jobs\common\job_drop.skrit;
+		jat_equip         			= world\ai\jobs\common\job_equip.skrit;
+		jat_face					= world\ai\jobs\common\job_face.skrit;
+		jat_fidget					= world\ai\jobs\common\job_fidget.skrit;
+		jat_flee_from_object		= world\ai\jobs\common\job_flee_from_object.skrit;
+		jat_follow					= world\ai\jobs\common\job_follow.skrit;
+		jat_gain_consciousness		= world\ai\jobs\common\job_gain_consciousness.skrit;
+		jat_get           			= world\ai\jobs\common\job_get.skrit;
+		jat_give          			= world\ai\jobs\common\job_give.skrit;
+		jat_guard         			= world\ai\jobs\common\job_guard.skrit;
+		jat_move          			= world\ai\jobs\common\job_move.skrit;
+		jat_patrol         			= world\ai\jobs\common\job_move.skrit;
+		jat_play_anim				= world\ai\jobs\common\job_play_anim.skrit;
+		jat_stop          			= world\ai\jobs\common\job_stop.skrit;
+		jat_unconscious				= world\ai\jobs\common\job_unconscious.skrit;
+		jat_use           			= world\ai\jobs\common\job_use.skrit;
+		jat_follow         			= world\ai\jobs\common\job_follow.skrit;
+
+		////////////////////////////////////////
+		//	sensor params
+
+		f actor_life_ratio_low_threshold  = 0.2;
+		f actor_life_ratio_high_threshold = 0.8;
+		f actor_mana_ratio_low_threshold  = 0.2;
+		f actor_mana_ratio_high_threshold = 0.8;
+		f com_range                        = 6.0;
+		f inner_comfort_zone_range         = 4.0;
+		f job_travel_distance_limit        = 20.0;
+		f melee_engage_range               = 1.9;
+		f outer_comfort_zone_range         = 6.0;
+		f personal_space_range             = 0.5;
+		f ranged_engage_range              = 9.0;
+		f sensor_scan_period               = 0.25;
+		f sight_fov                        = 120.0;
+		f sight_range                      = 12.0;
+		f visibility_memory_duration       = 2.0;
+		f visibility_memory_duration       = 2.0;
+		f limited_movement_range		   = 4.0;
+
+		////////////////////////////////////////
+		//	job params
+
+		  actor_weapon_preference = WP_MELEE;
+		i flee_count		= 3;
+		f flee_distance		= 8.0;
+		f min_comfort_delay_threshold = 3.0;
+		f max_comfort_delay_threshold = 12.0;
+
+		////////////////////////////////////////
+		//	job permissions
+
+		b actor_auto_fidgets							   = true;
+
+		b actor_auto_defends_others                        = false;
+		b actor_auto_heals_others_life                     = false;
+		b actor_auto_heals_others_mana                     = false;
+		b actor_auto_heals_self_life                       = false;
+		b actor_auto_heals_self_mana                       = false;
+		b actor_auto_picks_up_items                        = false;
+		b actor_auto_xfers_mana                            = false;
+
+		b actor_auto_switches_to_karate					   = true;
+		b actor_auto_switches_to_melee					   = true;
+		b actor_auto_switches_to_ranged					   = false;
+		b actor_auto_switches_to_magic					   = false;
+
+		b actor_auto_uses_stored_items					   = false;
+
+		b on_enemy_entered_icz_flee                        = false;
+		b on_enemy_entered_ocz_flee                        = false;
+		b on_enemy_entered_weapon_engage_range_attack	   = true;
+		b on_enemy_spotted_alert_friends                   = true;
+		b on_enemy_spotted_attack                          = true;
+		b on_engaged_fled_abort_attack                     = false;
+		b on_engaged_lost_consciousness_abort_attack       = true;
+		b on_engaged_lost_loiter                           = false;
+		b on_engaged_lost_return_to_job_origin             = false;
+		b on_friend_entered_icz_flee                       = false;
+		b on_friend_entered_ocz_flee                       = false;
+		b on_job_reached_travel_distance_abort_attack      = false;
+		b on_life_ratio_low_flee                           = false;
+		b on_mana_ratio_low_flee                           = false;
+		b on_alert_projectile_near_missed_flee			   = false;
+		b on_alert_projectile_near_missed_attack		   = false;
+	}
+
+	[physics]
+	{
+		gib_gore_good = false;
+	}
+	[placement]	{  }
+}
+
+//////////////////////////////////////////////////////////////////////////
+
+[t:template,n:actor_good]
+{
+	specializes	= actor;
+	doc			= "Ready to fight or flee from the forces of evil";
+	[actor] { alignment = aa_good; }
+	[aspect]
+	{
+		megamap_icon = <aspect_mesh>;
+		[voice]	{ die:* = s_e_die_male;	}
+	}
+	[attack]
+	{
+		damage_max = 0;
+		damage_min = 0;
+	}
+	[follower]	{  }
+
+	[mind]
+	{
+		on_engaged_fled_abort_attack	= true;
+		actor_auto_reanimates_friends	= false;
+	}
+}
+
+[t:template,n:npc]
+{
+	specializes	= actor;
+	doc			= "actors the player may interact with, but will never join the party";
+	[actor]
+	{
+		alignment			= aa_good;
+		can_level_up		= false;
+	}
+	[aspect]
+	{
+		is_collidable		= false;
+		is_invincible		= true;
+		draw_selection_indicator = false;
+	}
+	[common] { membership = hero; }
+	[follower]	{  }
+
+	[mind]
+	{
+		ranged_engage_range = 4.0;
+	}
+}
+
+[t:template,n:actor_evil]
+{
+	specializes	= actor;
+	doc			= "A mean old monster type actor";
+
+	[common]
+	{
+		membership = monster;
+	}
+
+	[actor]
+	{
+		alignment = aa_evil;
+		drops_spellbook = false;
+	}
+
+	[aspect]
+	{
+		draw_selection_indicator = false;
+		//megamap_icon	= b_gui_ig_mnu_gen_enem;
+		[voice]
+		{
+			die:* = s_e_monsterdie;
+		}
+	}
+
+	[follower]	{  }
+
+	[mind]
+	{
+		actor_balanced_attack_preference			= 0.8;
+		job_travel_distance_limit					= 20;
+		on_engaged_lost_consciousness_abort_attack	= true;
+		on_job_reached_travel_distance_abort_attack = true;
+		jat_fidget									= world\ai\jobs\common\job_fidget.skrit
+			?still									= false;
+	}
+}
+
+[t:template,n:actor_custom]
+{
+	specializes	= actor;
+	doc			= "An Extra mean old boss monster type actor, or any actor which doesn't fit the mold";
+
+	[common]
+	{
+		membership = monster;
+	}
+
+	[actor]
+	{
+		alignment = aa_evil;
+		drops_spellbook = false;
+	}
+
+	[body]
+	{
+		initial_chore = chore_none;
+	}
+
+	[mind]
+	{
+		jat_brain	= jat_none;
+
+		////////////////////////////////////////
+		//	jobs mappings
+
+		jat_attack_object			= jat_none;
+		jat_attack_object_melee 	= jat_none;
+		jat_attack_object_ranged	= jat_none;
+		jat_attack_position			= jat_none;
+		jat_attack_position_ranged	= jat_none;
+		jat_cast	    			= jat_none;
+		jat_cast_position  			= jat_none;
+		jat_die           			= jat_none;
+		jat_drink					= jat_none;
+		jat_do_se_command			= jat_none;
+		jat_drop          			= jat_none;
+		jat_equip         			= jat_none;
+		jat_face					= jat_none;
+		jat_fidget					= jat_none;
+		jat_flee_from_object		= jat_none;
+		jat_gain_consciousness		= jat_none;
+		jat_get           			= jat_none;
+		jat_give          			= jat_none;
+		jat_guard         			= jat_none;
+		jat_move          			= jat_none;
+		jat_patrol         			= jat_none;
+		jat_play_anim				= jat_none;
+		jat_stop          			= jat_none;
+		jat_use           			= jat_none;
+
+	}
+}
+
+[t:template,n:actor_ambient]
+{
+	specializes	= actor;
+	doc			= "Neutral ambient life";
+	[actor]
+	{
+		alignment			= aa_neutral;
+		can_level_up		= false;
+	}
+	[aspect]
+	{
+		draw_selection_indicator = false;
+		is_selectable = false;
+	}
+	[common] { is_multi_player = false; }
+	[follower]	{  }
+
+	[mind]
+	{
+		ranged_engage_range   = 4.0; // no ambients have ranged attacks, but this shoud be higher than the default melee
+							// engage range
+		jat_brain	= world\ai\jobs\common\brain_hero.skrit;
+
+		////////////////////////////////////////
+		//	jobs mappings
+
+		jat_attack_object			= world\ai\jobs\common\job_attack_object.skrit;
+		jat_attack_object_melee 	= world\ai\jobs\common\job_attack_object_melee.skrit;
+		jat_attack_object_ranged	= world\ai\jobs\common\job_attack_object_ranged.skrit;
+		jat_attack_position			= world\ai\jobs\common\job_attack_position.skrit;
+		jat_attack_position_ranged	= world\ai\jobs\common\job_attack_position_ranged.skrit;
+		jat_cast	    			= world\ai\jobs\common\job_cast.skrit;
+		jat_cast_position  			= world\ai\jobs\common\job_cast_position.skrit;
+		jat_die           			= world\ai\jobs\common\job_die.skrit;
+		jat_drink					= world\ai\jobs\common\job_drink.skrit;
+		jat_do_se_command			= world\ai\jobs\common\job_do_se_command.skrit;
+		jat_drop          			= world\ai\jobs\common\job_drop.skrit;
+		jat_equip         			= world\ai\jobs\common\job_equip.skrit;
+		jat_face					= world\ai\jobs\common\job_face.skrit;
+		jat_fidget					= world\ai\jobs\common\job_fidget.skrit;
+		jat_flee_from_object		= world\ai\jobs\common\job_flee_from_object.skrit;
+		jat_gain_consciousness		= world\ai\jobs\common\job_gain_consciousness.skrit;
+		jat_get           			= world\ai\jobs\common\job_get.skrit;
+		jat_give          			= world\ai\jobs\common\job_give.skrit;
+		jat_guard         			= world\ai\jobs\common\job_guard.skrit;
+		jat_move          			= world\ai\jobs\common\job_move.skrit;
+		jat_patrol         			= world\ai\jobs\common\job_move.skrit;
+		jat_play_anim				= world\ai\jobs\common\job_play_anim.skrit;
+		jat_stop          			= world\ai\jobs\common\job_stop.skrit;
+		jat_use           			= world\ai\jobs\common\job_use.skrit;
+
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: interactive
+
+[t:template,n:interactive]
+{
+	doc = "An interactive item or object";
+
+	aspect:is_selectable	= true;
+	aspect:megamap_icon	= b_gui_ig_mnu_dropped_item;
+	aspect:use_range = 2;
+
+	[common]
+	{
+		forced_expiration_class = normal;
+		auto_expiration_class = normal;
+	}
+
+	[placement]	{  }
+}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:ammo]
+	{
+		specializes = interactive;
+		doc = "Ammo of any kind (stuff that shoots)";
+
+		[common]
+		{
+			forced_expiration_class = immediate;
+			auto_expiration_class = immediate;
+		}
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:inventory]
+	{
+		specializes = interactive;
+		doc = "Non-equippable interactives that can be picked up and stored in inventory";
+		is_meta_group = true;
+
+		[gui]			{  }
+
+		[physics]
+		{
+			gravity			=	9.80665;
+			sim_duration	=	2.75;
+			elasticity		=	0.25;
+		}
+	}
+
+		//////////////////////////////////////////////////////////////////////////
+
+		[t:template,n:equippable]
+		{
+			specializes = inventory;
+			doc = "Interactives that can be equipped on the paper doll";
+		}
+
+			//////////////////////////////////////////////////////////////////////
+
+			[t:template,n:armor]
+			{
+				// $ important: do NOT rename this template! "armor" is used as a
+				//   root for the pcontent database.
+
+				specializes = equippable;
+				doc = "Armor";
+
+				aspect:	model		= <none>;
+				aspect:	material	= steel;
+
+				[defend]		{  }
+			}
+
+			[t:template,n:spell]
+			{
+				// $ important: do NOT rename this template! "spell" is used as a
+				//   root for the pcontent database.
+
+				specializes		= equippable;
+				doc				= "Spells";
+
+				[aspect]
+				{
+					model			= m_i_glb_spell-page;
+					material		= fireball;
+					scale_base		= 1.5;
+					voice:put_down:* = s_e_gui_put_down_scroll;
+				}
+
+				gui:	inventory_icon	=  b_gui_ig_i_it_spell-page;
+
+				[magic]	{}
+				[spell]	{}
+			}
+
+			[t:template,n:spellbook]
+			{
+				// $ important: do NOT rename this template! "spellbook" is used as a
+				//   root for the pcontent database.
+
+				specializes		= equippable;
+				doc				= "Spell Books";
+				category_name	= "mbook";
+
+				[aspect]
+				{
+					gold_value			= 5;
+					model				= m_i_glb_book-magic;
+					voice:put_down:*	= s_e_gui_put_down_book;
+				}
+
+				[common]
+				{
+					screen_name		= "Spell Book";
+
+					[template_triggers]
+					{
+						[*]
+						{
+							action* = call_sfx_script( "item_ring" );
+							condition* = receive_world_message("we_dropped");
+						}
+					}
+				}
+
+				[inventory]		{  }
+
+				[gui]
+				{
+					inventory_icon		= b_gui_ig_i_it_magic-book;
+					equip_slot 			= es_spellbook;
+					inventory_width 	= 1;
+					inventory_height	= 2;
+				}
+
+			}
+
+			[t:template,n:weapon]
+			{
+				// $ important: do NOT rename this template! "weapon" is used as a
+				//   root for the pcontent database.
+
+				specializes			= equippable;
+				doc					= "Weapons & Ammo";
+
+				aspect:	material	= steel;
+
+				[attack]		{  }
+			}
+
+				///////////////////////////
+				[t:template,n:weapon_melee]
+				{
+					specializes = weapon;
+					doc = "Melee weapons";
+
+					[attack]		{  }
+				}
+
+				[t:template,n:weapon_ranged]
+				{
+					specializes = weapon;
+					doc = "Ranged weapons & ammo";
+
+					aspect:	material	= generic; // must be 'generic' to disable 'swoosh' for minigun, et. al. -MM
+
+					[attack]		{  }
+				}
+
+		//////////////////////////////////////////////////////////////////////
+
+		[t:template,n:potion]
+		{
+			specializes = inventory;
+			doc = "Potions";
+
+			aspect:model						= m_i_glb_bottle-potion;
+			aspect:selection_indicator_scale	= 0.5;
+			aspect:voice:put_down:* 			= s_e_gui_put_down_potion;
+
+			gui:inventory_icon					= b_gui_ig_i_it_potion-bottle;
+
+			magic:magic_class					= mc_potion;
+
+			[potion]		{  }
+		}
+
+		[t:template,n:amulet]
+		{
+			// $ important: do NOT rename this template! "amulet" is used as
+			//   a root for the pcontent database.
+
+			specializes = inventory;
+			doc = "Amulets";
+			[common]
+			{
+				[template_triggers]
+				{
+					[*]
+					{
+						action* = call_sfx_script( "item_ring" );
+						condition* = receive_world_message("we_dropped");
+					}
+				}
+			}
+			common:screen_name	= "Amulet";
+			gui:equip_slot		= es_amulet;
+			gui:inventory_icon = b_gui_ig_i_it_amulet_003;
+
+			[aspect]
+			{
+				model		= m_i_glb_amulet-01;
+				textures:0	= b_i_glb_amulet-01;
+				voice:put_down:* = s_e_gui_put_down_jewelry;
+				gold_value = 100;
+			}
+		}
+
+		[t:template,n:ring]
+		{
+			// $ important: do NOT rename this template! "ring" is used as a
+			//   root for the pcontent database.
+
+			specializes = inventory;
+			doc = "Rings";
+			[common]
+			{
+				[template_triggers]
+				{
+					[*]
+					{
+						action* = call_sfx_script( "item_ring" );
+						condition* = receive_world_message("we_dropped");
+					}
+				}
+			}
+			common:screen_name	= "Ring";
+			gui:equip_slot		= es_ring;
+			gui:inventory_icon = b_gui_ig_i_it_ring_003;
+
+			[aspect]
+			{
+				model		= m_i_glb_ring-01;
+				textures:0	= b_i_glb_ring-01;
+				voice:put_down:* = s_e_gui_put_down_jewelry;
+				gold_value = 50;
+			}
+		}
+
+		[t:template,n:treasure]
+		{
+			specializes = inventory;
+			doc = "Valuable treasure";
+		}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:prop]
+	{
+		specializes = interactive;
+		doc = "Objects player can change state of, but cannot place in inventory";
+
+		[aspect]
+		{
+			is_collidable				= true;
+			is_usable					= true;
+			use_range					= 1.5;
+			draw_selection_indicator	= false;
+		}
+	}
+
+		//////////////////////////////////////////////////////////////////////
+
+		[t:template,n:container]
+		{
+			specializes = prop;
+			doc = "Objects or items that may contain other objects or items";
+			is_meta_group = true;
+
+			[common]
+			{
+				forced_expiration_class = immediate;
+				auto_expiration_class = immediate;
+			}
+			[inventory]		{  }
+			[aspect]
+			{
+				does_block_path = true;
+			}
+		}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: non_interactive
+
+[t:template,n:non_interactive]
+{
+	doc = "Non-interactive items and objects";
+
+	[aspect]		{  lodfi_lower = 0.0;  lodfi_upper = 1.0;  }
+	[common]		{  }
+	[placement]		{  }
+}
+
+	////////////////////////////////////////////////////////////////
+
+	[t:template,n:non_interactive_blocking]
+	{
+		specializes	= non_interactive;
+		doc = "Non-interactive items and objects the block pathfinding";
+
+		[aspect]
+		{
+			lodfi_lower = 0.0;
+			lodfi_upper = 0.0;
+			does_block_path = true;
+		}
+	}
+
+	////////////////////////////////////////////////////////////////
+
+	[t:template,n:non_interactive_nonblocking]
+	{
+		specializes	= non_interactive;
+		doc = "Non-interactive items and objects that do not block pathfinding";
+	}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: trap
+
+[t:template,n:trap]
+{
+	doc	= "trap";
+
+	[placement]	{	}
+	[common]
+	{
+		forced_expiration_class = immediate;
+		auto_expiration_class = immediate;
+	}
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	1.0, 0, 0;
+		use_diffuse_color	=	true;
+	}
+}
+[t:template,n:trap_auto]
+{
+	specializes	= trap;
+	doc			= "automatic trap";
+
+	[common]
+	{
+		[template_triggers]
+		{
+			[*]
+			{
+				flip_flop  = true;
+
+				condition* = actor_within_bounding_box(1.0, 0.025, 1.0 );
+				action*	   = send_world_message( "we_req_activate" );
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: emitter
+
+[t:template,n:emitter]
+{
+	doc	= "Directional emitter";
+
+	[placement]	{	}
+
+	[common]
+	{
+		forced_expiration_class = immediate;
+		auto_expiration_class = immediate;
+	}
+
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	1.0, 0, 0;
+		use_diffuse_color	=	true;
+	}
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: command
+
+[t:template,n:command]
+{
+	doc = "Command for a scripted sequence";
+
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+
+	[placement]	{  }
+
+	[gizmo]
+	{
+		model = m_i_glb_object-gogen;
+		texture = ;
+		diffuse_color = 0.05, 0.20, 0.95;
+		use_diffuse_color = true;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: elevator
+
+[t:template,n:elevator]
+{
+	doc = "Controls one or more movable Siege nodes";
+
+	[aspect]
+	{
+        force_no_render = true;
+		material     = elevator;
+		is_visible	 = false;
+        is_selectable = false;
+	}
+
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+
+	[placement]	{  }
+
+	[gizmo]
+	{
+		model = m_i_glb_object-gogen;
+		texture = ;
+		diffuse_color = 0.9, 0.9, 0.9;
+		use_diffuse_color = true;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: special
+
+[t:template,n:special]
+{
+	doc = "Special objects not suited to any other branch";
+	is_meta_group = true;
+
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:fragment]
+	{
+		specializes = special;
+		doc = "An object fragment used in physics and particle effects";
+
+		[aspect]	{  }
+		[physics]
+		{
+			sim_duration = 15;
+		}
+		[placement]	{  }
+
+		[common]
+		{
+			forced_expiration_class = immediate;
+			auto_expiration_class = immediate;
+		}
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:gui_helper]
+	{
+		specializes = special;
+		doc = "GUI helper object, always a local Go";
+
+		// $$$ tag this as "is_local_go"
+
+		[placement]	{  }
+		[aspect]	{  }
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:party]
+	{
+		specializes = special;
+		doc = "Base party";
+		is_group = true;
+
+		[placement]		{ }
+		[party]			{ }
+
+		[common]
+		{
+			forced_expiration_class = normal;
+			auto_expiration_class = normal;
+		}
+
+		[mind]
+		{
+			sight_range = 1.0;
+			jat_brain	= world\ai\jobs\common\brain_party.skrit;
+
+			// $$ to pacify mind verification code
+			actor_weapon_preference = WP_MELEE;
+			actor_auto_switches_to_melee = true;
+		}
+
+		[gizmo]
+		{
+			model = m_i_glb_object-party;
+			texture = ;
+			diffuse_color = 0.05, 0.20, 0.95;
+			alpha = 0.4;
+		}
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:trigger]
+	{
+		specializes = special;
+		doc = "Base trigger";
+		is_group = true;
+
+		[common]
+		{
+			forced_expiration_class = immediate;
+			auto_expiration_class = immediate;
+		}
+
+		[placement]		{  }
+		[gizmo]			{ model = m_i_glb_object-trigger;  texture = b_i_glb_yellow; }
+	}
+
+	//////////////////////////////////////////////////////////////////////////
+
+	[t:template,n:point]
+	{
+		specializes = special;
+		doc	= "Bare minimum for storing position and orientation - used by SiegeFx ";
+		is_group = true;
+
+		[placement]	{	}
+		[common]
+		{
+			forced_expiration_class	= siegefx_target;
+			auto_expiration_class	= siegefx_target;
+		}
+	}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: test
+
+[dev,t:template,n:test]
+{
+	doc = "Test objects - debug only";
+
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+
+	[placement]		{  }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: Generator
+
+[t:template,n:generator]
+{
+	doc	= "Base Generator";
+
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+	[placement]	{  }
+
+	[gizmo]
+	{
+		model				=	m_i_glb_object-gogen;
+		texture				=	;
+		diffuse_color		=	1.0, 0, 0;
+		use_diffuse_color	=	true;
+	}
+}
+//////////////////////////////////////////////////////////////////////////////
+// Primary branch: ui
+
+
+[t:template,n:ui]
+{
+	doc = "UI Frontend only element";
+	extra_doc = "This template is used for interface object elements.  Not intended for in-game usage.";
+
+	category_name = "gui";
+
+	[aspect] {  }
+
+	[body] {  }
+
+	[placement] { is_gui_go = true; }
+
+	[common] {  }
+}
+
+//////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,419 @@
+[t:template,n:base_stone_glb]
+{
+	category_name = "quest";
+	doc = "stone base template";
+	specializes = treasure;
+	[aspect]
+	{
+		[voice]
+		{
+			[put_down] { * = s_e_gui_put_down_jewelry; }
+		}
+	}
+	[common]
+	{
+		forced_expiration_class = never;
+		auto_expiration_class = never;
+	}
+	[gui] { can_sell = false; }
+	[single_pickup] {}
+}
+[t:template,n:stone_glb_crystwind_01]
+{
+	doc = "townstone_crystwind";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-crystwind;
+	}
+	[common]
+	{
+		screen_name = "Crystwind Stone";
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-crystwind;
+	}
+}
+[t:template,n:gen_stone_glb_elddim_01]
+{
+	doc = "generator_townstone_elddim";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-elddim;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Elddim Stone";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_elddim_01;
+	}
+}
+[t:template,n:stone_glb_elddim_01]
+{
+	doc = "townstone_elddim";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-elddim;
+	}
+	[common]
+	{
+		screen_name = "Elddim Stone";
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-elddim;
+	}
+}
+[t:template,n:gen_stone_glb_fallraen_01]
+{
+	doc = "generator_townstone_fallraen";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-fallraen;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Fallraen Stone";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_fallraen_01;
+	}
+}
+[t:template,n:stone_glb_fallraen_01]
+{
+	doc = "townstone_fallraen";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-fallraen;
+	}
+	[common]
+	{
+		screen_name = "Fallraen Stone";
+		[instance_triggers]
+		{
+			[*]
+			{
+				action* = send_world_message("we_req_activate",0x04F001E7,0f,"default","every",0), doc("send to quest trigger");
+			  b can_self_destruct = true;
+				condition* = receive_world_message("we_picked_up",0,"on_first_message"), doc("[*one-shot check (trigger is one-shot)*]");
+			  f delay = 0.000000;
+			  b flip_flop = false;
+			  b multi_player = true;
+			  b no_trig_bits = false;
+				occupants_group = ;
+			  f reset_duration = 0.000000;
+			  b single_player = true;
+			  b single_shot = true;
+			  b start_active = true;
+			}
+		}
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-fallraen;
+	}
+}
+[t:template,n:gen_stone_glb_gavel_01]
+{
+	doc = "generator_gavel_hovart";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-hammer;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Gavel of Convening";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_gavel_01;
+	}
+}
+[t:template,n:stone_glb_gavel_01]
+{
+	doc = "gavel_hovart";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-hammer;
+	}
+	[common]
+	{
+		screen_name = "Gavel of Convening";
+		[instance_triggers]
+		{
+			[*]
+			{
+				action* = change_quest_state("quest_zabar_hovart","active",2);
+			  b can_self_destruct = true;
+				condition* = receive_world_message("we_picked_up",0,"on_first_message"), doc("[*one-shot check (trigger is one-shot)*]");
+			  f delay = 0.000000;
+			  b flip_flop = false;
+			  b multi_player = true;
+			  b no_trig_bits = false;
+				occupants_group = ;
+			  f reset_duration = 0.000000;
+			  b single_player = true;
+			  b single_shot = true;
+			  b start_active = true;
+			}
+		}
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_it_stone-hammer;
+		inventory_width = 1;
+	}
+	[placement]
+	{
+	  p position = -0.0272325,1,0.0318838,0x8248ec2f;
+		use_point_scids = 0x008001d3;
+	}
+}
+[t:template,n:gen_stone_glb_grescal_01]
+{
+	doc = "generator_townstone_gavel";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-grescal;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Grescal Stone";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_grescal_01;
+	}
+}
+[t:template,n:stone_glb_grescal_01]
+{
+	doc = "townstone_grescal";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-grescal;
+	}
+	[common]
+	{
+		screen_name = "Grescal Stone";
+		[instance_triggers]
+		{
+			[*]
+			{
+				action* = change_quest_state("quest_grescal","active",1);
+			  b can_self_destruct = true;
+				condition* = receive_world_message("we_picked_up",0,"on_first_message"), doc("[*one-shot check (trigger is one-shot)*]");
+			  f delay = 0.000000;
+			  b flip_flop = false;
+			  b multi_player = true;
+			  b no_trig_bits = false;
+				occupants_group = ;
+			  f reset_duration = 0.000000;
+			  b single_player = true;
+			  b single_shot = true;
+			  b start_active = true;
+			}
+		}
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-grescal;
+	}
+	[placement]
+	{
+	  q orientation = 0,0.382683,0,0.92388;
+	  p position = -0.0396118,1.01436,-0.0762711,0xd520e486;
+		use_point_scids = 0x02d00128,0x02d00137,0x02d0012a;
+	}
+}
+[t:template,n:stone_glb_hiroth_01] 
+
+{
+	doc = "townstone_hiroth";
+	specializes = base_stone_glb;
+	category_name = "quest";
+	[aspect]
+	{
+		model = m_i_glb_stone-hiroth;
+		is_selectable = TRUE;
+		lodfi_lower = -1;
+		lodfi_upper = -1;
+		draw_selection_indicator = false;
+	}
+	[common]
+	{
+		rollover_display = TRUE;
+		screen_name = "Hiroth Stone";
+	}
+	
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-hiroth;
+	}
+}
+[t:template,n:stone_glb_lang_01]
+{
+	doc = "townstone_lang";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-lang;
+	}
+	[common]
+	{
+		screen_name = "Lang Stone";
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-lang;
+	}
+}
+[t:template,n:gen_stone_glb_meren_01]
+{
+	doc = "generator_townstone_meren";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-meren;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Meren Stone";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_meren_01;
+		snap_to_ground = false;
+	}
+	[placement]
+	{
+	  p position = 0.395657,0.133702,1.78192,0x5c05a115;
+		use_point_scids = 0x08001adf,0x08001ae0,0x08001ade;
+	}
+}
+[t:template,n:stone_glb_meren_01]
+{
+	doc = "townstone_meren";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-meren;
+	}
+	[common]
+	{
+		screen_name = "Meren Stone";
+		[instance_triggers]
+		{
+			[*]
+			{
+				action* = change_quest_state("quest_meren","active",1);
+			  b can_self_destruct = true;
+				condition* = receive_world_message("we_picked_up",0,"on_first_message"), doc("[*one-shot check (trigger is one-shot)*]");
+			  f delay = 0.000000;
+			  b flip_flop = false;
+			  b multi_player = true;
+				occupants_group = ;
+			  f reset_duration = 0.000000;
+			  b single_player = true;
+			  b single_shot = true;
+			  b start_active = true;
+			}
+		}
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-meren;
+	}
+}
+[t:template,n:gen_stone_glb_quillrabe_01]
+{
+	doc = "generator_townstone_quillrabe";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-quillrabe;
+		is_selectable = false;
+		is_visible = false;
+		force_no_render = true;
+	}
+	[common]
+	{
+		screen_name = "Quillrabe Stone";
+	}
+	[generator_multiple_mp]
+	{
+		child_template_name = stone_glb_quillrabe_01;
+	}
+}
+[t:template,n:stone_glb_quillrabe_01]
+{
+	doc = "townstone_quillrabe";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_stone-quillrabe;
+	}
+	[common]
+	{
+		screen_name = "Quillrabe Stone";
+	}
+	[gui]
+	{
+		inventory_icon = b_gui_ig_i_it_stone-quillrabe;
+	}
+}
+[t:template,n:tenstone_glb]
+{
+	category_name = "treasure";
+	doc = "tenstone";
+	specializes = base_stone_glb;
+	[aspect]
+	{
+		model = m_i_glb_tenstone;
+	}
+	[common]
+	{
+		screen_name = "Tenstone";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script( "tenstone_decay" );
+				condition* = receive_world_message("we_dropped");
+			}
+		}
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_it_tenstone;
+		inventory_width = 2;
+	}
+}

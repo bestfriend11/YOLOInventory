@@ -25,9 +25,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ToolTip="The inventory bag asset to display"))
 	UYIInventoryBag* Bag;
 
+	/** Set/replace the bag shown by this grid at runtime. Ensures Slate and delegates are rebound. */
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void SetBag(class UYIInventoryBag* InBag);
+
 	/** Size of one grid cell in pixels. Designers can clamp this between 8 and 128 for readability. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ClampMin="8.0", ClampMax="128.0", ToolTip="Pixel size of each grid cell"))
 	float CellPixelSize = 32.f;
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Geometry")
+	float GetCellPixelSize() const { return CellPixelSize; }
+
+	/** When true, individual grids will not draw their own drag ghost; instead, a global overlay widget should render the ghost once for the whole screen. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="If enabled, suppress per-grid ghost drawing; use a global overlay to draw drag ghost"))
+	bool bUseGlobalDragGhost = false;
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Visuals")
+	void SetUseGlobalDragGhost(bool bEnable);
 
 	/** Currently selected cell (runtime). Returns (-1,-1) if nothing selected. */
 	UPROPERTY(BlueprintReadOnly, Category="Inventory", meta=(ToolTip="Currently selected cell in the grid"))
@@ -159,15 +173,21 @@ public:
 	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData) const;
 
 protected:
+	virtual void OnWidgetRebuilt() override;
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void SynchronizeProperties() override;
 	FVector2D GetDesiredSize() const;
 
 	/** Release owned Slate resources and unregister any delegates to avoid leaking SWidgets on teardown. */
 	virtual void ReleaseSlateResources(bool bReleaseChildren) override;
+	virtual void BeginDestroy() override;
 
+	// Global registry for all live grids (for overlay queries)
+public:
+	static void ForEachRegisteredGrid(TFunctionRef<void(UInventoryGridWidget*)> Callback);
 
 private:
+	static TSet<TWeakObjectPtr<UInventoryGridWidget>> GRegisteredGrids;
 	TSharedPtr<SInventoryGridWidget> MySlateWidget;
 
 	/** Optional tooltip widget to bind for runtime (set from BP/owner). */

@@ -11,6 +11,7 @@ public class YOLOInventory : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
+            "DeveloperSettings",
             "Niagara",
             "PhysicsCore",
             "GameplayTags",

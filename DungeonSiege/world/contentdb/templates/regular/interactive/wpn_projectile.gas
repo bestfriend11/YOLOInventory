@@ -1,0 +1,777 @@
+[t:template,n:base_grenade]
+{
+	doc = "Pineapple";
+	specializes = ammo;
+	[aspect]
+	{
+		is_selectable = false;
+		life = 15;
+		max_life = 15;
+		megamap_icon = <none>;
+		model = m_w_misc_grenade;
+	}
+	[attack]
+	{
+		attack_class = ac_arrow;
+		is_projectile = true;
+		skill_class = ranged;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Pineapple";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("fuse_fire");
+				condition* = receive_world_message("we_entered_world");
+				single_shot = true;
+			}
+			[*]
+			{
+				action* = call_sfx_script("grenade_sparks");
+				condition* = receive_world_message("we_glanced");
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 4,4,4;
+		break_effect = grenade_explosion;
+		deflection_angle = 1.0;
+		elasticity = 0.7;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = false;
+		explode_when_expired = true;
+		explosion_magnitude = 3.5;
+		fire_resistance = 1;
+		randomize_velocity = true;
+		sim_duration = 4;
+	}
+}
+[t:template,n:base_projectile]
+{
+	doc = "Projectile weapons sans bows";
+	specializes = weapon_ranged;
+	[attack]
+	{
+		ammo_attach_bone = ap_ammo;
+		ammo_attaches_to_weapon = true;
+		attack_class = ac_minigun;
+		attack_range = 9.0;
+		damage_max = 4;
+		damage_min = 2;
+		is_projectile = true;
+		is_two_handed = true;
+		reload_delay = 1.0;
+		skill_class = ranged;
+		use_aiming_error = true;
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_bow_001;
+		equip_slot = es_weapon_hand;
+	}
+	[physics]
+	{
+		velocity = 14.0;
+	}
+}
+[t:template,n:chicken_grenade]
+{
+	doc = "Chicken";
+	specializes = base_grenade;
+	[aspect]
+	{
+		model = m_c_na_ckn_pos_1;
+		scale_base = 0.65;
+	}
+	[body]
+	{
+		initial_chore = chore_default;
+		[chore_dictionary]
+		{
+			[chore_default]
+			{
+				skrit = infinite_loop;
+				[anim_files]
+				{
+					00 = a_c_na_ckn_fs0_rl;
+				}
+			}
+		}
+	}
+	[common]
+	{
+		screen_name = "Chicken";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("chicken_launch");
+				condition* = receive_world_message("we_entered_world");
+				single_shot = true;
+			}
+		}
+	}
+	[physics]
+	{
+		angular_velocity = 2,2,2;
+		break_effect = feathers_white;
+		explode_if_hit_go = true;
+		explode_if_hit_terrain = true;
+		explode_when_expired = true;
+		gravity = 1;
+		randomize_velocity = true;
+	}
+}
+[t:template,n:chicken_gun]
+{
+	doc = "Chicken Gun";
+	specializes = base_projectile;
+	[aspect]
+	{
+		model = m_w_misc_minigun_dragon;
+	}
+	[attack]
+	{
+		aiming_error_range_x = 10;
+		aiming_error_range_y = 4.5;
+		ammo_appears_jit = true;
+		ammo_template = chicken_grenade;
+		attack_range = 10;
+		damage_max = 350;
+		damage_min = 200;
+		reload_delay = .5;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Chicken Gun";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_001;
+		equip_requirements = strength:25,dexterity:25;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_msc_009;
+		inventory_width = 2;
+	}
+	[physics]
+	{
+		velocity = 5;
+	}
+}
+[t:template,n:cw_g_c_l_p_avg]
+{
+	doc = "Long Crossbow";
+	specializes = base_projectile;
+	[aspect]
+	{
+		model = m_w_csb_005;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_bow;
+			}
+		}
+	}
+	[attack]
+	{
+		ammo_template = bolt;
+		attack_range = 15;
+	  f damage_max = 102.000000;
+	  f damage_min = 84.000000;
+		reload_delay = 0.7;
+	}
+	[common]
+	{
+		screen_name = "Long Crossbow";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_csb_002;
+		equip_requirements = strength:18,dexterity:30;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_csb_009;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 6.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 112.000000;
+		  f damage_min = 92.000000;
+			equip_requirements = strength:19,dexterity:32;
+			inventory_icon = b_gui_ig_i_w_csb_010;
+			model = m_w_csb_006;
+		  f modifier_max = 16.000000;
+		  f modifier_min = 3.000000;
+			texture = b_w_csb_010;
+		}
+		[c_mag]
+		{
+		  f damage_max = 230.000000;
+		  f damage_min = 188.000000;
+			equip_requirements = strength:29,dexterity:57;
+			inventory_icon = b_gui_ig_i_w_csb_012;
+			model = m_w_csb_008;
+		  f modifier_max = 62.000000;
+		  f modifier_min = 44.000000;
+			texture = b_w_csb_012;
+		}
+		[c_str]
+		{
+		  f damage_max = 174.000000;
+		  f damage_min = 142.000000;
+			equip_requirements = strength:24,dexterity:45;
+			inventory_icon = b_gui_ig_i_w_csb_011;
+			model = m_w_csb_007;
+		  f modifier_max = 45.000000;
+		  f modifier_min = 25.000000;
+			texture = b_w_csb_011;
+		}
+		[o_avg]
+		{
+		  f damage_max = 128.000000;
+		  f damage_min = 104.000000;
+			equip_requirements = strength:20,dexterity:35;
+			inventory_icon = b_gui_ig_i_w_csb_013;
+			model = m_w_csb_05;
+		  f modifier_max = 26.000000;
+		  f modifier_min = 10.000000;
+			texture = b_w_csb_013;
+		}
+		[o_fin]
+		{
+		  f damage_max = 150.000000;
+		  f damage_min = 122.000000;
+			equip_requirements = strength:22,dexterity:40;
+			inventory_icon = b_gui_ig_i_w_csb_014;
+			model = m_w_csb_006;
+		  f modifier_max = 36.000000;
+		  f modifier_min = 16.000000;
+			texture = b_w_csb_014;
+		}
+		[o_mag]
+		{
+		  f damage_max = 262.000000;
+		  f damage_min = 214.000000;
+			equip_requirements = strength:31,dexterity:63;
+			inventory_icon = b_gui_ig_i_w_csb_016;
+			model = m_w_csb_008;
+		  f modifier_max = 73.000000;
+		  f modifier_min = 53.000000;
+			texture = b_w_csb_016;
+		}
+		[o_str]
+		{
+		  f damage_max = 200.000000;
+		  f damage_min = 164.000000;
+			equip_requirements = strength:26,dexterity:50;
+			inventory_icon = b_gui_ig_i_w_csb_015;
+			model = m_w_csb_007;
+		  f modifier_max = 54.000000;
+		  f modifier_min = 36.000000;
+			texture = b_w_csb_015;
+		}
+	}
+	[physics]
+	{
+		velocity = 75;
+	}
+}
+[t:template,n:cw_g_c_m_p_avg]
+{
+	doc = "Medium Crossbow";
+	specializes = base_projectile;
+	[aspect]
+	{
+		model = m_w_csb_001;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_bow;
+			}
+		}
+	}
+	[attack]
+	{
+		ammo_template = bolt;
+		attack_range = 13;
+	  f damage_max = 52.000000;
+	  f damage_min = 38.000000;
+		reload_delay = 0.5;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Medium Crossbow";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_csb_001;
+		equip_requirements = strength:14,dexterity:21;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_csb_001;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 0.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 60.000000;
+		  f damage_min = 44.000000;
+			equip_requirements = strength:15,dexterity:23;
+			inventory_icon = b_gui_ig_i_w_csb_002;
+			model = m_w_csb_002;
+		  f modifier_max = 10.000000;
+		  f modifier_min = 1.000000;
+			texture = b_w_csb_002;
+		}
+		[c_mag]
+		{
+		  f damage_max = 133.000000;
+		  f damage_min = 99.000000;
+			equip_requirements = strength:22,dexterity:41;
+			inventory_icon = b_gui_ig_i_w_csb_004;
+			model = m_w_csb_004;
+		  f modifier_max = 42.000000;
+		  f modifier_min = 30.000000;
+			texture = b_w_csb_004;
+		}
+		[c_str]
+		{
+		  f damage_max = 95.000000;
+		  f damage_min = 71.000000;
+			equip_requirements = strength:19,dexterity:32;
+			inventory_icon = b_gui_ig_i_w_csb_003;
+			model = m_w_csb_003;
+		  f modifier_max = 30.000000;
+		  f modifier_min = 15.000000;
+			texture = b_w_csb_003;
+		}
+		[o_avg]
+		{
+		  f damage_max = 68.000000;
+		  f damage_min = 50.000000;
+			equip_requirements = strength:16,dexterity:25;
+			inventory_icon = b_gui_ig_i_w_csb_005;
+			model = m_w_csb_001;
+		  f modifier_max = 15.000000;
+		  f modifier_min = 5.000000;
+			texture = b_w_csb_005;
+		}
+		[o_fin]
+		{
+		  f damage_max = 81.000000;
+		  f damage_min = 60.000000;
+			equip_requirements = strength:17,dexterity:28;
+			inventory_icon = b_gui_ig_i_w_csb_006;
+			model = m_w_csb_002;
+		  f modifier_max = 24.000000;
+		  f modifier_min = 12.000000;
+			texture = b_w_csb_006;
+		}
+		[o_mag]
+		{
+		  f damage_max = 156.000000;
+		  f damage_min = 116.000000;
+			equip_requirements = strength:25,dexterity:47;
+			inventory_icon = b_gui_ig_i_w_csb_008;
+			model = m_w_csb_004;
+		  f modifier_max = 51.000000;
+		  f modifier_min = 37.000000;
+			texture = b_w_csb_008;
+		}
+		[o_str]
+		{
+		  f damage_max = 113.000000;
+		  f damage_min = 83.000000;
+			equip_requirements = strength:20,dexterity:36;
+			inventory_icon = b_gui_ig_i_w_csb_007;
+			model = m_w_csb_003;
+		  f modifier_max = 35.000000;
+		  f modifier_min = 23.000000;
+			texture = b_w_csb_007;
+		}
+	}
+	[physics]
+	{
+		velocity = 75;
+	}
+}
+[t:template,n:cw_ra_g_c_l_p_fin]
+{
+	doc = "Punisher Crossbow";
+	specializes = base_projectile;
+	[aspect]
+	{
+		model = m_w_csb_005;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_bow;
+			}
+		}
+	}
+	[attack]
+	{
+		ammo_template = bolt;
+		attack_range = 15;
+	  f damage_max = 124.000000;
+	  f damage_min = 94.000000;
+		reload_delay = 0.7;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Punisher Crossbow";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_csb_002;
+		equip_requirements = strength:19,dexterity:32;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_csb_018;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 14.000000;
+		  f modifier_min = 3.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 248.000000;
+		  f damage_min = 187.000000;
+			equip_requirements = strength:28,dexterity:56;
+			inventory_icon = b_gui_ig_i_w_csb_022;
+			model = m_w_csb_008;
+		  f modifier_max = 436.000000;
+		  f modifier_min = 1.000000;
+			texture = b_w_csb_012;
+		}
+		[c_str]
+		{
+		  f damage_max = 195.000000;
+		  f damage_min = 147.000000;
+			equip_requirements = strength:24,dexterity:46;
+			inventory_icon = b_gui_ig_i_w_csb_020;
+			model = m_w_csb_007;
+		  f modifier_max = 342.000000;
+		  f modifier_min = 1.000000;
+			texture = b_w_csb_011;
+		}
+		[o_avg]
+		{
+		  f damage_max = 144.000000;
+		  f damage_min = 108.000000;
+			equip_requirements = strength:20,dexterity:36;
+			inventory_icon = b_gui_ig_i_w_csb_019;
+			model = m_w_csb_05;
+		  f modifier_max = 252.000000;
+		  f modifier_min = 1.000000;
+			texture = b_w_csb_013;
+		}
+		[o_str]
+		{
+		  f damage_max = 211.000000;
+		  f damage_min = 159.000000;
+			equip_requirements = strength:26,dexterity:49;
+			inventory_icon = b_gui_ig_i_w_csb_021;
+			model = m_w_csb_007;
+		  f modifier_max = 370.000000;
+		  f modifier_min = 1.000000;
+			texture = b_w_csb_015;
+		}
+	}
+	[physics]
+	{
+		velocity = 75;
+	}
+}
+[t:template,n:cw_ra_g_o_m_p_mag]
+{
+	doc = "Slayer Crossbow";
+	specializes = base_projectile;
+	[aspect]
+	{
+		model = m_w_csb_001;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_bow;
+			}
+		}
+	}
+	[attack]
+	{
+		ammo_template = bolt;
+		attack_range = 12;
+	  f damage_max = 164.000000;
+	  f damage_min = 122.000000;
+		reload_delay = 0.5;
+	}
+	[common]
+	{
+		pcontent_special_type = rare;
+		screen_name = "Slayer Crossbow";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_csb_001;
+		equip_requirements = strength:25,dexterity:47;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_csb_017;
+		inventory_width = 2;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 53.000000;
+		  f modifier_min = 38.000000;
+		}
+	}
+	[physics]
+	{
+		velocity = 75;
+	}
+}
+[t:template,n:grenade]
+{
+	doc = "Tasty Pineapple";
+	specializes = base_grenade;
+	[attack]
+	{
+		skill_class = ranged;
+	}
+}
+[t:template,n:grenade_magic]
+{
+	doc = "Tasty Pineapple";
+	specializes = base_grenade;
+	[attack]
+	{
+		skill_class = "Combat Magic";
+	}
+}
+[t:template,n:grenade_magic_small]
+{
+	doc = "Tasty Pineapple";
+	specializes = base_grenade;
+	[attack]
+	{
+		skill_class = "Combat Magic";
+	}
+	[physics]
+	{
+		break_effect = dust_explosion_large;
+		break_sound = s_e_explode_rockbeast;
+	}
+}
+[t:template,n:minigun_dragon]
+{
+	doc = "Dragon Minigun";
+	specializes = base_projectile;
+	[aspect]
+	{
+		mana = 100;
+		mana_recovery_period = 1;
+		mana_recovery_unit = 2;
+		max_mana = 100;
+		model = m_w_misc_minigun_dragon;
+	}
+	[attack]
+	{
+		area_damage_radius = 1.0;
+		attack_range = 11;
+		damage_max = 75;
+		damage_min = 68;
+		reload_delay = 0.5;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+			[chore_rotate]
+			{
+				skrit = minigun_rotate?attack_duration=0.75;
+			}
+		}
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Dragon Minigun";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_001;
+		equip_requirements = strength:17,dexterity:29;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_msc_009;
+		inventory_width = 2;
+	}
+	[minigun_magic]
+	{
+		animate_weapon = true;
+		create_damage_volume = true;
+		effect_name = "minigun_muzzle_flash";
+		mana_per_shot = 2.5;
+		shot_life = 2.0;
+		total_effects = 10;
+		use_mana = true;
+	}
+}
+[t:template,n:minigun_flamethrower]
+{
+	doc = "Flamethrower";
+	specializes = base_projectile;
+	[aspect]
+	{
+		mana = 100;
+		mana_recovery_period = 1;
+		mana_recovery_unit = 12;
+		max_mana = 100;
+		model = m_w_misc_flamethrower;
+	}
+	[attack]
+	{
+		attack_range = 9;
+		damage_max = 135;
+		damage_min = 110;
+		reload_delay = 1.5;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Flamethrower";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_001;
+		equip_requirements = strength:19,dexterity:23;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_msc_014;
+		inventory_width = 2;
+	}
+	[magic] {}
+	[minigun_magic]
+	{
+		do_fire_damage = true;
+		mana_per_shot = 35.0;
+		particle_fit = 0.1;
+		shot_life = 1.0;
+		stop_on_death = false;
+		total_effects = 3;
+		use_mana = true;
+	}
+}
+[t:template,n:minigun_grenade_launcher]
+{
+	doc = "Grenade Launcher";
+	specializes = base_projectile;
+	[aspect]
+	{
+		mana = 100;
+		mana_recovery_period = 1;
+		mana_recovery_unit = 10;
+		max_mana = 100;
+		model = m_w_misc_grenadelauncher;
+	}
+	[attack]
+	{
+		aiming_error_range_x = 2.5;
+		aiming_error_range_y = 2.5;
+		ammo_appears_jit = true;
+		ammo_template = grenade;
+		area_damage_radius = 3.5;
+		attack_range = 10;
+		damage_max = 109;
+		damage_min = 100;
+		reload_delay = 2;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Grenade Launcher";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_001;
+		equip_requirements = strength:18;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_msc_015;
+		inventory_width = 2;
+	}
+	[minigun_magic]
+	{
+		mana_per_shot = 30.0;
+		use_mana = true;
+	}
+	[physics]
+	{
+		velocity = 10;
+	}
+}
+[t:template,n:minigun_lightning]
+{
+	doc = "Lightning Gun";
+	specializes = base_projectile;
+	[aspect]
+	{
+		mana = 100;
+		mana_recovery_period = 1;
+		mana_recovery_unit = 13;
+		max_mana = 100;
+		model = m_w_misc_lightning_gun;
+	}
+	[attack]
+	{
+		attack_range = 11;
+		damage_max = 77;
+		damage_min = 69;
+		reload_delay = 1.0;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Lightning Gun";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_001;
+		equip_requirements = intelligence:15,dexterity:16;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_msc_016;
+		inventory_width = 2;
+	}
+	[minigun_magic]
+	{
+		do_hit_damage = true;
+		effect_name = "minigun_lightning";
+		mana_per_shot = 17.0;
+		shot_life = 2.0;
+		total_effects = 10;
+		use_mana = true;
+	}
+}

@@ -8,6 +8,8 @@
 #include "InventoryActionMenuWidget.h"
 
 // Global drag state used to track click-to-pickup drags across grids
+TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
+
 static struct FInventoryGlobalDrag
 {
 	UInventoryGridWidget* SourceGrid = nullptr;
@@ -57,6 +59,29 @@ static int32 GetItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cel
 	return INDEX_NONE;
 }
 
+void UInventoryGridWidget::OnWidgetRebuilt()
+{
+	Super::OnWidgetRebuilt();
+	GRegisteredGrids.Add(this);
+}
+
+void UInventoryGridWidget::BeginDestroy()
+{
+	GRegisteredGrids.Remove(this);
+	Super::BeginDestroy();
+}
+
+void UInventoryGridWidget::ForEachRegisteredGrid(TFunctionRef<void(UInventoryGridWidget*)> Callback)
+{
+	for (auto It = GRegisteredGrids.CreateIterator(); It; ++It)
+	{
+		if (UInventoryGridWidget* Grid = It->Get())
+		{
+			Callback(Grid);
+		}
+	}
+}
+
 TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 {
 	// Hook Slate callbacks so Slate can notify the owning UWidget about hover/selection changes
@@ -76,8 +101,8 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		{
 			if (WeakThis.IsValid()) { WeakThis->HandleCellClicked(Cell); }
 		}));
-	// Apply wrap setting
-	if (MySlateWidget.IsValid()) MySlateWidget->SetWrapNavigation(bWrapNavigation);
+	// Apply wrap/ghost settings
+	if (MySlateWidget.IsValid()) { MySlateWidget->SetWrapNavigation(bWrapNavigation); MySlateWidget->SetUseGlobalDragGhost(bUseGlobalDragGhost); MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);}
 	return MySlateWidget.ToSharedRef();
 }
 
@@ -95,6 +120,9 @@ void UInventoryGridWidget::SynchronizeProperties()
 		MySlateWidget->SetBag(Bag);
 		MySlateWidget->SetCellPixelSize(CellPixelSize);
 		MySlateWidget->SetWrapNavigation(bWrapNavigation);
+		MySlateWidget->SetUseGlobalDragGhost(bUseGlobalDragGhost);
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
 	}
 
 	// Bind to bag change events so tooltips are updated when items change
@@ -120,6 +148,13 @@ FVector2D UInventoryGridWidget::GetDesiredSize() const
 	if (MySlateWidget.IsValid()) return MySlateWidget->GetDesiredSize();
 	if (Bag) return FVector2D(Bag->GridSize) * FVector2D(CellPixelSize, CellPixelSize);
 	return FVector2D::Zero();
+}
+
+void UInventoryGridWidget::SetUseGlobalDragGhost(bool bEnable)
+{
+	bUseGlobalDragGhost = bEnable; 
+	if (MySlateWidget.IsValid())
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Paint);
 }
 
 bool UInventoryGridWidget::MoveSelection(FIntPoint Delta)
@@ -308,7 +343,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			// Enforce exact placement at the highlighted cell; do not allow AddBagItem to relocate to first-fit
 			if (Bag->CanPlaceAt(Cell, ToPlace.Size))
 			{
+				// Temporarily disable auto-merge to enforce exact placement at target cell
+				bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false;
 				int32 NewIdx = Bag->AddBagItem(ToPlace);
+				Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 				if (NewIdx != INDEX_NONE)
 				{
 					OnItemDropped.Broadcast(this, INDEX_NONE, Cell, true);
@@ -411,8 +449,9 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (Bag->CanPlaceAt(Cell, ToPlace.Size))
 	{
 		// Clean placement: just add and remove from source
-		int32 NewIdx = Bag->AddBagItem(ToPlace);
-		if (NewIdx != INDEX_NONE)
+		// Temporarily disable auto-merge to avoid merging dragged item into existing stacks during cross-bag direct placement
+int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
+if (NewIdx != INDEX_NONE)
 		{
 			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
 {
@@ -488,22 +527,26 @@ if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NON
 	{
 		UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
 		const int32 SourceIdx = GInventoryDrag.SourceIndex;
-		// Only remove if source is not the same as destination victim index
-		if (!(SourceBag == Bag && SourceIdx == VictimIdx))
+		// Skip removal if the item was already removed at pickup or SourceIdx is invalid
+		if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removing original dragged item from source bag. SourceIdx=%d SourceBagCountBefore=%d"), SourceIdx, SourceBag->Items.Num());
-			if (!SourceBag->RemoveItem(SourceIdx))
+			// Only remove if source is not the same as destination victim index
+			if (!(SourceBag == Bag && SourceIdx == VictimIdx))
 			{
-				// Source removal failed; FULLY REVERT the destination change
-				Bag->Items[VictimIdx] = SavedVictim;
-				Bag->MarkPackageDirty();
-				Bag->OnChanged.Broadcast();
-				UE_LOG(LogTemp, Error, TEXT("Inventory Swap: Failed to remove original dragged item from source. Reverting. DestCount=%d"), Bag->Items.Num());
-				OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
-				GInventoryDrag.Reset();
-				return false;
+				UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removing original dragged item from source bag. SourceIdx=%d SourceBagCountBefore=%d"), SourceIdx, SourceBag->Items.Num());
+				if (!SourceBag->RemoveItem(SourceIdx))
+				{
+					// Source removal failed; FULLY REVERT the destination change
+					Bag->Items[VictimIdx] = SavedVictim;
+					Bag->MarkPackageDirty();
+					Bag->OnChanged.Broadcast();
+					UE_LOG(LogTemp, Error, TEXT("Inventory Swap: Failed to remove original dragged item from source. Reverting. DestCount=%d"), Bag->Items.Num());
+					OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
+					GInventoryDrag.Reset();
+					return false;
+				}
+				UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removed original dragged item from source. SourceBagCountAfter=%d"), SourceBag->Items.Num());
 			}
-			UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removed original dragged item from source. SourceBagCountAfter=%d"), SourceBag->Items.Num());
 		}
 		// Success! Notify both grids
 		OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, VictimIdx);
@@ -522,10 +565,11 @@ if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NON
 	// Update drag state: the victim is now at VictimIdx in this bag (linked, not unattached)
 	// If BeginDragFromCell is called again, it will just pick up the victim from its new location
 	GInventoryDrag.SourceGrid = this;
-	GInventoryDrag.SourceIndex = VictimIdx;
+	GInventoryDrag.SourceIndex = INDEX_NONE;
 	GInventoryDrag.Item = SavedVictim;
+	GInventoryDrag.bRemovedFromSource = true; // victim no longer exists in any bag after being displaced
 	GInventoryDrag.bActive = true;
-	OnItemDragStarted.Broadcast(this, VictimIdx);
+	OnItemDragStarted.Broadcast(this, INDEX_NONE);
 	return true;
 }
 
@@ -651,4 +695,33 @@ void UInventoryGridWidget::ReleaseSlateResources(bool bReleaseChildren)
 
 	// Clear any bound tooltip pointer so it cannot keep Slate/UWidget references alive
 	BoundTooltipWidget = nullptr;
+}
+
+void UInventoryGridWidget::SetBag(UYIInventoryBag* InBag)
+{
+	Bag = InBag;
+	// Rebind Slate to the new bag immediately
+	if (MySlateWidget.IsValid())
+	{
+		MySlateWidget->SetBag(Bag);
+	}
+	// Rebind bag-changed delegate like SynchronizeProperties
+	if (CachedBag != Bag)
+	{
+		if (CachedBag)
+		{
+			if (BagChangedHandle.IsValid())
+			{
+				CachedBag->OnChanged.Remove(BagChangedHandle);
+				BagChangedHandle = FDelegateHandle();
+			}
+		}
+		if (Bag)
+		{
+			BagChangedHandle = Bag->OnChanged.AddLambda([this]() { OnBagChanged(); });
+		}
+		CachedBag = Bag;
+	}
+	// Ensure tooltip reflects current selection and new bag
+	UpdateBoundTooltip();
 }

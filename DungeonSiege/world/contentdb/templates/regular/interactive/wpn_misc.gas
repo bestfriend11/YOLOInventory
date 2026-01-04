@@ -1,0 +1,246 @@
+[t:template,n:base_misc_fs1]
+{
+	doc = "misc";
+	specializes = weapon_melee;
+	category_name = "other";
+	[attack]
+	{
+		attack_class = ac_sword;
+		is_melee = true;
+		reload_delay = 0;
+		skill_class = melee;
+	}
+	[common] { is_pcontent_allowed = FALSE; }
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_w_swd_hum_long;
+		equip_slot = es_weapon_hand;
+	}
+}
+[t:template,n:blacksmith_hammer]
+{
+	specializes = base_misc_fs1;
+	category_name = "other";
+	doc = "blacksmith hammer";
+	[aspect] { model=m_w_hmr_004; }
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+	[common]
+	{
+		screen_name = "Blacksmith Hammer";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_hmr_001;
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_hmr_004;
+		inventory_width = 1;
+	}
+}
+[t:template,n:fire_poker]
+{
+	specializes = base_misc_fs1;
+	category_name = "other";
+	doc = "fire poker";
+	[aspect]
+	{
+		material = wood;
+		model=m_w_misc_fire_poker;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+	[common]
+	{
+		screen_name = "Fire Poker";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_stf_001;
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_msc_008;
+		inventory_width = 1;
+	}
+}
+
+[t:template,n:meat_bone]
+{
+	specializes = base_misc_fs1;
+	category_name = "other";
+	doc = "meat bone";
+	[aspect]
+	{
+		material = wood;
+		model=m_w_misc_meat_bone;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+	[common]
+	{
+		screen_name = "Meat";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_007;
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_msc_007;
+		inventory_width = 1;
+	}
+}
+[t:template,n:torch_small]
+{
+	doc = "torch_small";
+	category_name = "other";
+	specializes = base_misc_fs1;
+	[aspect]
+	{
+		model=m_w_misc_013;
+		is_selectable = false;
+		material = wood;
+	}
+	[attack]
+	{
+		damage_max = 1;
+		damage_min = 1;
+	}
+	[common]
+	{
+		screen_name = "Torch";
+		[template_triggers]
+		{
+			[*]
+			{
+				action* = call_sfx_script("torch_small");
+				condition* = receive_world_message("we_entered_world");
+				single_shot = true;
+			}
+		}
+	}
+	[gui]
+	{
+		is_droppable = false;
+		active_icon = b_gui_ig_i_ic_clb_001;
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_msc_013;
+		inventory_width = 1;
+	}
+}
+//////////////////////////////////SFX//////////////////////////////////////
+[t:template,n:meteor_glb]
+{
+	category_name = "sfx";
+	doc = "meteor";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_meteor; 
+		//scale_base = ;
+		[textures] { 0 = b_i_glb_meteor; }	
+	}
+}
+[t:template,n:fist_glb_01]//old fist for spell.
+{
+	category_name = "sfx";
+	doc = "fist_glb_01";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_fist-01; 
+		//scale_base = ;
+		textures:0 = b_i_glb_fist-01; 
+	}
+}
+[t:template,n:fist_glb_stone]
+{
+	category_name = "sfx";
+	doc = "fist_glb_stone";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_w_misc_028; 
+		//scale_base = ;
+		textures:0 = b_w_misc_stone-fist; 
+	}
+}
+///////////////////////// LEVEL-UP ITEMS ////////////////////////////////
+[t:template,n:level_glb_ranged]
+{
+	category_name = "sfx";
+	doc = "level_glb_ranged";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_ranged; 
+		[textures] { 0 = b_i_glb_ranged; }	
+	}
+}
+[t:template,n:level_glb_combat]
+{
+	category_name = "sfx";
+	doc = "level_glb_combat";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_combat; 
+		[textures] { 0 = b_i_glb_combat; }	
+	}
+}
+[t:template,n:level_glb_magic_combat]
+{
+	category_name = "sfx";
+	doc = "level_glb_magic_combat";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_combat-magic; 
+		[textures] { 0 = b_i_glb_combat-magic; }	
+	}
+}
+[t:template,n:level_glb_magic_nature]
+{
+	category_name = "sfx";
+	doc = "level_glb_magic_nature";
+	specializes = non_interactive_nonblocking;
+	[aspect] 
+	{ 
+		model = m_i_glb_nature-magic; 
+		[textures] { 0 = b_i_glb_nature-magic; }	
+	}
+}
+/////////////////////////////////////////////////////////////////////////
+[t:template,n:maljin_spike]
+{
+	specializes = non_interactive_nonblocking;
+	[aspect]
+	{
+		material= metal;
+		model	= m_w_misc_026;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+}
+[t:template,n:throwing_star]
+{
+	specializes = non_interactive_nonblocking;
+	[aspect]
+	{
+		material= metal;
+		model	= m_w_misc_027;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+}

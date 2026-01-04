@@ -1,0 +1,100 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_multiple_mp.skrit
+// Author(s):  Eric Tams
+//
+// Copyright © 2002 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "drop multiple objects when this item drops. One for each player in a MP game.";
+property string _required_component$ = "placement";
+
+// exported properties
+property 	string		child_template_name$					doc ="template name of the object to spawn";
+property	eWorldEvent spawn_event$			= WE_DROPPED	doc ="message to spawn new go on.";
+property	bool		snap_to_ground$			= true			doc ="Snap new quest objects to the ground.";
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(child_template_name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, child_template_name$ );
+	}
+}
+
+startup state WaitToSpawn$
+{	
+	event OnGoHandleMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+	{
+		if( e$ == spawn_event$ )
+		{
+			setstate Spawn$;
+	   	}
+	}
+}
+
+state Spawn$
+{
+	event OnEnterState$
+	{
+		int i$ = 0;
+		int count$ = Player.GetHumanPlayerCount;
+		
+		while( i$ < count$ )
+		{
+			if( !StringTool.IsEmpty(child_template_name$) )
+			{
+				GoCloneReq cloneReq$;
+				cloneReq$ = MakeGoCloneReq( child_template_name$ );
+				cloneReq$.StartingPos = owner.Go.Placement.Position;
+	
+				cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+				cloneReq$.SnapToTerrain = snap_to_ground$;
+	   			Goid newGoid$ = GoDb.SCloneGo( cloneReq$ );
+   			}
+   			else
+   			{
+   				owner.go.inventory.AddDelayedPcontent();
+   			}
+   			i$ += 1;
+   		}
+   		if( StringTool.IsEmpty(child_template_name$) )
+		{
+			AiQuery.TempGopColl1.Clear;
+			owner.go.Inventory.ListItems( IL_MAIN, AiQuery.TempGopColl1 );
+			int j$ = 0;
+			int jend$ = AiQuery.TempGopColl1.size();
+			while ( j$ < jend$ )
+			{
+				Go Item$ = AiQuery.TempGopColl1.Get( j$ );
+				if ( Item$ != NULL )
+				{
+					owner.go.Inventory.RSRemove( Item$, true );
+				}
+				j$ += 1;
+			}
+		}
+   		SetState Finished$;
+   	}
+}
+
+state Finished$
+{
+	event OnEnterState$
+	{
+		postworldmessage( WE_REQ_DELETE, owner.goid, owner.goid, 10 );	
+	}
+}

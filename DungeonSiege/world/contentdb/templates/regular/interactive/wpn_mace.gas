@@ -1,0 +1,1426 @@
+[t:template,n:base_mace]
+{
+	doc = "Mace";
+	specializes = weapon_melee;
+	[aspect]
+	{
+		material = steelblunt;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_mace;
+			}
+		}
+	}
+	[attack]
+	{
+		attack_class = ac_mace;
+		is_melee = true;
+		reload_delay = 0;
+		skill_class = melee;
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_001;
+		equip_slot = es_weapon_hand;
+	}
+}
+[t:template,n:mc_d_c_f_1h_str]
+{
+	doc = "Wing Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_060;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 86.000000;
+	  f damage_min = 66.000000;
+	}
+	[common]
+	{
+		screen_name = "Wing Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		equip_requirements = strength:26;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_060;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 17.000000;
+		  f modifier_min = 5.000000;
+		}
+	}
+}
+[t:template,n:mc_d_c_s_1h_mag]
+{
+	doc = "Horned Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_057;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 111.000000;
+	  f damage_min = 85.000000;
+	}
+	[common]
+	{
+		screen_name = "Horned Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:31;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_057;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 23.000000;
+		  f modifier_min = 7.000000;
+		}
+	}
+}
+[t:template,n:mc_g_c_f_1h_avg]
+{
+	doc = "Flanged Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_046;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 19.000000;
+	  f damage_min = 15.000000;
+	}
+	[common]
+	{
+		screen_name = "Flanged Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		equip_requirements = strength:13;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_046;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 1.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 22.000000;
+		  f damage_min = 17.000000;
+			equip_requirements = strength:13;
+			inventory_icon = b_gui_ig_i_w_mce_049;
+			model = m_w_mce_049;
+		  f modifier_max = 5.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 90.000000;
+		  f damage_min = 69.000000;
+			equip_requirements = strength:27;
+			inventory_icon = b_gui_ig_i_w_mce_050;
+			model = m_w_mce_050;
+		  f modifier_max = 25.000000;
+		  f modifier_min = 17.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 56.000000;
+		  f damage_min = 43.000000;
+			equip_requirements = strength:20;
+			inventory_icon = b_gui_ig_i_w_mce_047;
+			model = m_w_mce_047;
+		  f modifier_max = 16.000000;
+		  f modifier_min = 10.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 31.000000;
+		  f damage_min = 24.000000;
+			equip_requirements = strength:15;
+			inventory_icon = b_gui_ig_i_w_mce_066;
+			model = m_w_mce_066;
+		  f modifier_max = 9.000000;
+		  f modifier_min = 2.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 44.000000;
+		  f damage_min = 34.000000;
+			equip_requirements = strength:18;
+			inventory_icon = b_gui_ig_i_w_mce_067;
+			model = m_w_mce_067;
+		  f modifier_max = 13.000000;
+		  f modifier_min = 6.000000;
+		}
+		[o_mag]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 111.000000;
+		  f damage_min = 86.000000;
+			equip_requirements = strength:32;
+			inventory_icon = b_gui_ig_i_w_mce_069;
+			model = m_w_mce_069;
+		  f modifier_max = 28.000000;
+		  f modifier_min = 22.000000;
+		}
+		[o_str]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 71.000000;
+		  f damage_min = 55.000000;
+			equip_requirements = strength:24;
+			inventory_icon = b_gui_ig_i_w_mce_068;
+			model = m_w_mce_068;
+		  f modifier_max = 21.000000;
+		  f modifier_min = 14.000000;
+		}
+	}
+}
+[t:template,n:mc_g_c_f_1h_fun]
+{
+	doc = "Worn Flanged Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_048;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 16.000000;
+	  f damage_min = 12.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Worn Flanged Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		equip_requirements = strength:12;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_048;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_g_c_f_1h_low]
+{
+	doc = "Bent Flanged Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_045;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 13.000000;
+	  f damage_min = 10.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Bent Flanged Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_045;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_g_c_m_1h_avg]
+{
+	doc = "Mace";
+	reload_delay = 0;
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_040;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 13.000000;
+	  f damage_min = 10.000000;
+	}
+	[common]
+	{
+		screen_name = "Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_001;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_040;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 1.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 19.000000;
+		  f damage_min = 15.000000;
+			equip_requirements = strength:13;
+			inventory_icon = b_gui_ig_i_w_mce_043;
+			model = m_w_mce_043;
+		  f modifier_max = 4.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 81.000000;
+		  f damage_min = 67.000000;
+			equip_requirements = strength:26;
+			inventory_icon = b_gui_ig_i_w_mce_044;
+			model = m_w_mce_044;
+		  f modifier_max = 23.000000;
+		  f modifier_min = 16.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 48.000000;
+		  f damage_min = 40.000000;
+			equip_requirements = strength:19;
+			inventory_icon = b_gui_ig_i_w_mce_041;
+			model = m_w_mce_041;
+		  f modifier_max = 15.000000;
+		  f modifier_min = 9.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 25.000000;
+		  f damage_min = 20.000000;
+			equip_requirements = strength:14;
+			inventory_icon = b_gui_ig_i_w_mce_062;
+			model = m_w_mce_062;
+		  f modifier_max = 7.000000;
+		  f modifier_min = 2.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 37.000000;
+		  f damage_min = 30.000000;
+			equip_requirements = strength:17;
+			inventory_icon = b_gui_ig_i_w_mce_063;
+			model = m_w_mce_063;
+		  f modifier_max = 11.000000;
+		  f modifier_min = 5.000000;
+		}
+		[o_mag]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 102.000000;
+		  f damage_min = 84.000000;
+			equip_requirements = strength:31;
+			inventory_icon = b_gui_ig_i_w_mce_065;
+			model = m_w_mce_065;
+		  f modifier_max = 26.000000;
+		  f modifier_min = 20.000000;
+		}
+		[o_str]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 63.000000;
+		  f damage_min = 52.000000;
+			equip_requirements = strength:22;
+			inventory_icon = b_gui_ig_i_w_mce_064;
+			model = m_w_mce_064;
+		  f modifier_max = 19.000000;
+		  f modifier_min = 13.000000;
+		}
+	}
+}
+[t:template,n:mc_g_c_m_1h_fun]
+{
+	doc = "Dented Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_042;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 10.000000;
+	  f damage_min = 8.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Dented Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_001;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_042;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_g_c_m_1h_low]
+{
+	doc = "Chipped Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_039;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 7.000000;
+	  f damage_min = 5.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Chipped Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_001;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_039;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_g_c_s_1h_avg]
+{
+	doc = "Spiked Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_052;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 26.000000;
+	  f damage_min = 19.000000;
+	}
+	[common]
+	{
+		screen_name = "Spiked Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:14;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_053;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 1.000000;
+		  f modifier_min = 0.000000;
+		}
+		[c_fin]
+		{
+		  f damage_max = 38.000000;
+		  f damage_min = 28.000000;
+			equip_requirements = strength:17;
+			inventory_icon = b_gui_ig_i_w_mce_054;
+			model = m_w_mce_053;
+		  f modifier_max = 5.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 151.000000;
+		  f damage_min = 111.000000;
+			equip_requirements = strength:40;
+			inventory_icon = b_gui_ig_i_w_mce_056;
+			model = m_w_mce_055;
+		  f modifier_max = 37.000000;
+		  f modifier_min = 26.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 98.000000;
+		  f damage_min = 72.000000;
+			equip_requirements = strength:29;
+			inventory_icon = b_gui_ig_i_w_mce_055;
+			model = m_w_mce_054;
+		  f modifier_max = 23.000000;
+		  f modifier_min = 13.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 54.000000;
+		  f damage_min = 40.000000;
+			equip_requirements = strength:20;
+			inventory_icon = b_gui_ig_i_w_mce_070;
+			model = m_w_mce_070;
+		  f modifier_max = 10.000000;
+		  f modifier_min = 4.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 76.000000;
+		  f damage_min = 56.000000;
+			equip_requirements = strength:24;
+			inventory_icon = b_gui_ig_i_w_mce_071;
+			model = m_w_mce_071;
+		  f modifier_max = 16.000000;
+		  f modifier_min = 7.000000;
+		}
+		[o_mag]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 185.000000;
+		  f damage_min = 137.000000;
+			equip_requirements = strength:47;
+			inventory_icon = b_gui_ig_i_w_mce_073;
+			model = m_w_mce_073;
+		  f modifier_max = 47.000000;
+		  f modifier_min = 34.000000;
+		}
+		[o_str]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 122.000000;
+		  f damage_min = 91.000000;
+			equip_requirements = strength:34;
+			inventory_icon = b_gui_ig_i_w_mce_072;
+			model = m_w_mce_072;
+		  f modifier_max = 30.000000;
+		  f modifier_min = 20.000000;
+		}
+	}
+}
+[t:template,n:mc_g_c_s_1h_fun]
+{
+	doc = "Rusted Spiked Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_052;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 23.000000;
+	  f damage_min = 17.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Rusted Spiked Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:13;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_052;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_g_c_s_1h_low]
+{
+	doc = "Dull Spiked Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_051;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 21.000000;
+	  f damage_min = 16.000000;
+	}
+	[common]
+	{
+	  b allow_modifiers = false;
+		screen_name = "Dull Spiked Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:13;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_051;
+		inventory_width = 1;
+	}
+}
+[t:template,n:mc_ra_g_c_f_1h_fin]
+{
+	doc = "Mincemeat";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_049;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 28.000000;
+	  f damage_min = 22.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Mincemeat";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		equip_requirements = strength:13;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_080;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 6.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 96.000000;
+		  f damage_min = 74.000000;
+			equip_requirements = strength:27;
+			inventory_icon = b_gui_ig_i_w_mce_084;
+			model = m_w_mce_050;
+		  f modifier_max = 26.000000;
+		  f modifier_min = 19.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 62.000000;
+		  f damage_min = 48.000000;
+			equip_requirements = strength:20;
+			inventory_icon = b_gui_ig_i_w_mce_083;
+			model = m_w_mce_047;
+		  f modifier_max = 18.000000;
+		  f modifier_min = 11.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 38.000000;
+		  f damage_min = 29.000000;
+			equip_requirements = strength:15;
+			inventory_icon = b_gui_ig_i_w_mce_081;
+			model = m_w_mce_066;
+		  f modifier_max = 11.000000;
+		  f modifier_min = 3.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 48.000000;
+		  f damage_min = 37.000000;
+			equip_requirements = strength:18;
+			inventory_icon = b_gui_ig_i_w_mce_082;
+			model = m_w_mce_067;
+		  f modifier_max = 14.000000;
+		  f modifier_min = 6.000000;
+		}
+		[o_mag]
+		{
+			active_icon = b_gui_ig_i_ic_mce_005;
+		  f damage_max = 114.000000;
+		  f damage_min = 88.000000;
+			equip_requirements = strength:32;
+			inventory_icon = b_gui_ig_i_w_mce_085;
+			model = m_w_mce_069;
+		  f modifier_max = 28.000000;
+		  f modifier_min = 22.000000;
+		}
+	}
+}
+[t:template,n:mc_ra_g_c_m_1h_fin]
+{
+	doc = "Mace";
+	reload_delay = 0;
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_064;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 20.000000;
+	  f damage_min = 16.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Squasher";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_001;
+		equip_requirements = strength:12;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_078;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 4.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_mag]
+		{
+		  f damage_max = 87.000000;
+		  f damage_min = 71.000000;
+			equip_requirements = strength:26;
+			inventory_icon = b_gui_ig_i_w_mce_079;
+			model = m_w_mce_044;
+		  f modifier_max = 25.000000;
+		  f modifier_min = 17.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 54.000000;
+		  f damage_min = 45.000000;
+			equip_requirements = strength:19;
+			inventory_icon = b_gui_ig_i_w_mce_077;
+			model = m_w_mce_041;
+		  f modifier_max = 16.000000;
+		  f modifier_min = 10.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 30.000000;
+		  f damage_min = 25.000000;
+			equip_requirements = strength:14;
+			inventory_icon = b_gui_ig_i_w_mce_075;
+			model = m_w_mce_062;
+		  f modifier_max = 9.000000;
+		  f modifier_min = 2.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 42.000000;
+		  f damage_min = 35.000000;
+			equip_requirements = strength:17;
+			inventory_icon = b_gui_ig_i_w_mce_076;
+			model = m_w_mce_063;
+		  f modifier_max = 13.000000;
+		  f modifier_min = 6.000000;
+		}
+		[o_str]
+		{
+			active_icon = b_gui_ig_i_ic_mce_004;
+		  f damage_max = 69.000000;
+		  f damage_min = 57.000000;
+			equip_requirements = strength:22;
+			inventory_icon = b_gui_ig_i_w_mce_064;
+			model = m_w_mce_064;
+		  f modifier_max = 21.000000;
+		  f modifier_min = 14.000000;
+		}
+	}
+}
+[t:template,n:mc_ra_g_c_s_1h_fin]
+{
+	doc = "Spiked Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_055;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 41.000000;
+	  f damage_min = 31.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = rare, unique;
+		screen_name = "Slaughter Rod";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:16;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_086;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 5.000000;
+		  f modifier_min = 1.000000;
+		}
+		[c_str]
+		{
+		  f damage_max = 104.000000;
+		  f damage_min = 77.000000;
+			equip_requirements = strength:29;
+			inventory_icon = b_gui_ig_i_w_mce_089;
+			model = m_w_mce_055;
+		  f modifier_max = 24.000000;
+		  f modifier_min = 14.000000;
+		}
+		[o_avg]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 60.000000;
+		  f damage_min = 44.000000;
+			equip_requirements = strength:20;
+			inventory_icon = b_gui_ig_i_w_mce_087;
+			model = m_w_mce_070;
+		  f modifier_max = 11.000000;
+		  f modifier_min = 4.000000;
+		}
+		[o_fin]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 79.000000;
+		  f damage_min = 58.000000;
+			equip_requirements = strength:24;
+			inventory_icon = b_gui_ig_i_w_mce_088;
+			model = m_w_mce_071;
+		  f modifier_max = 17.000000;
+		  f modifier_min = 8.000000;
+		}
+		[o_mag]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 191.000000;
+		  f damage_min = 141.000000;
+			equip_requirements = strength:47;
+			inventory_icon = b_gui_ig_i_w_mce_091;
+			model = m_w_mce_073;
+		  f modifier_max = 48.000000;
+		  f modifier_min = 35.000000;
+		}
+		[o_str]
+		{
+			active_icon = b_gui_ig_i_ic_mce_006;
+		  f damage_max = 129.000000;
+		  f damage_min = 95.000000;
+			equip_requirements = strength:34;
+			inventory_icon = b_gui_ig_i_w_mce_090;
+			model = m_w_mce_072;
+		  f modifier_max = 31.000000;
+		  f modifier_min = 21.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_c_f_1h_fin]
+{
+	doc = "Icicle Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_037;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 139.000000;
+	  f damage_min = 107.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Icicle Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_003;
+		equip_requirements = strength:36;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_037;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 33.000000;
+		  f modifier_min = 13.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_c_m_1h_fin]
+{
+	doc = "Regalia Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_028;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 133.000000;
+	  f damage_min = 109.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Regalia Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:36;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_028;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 34.000000;
+		  f modifier_min = 19.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_c_m_1h_str]
+{
+	doc = "Lion Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_038;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 177.000000;
+	  f damage_min = 145.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Lion Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:45;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_038;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 43.000000;
+		  f modifier_min = 18.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_c_s_1h_fin]
+{
+	doc = "Crystal Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_036;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 158.000000;
+	  f damage_min = 122.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Crystal Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:40;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_036;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 38.000000;
+		  f modifier_min = 15.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_o_f_1h_fin]
+{
+	doc = "Dragon Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_029;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 166.000000;
+	  f damage_min = 128.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Dragon Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_003;
+		equip_requirements = strength:42;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_029;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 40.000000;
+		  f modifier_min = 16.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_o_m_1h_avg]
+{
+	doc = "Regal Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_033;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 99.000000;
+	  f damage_min = 81.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Regal Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_003;
+		equip_requirements = strength:29;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_033;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 24.000000;
+		  f modifier_min = 10.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_o_m_1h_fin]
+{
+	doc = "Eye Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_035;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 120.000000;
+	  f damage_min = 98.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Eye Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_003;
+		equip_requirements = strength:33;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_035;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 29.000000;
+		  f modifier_min = 12.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_g_o_m_1h_str]
+{
+	doc = "Crown Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_033;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 142.000000;
+	  f damage_min = 116.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Crown Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_003;
+		equip_requirements = strength:38;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_034;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 36.000000;
+		  f modifier_min = 21.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_bells]
+{
+	doc = "Bell Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_058;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 99.000000;
+	  f damage_min = 81.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Bell Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:29;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_058;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 24.000000;
+		  f modifier_min = 10.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_dolphin]
+{
+	doc = "Water Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_027;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 116.000000;
+	  f damage_min = 95.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Water Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:32;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_027;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 31.000000;
+		  f modifier_min = 17.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_egypt]
+{
+	doc = "Cane Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_030;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 123.000000;
+	  f damage_min = 101.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Cane Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:34;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_030;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 31.000000;
+		  f modifier_min = 18.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_hand]
+{
+	doc = "Iron Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_032;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 188.000000;
+	  f damage_min = 154.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Iron Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:47;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_032;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 46.000000;
+		  f modifier_min = 19.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_horns]
+{
+	doc = "Tangled Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_061;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 133.000000;
+	  f damage_min = 102.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Tangled Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:35;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_061;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 32.000000;
+		  f modifier_min = 13.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_jester]
+{
+	doc = "Masked Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_031;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 78.000000;
+	  f damage_min = 64.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Masked Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:24;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_031;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 20.000000;
+		  f modifier_min = 11.000000;
+		}
+	}
+}
+[t:template,n:mc_sc_un_spider]
+{
+	doc = "Web Scepter";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_059;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+	  f damage_max = 68.000000;
+	  f damage_min = 52.000000;
+	}
+	[common]
+	{
+		pcontent_special_type = unique;
+		screen_name = "Web Scepter";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_msc_002;
+		equip_requirements = strength:22;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_059;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+		  f modifier_max = 14.000000;
+		  f modifier_min = 4.000000;
+		}
+	}
+}
+[t:template,n:temp_mc_g_c_f_1h_avg]
+{
+	doc = "Inferior Flanged Mace";
+	specializes = base_mace;
+	[aspect]
+	{
+		model = m_w_mce_008;
+	}
+	[attack]
+	{
+		attack_range = 0.5;
+		damage_max = 9;
+		damage_min = 3;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Inferior Flanged Mace";
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_mce_002;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_mce_008;
+		inventory_width = 1;
+	}
+}

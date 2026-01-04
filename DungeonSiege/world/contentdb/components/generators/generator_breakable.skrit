@@ -1,0 +1,303 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_breakable.skrit
+// Author(s):  Uncle Ernsie, Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+/*//////////////////////////////////////////////////////////////////////////////
+DEV NOTES:
+
+/*///////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "Advanced Gen which Supports One Anims, Accel/Decel, and External Spawnpoints";
+property string _required_component$ = "placement";
+
+//Internal Properties
+bool	accel_on$		= true;
+bool	accel_over$		= false;
+// exported properties
+//----Movement--------
+property Scid   Spawnpoint$;
+property Scid   Initial_Command$;
+//----Generator-------
+property string child_template_name$;
+property int    num_children_incubating$ = 0;
+property float  spawn_period$            = 2.0;
+property int    max_alive_children$      = 0;
+property float  spawn_range$             = 1.0;
+//----Anims-----------
+property bool   accelerate$             = true;
+property int    accel_delay$            = 5;
+property float  accel_rate$      		= 0.2;
+property int	accel_count$            = 10;
+property float  accel_cap$              = 0.2;
+property float  decel_cap$              = 2.0;
+//----Sound-----------
+//property bool   sound_start$            = true;
+//property bool   sound_end$              = true;
+//property bool   sound_transition_start$ = false;
+//property bool   sound_transition_end$   = false;
+property bool	spawn_sfx_on$				= true				doc = "Do you want to use a spawn special effect?";
+property bool   spawn_sfx_at_spawnpoint$    = true              doc = "Do you want to use the spawnpoint for the effect location?";
+property string	spawn_sfx$					= "ice_dust"		doc = "Must Specify SiegeFx Script if Close Sfx On";
+property string spawn_sfx_params$			= ""				doc = "Parameters for the SiegeFx script";
+
+
+
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// global state
+
+trigger OnGoPreload$
+{
+	if(!StringTool.IsEmpty(child_template_name$))
+	{
+		GoDb.PreloadCloneSource( owner.Go, child_template_name$ );
+	}
+}
+
+event OnGoDrawDebugHud$
+{
+	World.DrawDebugSphere( owner.Go.Placement.Position,
+						   spawn_range$,
+						   MakeColor( 1.0, 0.0, 0.0 ),
+						   Debug.Format( "accel_delay: %d\naccel_count: %d\nincubating: %d\nspawn period: %f\nmax alive: %d\nspawn template: %s",
+										 accel_delay$, accel_count$, num_children_incubating$, spawn_period$, max_alive_children$, child_template_name$  ) );
+
+	
+    if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+    {
+		World.DrawDebugDirectedLine( owner.go.Placement.Position,
+									 SpawnPoint$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Spawnpoint" );
+    }
+
+    if ( (Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() ) && ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() ) )
+    {
+		World.DrawDebugDirectedLine( Spawnpoint$.go.Placement.Position,
+									 Initial_Command$.go.Placement.Position,
+                                     MakeColor( 1.0, 1.0, 0.0 ),
+                                     "Initial_Command" );
+    }
+
+
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+startup state Inactive$
+{
+	transition -> Startup$: OnGoHandleMessage( WE_REQ_ACTIVATE );
+
+	event OnEnterState$
+	{
+		//ACCEL CAP CAN'T BE = 0!  Big Bad-da Boom!!
+		if (accel_cap$ < 0.2)
+		{
+       		accel_cap$ == 0.2;
+		}
+
+	}
+}
+
+event OnGoHandleMessage$( eWorldEvent e$, WorldMessage msg$ )
+{
+	if( e$ == WE_KILLED ) {
+		if( !StringTool.IsEmpty(child_template_name$) && (num_children_incubating$ > 0) )
+		{
+			goid attacker$ = msg$.GetSendFrom();
+			
+	 		string template_query$ = "";
+	 		StringTool.Appendf(template_query$, "%s:aspect:experience_value", child_template_name$);
+	 		float experience$ = contentdb.GetTemplateFloat( template_query$, 0.0 );
+	 		//report.genericf("Experience: %g\n",experience$);
+	 		float kids$ = num_children_incubating$;
+	 		experience$ *= kids$;
+	 		//report.genericf("Experience: %g\n",experience$);
+	 		if (attacker$.IsValid()) {
+	 			if (attacker$.Go.HasInventory() ) {
+	 				
+	 				Go Weapon$ = NULL;
+	 				if( attacker$.Go.Inventory.IsMeleeWeaponSelected || attacker$.Go.Inventory.IsRangedWeaponSelected )
+	 				{
+	 					Weapon$ = attacker$.Go.Inventory.GetSelectedWeapon;
+	 				} else if ( attacker$.Go.Inventory.IsSpellSelected ) {
+	 					Weapon$ = attacker$.Go.Inventory.GetSelectedSpell;
+	 				}
+	 				
+	 				if (Weapon$ != NULL ) {
+	 					Rules.AwardExperience( attacker$, Weapon$.goid, experience$ );
+	 				} 
+	 			}
+			}
+	 	}
+ 		SetState Exiting$;
+	}
+}
+
+state Startup$
+{
+ 	
+ 	
+	transition -> Inactive$: OnGoHandleMessage( WE_REQ_DEACTIVATE );
+
+	event OnEnterState$
+	{
+		if ( num_children_incubating$ > 0 )
+		{
+			this.CreateTimer( 1, spawn_period$ );
+		}
+		else
+		{
+			SetState Explode$;
+		}
+    }
+
+	transition -> Startup$: OnTimer( 1 ) =
+	{
+    	if ( AiQuery.GetCount( owner.Go, QT_ALIVE_CONSCIOUS, owner.Go.Children ) < max_alive_children$ )
+		{
+        	SetState Begin$;
+        }
+	}
+
+}
+
+State Begin$
+{
+    event OnEnterState$
+    {
+        // make a new child
+		GoCloneReq cloneReq$ = MakeGoCloneReq( owner.Goid, child_template_name$ );
+
+		if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+		{
+			SiegePos SpawnPos$ = Spawnpoint$.go.placement.position;
+			cloneReq$.StartingPos	= SpawnPos$;
+            cloneReq$.SetStartingOrient = Spawnpoint$.Go.Placement.Orientation;
+		}
+		else
+		{
+			SiegePos SpawnPos$ = owner.go.placement.position;
+			cloneReq$.StartingPos	= SpawnPos$;
+            cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+		}
+
+		Goid spawnGoid$ = SpawnPoint$.Goid;
+
+		if ((spawn_sfx_at_spawnpoint$) && (spawn_sfx_on$))
+		{
+   			if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+			{
+				SiegeFx.SRunScript( spawn_sfx$, spawnGoid$, spawnGoid$, spawn_sfx_params$, spawnGoid$, WE_UNKNOWN );
+			}
+		}
+
+        else if (spawn_sfx_on$)
+		{
+			SiegeFx.SRunScript( spawn_sfx$, owner.Goid, owner.Goid, spawn_sfx_params$, owner.Goid, WE_UNKNOWN );
+		}
+
+		cloneReq$.SnapToTerrain = true;
+        Goid newGoid$ = GoDb.SCloneGo( cloneReq$ );
+
+		//If valid give clone an initial command
+		if ( Initial_Command$.IsValid() && Initial_Command$.getgoid.isvalid() )
+           {
+				newGoid$.Go.Mind.SetInitialCommand( Initial_Command$ );
+           }
+		// one less monster
+		num_children_incubating$ -= 1;
+
+		if (accel_delay$ > 0)
+		{
+			accel_delay$ -= 1;
+		}
+		if (accelerate$)
+		{
+			SetState Accel$;
+		}
+		else
+		{
+		    SetState Startup$;
+		}
+    }
+}
+
+State Accel$
+{
+    event OnEnterState$
+    {
+        float period_check$ = spawn_period$ - accel_rate$;
+
+		//Peek ahead to make sure the next accel > 0
+		if ( period_check$ > 0.1)
+    	{
+    		accel_on$ == false;
+		}
+		//Is accel up done?
+		else if (spawn_period$ < accel_cap$)
+    	{
+    	   	accel_on$ = false;
+    	}
+
+		//Is entire accel up/down done?
+		if ( spawn_period$ > decel_cap$)
+    	{
+			accel_over$ = true;
+    	}
+
+    	//Is accel cycle over?
+    	if (( !accel_over$ ) && (accel_delay$ == 0))
+    	{
+    	//accelerate then decelerate
+    		if (accel_on$)
+    	    {
+       		   	spawn_period$ -= accel_rate$;
+        	}
+        	else if (accel_count$ == 0)
+        	{
+        		spawn_period$ += accel_rate$;
+        	}
+            else
+            {
+				accel_count$ -= 1;
+			}
+    	}
+
+    	SetState Startup$;
+    }
+}
+
+State Explode$
+{
+    event OnEnterState$
+    {
+		if( !Physics.SExplodeGo( owner.goid, 3, MakeVector(0,3,0) ) )
+		{
+			GoDb.SMarkForDeletion( owner.goid );
+		}
+	}
+}
+
+state Exiting$
+{}
+
+
+
+
+

@@ -7,6 +7,7 @@
 #include "Rendering/DrawElements.h"
 #include "Engine/Texture2D.h"
 #include "YIItemDefinition.h"
+#include "Framework/Application/SlateApplication.h"
 
 #pragma optimize("", off)
 
@@ -124,19 +125,21 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	int32 L = LayerId;
 	if (!Bag.IsValid()) return L;
 	const FSlateBrush* Box = FAppStyle::Get().GetBrush("WhiteBrush");
-	const FVector2D SizePix = FVector2D(Bag->GridSize)*CellSize;
+	// Use explicit pixel cell size as configured (do not stretch to allotted geometry)
+	const FVector2D LocalCell = CellSize;
+	const FVector2D SizePix = FVector2D(Bag->GridSize) * LocalCell;
 	FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(SizePix), FSlateLayoutTransform()), Box, ESlateDrawEffect::None, Bag->CellBgColor);
 	// Grid lines
 	const float Half=0.5f; const float MaxX=SizePix.X-Half; const float MaxY=SizePix.Y-Half;
-	for(int x=0;x<=Bag->GridSize.X;++x){ float X=x*CellSize.X+Half; TArray<FVector2D> Seg={FVector2D(X,Half),FVector2D(X,MaxY)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
-	for(int y=0;y<=Bag->GridSize.Y;++y){ float Y=y*CellSize.Y+Half; TArray<FVector2D> Seg={FVector2D(Half,Y),FVector2D(MaxX,Y)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
+	for(int x=0;x<=Bag->GridSize.X;++x){ float X=x*LocalCell.X+Half; TArray<FVector2D> Seg={FVector2D(X,Half),FVector2D(X,MaxY)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
+	for(int y=0;y<=Bag->GridSize.Y;++y){ float Y=y*LocalCell.Y+Half; TArray<FVector2D> Seg={FVector2D(Half,Y),FVector2D(MaxX,Y)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
 	// Items
 	for (int32 i=0;i<Bag->Items.Num();++i)
 	{
 		const auto& It = Bag->Items[i];
 		FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-		FVector2D P = ToPixel(It.Pos);
-		FVector2D S = FVector2D(Eff)*CellSize;
+		FVector2D P = FVector2D(It.Pos) * LocalCell;
+		FVector2D S = FVector2D(Eff) * LocalCell;
 		FLinearColor Fill = FLinearColor(1,1,1,0.08f);
 		// Try load asset for rarity and icon later
 		UYIItemDefinition* Def = It.Item.Definition.IsValid() ? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
@@ -173,30 +176,30 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	// Hover highlight: whole item if any, else just the cell
 	if (bWholeItemHover && HoveredItemIndex != INDEX_NONE)
 	{
-		const FVector2D P = ToPixel(HoveredItemTopLeft);
-		const FVector2D S = FVector2D(HoveredItemSize) * CellSize;
+		const FVector2D P = FVector2D(HoveredItemTopLeft) * LocalCell;
+		const FVector2D S = FVector2D(HoveredItemSize) * LocalCell;
 		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.8f,0.2f,0.12f));
 	}
 	else
 	{
-		FVector2D P = ToPixel(HoverCell);
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(CellSize), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.6f,1.f,0.08f));
+		FVector2D P = FVector2D(HoverCell) * LocalCell;
+		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(LocalCell), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.6f,1.f,0.08f));
 	}
 	// Selected cell cursor (thicker outline)
 	if (SelectedCell.X >= 0 && SelectedCell.Y >= 0)
 	{
-		FVector2D P = ToPixel(SelectedCell);
-		TArray<FVector2D> Rect = { P, P + FVector2D(CellSize.X, 0), P + FVector2D(CellSize.X, CellSize.Y), P + FVector2D(0, CellSize.Y), P };
+		FVector2D P = FVector2D(SelectedCell) * LocalCell;
+		TArray<FVector2D> Rect = { P, P + FVector2D(LocalCell.X, 0), P + FVector2D(LocalCell.X, LocalCell.Y), P + FVector2D(0, LocalCell.Y), P };
 		FLinearColor CursorColor = FLinearColor(0.2f, 0.6f, 1.f, 0.9f);
 		FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Rect, ESlateDrawEffect::None, CursorColor, true, 2.5f);
 	}
 	// Ghost visual (click-to-drag without holding)
-	if (bGhostActive)
+	if (bGhostActive && !bUseGlobalDragGhost)
 	{
 		// Footprint highlight under ghost
 		const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f,0.8f,0.2f,0.18f) : FLinearColor(0.8f,0.2f,0.2f,0.18f);
-		const FVector2D FootP = ToPixel(GhostTopLeft);
-		const FVector2D FootS = FVector2D(GhostFootprint) * CellSize;
+		const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
+		const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
 		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
 
 		const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
@@ -213,6 +216,33 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, FLinearColor(0.2f,0.8f,1.f,0.6f), true, 1.5f);
 	}
 	return L;
+}
+
+void SInventoryGridWidget::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
+{
+	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
+	// Safety: if this grid isn't hovered and a drag is active, ensure its ghost is disabled
+	FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr;
+	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag);
+	if (!bDragActive)
+	{
+		if (bGhostActive)
+		{
+			bGhostActive = false;
+			Invalidate(EInvalidateWidgetReason::Paint);
+		}
+		return;
+	}
+	// If we are dragging, check current cursor against our bounds each frame (covers cases when OnMouseLeave didn't fire)
+	const FVector2D ScreenPos = FSlateApplication::Get().GetCursorPos();
+	const FVector2D Local = AllottedGeometry.AbsoluteToLocal(ScreenPos);
+	const FVector2D VisualSize = Bag.IsValid() ? FVector2D(Bag->GridSize) * CellSize : FVector2D::ZeroVector;
+	const bool bInside = (Local.X >= 0.f && Local.Y >= 0.f && Local.X < VisualSize.X && Local.Y < VisualSize.Y);
+	if (!bInside && bGhostActive)
+	{
+		bGhostActive = false;
+		Invalidate(EInvalidateWidgetReason::Paint);
+	}
 }
 
 FVector2D SInventoryGridWidget::ComputeDesiredSize(float) const
@@ -262,9 +292,21 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 		}
 		else
 		{
-			GhostCursorLocal = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-			UpdateGhostPlacement(GhostCursorLocal);
-			bGhostActive = true;
+			// We only render the ghost inside this grid's bounds. If cursor is outside, disable the ghost for this grid.
+			const FVector2D Local = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
+			const FVector2D VisualSize = Bag.IsValid() ? FVector2D(Bag->GridSize) * CellSize : FVector2D::ZeroVector;
+			const bool bInside = (Local.X >= 0.f && Local.Y >= 0.f && Local.X < VisualSize.X && Local.Y < VisualSize.Y);
+			if (bInside)
+			{
+				GhostCursorLocal = Local;
+				// Use configured cell pixel size for placement
+				UpdateGhostPlacement(GhostCursorLocal, CellSize);
+				bGhostActive = true;
+			}
+			else
+			{
+				bGhostActive = false;
+			}
 		}
 		Invalidate(EInvalidateWidgetReason::Paint);
 	}
@@ -282,6 +324,7 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 				UpdateHoverSelection();
 				Invalidate(EInvalidateWidgetReason::Paint);
 			}
+			bGhostActive = false;
 			return FReply::Unhandled();
 		}
 		// If outside visual grid area, clear hover and ignore
@@ -293,6 +336,7 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 				UpdateHoverSelection();
 				Invalidate(EInvalidateWidgetReason::Paint);
 			}
+			bGhostActive = false;
 			return FReply::Unhandled();
 		}
 		const FIntPoint NewCell = ToCell(Local);
@@ -308,16 +352,27 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 
 void SInventoryGridWidget::OnMouseLeave(const FPointerEvent& MouseEvent)
 {
+	// Clear hover and disable ghost when the cursor leaves this grid entirely
+	bool bInvalidate = false;
 	if (HoverCell != FIntPoint(-1,-1))
 	{
 		HoverCell = FIntPoint(-1,-1);
 		UpdateHoverSelection();
+		bInvalidate = true;
+	}
+	if (bGhostActive)
+	{
+		bGhostActive = false;
+		bInvalidate = true;
+	}
+	if (bInvalidate)
+	{
 		Invalidate(EInvalidateWidgetReason::Paint);
 	}
 	SCompoundWidget::OnMouseLeave(MouseEvent);
 }
 
-void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor)
+void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, const FVector2D& LocalCell)
 {
 	if (!Bag.IsValid())
 	{
@@ -327,8 +382,8 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor)
 	}
 
 	// Anchor ghost at its top-left so we can align to cells
-	const FVector2D Anchor = LocalCursor - (GhostSize * 0.5f);
-	const FIntPoint Candidate = ToCell(Anchor);
+	const FVector2D Anchor = LocalCursor - (FVector2D(GhostFootprint) * LocalCell * 0.5f);
+	const FIntPoint Candidate = ToCellLocal(Anchor, LocalCell);
 	GhostTopLeft = Candidate;
 	int32 Overlap = INDEX_NONE;
 	bGhostPlacementValid = EvaluateGhostPlacement(Candidate, Overlap);
@@ -367,8 +422,8 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 	if (Bag.IsValid() && MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		const FVector2D Local = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-		const FVector2D VisualSize = FVector2D(Bag->GridSize) * CellSize;
-		if (Local.X < 0.f || Local.Y < 0.f || Local.X >= VisualSize.X || Local.Y >= VisualSize.Y) return FReply::Unhandled();
+		const FVector2D LocalSize = MyGeometry.GetLocalSize();
+		if (Local.X < 0.f || Local.Y < 0.f || Local.X >= LocalSize.X || Local.Y >= LocalSize.Y) return FReply::Unhandled();
 		// If we're dragging but the footprint is invalid, ignore click
 		if (bGhostActive && !bGhostPlacementValid)
 		{
@@ -436,7 +491,7 @@ if (OwnerWidget->BeginDragFromCell(SelectedCell))
 				}
 					GhostIgnoreIndex = INDEX_NONE;
 					GhostCursorLocal = Local;
-					UpdateGhostPlacement(Local);
+				UpdateGhostPlacement(Local, CellSize);
 					bGhostActive = true;
 					Invalidate(EInvalidateWidgetReason::Paint);
 				}

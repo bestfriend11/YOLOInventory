@@ -1,0 +1,119 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_object_pcontent.skrit
+// Author(s):  Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$        = true;
+property string _doc$                = "A pop out a guy when an object breaks generator guy is defined in pcontent";
+property string _required_component$ = "placement";
+
+// exported properties
+property	eWorldEvent create_msg$				= WE_EXPLODED		doc = "message create go on.";
+
+property 	Scid   		Spawnpoint$									doc = "Scid of Spawnpoint Object if applicable";
+property	scid 		msg_scid$ 									doc = "Scid to send message to when CC'd trigger message is recieved";
+property	eWorldEvent msg_type$				= WE_REQ_ACTIVATE	doc = "message to send when trigger is recieved";
+property	eWorldEvent trigger_msg$			= WE_KILLED			doc = "CC'd message to trigger on";
+
+property	bool		get_child_cc$			= false				doc = "Recieve cc'd messages from the kidlet.";
+property	bool		one_shot$				= false				doc = "make object non-selectable an useable after spewing.";
+
+property	bool		auto_drop$				= true				doc = "Does the skrit drop the object instead of just creating it?";
+property 	bool		throw_object$			= true				doc = "make the object spin when dropped";
+
+property	bool		send_goid$				= false				doc = "Send the GOID of the generated object to the parent of the generator";
+property	bool		delete_on_spawn$		= false				doc = "delete generator after spawning an object";
+
+owner = GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+// global state
+
+event OnGoHandleCcMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+{		
+	if ( get_child_cc$ )
+	{
+		if ( e$ == trigger_msg$)
+		{	
+			if ( msg_scid$.isvalid() )
+			{
+				SendWorldMessage( msg_type$, owner.Goid, msg_scid$ );
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// local states
+
+startup state WaitToSpawn$
+{
+	event OnGoHandleMessage$( eWorldEvent e$, WorldMessage /*msg$*/ )
+	{
+		if( e$ == create_msg$ )
+		{
+			if( owner.Go.HasInventory() )
+			{
+				owner.go.inventory.AddDelayedPcontent();
+				
+				if( ( owner.go.children.size > 0 ) && ( auto_drop$ || send_goid$ ) )
+				{
+					Go item$ = owner.go.children.get( 0 );
+				
+					int id$ = makeInt( item$.goid );
+					
+					This.CreateTimer( id$, 0);
+				}
+				
+				if( one_shot$ )
+				{
+					Owner.Go.Aspect.SSetIsSelectable( false );
+					Owner.Go.Aspect.SSetIsUsable( false );
+				}
+				if( delete_on_spawn$ )
+				{
+					PostWorldMessage( WE_REQ_DELETE, owner.Goid, owner.Goid, 2.0);	
+				}
+			}
+		}
+	}
+	
+	event OnTimer$( int id$, float /*off*/ )
+	{
+		Go Item$ = makeGoid( id$ ).Go;
+		
+		if( send_goid$ )
+		{
+			Go Parent$ = owner.Go.Parent;
+			if( Parent$ != NULL )
+			{
+				PostWorldMessage( WE_REQ_ACTIVATE, owner.Goid, Parent$.Goid, id$, 0.1);	
+			}
+		}
+		
+		if( auto_drop$ )
+		{
+			if ( SpawnPoint$.IsValid() && SpawnPoint$.getgoid.isvalid() )
+			{
+				owner.go.Inventory.RSRemove( item$, throw_object$, SpawnPoint$.Go );
+			} else {
+				owner.go.inventory.RSRemove( item$, throw_object$ );
+			}
+		}
+		
+		if ( get_child_cc$ )
+		{
+			GoDb.StartWatching( owner.Goid, item$.goid);
+		}
+	}
+}

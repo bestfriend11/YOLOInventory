@@ -1,0 +1,2287 @@
+///////////////////////////////////////////////
+// BASE AUTOMATED GENERATORS
+
+//BASE EXPLODING
+[t:template,n:generator_base_exploding]
+{
+	specializes		= generator;
+	doc				= "base template for automated exploding gens";
+    category_name   = "1w_automated";
+
+	[aspect]
+	{
+        is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = true;
+		life_state		= ls_alive_conscious;
+	}
+
+    common:dev_instance_text = "GENERATOR";
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation	= 10;
+		Health_Modifier		= 500;
+		trigger_range		= 10.0;
+	}
+}
+[t:template,n:generator_base_exploding_wood]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for wood automated exploding gens";
+    category_name   = "1w_automated";
+
+	[aspect]
+	{
+		material		= wood;
+	}
+
+    [physics]
+	{
+        break_sound = s_e_env_break_container_wood;
+		explode_when_killed = true;
+
+		[break_particulate]
+		{
+			frag_glb_wood_01	= 3;
+			frag_glb_wood_02	= 2;
+			frag_glb_wood_03	= 2;
+			frag_glb_wood_04	= 4;
+		}
+	}
+
+    [gizmo]
+	{
+		model				=	m_i_glb_waypoint-10;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+}
+[t:template,n:generator_base_exploding_stone]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for stone automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= stone;
+	}
+
+ 	[physics]
+	{
+        break_sound = s_e_env_break_container_stone;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			frag_glb_stone_01	= 4;
+			frag_glb_stone_02	= 1;
+			frag_glb_stone_03	= 1;
+			frag_glb_stone_04	= 1;
+			frag_glb_stone_05	= 1;
+			frag_glb_stone_06	= 1;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+[t:template,n:generator_base_exploding_stone_ice]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for ice stone automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= ice;
+		is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = false;
+
+	}
+
+ 	[physics]
+	{
+        break_sound = s_e_die_ice_warrior;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			chunks_ice_spire_01	= 1;
+			chunks_ice_spire_02	= 0;
+			chunks_ice_spire_03	= 1;
+			chunks_ice_spire_04	= 1;
+			chunks_ice_spire_05	= 4;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+[t:template,n:generator_base_exploding_mucosa_egg]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for mucosa egg automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= flesh;
+		is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = false;
+
+	}
+	[generator_in_object]
+	{
+		spawn_chance = 0.0;
+		child_template_name = cocoon_glb_mucosa_broken;
+	}
+ 	[physics]
+	{
+        break_sound = s_e_IH_meat_explosion;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			frag_glb_cocoon_mucosa_01	= 1;
+			frag_glb_cocoon_mucosa_02	= 1;
+			frag_glb_cocoon_mucosa_03	= 1;
+			frag_glb_cocoon_mucosa_04	= 1;
+			frag_glb_cocoon_mucosa_05	= 1;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+[t:template,n:generator_base_exploding_wood_box1]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for wood box1 automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= wood;
+		is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = false;
+	    model         = m_i_gob_box-shipping-01;
+   		textures:0 	= b_i_gob_box-shipping-01;
+	}
+
+ 	[physics]
+	{
+        break_sound = s_e_break_wood;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			frag_gob_box_shipping_01	= 1;
+			frag_gob_box_shipping_02	= 1;
+			frag_gob_box_shipping_03	= 1;
+			frag_gob_box_shipping_04	= 1;
+			frag_gob_box_shipping_05	= 1;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+[t:template,n:generator_base_exploding_wood_box2]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for wood box2 automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= wood;
+		is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = false;
+	    model         = m_i_gob_box-shipping-01;
+   		textures:0 	= b_i_gob_box-shipping-02;
+	}
+
+ 	[physics]
+	{
+        break_sound = s_e_break_wood;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			frag_gob_box_shipping_06	= 1;
+			frag_gob_box_shipping_07	= 1;
+			frag_gob_box_shipping_08	= 1;
+			frag_gob_box_shipping_09	= 1;
+			frag_gob_box_shipping_10	= 1;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+[t:template,n:generator_base_exploding_wood_box3]
+{
+	specializes		= generator_base_exploding;
+	doc				= "base template for wood box3 automated exploding gens";
+    category_name   = "1w_automated";
+
+    [aspect]
+	{
+		material		= wood;
+		is_selectable   = false;
+		is_usable		= false;
+		is_collidable	= false;
+    	does_block_path = false;
+	    model         	= m_i_gob_box-shipping-02;
+   		textures:0		= b_i_gob_box-shipping-03;
+        //scale_base      = 1.1;
+	}
+
+ 	[physics]
+	{
+        break_sound = s_e_break_wood;
+		explode_when_killed = true;
+
+		fire_resistance		= 1.0;
+
+		[break_particulate]
+		{
+			frag_gob_box_shipping_06	= 1;
+			frag_gob_box_shipping_07	= 1;
+			frag_gob_box_shipping_08	= 1;
+			frag_gob_box_shipping_09	= 1;
+			frag_gob_box_shipping_10	= 1;
+		}
+	}
+
+    [generator_auto_object_exploding]
+	{
+		Health_on_Creation  = 10;
+		Health_Modifier     = 1000;
+	}
+}
+
+
+//BASE ANIMATING
+[t:template,n:generator_base_grate_wall]
+{
+	specializes		= generator;
+	doc 			= "base template automated wall grate gens";
+    category_name   = "1w_automated";
+
+    aspect:model	= m_i_csl_grate-01;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_csl_grate-01-open;
+				}
+			}
+		}
+
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_advanced_a2]
+    {
+    	spawn_range		= 0.0;
+    	anim_one_shot	= true;
+    	sound_start		= false;
+    	sound_end		= false;
+    	close_sfx_on	= false;
+    }
+}
+
+[t:template,n:generator_base_grate_floor]
+{
+	specializes		= generator;
+	doc				= "base template automated floor grate gens";
+    category_name   = "1w_automated";
+
+	[aspect]
+	{
+	    model         = m_i_csl_grate-02;
+	    material      = steel;
+	    is_collidable = false;
+	    is_selectable = false;
+	    is_usable     = false;
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_csl_grate-02-open;
+					rest = a_i_csl_grate-02-close;
+				}
+			}
+		}
+
+	}
+
+    [generator_advanced_a2] 
+    {
+    	trigger_range = 10.0;
+    	accelerate = false;
+    }
+
+    [gizmo]
+	{
+		model				=	m_i_glb_waypoint-10;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+}
+
+[t:template,n:generator_base_tent_flap]
+{
+	specializes		= generator;
+	doc 			= "base template automated tent flap grs gens";
+    category_name   = "1w_automated";
+
+    aspect:model	= m_i_grs_tent-camp-03;
+
+	
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_grs_tent-camp-03-open;
+				}
+			}
+		}
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_advanced_a2]
+	{
+		spawn_range		= 0.0;
+    	anim_one_shot	= true;
+    	sound_start		= false;
+    	sound_end		= false;
+    	close_sfx_on	= false;
+		trigger_range	= 18;
+	}
+
+}
+[t:template,n:generator_base_glb_tent_flap]
+{
+	specializes		= generator;
+	doc 			= "base template automated tent flap glb gens";
+    category_name   = "1w_automated";
+
+    aspect:model	= m_i_glb_tent-merchant-02;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_glb_tent-merchant-02-open;
+				}
+			}
+		}
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_advanced_a2]
+	{
+		spawn_range		= 0.0;
+    	anim_one_shot	= true;
+    	sound_start		= false;
+    	sound_end		= false;
+    	close_sfx_on	= false;
+		trigger_range	= 18;
+	}
+
+}
+[t:template,n:generator_base_generic_bush]
+{
+	specializes		= generator;
+	doc				= "base template automated generator bush grass";
+    category_name   = "1w_automated";
+
+	[aspect]
+	{
+		is_collidable = 	FALSE;
+		is_selectable = 	FALSE;
+		is_usable = 		FALSE;
+        material = 			foliage;
+	    does_block_camera =	true;
+   		model = 			m_i_glb_bush-10;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_glb_bush-10-shake;
+					rest = a_i_glb_bush-10-still;
+				}
+			}
+
+		}
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+	[generator_advanced_a2]
+	{
+//        spawn_period = 0;
+        trigger_range = 14;
+        sound_start = true;
+        sound_end = false;
+        accelerate = false;
+	}
+
+	[gizmo]
+	{
+		diffuse_color		=	0.0, 1, 0.0;
+		model = m_i_glb_object-waypoint;
+		use_diffuse_color = TRUE;
+	}
+
+
+}
+[t:template,n:generator_base_swp_bush]
+{
+	specializes		= generator;
+	doc				= "base template automated generator bush swamp";
+    category_name   = "1w_automated";
+	[aspect]
+	{
+		is_collidable = 	FALSE;
+		is_selectable = 	FALSE;
+		is_usable = 		FALSE;
+        material = 			foliage;
+	    does_block_camera =	true;
+   		model 		= m_i_swp_bush-08;
+   		textures:0 	= b_i_swp_bush-05;
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_swp_bush-08-shake;
+					rest = a_i_swp_bush-08-still;
+				}
+			}
+
+		}
+	}
+
+    common:dev_instance_text = "GENERATOR";
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+	[generator_advanced_a2]
+	{
+//        spawn_period = 0;
+        trigger_range = 14;
+        sound_start = true;
+        sound_end = false;
+        accelerate = false;
+	}
+	[gizmo]
+	{
+		diffuse_color		=	0.0, 1, 0.0;
+		model = m_i_glb_object-waypoint;
+		use_diffuse_color = TRUE;
+	}
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+//SPECIALIZED GENERATORS
+
+[t:template,n:generator_generic]
+{
+	specializes = generator;
+	doc = "generator_basic";
+    extra_doc = "Basic Generator Object Used to Spawn Objects.";
+	category_name       = "1w_generator";
+
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+   	[generator_basic] { }
+
+}
+//All exploding door gens specialize this.
+[t:template,n:generator_door_breakable]
+{
+	specializes		= base_breakable_wood;
+	doc				= "generator wooden breakable door";
+    category_name   = "1w_generator";
+
+    [aspect]
+    {
+    	model			= m_i_grs_door-farmhouse;
+    	does_block_path = true;
+    }
+
+    [physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_wood_01	= 3;
+			frag_glb_wood_02	= 2;
+			frag_glb_wood_03	= 2;
+			frag_glb_wood_04	= 4;
+		}
+	}
+
+    [generator_object_exploding] {}	
+}
+
+[t:template,n:generator_random]
+{
+	specializes = generator;
+	doc = "generator_random";
+    extra_doc = "Basic Generator Object Used to Spawn Objects using pcontent.";
+	category_name       = "1w_generator";
+
+	[gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+	[aspect]
+	{
+		is_visible = false;
+	}
+
+   	[generator_random]	{ }
+	[inventory]			{ }
+}
+
+[t:template,n:generator_cobweb]
+{
+	specializes = base_breakable_wood;
+	doc = "cobweb_generator_lg";
+    category_name = "1w_generator";
+
+	aspect:model 				= m_i_csl_cobweb-07;
+	physics:break_effect		= sarcophagus_dust;
+
+	[aspect]
+    {
+   		life_state		= LS_ALIVE_CONSCIOUS;
+        is_collidable 		= false;
+		life			= 30;
+		max_life		= 30;
+	}
+
+    [physics]
+	{
+		[break_particulate]
+		{
+			cobweb_csl_01	= 1;
+			cobweb_csl_02	= 1;
+        }
+	}
+
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_breakable]
+	{
+		spawn_sfx = grate_dust;
+	}
+
+}
+
+[t:template,n:generator_door_breakable_peasant]
+{
+	specializes		= generator_door_breakable;
+	doc				= "generator breakable door peasant";
+    category_name   = "1w_generator";
+
+    aspect:model		= m_i_glb_door-barn-01;
+    aspect:textures:0	= b_i_grs_door-02;
+
+    physics:break_sound = s_e_IH_break_wood_solid;
+}
+
+[t:template,n:generator_stalagmite]
+{
+	specializes = base_breakable_wood;
+	doc = "generator_stalagmite";
+    category_name = "1w_generator";
+
+	aspect:model 				= m_i_cav_stalagmite-03;
+	physics:break_effect		= sarcophagus_dust;
+
+	[aspect]
+    {
+		life_state		= LS_ALIVE_CONSCIOUS;
+        is_collidable 		= false;
+		life			= 120;
+		max_life		= 120;
+	}
+
+    [physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_stone_03	= 2;
+			frag_glb_stone_04	= 8;
+        }
+	}
+
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_breakable] {}
+
+}
+
+[t:template,n:generator_ice_stalagmite]
+{
+	specializes = base_breakable_wood;
+	doc = "generator_ice_stalag";
+    category_name = "1w_generator";
+    
+    [common]
+    {
+    	rollover_display = true;
+    	screen_name = "Ice Burrow";
+		rollover_life = true;
+    }
+
+	[aspect]
+	{
+		model 		= m_i_cav_stalagmite-03;
+		[textures] { 0 = b_t_ic01_flr_stg-08x08-c;}
+	}
+	
+	physics:break_effect		= sarcophagus_dust;
+
+	[aspect]
+    {
+		life_state		= LS_ALIVE_CONSCIOUS;
+        is_collidable 		= false;
+		life			= 210;
+		max_life		= 210;
+	}
+
+    [physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_ice_01	= 3;
+			frag_glb_ice_02	= 3;
+			frag_glb_ice_03	= 3;
+			frag_glb_ice_04	= 3;
+			frag_glb_ice_05	= 3;
+        }
+	}
+
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+    [generator_breakable] {}
+
+}
+
+[t:template,n:generator_swp_spawner_01]
+{
+	specializes = base_breakable_wood;
+	doc = "generator_swp_spawner";
+    category_name = "1w_generator";
+    [common]
+    {
+    	rollover_display = true;
+    	screen_name = "Spawner";
+		rollover_life = true;
+    }
+    
+	physics:break_effect	= sarcophagus_dust;
+	
+	[aspect]
+    {
+    	model 		= m_i_cav_stalagmite-03;
+		[textures] { 0 = b_i_swp_spawner-01;}
+		
+		life_state		= LS_ALIVE_CONSCIOUS;
+        is_collidable 	= false;
+		life			= 210;
+		max_life		= 210;
+	}
+    [physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_stone_03	= 2;
+			frag_glb_stone_04	= 8;
+        }
+	}
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+	[generator_breakable] {}
+}
+
+[t:template,n:generator_grs_spawner_01]
+{
+	specializes = base_breakable_wood;
+	doc = "generator_grs_spawner";
+    category_name = "1w_generator";
+    [common]
+    {
+    	rollover_display = true;
+    	screen_name = "Spawner";
+		rollover_life = true;
+    }
+    
+	physics:break_effect	= sarcophagus_dust;
+	
+	[aspect]
+    {
+    	model 		= m_i_cav_stalagmite-03;
+		[textures] { 0 = b_i_grs_spawner-01;}
+		
+		life_state		= LS_ALIVE_CONSCIOUS;
+        is_collidable 	= false;
+		life			= 50;
+		max_life		= 50;
+	}
+    [physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_stone_03	= 2;
+			frag_glb_stone_04	= 8;
+        }
+	}
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+	[generator_breakable] {}
+}
+[t:template,n:generator_grs_cattail_06] //$$ Should spawn mangler, swamp_slinger, and troll. -CarlosN 10/10/01
+{
+	specializes = non_interactive_nonblocking;
+	category_name = "1w_generator";
+	doc = "generator_grs_cattail_01";
+	[aspect]
+	{
+		model		=	m_i_grs_cattail-06;
+		textures:0  = 	b_i_grs_cattail-02;
+	}
+	[body]
+	{
+		initial_chore = chore_default;
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_grs;
+			[chore_default]
+			{
+				skrit = infinite_loop;
+				[anim_files] { 00 =	cattail-06-shake; }
+			}
+		}
+	}
+}
+[t:template,n:generator_alignment_changer]
+{
+	specializes = generator;
+	doc = "generator_alignment_changer";
+    extra_doc = "Dumb Guy Skrit.";
+
+	category_name       = "1w_generator";
+
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0.0, 1, 0.0;
+		use_diffuse_color	=	true;
+	}
+
+   	[generator_dumb_guy] {}
+
+}
+
+[t:template,n:generator_wall_breakable_01]
+{
+	specializes		= base_breakable_wood;
+	doc				= "generator wooden breakable wall";
+    category_name   = "1w_generator";
+
+    [aspect]
+    {
+    	model	= m_i_cav_boarded-cave;
+    	does_block_path = true;
+    }
+
+	[physics]
+	{
+		[break_particulate]
+		{
+			frag_glb_wood_01 = 2;
+			frag_glb_wood_02 = 2;
+			frag_glb_wood_03 = 2;
+			frag_glb_wood_04 = 2;
+		}
+	}
+
+    [generator_object_exploding]
+	{
+		child_template_name = rock_beast;
+        //spawn_actor = true;
+	}
+}
+
+[t:template,n:generator_bush_01]
+{
+	specializes		= generator;
+	doc = "generator_bush";
+	category_name = "1w_generator";
+	[aspect]
+	{
+		is_collidable = 	FALSE;
+		is_selectable = 	FALSE;
+		is_usable = 		FALSE;
+		model = 			m_i_glb_bush-10;
+        material = 			foliage;
+	    does_block_camera =	true;
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_glb_bush-10-shake;
+					rest = a_i_glb_bush-10-still;
+				}
+			}
+
+		}
+	}
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+	[generator_advanced_a2]
+	{
+//        spawn_period = 0;
+        sound_start = true;
+        sound_end = flase;
+	}
+
+	[gizmo]
+	{
+		diffuse_color		=	0.0, 1, 0.0;
+		model = m_i_glb_object-waypoint;
+		use_diffuse_color = TRUE;
+	}
+}
+
+[t:template,n:generator_bush_02]
+{
+	specializes		= generator;
+	doc = "generator_bush_ice";
+	category_name = "1w_generator";
+	[aspect]
+	{
+		is_collidable = 	FALSE;
+		is_selectable = 	FALSE;
+		is_usable = 		FALSE;
+		model = 			m_i_glb_bush-10;
+        material = 			foliage;
+	    does_block_camera =	true;
+	    [textures] { 0=b_i_ice_bush-rhod; }
+	}
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_glb_bush-10-shake;
+					rest = a_i_glb_bush-10-still;
+				}
+			}
+
+		}
+	}
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+    [generator_advanced_a2]
+	{
+//        spawn_period = 0;
+        sound_start = true;
+        sound_end = flase;
+	}
+
+	[gizmo]
+	{
+		diffuse_color		=	0.0, 1, 0.0;
+		model = m_i_glb_object-waypoint;
+		use_diffuse_color = TRUE;
+	}
+}
+
+[t:template,n:generator_grate_csl_01]
+{
+	specializes		= generator;
+	doc				= "generator_grate_floor";
+    category_name   = "1w_generator";
+
+    aspect:model	= m_i_csl_grate-01;
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+            [chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_csl_grate-01-open;
+				}
+			}
+
+		}
+	}
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+    [generator_advanced_a2] 
+    {
+    	spawn_range		= 0.0;
+    	anim_one_shot	= true;
+    	sound_start		= false;
+    	sound_end		= false;
+    	close_sfx_on	= false;
+    }
+    [gizmo]
+	{
+		model				=	m_i_glb_object-waypoint;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+}
+
+[t:template,n:generator_grate_csl_02]
+{
+	specializes		= generator;
+	doc				= "generator_grate_wall";
+    category_name   = "1w_generator";
+
+	[aspect]
+	{
+	    model         = m_i_csl_grate-02;
+	    material      = steel;
+	    is_collidable = false;
+	    is_selectable = false;
+	    is_usable     = false;
+	}
+
+	[body]
+	{
+		[chore_dictionary]
+		{
+            chore_prefix = 0;
+			[chore_misc]
+			{
+				chore_stances = ignore;
+				skrit = select_transition;
+                [anim_files]
+				{
+					spwn = a_i_csl_grate-02-open;
+					rest = a_i_csl_grate-02-close;
+				}
+			}
+		}
+
+	}
+	common:forced_expiration_class = immediate;
+	common:auto_expiration_class = immediate;
+
+    [generator_advanced_a2] {}
+
+    [gizmo]
+	{
+		model				=	m_i_glb_waypoint-10;
+		texture				=	;
+		diffuse_color		=	0, 0, 1.0;
+		use_diffuse_color	=	true;
+	}
+
+}
+
+[t:template,n:spawner_csl_spider]
+{
+	specializes = non_interactive_blocking;
+	doc = "eggsack_spawner";
+	category_name = "1w_generator";
+	[aspect]
+	{ 
+		model=m_i_csl_spider-spawner; 
+		[textures]	{0=b_i_csl_spider-spawner;}
+		life = 111;
+		max_life =111;
+	}
+	[body]
+	{
+		initial_chore = chore_default;
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_csl;
+			[chore_default]
+			{
+				skrit = infinite_loop;
+				[anim_files] { 00=spider-spawner-move; }
+			}
+			[chore_die]
+			{
+				skrit = select_transition;
+				[anim_files] { 00= spider-spawner-die; }
+			}
+		}
+	}
+}
+[t:template,n:generator_glb_mucosa_01]
+{
+	specializes = non_interactive_blocking;
+	doc = "generator_glb_mucosa_01";
+	category_name = "1w_generator";
+	[aspect]
+	{
+		model		=	m_i_glb_cocoon-mucosa-01;
+		textures:0  = 	b_i_csl_spider-spawner-02;
+		life = 41;
+		max_life = 41;
+	}
+	[body]
+	{
+		initial_chore = chore_default;
+		[chore_dictionary]
+		{
+			chore_prefix = a_i_glb;
+			[chore_default]
+			{
+				skrit = infinite_loop;
+				[anim_files] { 00 =	cocoon-mucosa-01-move; }
+			}
+			[chore_die]
+			{
+				skrit = select_transition;
+				[anim_files] { 00 = cocoon-mucosa-01-open; }
+			}
+		}
+	}
+}
+
+//////////////////////////////////////////////
+//AUTOMATED GENERATORS SORTED BY MONSTER TYPE
+
+//Doors
+[t:template,n:gen_explode_door-krug_grunt]
+{
+	specializes		= generator_base_exploding_wood;
+	doc				= "gen_explode_door-krug_grunt";
+
+    aspect:model	= m_i_grs_door-farmhouse;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = Krug_Grunt;
+	}
+}
+
+//Rocks
+[t:template,n:gen_explode_rock-rock_beast]
+{
+	specializes		= generator_base_exploding_stone;
+	doc				= "gen_explode_rock-krug_grunt";
+
+    aspect:model	= m_i_glb_rock-03;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = rock_beast;
+	}
+}
+
+//Ice
+[t:template,n:gen_explode_ice_01-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .6;
+
+    aspect:model	= m_i_ice_spire-01;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_02-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-02;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_03-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-03;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_04-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-04;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_05-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .8;
+
+    aspect:model	= m_i_ice_spire-05;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_06-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+
+    aspect:model	= m_i_ice_spire-06;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice_01-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .6;
+
+    aspect:model	= m_i_ice_spire-01;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+[t:template,n:gen_explode_ice_02-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-02;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+[t:template,n:gen_explode_ice_03-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-03;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+[t:template,n:gen_explode_ice_04-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-04;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+[t:template,n:gen_explode_ice_05-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .8;
+
+    aspect:model	= m_i_ice_spire-05;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+[t:template,n:gen_explode_ice_06-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+
+    aspect:model	= m_i_ice_spire-06;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+//Old Ice
+[t:template,n:gen_explode_ice-ice_warrior]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_warrior";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-02;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_warrior;
+	}
+}
+[t:template,n:gen_explode_ice-ice_archer]
+{
+	specializes		= generator_base_exploding_stone_ice;
+	doc				= "gen_explode_ice-ice_archer";
+	aspect:scale_base	= .7;
+
+    aspect:model	= m_i_ice_spire-01;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = ice_archer;
+	}
+}
+
+//Goblin Boxes
+    //BOX 1 - heater?, blaster?
+[t:template,n:gen_explode_box1-heater]
+{
+	specializes		= generator_base_exploding_wood_box1;
+	doc				= "gen_explode_box1-heater";
+	aspect:scale_base	= 1.5;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = heater;
+	}
+}
+[t:template,n:gen_explode_box1-blaster]
+{
+	specializes		= generator_base_exploding_wood_box1;
+	doc				= "gen_explode_box1-blaster";
+	aspect:scale_base	= 1.5;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = blaster;
+	}
+}
+    //BOX 2 - perforator, proxo
+[t:template,n:gen_explode_box2-perforator]
+{
+	specializes		= generator_base_exploding_wood_box2;
+	doc				= "gen_explode_box2-perforator";
+	aspect:scale_base	= 1.2;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = perforator;
+	}
+}
+[t:template,n:gen_explode_box2-proxo]
+{
+	specializes		= generator_base_exploding_wood_box2;
+	doc				= "gen_explode_box2-proxo";
+	aspect:scale_base	= 1.2;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = proxo;
+	}
+}
+	//BOX 3 - Gobbots, kill_bot, hunter
+[t:template,n:gen_explode_box3-gobbot_flamethrower]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-gobbot_flamethrower";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = gobbot_flamethrower;
+	}
+}
+[t:template,n:gen_explode_box3-gobbot_grenade]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-gobbot_grenade";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = gobbot_grenade;
+	}
+}
+[t:template,n:gen_explode_box3-gobbot_lightning]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-gobbot_lightning";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = gobbot_lightning;
+	}
+}
+[t:template,n:gen_explode_box3-gobbot_minigun]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-gobbot_minigun";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = gobbot_minigun;
+	}
+}
+[t:template,n:gen_explode_box3-kill_bot]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-kill_bot";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = kill_bot;
+	}
+}
+[t:template,n:gen_explode_box3-hunter]
+{
+	specializes		= generator_base_exploding_wood_box3;
+	doc				= "gen_explode_box3-hunter";
+	aspect:scale_base	= .9;
+
+    [generator_auto_object_exploding]
+	{
+        Child_Template_Name = hunter;
+	}
+}
+
+//Grates
+[t:template,n:gen_grate_wall-spider_adolescent_yellow]
+{
+	specializes		= generator_base_grate_wall;
+	doc 			= "gen_grate_wall-spider_adolescent_yellow";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = spider_adolescent_yellow;
+	}
+
+}
+
+[t:template,n:gen_grate_floor-spider_adolescent_yellow]
+{
+	specializes		= generator_base_grate_floor;
+	doc 			= "gen_grate_floor-spider_adolescent_yellow";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = spider_adolescent_yellow;
+	}
+
+}
+//Tents
+[t:template,n:gen_tent_flap-krug_grunt]
+{
+	specializes		= generator_base_tent_flap;
+	doc 			= "gen_tent_flap-krug_grunt";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = krug_grunt;
+	}
+}
+[t:template,n:gen_tent_flap-krug_scout]
+{
+	specializes		= generator_base_tent_flap;
+	doc 			= "gen_tent_flap-krug_scout";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = krug_scout;
+	}
+}
+[t:template,n:gen_tent_flap-krug_shaman]
+{
+	specializes		= generator_base_tent_flap;
+	doc 			= "gen_tent_flap-krug_shaman";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = krug_shaman;
+	}
+}
+[t:template,n:gen_tent_flap-krug_raider]
+{
+	specializes		= generator_base_tent_flap;
+	doc 			= "gen_tent_flap-krug_raider";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = krug_raider;
+	}
+}
+[t:template,n:gen_tent_flap_glb-bandit_melee]
+{
+	specializes		= generator_base_glb_tent_flap;
+	doc 			= "gen_tent_flap_glb-bandit_melee";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_melee;
+	}
+}
+[t:template,n:gen_tent_flap_glb-bandit_ranged]
+{
+	specializes		= generator_base_glb_tent_flap;
+	doc 			= "gen_tent_flap_glb-bandit_ranged";
+
+    [generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_ranged;
+	}
+}
+
+//Bushes
+
+	//GRASS - FARMHOUSE MONSTERS
+[t:template,n:gen_bush_grass-krug_scavenger]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_scavenger";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_scavenger;
+	}
+}
+[t:template,n:gen_bush_grass-krug_scout]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_scout";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_scout;
+	}
+}
+[t:template,n:gen_bush_grass-krug_grunt]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_grunt";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_grunt;
+	}
+}
+[t:template,n:gen_bush_grass-krug_dog]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_dog";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_dog;
+	}
+}
+[t:template,n:gen_bush_grass-krug_apprentice]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_apprentice";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_apprentice;
+	}
+}
+[t:template,n:gen_bush_grass-krug_shaman]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_shaman";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_shaman;
+	}
+}
+[t:template,n:gen_bush_grass-krug_raider]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_raider";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_raider;
+	}
+}
+[t:template,n:gen_bush_grass-krug_guard]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_guard";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_guard;
+	}
+}
+[t:template,n:gen_bush_grass-krug_throw]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-krug_throw";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = krug_throw;
+	}
+}
+[t:template,n:gen_bush_grass-wolf_gray]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-wolf_gray";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = wolf_gray;
+	}
+}
+[t:template,n:gen_bush_grass-phrak]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-phrak";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = phrak;
+	}
+}
+[t:template,n:gen_bush_grass-phrak_piercer]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-phrak_piercer";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = phrak_piercer;
+	}
+}
+
+    //GRASS - DARK FOREST MONSTERS
+[t:template,n:gen_bush_grass-spiked_maw]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-spiked_maw";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = spiked_maw;
+	}
+}
+[t:template,n:gen_bush_grass-troll_forest]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-troll_forest";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = troll_forest;
+	}
+}
+[t:template,n:gen_bush_grass-forest_klaw]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-forest_klaw";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = forest_klaw;
+	}
+}
+[t:template,n:gen_bush_grass-hell_boar]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-hell_boar";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = hell_boar;
+	}
+}
+[t:template,n:gen_bush_grass-gorack]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-gorack";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = gorack;
+	}
+}
+[t:template,n:gen_bush_grass-bandit_ranged]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-bandit_ranged";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_ranged;
+	}
+}
+[t:template,n:gen_bush_grass-bandit_melee]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-bandit_melee";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_melee;
+	}
+}
+[t:template,n:gen_bush_grass-wolf_black]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-wolf_black";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = wolf_black;
+	}
+}
+[t:template,n:gen_bush_grass-phrak_forest]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-phrak_forest";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = phrak_forest;
+	}
+}
+[t:template,n:gen_bush_grass-spiked_dweller]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_grass-spiked_dweller";
+
+	[aspect]
+	{
+	    [textures] { 0=b_i_grs_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = spiked_dweller;
+	}
+}
+
+	//SNOW
+[t:template,n:gen_bush_snow-klaw]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-klaw";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = klaw;
+	}
+}
+[t:template,n:gen_bush_snow-wolf_white]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-wolf_white";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = wolf_white;
+	}
+}
+[t:template,n:gen_bush_snow-braak_magic]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-braak_magic";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = braak_magic;
+	}
+}
+[t:template,n:gen_bush_snow-braak]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-braak";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = braak;
+	}
+}
+[t:template,n:gen_bush_snow-bandit_ranged]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-bandit_ranged";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_ranged;
+	}
+}
+[t:template,n:gen_bush_snow-bandit_melee]
+{
+	specializes = generator_base_generic_bush;
+	doc = "generator_bush_snow-bandit_melee";
+
+	[aspect]
+	{
+		[textures] { 0=b_i_ice_bush-rhod; }
+	}
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = bandit_melee;
+	}
+}
+
+	//SWAMP - REGULAR BUSH
+[t:template,n:gen_bush_swamp-swamp_stinger]
+{
+	specializes = generator_base_swp_bush;
+	doc = "generator_bush_swamp-swamp_stinger";
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = swamp_stinger;
+	}
+}
+[t:template,n:gen_bush_swamp-swamp_witch]
+{
+	specializes = generator_base_swp_bush;
+	doc = "generator_bush_swamp-swamp_witch";
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = swamp_witch;
+	}
+}
+[t:template,n:gen_bush_swamp-troll_swamp]
+{
+	specializes = generator_base_swp_bush;
+	doc = "generator_bush_swamp-troll_swamp";
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = troll_swamp;
+	}
+}
+[t:template,n:gen_bush_swamp-swamp_slinger]
+{
+	specializes = generator_base_swp_bush;
+	doc = "generator_bush_swamp-swamp_slinger";
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = swamp_slinger;
+	}
+}
+[t:template,n:gen_bush_swamp-mangler]
+{
+	specializes = generator_base_swp_bush;
+	doc = "generator_bush_swamp-mangler";
+
+	[generator_advanced_a2]
+	{
+        Child_Template_Name = mangler;
+	}
+}
+
+//Cocoon - Mucosa
+[t:template,n:gen_egg_mucosa-mucosa]
+{
+	specializes = generator_base_exploding_mucosa_egg;
+	doc = "generator_mucosa_egg-mucosa";
+    aspect:model	= m_i_glb_cocoon-mucosa-02;
+	aspect:scale_base	= 1.5;
+
+	[generator_auto_object_exploding]
+	{
+        Child_Template_Name = mucosa;
+	}
+}
+[t:template,n:gen_egg_mucosa-mucosa_small]
+{
+	specializes = generator_base_exploding_mucosa_egg;
+	doc = "generator_mucosa_egg-mucosa_small";
+    aspect:model	= m_i_glb_cocoon-mucosa-02;
+	aspect:scale_base	= 1.2;
+
+	[generator_auto_object_exploding]
+	{
+        Child_Template_Name = mucosa_small;
+	}
+}
+
+[t:template,n:emitter_gom_die]
+{
+	specializes 		= point;
+	doc 				= "emitter Gom Die, don't place me.";
+    category_name       = "emitter";
+    
+	[common]
+	{
+		auto_expiration_class = never;
+		forced_expiration_class = never;
+		[template_triggers]
+		{
+			[*]
+			{
+				condition* = receive_world_message("WE_ENTERED_WORLD");
+				single_shot = true;
+				action*    = call_sfx_script("gom_switch");
+			}
+		}
+	}
+	[self_destruct] 
+	{
+		delete_time = 25.0;
+	}
+	[generator_in_object]
+	{
+		child_template_name = Gom_Super;
+		spawn_event = WE_ENTERED_WORLD;
+		spawn_chance = 1.0;
+		spawn_delay = 20.0;
+		invis_kid = true;
+	}
+}
+
+[t:template,n:emitter_sarden_reward_mp]
+{
+	specializes 		= inventory;
+	doc 				= "Multiplayer loot generator. Sarden";
+    category_name       = "generator";
+    
+	[aspect]
+	{
+		is_visible = false;
+		force_no_render = true;
+		is_selectable = false;
+	}
+    common:is_pcontent_allowed = false;
+	[generator_multiple_mp] {}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			il_main = bo_gr_bl_f_g_c_avg;
+		}
+	}
+}
+[t:template,n:emitter_flessan_reward_mp]
+{
+	specializes 		= inventory;
+	doc 				= "Multiplayer loot generator. flessan";
+    category_name       = "generator";
+    
+	[aspect]
+	{
+		is_visible = false;
+		force_no_render = true;
+		is_selectable = false;
+	}
+    common:is_pcontent_allowed = false;
+	[generator_multiple_mp] {}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			il_main = st_g_c_s_avg;
+		}
+	}
+}
+[t:template,n:emitter_ferdl_reward_mp]
+{
+	specializes 		= inventory;
+	doc 				= "Multiplayer loot generator. ferdl";
+    category_name       = "generator";
+    
+	[aspect]
+	{
+		is_visible = false;
+		force_no_render = true;
+		is_selectable = false;
+	}
+    common:is_pcontent_allowed = false;
+	[generator_multiple_mp] {}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			il_main = #ring/90-130;
+		}
+	}
+}
+[t:template,n:emitter_kylira_reward_mp]
+{
+	specializes 		= inventory;
+	doc 				= "Multiplayer loot generator. kylira";
+    category_name       = "generator";
+    
+	[aspect]
+	{
+		is_visible = false;
+		force_no_render = true;
+		is_selectable = false;
+	}
+    common:is_pcontent_allowed = false;
+	[generator_multiple_mp] {}
+	[inventory]
+	{
+		[delayed_pcontent]
+		{
+			il_main = bd_bp_f_g_c_avg;
+		}
+	}
+}

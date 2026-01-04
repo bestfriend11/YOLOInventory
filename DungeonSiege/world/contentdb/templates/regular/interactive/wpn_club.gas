@@ -1,0 +1,401 @@
+[t:template,n:base_club]
+{
+	doc = "Club";
+	specializes = weapon_melee;
+	[aspect]
+	{
+		material = wood;
+		[voice]
+		{
+			[put_down]
+			{
+				* = s_e_gui_put_down_staff_sed;
+			}
+		}
+	}
+	[attack]
+	{
+		attack_class = ac_club;
+		is_melee = true;
+		reload_delay = 0;
+		skill_class = melee;
+	}
+	[gui]
+	{
+		active_icon = b_gui_ig_i_ic_clb_001;
+		equip_slot = es_weapon_hand;
+	}
+}
+[t:template,n:cb_g_c_r_1h_avg]
+{
+	specializes = base_club;
+	doc = "cudgel";
+	[aspect]
+	{
+		model = m_w_clb_007;
+	}
+	[attack]
+	{
+		damage_max = 5;
+		damage_min = 3;
+	}
+	[common]
+	{
+        allow_modifiers = false;
+		screen_name = "Cudgel";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_007;
+		inventory_width = 1;
+	}
+	[pcontent]
+	{
+		[base]
+		{
+			modifier_max = 0;
+			modifier_min = 0;
+		}
+		[c_fin]
+		{
+		  f damage_max = 4.000000;
+		  f damage_min = 2.000000;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_clb_004;
+			inventory_width = 1;
+			model = m_w_clb_002;
+		  f modifier_max = 2.000000;
+		  f modifier_min = 1.000000;
+		}
+		[o_avg]
+		{
+		  f damage_max = 7.000000;
+		  f damage_min = 5.000000;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_clb_010;
+			inventory_width = 1;
+			model = m_w_clb_010;
+		  f modifier_max = 2.000000;
+		  f modifier_min = 1.000000;
+		}
+		[o_fin]
+		{
+		  f damage_max = 10.000000;
+		  f damage_min = 7.000000;
+			inventory_height = 2;
+			inventory_icon = b_gui_ig_i_w_clb_011;
+			inventory_width = 1;
+			model = m_w_clb_011;
+		  f modifier_max = 3.000000;
+		  f modifier_min = 2.000000;
+		}
+	}
+}
+[t:template,n:cb_g_c_r_1h_fun]
+{
+	specializes = base_club;
+	doc = "rock_club";
+	[aspect]
+	{
+		model = m_w_clb_008;
+	}
+	[attack]
+	{
+		damage_max = 4;
+		damage_min = 2;
+	}
+	[common]
+	{
+		allow_modifiers = false;
+		screen_name = "Rock Club";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_008;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_g_c_r_1h_low]
+{
+	specializes = base_club;
+	doc = "bone_club";
+	[aspect]
+	{
+		model = m_w_clb_001;
+	}
+	[attack]
+	{
+		damage_max = 3;
+		damage_min = 2;
+	}
+	[common]
+	{
+		allow_modifiers = false;
+		screen_name = "Bone Club";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_001;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_g_d_r_1h_avg]
+{
+	specializes = base_club;
+	doc = "spiked_club";
+	[aspect]
+	{
+		model = m_w_clb_004;
+	}
+	[attack]
+	{
+		damage_max = 6;
+		damage_min = 2;
+	}
+	[common]
+	{
+        allow_modifiers = false;
+		screen_name = "Spiked Club";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_002;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_g_d_r_1h_fun]
+{
+	specializes = base_club;
+	doc = "chair_leg";
+	[aspect]
+	{
+		model = m_w_clb_003;
+	}
+	[attack]
+	{
+		damage_max = 3;
+		damage_min = 1;
+	}
+	[common]
+	{
+		allow_modifiers = false;
+		screen_name = "Chair Leg";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_003;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_g_d_r_1h_low]
+{
+	specializes = base_club;
+	doc = "branch";
+	[aspect]
+	{
+		model = m_w_clb_005;
+	}
+	[attack]
+	{
+		damage_max = 2;
+		damage_min = 1;
+	}
+	[common]
+	{
+		allow_modifiers = false;
+		screen_name = "Branch";
+	}
+	[gui]
+	{
+		inventory_height = 2;
+		inventory_icon = b_gui_ig_i_w_clb_005;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_1h_swanny]
+{
+	specializes = base_club;
+	doc = "swanny_club";
+	[aspect]
+	{
+		model = m_w_clb_012;
+	}
+	[attack]
+	{
+		damage_max = 180;
+		damage_min = 150;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Swanny's Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:48;
+		inventory_height = 4;
+		inventory_icon = b_gui_ig_i_w_clb_012;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_2h_cyclops]
+{
+	specializes = base_club;
+	doc = "massive_club";
+	[aspect]
+	{
+		model = m_w_clb_006;
+	}
+	[attack]
+	{
+		damage_max = 125;
+		damage_min = 115;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Massive Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:37;
+		inventory_height = 4;
+		inventory_icon = b_gui_ig_i_w_clb_006;
+		inventory_width = 2;
+	}
+}
+[t:template,n:cb_un_2h_horrid]
+{
+	specializes = base_club;
+	doc = "horrid_club";
+	[aspect]
+	{
+		model = m_w_clb_009;
+	}
+	[attack]
+	{
+		damage_max = 31;
+		damage_min = 29;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Horrid Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:17;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_clb_009;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_2h_troll]
+{
+	specializes = base_club;
+	doc = "troll_club";
+	[aspect]
+	{
+		model = m_w_clb_009;
+	}
+	[attack]
+	{
+		damage_max = 31;
+		damage_min = 29;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Troll Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:16;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_clb_009;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_2h_troll_forest]
+{
+	specializes = base_club;
+	doc = "tree_club";
+	[aspect]
+	{
+		model = m_w_clb_009;
+	}
+	[attack]
+	{
+		damage_max = 54;
+		damage_min = 50;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Tree Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:21;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_clb_009;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_2h_troll_rock]
+{
+	specializes = base_club;
+	doc = "rocky_club";
+	[aspect]
+	{
+		model = m_w_clb_009;
+	}
+	[attack]
+	{
+		damage_max = 31;
+		damage_min = 29;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Rocky Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:16;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_clb_009;
+		inventory_width = 1;
+	}
+}
+[t:template,n:cb_un_2h_troll_swamp]
+{
+	specializes = base_club;
+	doc = "swamp_club";
+	[aspect]
+	{
+		model = m_w_clb_009;
+	}
+	[attack]
+	{
+		damage_max = 85;
+		damage_min = 75;
+	}
+	[common]
+	{
+		is_pcontent_allowed = false;
+		screen_name = "Swamp Club";
+	}
+	[gui]
+	{
+		equip_requirements = strength:28;
+		inventory_height = 3;
+		inventory_icon = b_gui_ig_i_w_clb_009;
+		inventory_width = 1;
+	}
+}

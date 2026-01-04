@@ -1,0 +1,73 @@
+//////////////////////////////////////////////////////////////////////////////
+//
+// File     :  generator_cage.skrit
+// Author(s):  Eric Tams
+//
+// Copyright © 2000 Gas Powered Games, Inc.  All rights reserved.
+//----------------------------------------------------------------------------
+//  $Revision:: $              $Date:$
+//----------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////////
+//
+//	Custom generator to handle the caged phraks.
+//
+//////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////
+// public definitions
+
+// reserved tags
+property bool   _server_only$			= true;
+property string _doc$					= "spawns an actor, and activates it when the generator is exploded.";
+property string _required_component$	= "placement";
+
+// exported properties
+property string 			child_template_name$		= "Caged_phrak"			doc ="Template Name of Actor to Spawn.";
+property float			 	delay$				 		= 4.0					doc ="Random delay before spawning.";
+
+owner									= GoSkritComponent;
+
+//////////////////////////////////////////////////////////////////////////////
+
+startup state Startup$
+{
+	transition -> Cage$ : OnTimer( 1 );
+	
+	trigger OnGoHandleMessage$( WE_ENTERED_WORLD )
+	{
+		if (godb.IsEditMode())
+		{
+			SetState Finish$;
+		} else {
+			float random_delay$ = Math.RandomFloat( delay$ );
+			this.CreateTimer( 1, random_delay$ );
+		}
+	}
+}
+state Cage$
+{	
+	Goid newGoid$;
+
+	event OnEnterState$
+	{
+		// make a new child
+		GoCloneReq cloneReq$ = MakeGoCloneReq( child_template_name$ );
+		cloneReq$.StartingPos = owner.Go.Placement.Position;
+        cloneReq$.SetStartingOrient = owner.Go.Placement.Orientation;
+		cloneReq$.SnapToTerrain = true;
+		newGoid$ = GoDb.SCloneGo( cloneReq$ );
+	}
+
+	trigger OnGoHandleMessage$( WE_EXPLODED )
+	{
+		if ( newgoid$.isvalid )
+    	{
+			SendWorldMessage( WE_REQ_ACTIVATE, owner.Goid, newGoid$ );
+		}
+	}
+}
+
+state Finish$
+{
+}
+//////////////////////////////////////////////////////////////////////////////
