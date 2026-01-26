@@ -31,6 +31,8 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Factories/BlueprintFactory.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "PropertyEditorModule.h"
+#include "IDetailsView.h"
 
 static FString GetRowStringFromStruct(const UScriptStruct* Struct, const uint8* RowData, FName Field)
 {
@@ -70,71 +72,97 @@ static FString GetRowStringFromStruct(const UScriptStruct* Struct, const uint8* 
 
 void SYIItemDashboard::Construct(const FArguments& InArgs)
 {
+	FPropertyEditorModule& PropModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+	FDetailsViewArgs DetailArgs;
+	DetailArgs.bAllowSearch = true;
+	DetailArgs.bHideSelectionTip = true;
+	DetailArgs.bAllowMultipleTopLevelObjects = false;
+	DetailArgs.bShowOptions = true;
+	DetailsView = PropModule.CreateDetailView(DetailArgs);
+
 	ChildSlot
 	[
-		SNew(SBorder)
-		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+		SNew(SSplitter)
+		+ SSplitter::Slot().Value(0.45f)
 		[
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot().AutoHeight().Padding(8)
+			SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().Padding(8)
 				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","DashboardRefresh","Refresh"))
-					.OnClicked_Lambda([this]()
-					{
-						Refresh();
-						return FReply::Handled();
-					})
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","DashboardRefresh","Refresh"))
+						.OnClicked_Lambda([this]()
+						{
+							Refresh();
+							return FReply::Handled();
+						})
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","DashboardCreateSource","New Data Table Source"))
+						.OnClicked_Lambda([this]()
+						{
+							CreateDataTableSourceAsset();
+							return FReply::Handled();
+						})
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","DashboardValidateCodes","Validate Unique Codes"))
+						.OnClicked_Lambda([this]()
+						{
+							ValidateUniqueCodes();
+							return FReply::Handled();
+						})
+					]
+					+ SHorizontalBox::Slot().FillWidth(1.0f)
+					[
+						SNew(SSearchBox)
+						.OnTextChanged(this, &SYIItemDashboard::OnSearchTextChanged)
+					]
 				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+				+ SVerticalBox::Slot().FillHeight(1.f).Padding(8)
 				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","DashboardCreateSource","New Data Table Source"))
-					.OnClicked_Lambda([this]()
+					SAssignNew(ListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
+					.ListItemsSource(&FilteredItems)
+					.SelectionMode(ESelectionMode::Single)
+					.OnContextMenuOpening(FOnContextMenuOpening::CreateSP(this, &SYIItemDashboard::BuildListContextMenu))
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry, ESelectInfo::Type)
 					{
-						CreateDataTableSourceAsset();
-						return FReply::Handled();
+						ShowDetailsForEntry(Entry);
 					})
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","DashboardValidateCodes","Validate Unique Codes"))
-					.OnClicked_Lambda([this]()
+					.OnGenerateRow(this, &SYIItemDashboard::MakeRowWidget)
+					.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry)
 					{
-						ValidateUniqueCodes();
-						return FReply::Handled();
+						ShowDetailsForEntry(Entry);
 					})
-				]
-				+ SHorizontalBox::Slot().FillWidth(1.0f)
-				[
-					SNew(SSearchBox)
-					.OnTextChanged(this, &SYIItemDashboard::OnSearchTextChanged)
+					.HeaderRow
+					(
+						SNew(SHeaderRow)
+						+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Code","Code")).FillWidth(0.15f)
+						+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Name","Name")).FillWidth(0.25f)
+						+ SHeaderRow::Column("Template").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Template","TemplateId")).FillWidth(0.2f)
+						+ SHeaderRow::Column("Type").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Type","Type")).FillWidth(0.1f)
+						+ SHeaderRow::Column("Source").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Source","Source")).FillWidth(0.45f)
+					)
 				]
 			]
-	+ SVerticalBox::Slot().FillHeight(1.f).Padding(8)
-	[
-		SAssignNew(ListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
-		.ListItemsSource(&FilteredItems)
-		.SelectionMode(ESelectionMode::Single)
-		.OnContextMenuOpening(FOnContextMenuOpening::CreateSP(this, &SYIItemDashboard::BuildListContextMenu))
-				.OnGenerateRow(this, &SYIItemDashboard::MakeRowWidget)
-				.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry)
-				{
-					OpenEntry(Entry);
-				})
-				.HeaderRow
-				(
-					SNew(SHeaderRow)
-					+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Code","Code")).FillWidth(0.15f)
-					+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Name","Name")).FillWidth(0.25f)
-					+ SHeaderRow::Column("Template").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Template","TemplateId")).FillWidth(0.2f)
-					+ SHeaderRow::Column("Type").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Type","Type")).FillWidth(0.1f)
-					+ SHeaderRow::Column("Source").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Source","Source")).FillWidth(0.45f)
-				)
+		]
+		+ SSplitter::Slot().Value(0.55f)
+		[
+			SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			[
+				DetailsView.IsValid()
+				? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
+				: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_NoDetails","Details panel unavailable")))
 			]
 		]
 	];
@@ -272,23 +300,10 @@ void SYIItemDashboard::OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry)
 		return;
 	}
 
-	if (!Entry->bIsDataTable)
-	{
-		if (UObject* Obj = Entry->Object.LoadSynchronous())
-		{
-			if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
-			{
-				AssetEditor->OpenEditorForAsset(Obj);
-			}
-		}
-		else
-		{
-			FMessageDialog::Open(EAppMsgType::Ok, FText::Format(
-				NSLOCTEXT("YOLOInventory","DashboardMissingAsset","Asset not found for code {0}. It may have been moved or deleted."),
-				FText::AsNumber(Entry->Code)));
-		}
-	}
-	else
+	// Prefer inline details view to keep designers inside the dashboard
+	ShowDetailsForEntry(Entry);
+
+	if (Entry->bIsDataTable)
 	{
 		if (Entry->DataSource.IsValid())
 		{
@@ -307,9 +322,10 @@ void SYIItemDashboard::OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry)
 
 		if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
 		{
-			FDataTableEditorModule& DataTableEditorModule = FModuleManager::LoadModuleChecked<FDataTableEditorModule>("DataTableEditor");
-			const EToolkitMode::Type Mode = EToolkitMode::WorldCentric;
-			DataTableEditorModule.CreateDataTableEditor(Mode, nullptr, Table);
+			if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
+			{
+				AssetEditor->OpenEditorForAsset(Table);
+			}
 		}
 	}
 }
@@ -571,6 +587,68 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 	}
 
 	return MenuBuilder.MakeWidget();
+}
+
+void SYIItemDashboard::ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry)
+{
+	if (!DetailsView.IsValid())
+	{
+		return;
+	}
+
+	UObject* Target = Entry.IsValid() ? ResolveDetailObject(*Entry) : nullptr;
+	if (Target && LastDetailObject.Get() == Target)
+	{
+		return;
+	}
+
+	LastDetailObject = Target;
+	TArray<UObject*> Objects;
+	if (Target)
+	{
+		Objects.Add(Target);
+	}
+	DetailsView->SetObjects(Objects);
+}
+
+UObject* SYIItemDashboard::ResolveDetailObject(const FYIItemDashboardEntry& Entry) const
+{
+	// Prefer a real asset if it exists
+	if (!Entry.bIsDataTable && Entry.Object.ToSoftObjectPath().IsValid())
+	{
+		if (UObject* Obj = Entry.Object.LoadSynchronous())
+		{
+			return Obj;
+		}
+	}
+
+	// Try registry lookup (will transform rows if needed)
+	if (GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			if (UYIItemDefinition* Def = Registry->GetByCode(Entry.Code))
+			{
+				return Def;
+			}
+		}
+	}
+
+	// Fallback to data source asset, then data table itself
+	if (Entry.DataSource.IsValid())
+	{
+		if (UObject* Source = Entry.DataSource.LoadSynchronous())
+		{
+			return Source;
+		}
+	}
+
+	if (Entry.DataTable.IsValid())
+	{
+		return Entry.DataTable.LoadSynchronous();
+	}
+
+	return nullptr;
 }
 
 TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()

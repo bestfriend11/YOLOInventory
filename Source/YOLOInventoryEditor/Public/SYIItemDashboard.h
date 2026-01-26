@@ -5,6 +5,7 @@
 #include "Input/Reply.h"
 #include "Input/Events.h"
 #include "UObject/SoftObjectPtr.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
 class UYIDataTableItemSource;
 class UYIItemDefinition;
@@ -43,10 +44,14 @@ private:
 	FText BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
 	TSharedPtr<SWidget> BuildContextMenuForEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
 	TSharedPtr<SWidget> BuildListContextMenu();
+	void ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry);
+	UObject* ResolveDetailObject(const FYIItemDashboardEntry& Entry) const;
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
 	TArray<TSharedPtr<FYIItemDashboardEntry>> FilteredItems;
 	TSharedPtr<class SListView<TSharedPtr<FYIItemDashboardEntry>>> ListView;
+	TSharedPtr<class IDetailsView> DetailsView;
+	TWeakObjectPtr<UObject> LastDetailObject;
 	FText SearchText;
 };
