@@ -1,6 +1,7 @@
 #include "TradingScreenWidget.h"
 #include "UILayerSubsystem.h"
 #include "InventoryScreenWidget.h"
+#include "InventoryDragOverlayUserWidget.h"
 #include "YIInventoryBag.h"
 
 void UTradingScreenWidget::NativeConstruct()
@@ -13,12 +14,11 @@ void UTradingScreenWidget::NativeConstruct()
 	if (RightGrid) { RightGrid->OnCellSelected.AddDynamic(this, &UTradingScreenWidget::OnRightCellSelected); }
 	if (LeftGrid) LeftGrid->RefreshBoundTooltip();
 	if (RightGrid) RightGrid->RefreshBoundTooltip();
-	// Enable global drag ghost mode when overlay is present
-	if (DragOverlay)
-	{
-		if (LeftGrid) LeftGrid->SetUseGlobalDragGhost(true);
-		if (RightGrid) RightGrid->SetUseGlobalDragGhost(true);
-	}
+	// Always render drag ghosts/highlights inside each grid to keep drag/drop simple
+	if (LeftGrid) LeftGrid->SetUseGlobalDragGhost(false);
+	if (RightGrid) RightGrid->SetUseGlobalDragGhost(false);
+	// If a legacy overlay exists in the UMG layout, collapse it to avoid duplicate drawing/overhead
+	if (DragOverlay) { DragOverlay->SetVisibility(ESlateVisibility::Collapsed); }
 	FocusedGrid = LeftGrid ? LeftGrid : RightGrid;
 	// Auto push this screen to layered UI stack
 	RequestPush(true);

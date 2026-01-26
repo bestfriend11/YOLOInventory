@@ -146,7 +146,9 @@ int32 SBagEditor::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeome
 					static TMap<UTexture2D*, TSharedPtr<FSlateDynamicImageBrush>> BrushCache;
 					if (!BrushCache.Contains(IconTex))
 					{
-						BrushCache.Add(IconTex, MakeShared<FSlateDynamicImageBrush>(IconTex->GetFName(), FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY())));
+						TSharedPtr<FSlateDynamicImageBrush> NewBrush = MakeShared<FSlateDynamicImageBrush>(IconTex->GetFName(), FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY()));
+						NewBrush->SetResourceObject(IconTex);
+						BrushCache.Add(IconTex, NewBrush);
 					}
 					Icon = BrushCache[IconTex].Get();
 				}

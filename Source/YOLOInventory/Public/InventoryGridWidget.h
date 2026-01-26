@@ -1,10 +1,13 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Components/Widget.h"
+#include "GameplayTagContainer.h"
 #include "InventoryGridWidget.generated.h"
 
 class UYIInventoryBag;
 class SInventoryGridWidget;
+class UAbilitySystemComponent;
+struct FYIRequirementContext;
 
 /**
  * UInventoryGridWidget
@@ -13,7 +16,7 @@ class SInventoryGridWidget;
  * Designed for designers to be able to drive selection via mouse/gamepad and bind a tooltip widget.
  *
  * Designer tips:
- * - Bind a UInventoryTooltipWidget using SetBoundTooltipWidget to show item details for the selected cell.
+ * - Bind a tooltip widget (e.g., UInventoryTooltipView or custom UUserWidget with OnTooltipDataUpdated/OnTooltipCleared) using SetBoundTooltipWidget to show item details for the selected cell.
  * - Use MoveSelection* helpers to drive focus with input mappings (gamepad/keyboard).
  */
 UCLASS(meta=(DisplayName="YOLO Inventory Grid"))
@@ -40,8 +43,44 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="If enabled, suppress per-grid ghost drawing; use a global overlay to draw drag ghost"))
 	bool bUseGlobalDragGhost = false;
 
+	/** If true, the grid will track hover and draw hover highlights. Disabled by default for gamepad-first setups. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="Enable per-cell hover tracking/highlight"))
+	bool bEnableCellHover = false;
+
+	/** If true, mouse clicks will update selection. Disable for mouse-driven PC inventories that don't need grid selection. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Input", meta=(ToolTip="Allow mouse clicks to change the selected cell"))
+	bool bEnableMouseSelection = false;
+
+	/** Optional ASC/tags/XP for evaluating requirements in tooltips. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip", meta=(ToolTip="Ability System used to evaluate item requirements for tooltips"))
+	TWeakObjectPtr<class UAbilitySystemComponent> RequirementAbilitySystem;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip")
+	FGameplayTagContainer RequirementOwnedTags;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip")
+	int32 RequirementXP = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip")
+	TMap<FName,float> RequirementPreviewAttributes;
+
+	/** Fired when tooltip data is produced (non-empty). */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTooltipDataUpdated, const FYITooltipData&, Data);
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Tooltip")
+	FOnTooltipDataUpdated OnTooltipDataUpdated;
+	/** Fired when tooltip is cleared/hidden. */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTooltipCleared);
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Tooltip")
+	FOnTooltipCleared OnTooltipCleared;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory|Visuals")
 	void SetUseGlobalDragGhost(bool bEnable);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Visuals")
+	void SetEnableCellHover(bool bEnable);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Input")
+	void SetEnableMouseSelection(bool bEnable);
+	/** Set runtime context used for requirement evaluation in tooltips. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Tooltip")
+	void SetTooltipRequirementContext(class UAbilitySystemComponent* InASC, int32 InXP, const FGameplayTagContainer& InOwnedTags);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Tooltip")
+	void SetTooltipPreviewAttributes(const TMap<FName,float>& InAttributes);
 
 	/** Currently selected cell (runtime). Returns (-1,-1) if nothing selected. */
 	UPROPERTY(BlueprintReadOnly, Category="Inventory", meta=(ToolTip="Currently selected cell in the grid"))
@@ -67,7 +106,7 @@ public:
 
 	/** Bind a runtime tooltip widget that will be populated as selection changes. */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Attach a tooltip widget to display selected cell info"))
-	void SetBoundTooltipWidget(class UInventoryTooltipWidget* Widget);
+	void SetBoundTooltipWidget(class UUserWidget* Widget);
 
 	/** Force the bound tooltip to refresh (useful after programmatic changes). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Refresh the currently bound tooltip widget"))
@@ -170,7 +209,7 @@ public:
 	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag);
 	/** Fill OutData for the currently selected cell if an item exists there (returns true on success). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get tooltip data for the currently selected cell"))
-	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData) const;
+	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext) const;
 
 protected:
 	virtual void OnWidgetRebuilt() override;
@@ -192,7 +231,7 @@ private:
 
 	/** Optional tooltip widget to bind for runtime (set from BP/owner). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(AllowPrivateAccess="true", ToolTip="Optional runtime tooltip widget to display item details"))
-	class UInventoryTooltipWidget* BoundTooltipWidget = nullptr;
+	class UUserWidget* BoundTooltipWidget = nullptr;
 
 	// Internal click handler bound from Slate
 	void HandleCellClicked(const FIntPoint& Cell);
@@ -200,6 +239,7 @@ private:
 	// Cached bag change handle so we can update tooltip when items change
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* CachedBag = nullptr;
+	int32 HoveredItemIndexCached = INDEX_NONE;
 
 	// Helper to update the bound tooltip when selection changes
 	void UpdateBoundTooltip();

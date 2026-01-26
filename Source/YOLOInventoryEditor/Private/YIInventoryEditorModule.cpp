@@ -24,10 +24,14 @@
 #include "AssetTypeActions_YIAffixPool.h"
 #include "YIAffixPoolFactory.h"
 #include "YIAffixPoolAsset.h"
+#include "SYIItemDashboard.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "Framework/Docking/TabManager.h"
 
 TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
 uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
+static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 
 class FAssetTypeActions_YIInventoryAsset : public FAssetTypeActions_Base
 {
@@ -81,6 +85,19 @@ void FYOLOInventoryEditorModule::StartupModule()
 	GYOLOInventoryAssetCategory = AssetTools.RegisterAdvancedAssetCategory(FName("YOLOInventory"), NSLOCTEXT("YOLOInventory", "AssetCategory", "YOLO Inventory"));
 	RegisterAssetTypeActions();
 	GYOLONodeFactory = MakeShareable(new FGraphPanelNodeFactory_YOLO());
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(YOLOInventoryDashboardTabName, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+	{
+		return SNew(SDockTab)
+			.TabRole(ETabRole::NomadTab)
+			.Label(NSLOCTEXT("YOLOInventory","DashboardTab","YOLO Inventory Dashboard"))
+			[
+				SNew(SYIItemDashboard)
+			];
+	}))
+	.SetDisplayName(NSLOCTEXT("YOLOInventory","DashboardTabName","YOLO Inventory Dashboard"))
+	.SetTooltipText(NSLOCTEXT("YOLOInventory","DashboardTabTooltip","View all YOLO Inventory items (assets + data table rows)"))
+	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
 
 	// // Ensure an example Affix asset exists for authoring docs/demo
 	// {
@@ -137,8 +154,14 @@ void FYOLOInventoryEditorModule::StartupModule()
 		auto AddMenuEntry = [&Sec](const FName& TabId, const FText& Label)
 		{
 			const FName EntryName = FName(*FString::Printf(TEXT("YOLOInventory_Open_%s"), *TabId.ToString()));
-			// removed old editor menu entries
+			Sec.AddMenuEntry(EntryName, Label, FText(), FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([TabId]()
+				{
+					FGlobalTabmanager::Get()->TryInvokeTab(TabId);
+				}))
+			);
 		};
+		AddMenuEntry(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","MenuDashboard","Dashboard"));
 		AddMenuEntry(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","MenuPalette","Palette"));
 		AddMenuEntry(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","MenuGraph","Graph"));
 		AddMenuEntry(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","MenuScript","Script"));
@@ -150,8 +173,18 @@ void FYOLOInventoryEditorModule::StartupModule()
 			auto AddTool = [&TSec](const FName& TabId, const FText& Label, const FName& IconName)
 			{
 				const FName EntryName = FName(*FString::Printf(TEXT("YOLOInventory_Tool_%s"), *TabId.ToString()));
-				// removed toolbar buttons for old editor
+				TSec.AddEntry(FToolMenuEntry::InitToolBarButton(
+					EntryName,
+					FUIAction(FExecuteAction::CreateLambda([TabId]()
+					{
+						FGlobalTabmanager::Get()->TryInvokeTab(TabId);
+					})),
+					Label,
+					FText(),
+					FSlateIcon(FAppStyle::GetAppStyleSetName(), IconName)
+				));
 			};
+			AddTool(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","ToolDashboard","Dashboard"), "ContentBrowser.TabIcon");
 			AddTool(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","ToolPalette","Palette"), "Icons.Details");
 			AddTool(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","ToolGraph","Graph"), "GraphEditor.Event_16x");
 			AddTool(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","ToolScript","Script"), "Kismet.Tabs.Palette");
@@ -188,6 +221,7 @@ void FYOLOInventoryEditorModule::StartupModule()
 
 void FYOLOInventoryEditorModule::ShutdownModule()
 {
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryDashboardTabName);
 	UnregisterAssetTypeActions();
 	if (GYOLONodeFactory.IsValid())
 	{

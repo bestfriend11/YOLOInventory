@@ -31,6 +31,8 @@ public class YOLOInventoryEditor : ModuleRules
             "ClassViewer",
             "Niagara",
             "GameplayTags",
+            "DataTableEditor",
+            "CSVItemBuilder"
         });
 
         PublicDependencyModuleNames.AddRange(new string[]

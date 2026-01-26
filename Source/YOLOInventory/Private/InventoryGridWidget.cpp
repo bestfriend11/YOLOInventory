@@ -2,10 +2,12 @@
 #include "SInventoryGridWidget.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
-#include "InventoryTooltipWidget.h"
+#include "Widgets/InventoryTooltipView.h"
 #include "InventoryUtils.h"
 #include "YIItemDefinition.h"
 #include "InventoryActionMenuWidget.h"
+#include "AbilitySystemComponent.h"
+#include "YIRequirement.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
@@ -89,6 +91,8 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		.OwnerWidget(this)
 		.Bag(Bag)
 		.CellPixelSize(CellPixelSize)
+		.bEnableCellHover(bEnableCellHover)
+		.bEnableMouseSelection(bEnableMouseSelection)
 		.OnHoveredItemChanged(SInventoryGridWidget::FOnHoveredItemChanged::CreateLambda([WeakThis = TWeakObjectPtr<UInventoryGridWidget>(this)](int32 Idx)
 		{
 			if (WeakThis.IsValid()) { WeakThis->HandleHoverChanged(Idx); }
@@ -102,7 +106,7 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 			if (WeakThis.IsValid()) { WeakThis->HandleCellClicked(Cell); }
 		}));
 	// Apply wrap/ghost settings
-	if (MySlateWidget.IsValid()) { MySlateWidget->SetWrapNavigation(bWrapNavigation); MySlateWidget->SetUseGlobalDragGhost(bUseGlobalDragGhost); MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);}
+	if (MySlateWidget.IsValid()) { MySlateWidget->SetWrapNavigation(bWrapNavigation); MySlateWidget->SetUseGlobalDragGhost(bUseGlobalDragGhost); MySlateWidget->SetCellHoverEnabled(bEnableCellHover); MySlateWidget->SetMouseSelectionEnabled(bEnableMouseSelection); MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);}
 	return MySlateWidget.ToSharedRef();
 }
 
@@ -121,6 +125,8 @@ void UInventoryGridWidget::SynchronizeProperties()
 		MySlateWidget->SetCellPixelSize(CellPixelSize);
 		MySlateWidget->SetWrapNavigation(bWrapNavigation);
 		MySlateWidget->SetUseGlobalDragGhost(bUseGlobalDragGhost);
+		MySlateWidget->SetCellHoverEnabled(bEnableCellHover);
+		MySlateWidget->SetMouseSelectionEnabled(bEnableMouseSelection);
 		MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
 		MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
 	}
@@ -155,6 +161,40 @@ void UInventoryGridWidget::SetUseGlobalDragGhost(bool bEnable)
 	bUseGlobalDragGhost = bEnable; 
 	if (MySlateWidget.IsValid())
 		MySlateWidget->Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UInventoryGridWidget::SetEnableCellHover(bool bEnable)
+{
+	bEnableCellHover = bEnable;
+	if (MySlateWidget.IsValid())
+	{
+		MySlateWidget->SetCellHoverEnabled(bEnableCellHover);
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Paint);
+	}
+}
+
+void UInventoryGridWidget::SetEnableMouseSelection(bool bEnable)
+{
+	bEnableMouseSelection = bEnable;
+	if (MySlateWidget.IsValid())
+	{
+		MySlateWidget->SetMouseSelectionEnabled(bEnableMouseSelection);
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Paint);
+	}
+}
+
+void UInventoryGridWidget::SetTooltipRequirementContext(UAbilitySystemComponent* InASC, int32 InXP, const FGameplayTagContainer& InOwnedTags)
+{
+	RequirementAbilitySystem = InASC;
+	RequirementXP = InXP;
+	RequirementOwnedTags = InOwnedTags;
+	UpdateBoundTooltip();
+}
+
+void UInventoryGridWidget::SetTooltipPreviewAttributes(const TMap<FName,float>& InAttributes)
+{
+	RequirementPreviewAttributes = InAttributes;
+	UpdateBoundTooltip();
 }
 
 bool UInventoryGridWidget::MoveSelection(FIntPoint Delta)
@@ -194,7 +234,7 @@ void UInventoryGridWidget::SetSelectedCell(FIntPoint Cell)
 	}
 }
 
-bool UInventoryGridWidget::GetSelectedCellTooltipData(FYITooltipData& OutData) const
+bool UInventoryGridWidget::GetSelectedCellTooltipData(FYITooltipData& OutData, const FYIRequirementContext& RequirementContext) const
 {
 	if (!Bag) return false;
 	if (SelectedCell.X < 0 || SelectedCell.Y < 0) return false;
@@ -205,7 +245,7 @@ bool UInventoryGridWidget::GetSelectedCellTooltipData(FYITooltipData& OutData) c
 		FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
 		if (SelectedCell.X >= It.Pos.X && SelectedCell.Y >= It.Pos.Y && SelectedCell.X < It.Pos.X + Eff.X && SelectedCell.Y < It.Pos.Y + Eff.Y)
 		{
-			return UYIInventoryBlueprintLibrary::GetItemTooltipData(Bag, i, OutData);
+			return UYIInventoryBlueprintLibrary::GetItemTooltipData(Bag, i, OutData, RequirementContext);
 		}
 	}
 	return false;
@@ -294,6 +334,8 @@ void UInventoryGridWidget::HandleHoverChanged(int32 HoveredIndex)
 {
 	// Broadcast hover state to Blueprint listeners
 	OnItemHoverChanged.Broadcast(HoveredIndex);
+	HoveredItemIndexCached = HoveredIndex;
+	UpdateBoundTooltip();
 	// Optionally refresh tooltip if there is no explicit selection but we want hover to drive tooltip (kept to selection-only for now)
 }
 
@@ -629,16 +671,49 @@ void UInventoryGridWidget::HandleCellClicked(const FIntPoint& Cell)
 
 void UInventoryGridWidget::UpdateBoundTooltip()
 {
-	if (!BoundTooltipWidget) return;
 	FYITooltipData Data;
-	if (GetSelectedCellTooltipData(Data))
+	FYIRequirementContext Ctx;
+	if (RequirementAbilitySystem.IsValid()) { Ctx.AbilitySystem = RequirementAbilitySystem; }
+	Ctx.OwnedTags = RequirementOwnedTags;
+	Ctx.XP = RequirementXP;
+	Ctx.PreviewAttributes = RequirementPreviewAttributes;
+
+	bool bGot = GetSelectedCellTooltipData(Data, Ctx);
+	if (!bGot && Bag && HoveredItemIndexCached != INDEX_NONE)
 	{
-		BoundTooltipWidget->SetTooltipData(Data);
+		bGot = UYIInventoryBlueprintLibrary::GetItemTooltipData(Bag, HoveredItemIndexCached, Data, Ctx);
+	}
+
+	if (bGot)
+	{
+		if (BoundTooltipWidget)
+		{
+			if (UInventoryTooltipView* View = Cast<UInventoryTooltipView>(BoundTooltipWidget))
+			{
+				View->SetTooltipData(Data);
+			}
+			else if (UFunction* Fn = BoundTooltipWidget->FindFunction(TEXT("OnTooltipDataUpdated")))
+			{
+				BoundTooltipWidget->ProcessEvent(Fn, &Data);
+			}
+		}
+		OnTooltipDataUpdated.Broadcast(Data);
 	}
 	else
 	{
 		// Clear tooltip by sending empty data
-		BoundTooltipWidget->SetTooltipData(FYITooltipData());
+		if (BoundTooltipWidget)
+		{
+			if (UInventoryTooltipView* View = Cast<UInventoryTooltipView>(BoundTooltipWidget))
+			{
+				View->ClearTooltip();
+			}
+			else if (UFunction* Fn = BoundTooltipWidget->FindFunction(TEXT("OnTooltipCleared")))
+			{
+				BoundTooltipWidget->ProcessEvent(Fn, nullptr);
+			}
+		}
+		OnTooltipCleared.Broadcast();
 	}
 }
 
@@ -666,7 +741,7 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 	return b;
 }
 
-void UInventoryGridWidget::SetBoundTooltipWidget(UInventoryTooltipWidget* Widget)
+void UInventoryGridWidget::SetBoundTooltipWidget(UUserWidget* Widget)
 {
 	BoundTooltipWidget = Widget;
 	UpdateBoundTooltip();

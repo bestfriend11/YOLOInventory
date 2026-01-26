@@ -11,10 +11,32 @@ class UYIItemDefinition;
 class UTexture2D;
 
 USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYITooltipRequirementLine
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") FText Text;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") bool bMet = true;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYITooltipAttributeLine
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") FText Label;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") float Value = 0.f;
+};
+
+USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYITooltipData
 {
 	GENERATED_BODY()
 public:
+	/** Optional name parts (prefix/base/suffix). FullName is the combined result (used for display if set). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Optional item name prefix (e.g., 'Ancient')")) FText NamePrefix;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Base item name")) FText NameBase;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Optional item name suffix (e.g., 'of Flames')")) FText NameSuffix;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Combined display name; falls back to Title if empty")) FText FullName;
+
 	/** Short display title for the item (e.g., 'Exquisite Sword'). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Primary title displayed in tooltips")) FText Title;
 
@@ -29,6 +51,23 @@ public:
 
 	/** Lines describing affixes or stat summaries; designers can push localized text here. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="List of lines describing affixes or stats")) TArray<FText> AffixLines;
+
+	/** Structured requirement lines (with pass/fail info). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Requirement lines with pass/fail state")) TArray<FYITooltipRequirementLine> RequirementLines;
+
+	/** Attribute snippets displayed as buffs or stats. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Attribute/value pairs for buffs or stats")) TArray<FYITooltipAttributeLine> AttributeLines;
+
+	/** Durability info if the item tracks durability. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") bool bHasDurability = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") float CurrentDurability = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") float MaxDurability = 0.f;
+
+	/** Economy info (sell price). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") int32 SellPrice = 0;
+
+	/** True if all requirements are met (for quick checks). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") bool bAllRequirementsMet = true;
 };
 
 UCLASS()
@@ -76,6 +115,8 @@ public:
 
 	// Build a simple tooltip data struct for a bag item
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Bag")
+	static bool GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext);
+	// Convenience overload with default/empty requirement context
 	static bool GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData);
 
 	// Returns a color for a designer-defined rarity tag. Looks up a palette at /Game/YOLOInventory/RarityPalette_Default if present, else falls back to common names.

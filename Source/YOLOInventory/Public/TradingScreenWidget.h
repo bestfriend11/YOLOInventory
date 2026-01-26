@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "WidgetScreen.h"
 #include "InventoryGridWidget.h"
-#include "InventoryTooltipWidget.h"
+#include "Widgets/InventoryTooltipView.h"
 #include "TradingScreenWidget.generated.h"
 
 /**
@@ -30,9 +30,9 @@ public:
 	UInventoryGridWidget* GetRightGrid() const { return RightGrid; }
 
 	UFUNCTION(BlueprintCallable, Category="Trading")
-	UInventoryTooltipWidget* GetLeftTooltip() const { return LeftTooltip; }
+	UInventoryTooltipView* GetLeftTooltip() const { return LeftTooltip; }
 	UFUNCTION(BlueprintCallable, Category="Trading")
-	UInventoryTooltipWidget* GetRightTooltip() const { return RightTooltip; }
+	UInventoryTooltipView* GetRightTooltip() const { return RightTooltip; }
 
 	/** Assign the two bags that back the left and right grids. */
 	UFUNCTION(BlueprintCallable, Category="Trading")
@@ -49,9 +49,9 @@ protected:
 	UPROPERTY(meta=(BindWidget))
 	UInventoryGridWidget* RightGrid = nullptr;
 	UPROPERTY(meta=(BindWidget))
-	UInventoryTooltipWidget* LeftTooltip = nullptr;
+	UInventoryTooltipView* LeftTooltip = nullptr;
 	UPROPERTY(meta=(BindWidget))
-	UInventoryTooltipWidget* RightTooltip = nullptr;
+	UInventoryTooltipView* RightTooltip = nullptr;
 	// Global drag overlay (optional)
 	UPROPERTY(meta=(BindWidgetOptional))
 	class UInventoryDragOverlayUserWidget* DragOverlay = nullptr;

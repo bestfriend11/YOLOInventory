@@ -104,7 +104,7 @@ FReply UInventoryActionMenuWidget::NativeOnKeyDown(const FGeometry& MyGeometry, 
 		HandleMoveDown();
 		return FReply::Handled();
 	}
-	if (Key == EKeys::Enter || Key == EKeys::Virtual_Accept || Key == EKeys::SpaceBar || Key == EKeys::Gamepad_FaceButton_Bottom)
+	if (Key == EKeys::Enter || Key == EKeys::Virtual_Gamepad_Accept.GetVirtualKey() || Key == EKeys::SpaceBar || Key == EKeys::Gamepad_FaceButton_Bottom)
 	{
 		HandleConfirm();
 		return FReply::Handled();

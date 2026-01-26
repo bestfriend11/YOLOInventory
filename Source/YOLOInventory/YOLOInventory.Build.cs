@@ -16,7 +16,8 @@ public class YOLOInventory : ModuleRules
             "PhysicsCore",
             "GameplayTags",
             "EnhancedInput",
-            "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore", "UILayered"
+            "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore", "UILayered",
+            "CSVItemBuilder"
         });
 
         if (Target.bBuildEditor)

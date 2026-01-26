@@ -7,11 +7,13 @@
 #include "StructUtils/InstancedStruct.h"
 #include "GameplayTagContainer.h"
 #include "YIInventoryTypes.h"
-#include "YIRarityPalette.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "YIItemBlueprintLibrary.h"
 #include "Modules/ModuleManager.h"
+#include "YOLOInventorySettings.h"
+#include "YIRequirement.h"
+#include "AbilitySystemComponent.h"
 
 bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsset* Affix, int32 Level, int32 Seed, float& OutRolledValue)
 {
@@ -267,14 +269,38 @@ bool UYIInventoryBlueprintLibrary::GetFirstEmptyPosForItem(const UYIInventoryBag
 	return Bag->FindFirstFit(Definition->DefaultSize, OutPos);
 }
 
-bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData)
+bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData, const FYIRequirementContext& RequirementContext)
 {
 	OutData = FYITooltipData();
 	if (!Bag || !Bag->Items.IsValidIndex(Index)) return false;
 	const FYIBagItem& It = Bag->Items[Index];
 	UYIItemDefinition* Def = It.Item.Definition.IsValid()? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
 	if (!Def) return false;
+	OutData.NameBase = Def->DisplayName;
 	OutData.Title = Def->DisplayName;
+	// Simple prefix/suffix extraction from affixes (best-effort)
+	if (It.Item.Affixes.Num() > 0)
+	{
+		OutData.NamePrefix = It.Item.Affixes[0].DisplayNameCache;
+		if (It.Item.Affixes.Num() > 1)
+		{
+			OutData.NameSuffix = It.Item.Affixes.Last().DisplayNameCache;
+		}
+	}
+	// Build combined name
+	FString FullNameStr;
+	if (!OutData.NamePrefix.IsEmpty()) { FullNameStr += OutData.NamePrefix.ToString(); FullNameStr += TEXT(" "); }
+	if (!OutData.NameBase.IsEmpty()) { FullNameStr += OutData.NameBase.ToString(); }
+	if (!OutData.NameSuffix.IsEmpty())
+	{
+		if (!FullNameStr.IsEmpty()) { FullNameStr += TEXT(" "); }
+		FullNameStr += OutData.NameSuffix.ToString();
+	}
+	if (!FullNameStr.IsEmpty())
+	{
+		OutData.FullName = FText::FromString(FullNameStr);
+		OutData.Title = OutData.FullName;
+	}
 	// Derive rarity color from definition (DS1-style tint via designer-defined rarity tag)
 	OutData.RarityColor = UYIInventoryBlueprintLibrary::GetColorForRarityTag(Def->RarityTag);
 	// Peek at a UI stack entry if present for description and icon
@@ -318,25 +344,64 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 			OutData.AffixLines.Add(Line);
 		}
 	}
+
+	// Requirements: deferred for future implementation; keep defaults
+	OutData.bAllRequirementsMet = true;
+
+	// Attributes (raw key/value from instance attributes map)
+	for (const TPair<FName,float>& Pair : It.Item.Attributes)
+	{
+		FYITooltipAttributeLine Line; Line.Label = FText::FromName(Pair.Key); Line.Value = Pair.Value;
+		OutData.AttributeLines.Add(Line);
+	}
+
+	// Durability heuristics: look for keys in attributes
+	auto TryFindAttr = [&It](const FName& Key, float& OutVal)->bool
+	{
+		if (const float* V = It.Item.Attributes.Find(Key)) { OutVal = *V; return true; }
+		return false;
+	};
+	float Cur=0.f, Max=0.f;
+	bool bHasCur = TryFindAttr(TEXT("Durability"), Cur) || TryFindAttr(TEXT("CurrentDurability"), Cur);
+	bool bHasMax = TryFindAttr(TEXT("DurabilityMax"), Max) || TryFindAttr(TEXT("MaxDurability"), Max);
+	if (bHasCur || bHasMax)
+	{
+		OutData.bHasDurability = true;
+		OutData.CurrentDurability = Cur;
+		OutData.MaxDurability = bHasMax ? Max : Cur;
+	}
+
+	// Economy: sell price (stub uses blueprint library getter)
+	OutData.SellPrice = UYIInventoryBlueprintLibrary::GetSellPrice(Def, 1.0f);
 	return true;
+}
+
+bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData)
+{
+	static const FYIRequirementContext EmptyCtx;
+	return GetItemTooltipData(Bag, Index, OutData, EmptyCtx);
 }
 
 FLinearColor UYIInventoryBlueprintLibrary::GetColorForRarityTag(const FGameplayTag& RarityTag)
 {
-	// Attempt to load a designer-authorable palette asset at a well-known path; if present, use it
-	static const FString PalettePath = TEXT("/Game/YOLOInventory/RarityPalette_Default.RarityPalette_Default");
-	UYIRarityPalette* Pal = Cast<UYIRarityPalette>(StaticLoadObject(UYIRarityPalette::StaticClass(), nullptr, *PalettePath));
-	if (Pal)
+	// First, consult plugin settings palette (editable in Project Settings -> YOLO Inventory)
+	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
+	for (const FYIRarityColorEntry& Entry : Settings.RarityColors)
 	{
-		for (const FRarityPaletteEntry& E : Pal->Entries)
+		if (!Entry.RarityTag.IsValid())
 		{
-			if (E.Tag == RarityTag) return E.Color;
+			continue;
+		}
+		if (RarityTag.IsValid() && RarityTag.MatchesTag(Entry.RarityTag))
+		{
+			return Entry.Color;
 		}
 	}
 	// Fallback: try to map by common name tokens (designer tags like Rarity.Common, Rarity.Epic, etc.)
 	if (RarityTag.IsValid())
 	{
 		FString Name = RarityTag.GetTagName().ToString();
+		if (Name.Contains(TEXT("Unique"))) return FLinearColor(0.95f, 0.55f, 0.15f, 1.f);
 		if (Name.Contains(TEXT("Common"))) return YI_GetRarityColor(EYOLOItemRarity::Common);
 		if (Name.Contains(TEXT("Uncommon"))) return YI_GetRarityColor(EYOLOItemRarity::Uncommon);
 		if (Name.Contains(TEXT("Rare"))) return YI_GetRarityColor(EYOLOItemRarity::Rare);

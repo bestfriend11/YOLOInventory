@@ -97,6 +97,8 @@ void SInventoryGridWidget::Construct(const FArguments& InArgs)
 	bWholeItemHover = InArgs._bWholeItemHover;
 	bWholeItemSelection = InArgs._bWholeItemSelection;
 	bWrapNavigation = InArgs._bWrapNavigation;
+	bEnableCellHover = InArgs._bEnableCellHover;
+	bEnableMouseSelection = InArgs._bEnableMouseSelection;
 
 	// Hook up Slate-provided callbacks
 	OnHoveredItemChanged = InArgs._OnHoveredItemChanged;
@@ -143,6 +145,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		FLinearColor Fill = FLinearColor(1,1,1,0.08f);
 		// Try load asset for rarity and icon later
 		UYIItemDefinition* Def = It.Item.Definition.IsValid() ? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
+		UTexture2D* IconTex = (Bag->bEnableThumbnails && Def) ? (Def->Icon.IsValid() ? Def->Icon.Get() : Def->Icon.LoadSynchronous()) : nullptr;
 		FLinearColor Border = FLinearColor(0.8f,0.8f,0.8f,0.5f);
 		if (Def)
 		{
@@ -150,6 +153,31 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		// Fill
 		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, Fill);
+		// Icon (centered within the item footprint)
+		if (IconTex)
+		{
+			FSlateBrush IconBrush;
+			IconBrush.SetResourceObject(IconTex);
+			IconBrush.ImageSize = FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY());
+			IconBrush.DrawAs = ESlateBrushDrawType::Image;
+			const float Pad = 2.f;
+			FVector2D MaxIconSize = S - FVector2D(Pad * 2.f, Pad * 2.f);
+			MaxIconSize.X = FMath::Max(1.f, MaxIconSize.X);
+			MaxIconSize.Y = FMath::Max(1.f, MaxIconSize.Y);
+			const float TexAspect = (IconBrush.ImageSize.Y > KINDA_SMALL_NUMBER) ? (IconBrush.ImageSize.X / IconBrush.ImageSize.Y) : 1.f;
+			const float SlotAspect = MaxIconSize.X / MaxIconSize.Y;
+			FVector2D IconSize = MaxIconSize;
+			if (TexAspect > SlotAspect)
+			{
+				IconSize = FVector2D(MaxIconSize.X, MaxIconSize.X / FMath::Max(TexAspect, KINDA_SMALL_NUMBER));
+			}
+			else
+			{
+				IconSize = FVector2D(MaxIconSize.Y * TexAspect, MaxIconSize.Y);
+			}
+			const FVector2D IconPos = P + (S - IconSize) * 0.5f;
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(IconSize), FSlateLayoutTransform(FVector2f(IconPos))), &IconBrush, ESlateDrawEffect::None, FLinearColor::White);
+		}
 		// Border
 		{
 			TArray<FVector2D> Seg;
@@ -173,17 +201,51 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			FSlateDrawElement::MakeText(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(TextSize), FSlateLayoutTransform(FVector2f(TP))), FText::FromString(CountStr), Font, ESlateDrawEffect::None, FLinearColor::White);
 		}
 	}
-	// Hover highlight: whole item if any, else just the cell
-	if (bWholeItemHover && HoveredItemIndex != INDEX_NONE)
+	// Hover highlight: only when not actively dragging a ghost, to avoid visual conflict
+	if (!bGhostActive && bEnableCellHover)
 	{
-		const FVector2D P = FVector2D(HoveredItemTopLeft) * LocalCell;
-		const FVector2D S = FVector2D(HoveredItemSize) * LocalCell;
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.8f,0.2f,0.12f));
-	}
-	else
-	{
-		FVector2D P = FVector2D(HoverCell) * LocalCell;
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(LocalCell), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.6f,1.f,0.08f));
+		if (bWholeItemHover && HoveredItemIndex != INDEX_NONE)
+		{
+			const FVector2D P = FVector2D(HoveredItemTopLeft) * LocalCell;
+			const FVector2D S = FVector2D(HoveredItemSize) * LocalCell;
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.8f,0.2f,0.12f));
+			// Re-draw item icon above the highlight so it stays visible
+			if (Bag->Items.IsValidIndex(HoveredItemIndex))
+			{
+				const FYIBagItem& HoverItem = Bag->Items[HoveredItemIndex];
+				UYIItemDefinition* HoverDef = HoverItem.Item.Definition.IsValid() ? HoverItem.Item.Definition.Get() : HoverItem.Item.Definition.LoadSynchronous();
+				UTexture2D* HoverIcon = HoverDef ? (HoverDef->Icon.IsValid() ? HoverDef->Icon.Get() : HoverDef->Icon.LoadSynchronous()) : nullptr;
+				if (HoverIcon)
+				{
+					FSlateBrush HoverIconBrush;
+					HoverIconBrush.SetResourceObject(HoverIcon);
+					HoverIconBrush.ImageSize = FVector2D(HoverIcon->GetSizeX(), HoverIcon->GetSizeY());
+					HoverIconBrush.DrawAs = ESlateBrushDrawType::Image;
+					const float Pad = 2.f;
+					FVector2D MaxIconSize = S - FVector2D(Pad * 2.f, Pad * 2.f);
+					MaxIconSize.X = FMath::Max(1.f, MaxIconSize.X);
+					MaxIconSize.Y = FMath::Max(1.f, MaxIconSize.Y);
+					const float TexAspect = (HoverIconBrush.ImageSize.Y > KINDA_SMALL_NUMBER) ? (HoverIconBrush.ImageSize.X / HoverIconBrush.ImageSize.Y) : 1.f;
+					const float SlotAspect = MaxIconSize.X / MaxIconSize.Y;
+					FVector2D IconSize = MaxIconSize;
+					if (TexAspect > SlotAspect)
+					{
+						IconSize = FVector2D(MaxIconSize.X, MaxIconSize.X / FMath::Max(TexAspect, KINDA_SMALL_NUMBER));
+					}
+					else
+					{
+						IconSize = FVector2D(MaxIconSize.Y * TexAspect, MaxIconSize.Y);
+					}
+					const FVector2D IconPos = P + (S - IconSize) * 0.5f;
+					FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(IconSize), FSlateLayoutTransform(FVector2f(IconPos))), &HoverIconBrush, ESlateDrawEffect::None, FLinearColor::White);
+				}
+			}
+		}
+		else
+		{
+			FVector2D P = FVector2D(HoverCell) * LocalCell;
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(LocalCell), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.6f,1.f,0.08f));
+		}
 	}
 	// Selected cell cursor (thicker outline)
 	if (SelectedCell.X >= 0 && SelectedCell.Y >= 0)
@@ -194,26 +256,31 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Rect, ESlateDrawEffect::None, CursorColor, true, 2.5f);
 	}
 	// Ghost visual (click-to-drag without holding)
-	if (bGhostActive && !bUseGlobalDragGhost)
+	if (bGhostActive)
 	{
-		// Footprint highlight under ghost
+		// Always draw the footprint highlight so users can see valid/invalid placement while dragging,
+		// even when a global ghost renderer is used.
 		const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f,0.8f,0.2f,0.18f) : FLinearColor(0.8f,0.2f,0.2f,0.18f);
 		const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
 		const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
 		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
 
-		const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
-		const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
-		const FLinearColor Tint = bGhostHasIcon ? FLinearColor(1,1,1,0.9f) : FLinearColor(1,1,1,0.18f);
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), BrushToUse, ESlateDrawEffect::None, Tint);
-		// Outline for visibility
-		TArray<FVector2D> Seg;
-		Seg.Add(P);
-		Seg.Add(P + FVector2D(GhostSize.X, 0));
-		Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
-		Seg.Add(P + FVector2D(0, GhostSize.Y));
-		Seg.Add(P);
-		FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, FLinearColor(0.2f,0.8f,1.f,0.6f), true, 1.5f);
+		// Only draw the ghost icon locally if we are not using a global overlay ghost.
+		if (!bUseGlobalDragGhost)
+		{
+			const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
+			const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
+			const FLinearColor Tint = bGhostHasIcon ? FLinearColor(1,1,1,0.9f) : FLinearColor(1,1,1,0.18f);
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), BrushToUse, ESlateDrawEffect::None, Tint);
+			// Outline for visibility
+			TArray<FVector2D> Seg;
+			Seg.Add(P);
+			Seg.Add(P + FVector2D(GhostSize.X, 0));
+			Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
+			Seg.Add(P + FVector2D(0, GhostSize.Y));
+			Seg.Add(P);
+			FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, FLinearColor(0.2f,0.8f,1.f,0.6f), true, 1.5f);
+		}
 	}
 	return L;
 }
@@ -311,6 +378,11 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 		Invalidate(EInvalidateWidgetReason::Paint);
 	}
 
+	if (!bEnableCellHover)
+	{
+		return bGhostActive ? FReply::Handled() : FReply::Unhandled();
+	}
+
 	if (Bag.IsValid())
 	{
 		const FVector2D Local = MyGeometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
@@ -354,7 +426,7 @@ void SInventoryGridWidget::OnMouseLeave(const FPointerEvent& MouseEvent)
 {
 	// Clear hover and disable ghost when the cursor leaves this grid entirely
 	bool bInvalidate = false;
-	if (HoverCell != FIntPoint(-1,-1))
+	if (bEnableCellHover && HoverCell != FIntPoint(-1,-1))
 	{
 		HoverCell = FIntPoint(-1,-1);
 		UpdateHoverSelection();
@@ -381,9 +453,13 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, co
 		return;
 	}
 
-	// Anchor ghost at its top-left so we can align to cells
-	const FVector2D Anchor = LocalCursor - (FVector2D(GhostFootprint) * LocalCell * 0.5f);
-	const FIntPoint Candidate = ToCellLocal(Anchor, LocalCell);
+	// Compute top-left cell by centering the footprint on the cursor, then rounding to nearest cell
+	const FVector2D CellPos = FVector2D(LocalCursor.X / LocalCell.X, LocalCursor.Y / LocalCell.Y);
+	const FVector2D TopLeftCellF = CellPos - FVector2D((float)GhostFootprint.X, (float)GhostFootprint.Y) * 0.5f;
+	const FIntPoint Candidate(
+		FMath::RoundToInt(TopLeftCellF.X),
+		FMath::RoundToInt(TopLeftCellF.Y)
+	);
 	GhostTopLeft = Candidate;
 	int32 Overlap = INDEX_NONE;
 	bGhostPlacementValid = EvaluateGhostPlacement(Candidate, Overlap);
@@ -439,9 +515,12 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 		{
 			DropCell = ToCell(Local);
 		}
-		// Update selection to reflect the drop target for UI consistency
-		SelectedCell = DropCell;
-		if (OnSelectedCellChanged.IsBound()) { OnSelectedCellChanged.Execute(SelectedCell); }
+		// Update selection to reflect the drop target if mouse selection is enabled
+		if (bEnableMouseSelection)
+		{
+			SelectedCell = DropCell;
+			if (OnSelectedCellChanged.IsBound()) { OnSelectedCellChanged.Execute(SelectedCell); }
+		}
 		const bool bWasDragging = UInventoryGridWidget::IsItemDragActive();
 		// Explicit click callback (used for pick-up / drop behaviour). This will drop if a drag is already active.
 		if (OnCellClicked.IsBound()) { OnCellClicked.Execute(DropCell); }
@@ -463,11 +542,11 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 		// No active drag: start one immediately on click (no hold)
 		if (OwnerWidget.IsValid())
 		{
-			const int32 Idx = GetItemIndexAtCell(SelectedCell);
+			const int32 Idx = GetItemIndexAtCell(DropCell);
 if (Idx != INDEX_NONE)
 {
 const FYIBagItem CachedItem = Bag->Items[Idx];
-if (OwnerWidget->BeginDragFromCell(SelectedCell))
+if (OwnerWidget->BeginDragFromCell(DropCell))
 				{
 					// Build ghost visual using the cached item copy (item was removed from bag on pickup)
 					const FYIBagItem& Item = CachedItem;

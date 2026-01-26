@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "WidgetScreen.h"
 #include "InventoryGridWidget.h"
-#include "InventoryTooltipWidget.h"
+#include "Widgets/InventoryTooltipView.h"
 #include "InventoryScreenWidget.generated.h"
 
 /**
@@ -25,7 +25,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UInventoryGridWidget* GetGrid() const { return Grid; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
-	UInventoryTooltipWidget* GetTooltip() const { return Tooltip; }
+	UInventoryTooltipView* GetTooltip() const { return Tooltip; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	class UInventoryActionMenuWidget* GetActionMenu() const { return ActionMenu; }
 
@@ -37,7 +37,7 @@ protected:
 
 	/** The tooltip widget that will receive data for the selected cell. */
 	UPROPERTY(meta = (BindWidget))
-	UInventoryTooltipWidget* Tooltip;
+	UInventoryTooltipView* Tooltip;
 
 	/** Optional action menu widget that displays available actions when an item is selected. */
 	UPROPERTY(meta = (BindWidget))

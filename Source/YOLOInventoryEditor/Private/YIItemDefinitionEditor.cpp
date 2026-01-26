@@ -370,7 +370,9 @@ TSharedRef<SWidget> FYIItemDefinitionEditor::BuildItemCard()
 					{
 						if (!EditingAsset) return NSLOCTEXT("YOLOInventory","NoVariants","No variants");
 						// Discover variants by scanning AssetRegistry and filtering BaseDefinition == this
-						FARFilter Filter; Filter.ClassNames.Add(UYIItemVariantAsset::StaticClass()->GetFName()); Filter.bRecursiveClasses = true;
+						FARFilter Filter; 
+						Filter.ClassPaths.Add(UYIItemVariantAsset::StaticClass()->GetClassPathName());
+						Filter.bRecursiveClasses = true;
 						TArray<FAssetData> Out;
 						FAssetRegistryModule& ARM = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 						ARM.Get().GetAssets(Filter, Out);

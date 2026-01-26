@@ -19,6 +19,8 @@ public:
 		SLATE_ARGUMENT(bool, bWholeItemHover)
 		SLATE_ARGUMENT(bool, bWholeItemSelection)
 		SLATE_ARGUMENT(bool, bWrapNavigation)
+		SLATE_ARGUMENT(bool, bEnableCellHover)
+		SLATE_ARGUMENT(bool, bEnableMouseSelection)
 		SLATE_EVENT(FOnHoveredItemChanged, OnHoveredItemChanged)
 		SLATE_EVENT(FOnSelectedCellChanged, OnSelectedCellChanged)
 		// Called when a cell is explicitly clicked by the user (mouse button down)
@@ -40,6 +42,8 @@ public:
 	void SetWholeItemSelection(bool bEnable) { bWholeItemSelection = bEnable; }
 	void SetWrapNavigation(bool bEnable) { bWrapNavigation = bEnable; }
 	void SetUseGlobalDragGhost(bool bEnable) { bUseGlobalDragGhost = bEnable; }
+	void SetCellHoverEnabled(bool bEnable) { bEnableCellHover = bEnable; if (!bEnable) { HoverCell = FIntPoint(-1,-1); UpdateHoverSelection(); } }
+	void SetMouseSelectionEnabled(bool bEnable) { bEnableMouseSelection = bEnable; if (!bEnable) { SelectedCell = FIntPoint(-1,-1); } }
 
 	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
@@ -82,6 +86,8 @@ private:
 	bool bWholeItemSelection = true;
 	bool bWrapNavigation = false;
 	bool bUseGlobalDragGhost = false;
+	bool bEnableCellHover = false;
+	bool bEnableMouseSelection = false;
 
 	// Callbacks (set during Construct)
 	FOnHoveredItemChanged OnHoveredItemChanged;
