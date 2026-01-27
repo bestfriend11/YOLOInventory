@@ -5,12 +5,26 @@
 #include "CSVDataTransformer.h"
 #include "YIDataTableItemSource.generated.h"
 
+USTRUCT(BlueprintType)
+struct FYIFieldMapping
+{
+	GENERATED_BODY()
+
+	/** Column name in the data table row (authored name). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	FName SourceField;
+
+	/** Property name on the target item definition to write into. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	FName TargetProperty;
+};
+
 class UDataTable;
 class UCSVDataTransformer;
 
 /**
  * Describes a data table whose rows can be transformed into runtime item definitions.
- * Designers author a Blueprint transformer (UCSVDataTransformer) that converts a row into a UYIItemDefinition.
+ * Designers can use a Blueprint transformer or simple inline field mappings.
  */
 UCLASS(BlueprintType)
 class YOLOINVENTORY_API UYIDataTableItemSource : public UDataAsset
@@ -29,6 +43,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="ItemSource")
 	TArray<FName> GetRowNames() const;
 
+	/** The effective transformer class, preferring inline mappings if enabled. */
+	UFUNCTION(BlueprintCallable, Category="ItemSource")
+	TSubclassOf<UCSVDataTransformer> GetEffectiveTransformerClass() const;
+
 	/** Data table containing item rows. Must include a numeric field used as the UniqueCode. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource")
 	TSoftObjectPtr<UDataTable> DataTable;
@@ -37,9 +55,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource")
 	TSubclassOf<UCSVDataTransformer> TransformerClass;
 
-	/** If true, registry will log and ignore rows when the transformer is missing. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource")
+	/** If true, the registry/dashboard will warn/skip rows when no transformer (inline or Blueprint) is available. Leave true to avoid silent missing items. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource", meta=(ToolTip="If true, the registry/dashboard will warn/skip rows when no transformer (inline or Blueprint) is available. Leave true to avoid silent missing items."))
 	bool bRequireTransformer = true;
+
+	/** Enable simple inline field mappings instead of (or alongside) a transformer Blueprint. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
+	bool bUseInlineMappings = false;
+
+	/** Mappings from data table columns to item definition properties (type-compatible copies). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
+	TArray<FYIFieldMapping> InlineMappings;
 
 	/** Name of the field in the row struct that holds the UniqueCode (int32/int64). Defaults to 'UniqueCode'. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource")

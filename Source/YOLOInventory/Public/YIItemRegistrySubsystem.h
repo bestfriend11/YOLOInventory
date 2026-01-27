@@ -79,7 +79,7 @@ public:
 private:
 	int64 ExtractCodeFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const;
 	FString ExtractTemplateIdFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const;
-	UYIItemDefinition* TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code);
+	UYIItemDefinition* TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code, const class UYIDataTableItemSource* Source);
 
 	UPROPERTY()
 	TMap<int64, TObjectPtr<UYIItemDefinition>> CachedGeneratedDefinitions;

@@ -449,7 +449,7 @@ UYIItemDefinition* UYIInventoryBlueprintLibrary::FindItemDefinitionByTemplateId(
 	if (TemplateId.IsEmpty()) return nullptr;
 	FAssetRegistryModule& Arm = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	FARFilter Filter;
-	Filter.ClassNames.Add(UYIItemDefinition::StaticClass()->GetFName());
+	Filter.ClassPaths.Add(UYIItemDefinition::StaticClass()->GetClassPathName());
 	Filter.bRecursiveClasses = true;
 	TArray<FAssetData> AssetDataList;
 	Arm.Get().GetAssets(Filter, AssetDataList);
@@ -477,7 +477,7 @@ UYIAffixAsset* UYIInventoryBlueprintLibrary::FindAffixByTemplateId(const FString
 	if (TemplateId.IsEmpty()) return nullptr;
 	FAssetRegistryModule& Arm = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	FARFilter Filter;
-	Filter.ClassNames.Add(UYIAffixAsset::StaticClass()->GetFName());
+	Filter.ClassPaths.Add(UYIAffixAsset::StaticClass()->GetClassPathName());
 	Filter.bRecursiveClasses = true;
 	TArray<FAssetData> AssetDataList;
 	Arm.Get().GetAssets(Filter, AssetDataList);

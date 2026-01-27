@@ -6,6 +6,7 @@
 #include "Input/Events.h"
 #include "UObject/SoftObjectPtr.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "Data/YIDataTableItemSource.h"
 
 class UYIDataTableItemSource;
 class UYIItemDefinition;
@@ -46,6 +47,8 @@ private:
 	TSharedPtr<SWidget> BuildListContextMenu();
 	void ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry);
 	UObject* ResolveDetailObject(const FYIItemDashboardEntry& Entry) const;
+	void RefreshInlineMappingEditor(UYIDataTableItemSource* Source);
+	TSharedRef<ITableRow> MakeMappingRow(TSharedPtr<FYIFieldMapping> Mapping, const TSharedRef<STableViewBase>& OwnerTable);
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -53,5 +56,11 @@ private:
 	TSharedPtr<class SListView<TSharedPtr<FYIItemDashboardEntry>>> ListView;
 	TSharedPtr<class IDetailsView> DetailsView;
 	TWeakObjectPtr<UObject> LastDetailObject;
+	TStrongObjectPtr<UObject> DetailKeepAlive;
+	TWeakObjectPtr<UYIDataTableItemSource> CurrentMappingSource;
+	TArray<TSharedPtr<FYIFieldMapping>> MappingRows;
+	TSharedPtr<class SListView<TSharedPtr<FYIFieldMapping>>> MappingListView;
+	TArray<TSharedPtr<FString>> SourceFieldOptions;
+	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	FText SearchText;
 };

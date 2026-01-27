@@ -24,7 +24,9 @@ bool UYIDataTableItemSource::ValidateSource(FString& OutError) const
 		return false;
 	}
 
-	if (!TransformerClass)
+	const bool bHasInline = bUseInlineMappings && InlineMappings.Num() > 0;
+
+	if (!TransformerClass && !bHasInline)
 	{
 		OutError = TEXT("TransformerClass is not set.");
 		return !bRequireTransformer;
@@ -59,4 +61,14 @@ TArray<FName> UYIDataTableItemSource::GetRowNames() const
 		Out.Sort(FNameLexicalLess());
 	}
 	return Out;
+}
+
+TSubclassOf<UCSVDataTransformer> UYIDataTableItemSource::GetEffectiveTransformerClass() const
+{
+	if (bUseInlineMappings && InlineMappings.Num() > 0)
+	{
+		// Inline mappings handled directly by the registry; no transformer class needed.
+		return nullptr;
+	}
+	return TransformerClass;
 }

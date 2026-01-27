@@ -7,6 +7,8 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/AssetManager.h"
+#include "Data/YIDataTableItemSource.h"
+#include "YIItemDefinition.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIItemRegistry, Log, All);
 
@@ -79,11 +81,208 @@ FString UYIItemRegistrySubsystem::ExtractTemplateIdFromRow(const UScriptStruct* 
 	return FString();
 }
 
-UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code)
+static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr)
+{
+	if (!SourceProp || !DestProp || !SourcePtr || !DestPtr)
+	{
+		return false;
+	}
+
+	// Exact type match
+	if (SourceProp->SameType(DestProp))
+	{
+		SourceProp->CopyCompleteValue(DestPtr, SourcePtr);
+		return true;
+	}
+
+	// Simple coercions (string/text/name)
+	if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+	{
+		FString Value = SrcStr->GetPropertyValue(SourcePtr);
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value);
+			return true;
+		}
+		if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+		{
+			DestName->SetPropertyValue(DestPtr, FName(*Value));
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+			return true;
+		}
+	}
+	if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+	{
+		const FName Value = SrcName->GetPropertyValue(SourcePtr);
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value.ToString());
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, FText::FromName(Value));
+			return true;
+		}
+	}
+	if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+	{
+		const FText Value = SrcText->GetPropertyValue(SourcePtr);
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value.ToString());
+			return true;
+		}
+		if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+		{
+			DestName->SetPropertyValue(DestPtr, FName(*Value.ToString()));
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, Value);
+			return true;
+		}
+	}
+
+	// Numeric conversions (int/float)
+	if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+	{
+		if (const FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+		{
+			double Value = 0.0;
+			if (SrcNum->IsFloatingPoint())
+			{
+				Value = SrcNum->GetFloatingPointPropertyValue(SourcePtr);
+			}
+			else
+			{
+				// Handle signed/unsigned integers safely
+				Value = (double)SrcNum->GetSignedIntPropertyValue(SourcePtr);
+			}
+			if (DestNum->IsInteger())
+			{
+				DestNum->SetIntPropertyValue(DestPtr, (int64)Value);
+			}
+			else
+			{
+				DestNum->SetFloatingPointPropertyValue(DestPtr, Value);
+			}
+			return true;
+		}
+	}
+
+	// Bool conversions (bool <-> numeric/bool)
+	if (const FBoolProperty* SrcBool = CastField<FBoolProperty>(SourceProp))
+	{
+		const bool bVal = SrcBool->GetPropertyValue(SourcePtr);
+		if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+		{
+			DestBool->SetPropertyValue(DestPtr, bVal);
+			return true;
+		}
+		if (FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+		{
+			if (DestNum->IsInteger())
+			{
+				DestNum->SetIntPropertyValue(DestPtr, bVal ? (int64)1 : (int64)0);
+			}
+			else
+			{
+				DestNum->SetFloatingPointPropertyValue(DestPtr, bVal ? 1.0 : 0.0);
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDataTable* DataTable, FName RowName, UYIItemDefinition*& OutDef)
+{
+	if (!Source || !DataTable || !DataTable->RowStruct || !Source->bUseInlineMappings || Source->InlineMappings.Num() == 0)
+	{
+		return false;
+	}
+
+	const uint8* const* FoundRow = DataTable->GetRowMap().Find(RowName);
+	const uint8* RowPtr = FoundRow ? *FoundRow : nullptr;
+	if (!RowPtr)
+	{
+		return false;
+	}
+
+	UYIItemDefinition* Def = NewObject<UYIItemDefinition>();
+	if (!Def)
+	{
+		return false;
+	}
+
+	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
+	{
+		if (Mapping.SourceField.IsNone() || Mapping.TargetProperty.IsNone())
+		{
+			continue;
+		}
+
+		FProperty* SourceProp = nullptr;
+		for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
+		{
+			if (It->GetAuthoredName().Equals(Mapping.SourceField.ToString(), ESearchCase::IgnoreCase))
+			{
+				SourceProp = *It;
+				break;
+			}
+		}
+		if (!SourceProp)
+		{
+			continue;
+		}
+
+		FProperty* DestProp = nullptr;
+		for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+		{
+			if (It->GetAuthoredName().Equals(Mapping.TargetProperty.ToString(), ESearchCase::IgnoreCase))
+			{
+				DestProp = *It;
+				break;
+			}
+		}
+		if (!DestProp)
+		{
+			continue;
+		}
+
+		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
+		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
+		CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr);
+	}
+
+	OutDef = Def;
+	return true;
+}
+
+UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code, const UYIDataTableItemSource* Source)
 {
 	if (!DataTable)
 	{
 		return nullptr;
+	}
+
+	UYIItemDefinition* CachedResult = nullptr;
+
+	// Inline mapping path (editor-friendly, no blueprint needed)
+	if (ApplyInlineMappings(Source, DataTable, RowName, CachedResult))
+	{
+		if (bCacheResult)
+		{
+			CachedGeneratedDefinitions.FindOrAdd(Code) = CachedResult;
+		}
+		return CachedResult;
 	}
 
 	if (!TransformerClass)
@@ -263,13 +462,15 @@ UYIItemDefinition* UYIItemRegistrySubsystem::GetByCode(int64 Code)
 		return nullptr;
 	}
 
-	if (!Source->TransformerClass && Source->bRequireTransformer)
+	const bool bHasInline = Source->bUseInlineMappings && Source->InlineMappings.Num() > 0;
+	if (!Source->TransformerClass && !bHasInline && Source->bRequireTransformer)
 	{
 		UE_LOG(LogYIItemRegistry, Warning, TEXT("GetByCode(%lld) failed: TransformerClass is required but not set on %s."), (long long)Code, *Source->GetPathName());
 		return nullptr;
 	}
 
-	UYIItemDefinition* Def = TransformRow(Entry->RowName, Table, Source->TransformerClass, Source->bCacheGeneratedItems, Code);
+	const TSubclassOf<UCSVDataTransformer> TransformerClass = Source->GetEffectiveTransformerClass();
+	UYIItemDefinition* Def = TransformRow(Entry->RowName, Table, TransformerClass, Source->bCacheGeneratedItems, Code, Source);
 	if (!Def)
 	{
 		UE_LOG(LogYIItemRegistry, Warning, TEXT("GetByCode(%lld) failed: Transformer returned null for row %s in %s."), (long long)Code, *Entry->RowName.ToString(), *Table->GetPathName());

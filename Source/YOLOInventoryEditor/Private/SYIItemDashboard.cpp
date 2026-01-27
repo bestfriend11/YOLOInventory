@@ -33,6 +33,8 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
+#include "Widgets/Input/SComboBox.h"
+#include "Widgets/Input/SCheckBox.h"
 
 static FString GetRowStringFromStruct(const UScriptStruct* Struct, const uint8* RowData, FName Field)
 {
@@ -157,12 +159,90 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 		]
 		+ SSplitter::Slot().Value(0.55f)
 		[
-			SNew(SBorder)
-			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().FillHeight(0.6f)
 			[
-				DetailsView.IsValid()
-				? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
-				: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_NoDetails","Details panel unavailable")))
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				[
+					DetailsView.IsValid()
+					? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
+					: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_NoDetails","Details panel unavailable")))
+				]
+			]
+			+ SVerticalBox::Slot().FillHeight(0.4f).Padding(4)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+				.Visibility_Lambda([this]()
+				{
+					return CurrentMappingSource.IsValid() ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().Padding(4)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+						[
+							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_InlineMappings","Inline Mappings"))
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+						[
+							SNew(SCheckBox)
+							.IsChecked_Lambda([this]()
+							{
+								return (CurrentMappingSource.IsValid() && CurrentMappingSource->bUseInlineMappings) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+							})
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+							{
+								if (CurrentMappingSource.IsValid())
+								{
+									CurrentMappingSource->Modify();
+									CurrentMappingSource->bUseInlineMappings = (State == ECheckBoxState::Checked);
+								}
+							})
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+						[
+							SNew(SButton)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_AddMapping","Add Mapping"))
+							.OnClicked_Lambda([this]()
+							{
+								if (CurrentMappingSource.IsValid())
+								{
+									CurrentMappingSource->Modify();
+									FYIFieldMapping NewMap;
+									CurrentMappingSource->InlineMappings.Add(NewMap);
+									RefreshInlineMappingEditor(CurrentMappingSource.Get());
+								}
+								return FReply::Handled();
+							})
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+						[
+							SNew(SButton)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_ClearMapping","Clear"))
+							.OnClicked_Lambda([this]()
+							{
+								if (CurrentMappingSource.IsValid())
+								{
+									CurrentMappingSource->Modify();
+									CurrentMappingSource->InlineMappings.Reset();
+									RefreshInlineMappingEditor(CurrentMappingSource.Get());
+								}
+								return FReply::Handled();
+							})
+						]
+					]
+					+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
+					[
+						SAssignNew(MappingListView, SListView<TSharedPtr<FYIFieldMapping>>)
+						.ListItemsSource(&MappingRows)
+						.OnGenerateRow(this, &SYIItemDashboard::MakeMappingRow)
+						.SelectionMode(ESelectionMode::Single)
+					]
+				]
 			]
 		]
 	];
@@ -383,7 +463,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 		return false;
 	}
 
-	if (!Source->TransformerClass)
+	const bool bHasInline = Source->bUseInlineMappings && Source->InlineMappings.Num() > 0;
+
+	if (!Source->TransformerClass && !bHasInline)
 	{
 		const EAppReturnType::Type Res = FMessageDialog::Open(EAppMsgType::YesNo, FText::Format(
 			NSLOCTEXT("YOLOInventory","DashboardMissingTransformer","Data Source '{0}' has no TransformerClass. Create a transformer Blueprint next to it?"),
@@ -447,8 +529,21 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	RowWrapper->Address = const_cast<uint8*>(RowPtr);
 	RowWrapper->Struct = Table->RowStruct;
 
-	UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Source->TransformerClass);
-	UObject* Transformed = Transformer ? Transformer->TransformObject(RowWrapper) : nullptr;
+	UObject* Transformed = nullptr;
+	if (TSubclassOf<UCSVDataTransformer> Effective = Source->GetEffectiveTransformerClass())
+	{
+		if (UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Effective))
+		{
+			Transformed = Transformer->TransformObject(RowWrapper);
+		}
+	}
+	else if (GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Transformed = Registry->GetByCode(Entry.Code);
+		}
+	}
 	UYIItemDefinition* Def = Cast<UYIItemDefinition>(Transformed);
 	if (!Def)
 	{
@@ -603,12 +698,43 @@ void SYIItemDashboard::ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntr
 	}
 
 	LastDetailObject = Target;
+	DetailKeepAlive.Reset();
+	if (Target)
+	{
+		DetailKeepAlive = TStrongObjectPtr<UObject>(Target);
+	}
 	TArray<UObject*> Objects;
 	if (Target)
 	{
 		Objects.Add(Target);
 	}
 	DetailsView->SetObjects(Objects);
+
+	CurrentMappingSource.Reset();
+	if (Entry.IsValid())
+	{
+		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(Target))
+		{
+			CurrentMappingSource = Source;
+			RefreshInlineMappingEditor(Source);
+		}
+		else if (Entry->bIsDataTable)
+		{
+			if (Entry->DataSource.IsValid())
+			{
+				CurrentMappingSource = Entry->DataSource.LoadSynchronous();
+				RefreshInlineMappingEditor(CurrentMappingSource.Get());
+			}
+		}
+	}
+	else
+	{
+		MappingRows.Reset();
+		if (MappingListView.IsValid())
+		{
+			MappingListView->RequestListRefresh();
+		}
+	}
 }
 
 UObject* SYIItemDashboard::ResolveDetailObject(const FYIItemDashboardEntry& Entry) const
@@ -665,6 +791,174 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 	}
 
 	return BuildContextMenuForEntry(Selected[0]);
+}
+
+void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source)
+{
+	MappingRows.Reset();
+	SourceFieldOptions.Reset();
+	TargetPropertyOptions.Reset();
+
+	if (!Source)
+	{
+		if (MappingListView.IsValid())
+		{
+			MappingListView->RequestListRefresh();
+		}
+		return;
+	}
+
+	// Build options from row struct and item definition properties
+	if (UDataTable* Table = Source->DataTable.LoadSynchronous())
+	{
+		if (UScriptStruct* RowStruct = Table->RowStruct)
+		{
+			for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+			{
+				SourceFieldOptions.Add(MakeShared<FString>((*It)->GetAuthoredName()));
+			}
+		}
+	}
+	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+	{
+		TargetPropertyOptions.Add(MakeShared<FString>((*It)->GetAuthoredName()));
+	}
+
+	for (const FYIFieldMapping& M : Source->InlineMappings)
+	{
+		MappingRows.Add(MakeShared<FYIFieldMapping>(M));
+	}
+
+	if (MappingListView.IsValid())
+	{
+		MappingListView->RequestListRefresh();
+	}
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMapping> Mapping, const TSharedRef<STableViewBase>& OwnerTable)
+{
+	auto DropdownText = [](const TSharedPtr<FString>& Str)->FText
+	{
+		return Str.IsValid() ? FText::FromString(*Str) : FText::GetEmpty();
+	};
+
+	return SNew(STableRow<TSharedPtr<FYIFieldMapping>>, OwnerTable)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
+		[
+			SNew(SComboBox<TSharedPtr<FString>>)
+			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->SourceFieldOptions)
+			.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+			{
+				return SNew(STextBlock).Text(DropdownText(InItem));
+			})
+			.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+			{
+				if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+				{
+					CurrentMappingSource->Modify();
+					Mapping->SourceField = FName(**NewItem);
+					const int32 Index = MappingRows.Find(Mapping);
+					if (Index != INDEX_NONE)
+					{
+						CurrentMappingSource->InlineMappings[Index].SourceField = Mapping->SourceField;
+					}
+				}
+			})
+			.InitiallySelectedItem([this, Mapping]()
+			{
+				if (!Mapping.IsValid()) return TSharedPtr<FString>();
+				if (const TSharedPtr<FString>* FoundPtr = SourceFieldOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+				{
+					return Opt.IsValid() && FName(**Opt).IsEqual(Mapping->SourceField);
+				}))
+				{
+					return *FoundPtr;
+				}
+				return TSharedPtr<FString>();
+			}())
+			.Content()
+			[
+				SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+				{
+					const TSharedPtr<FString>* Found = SourceFieldOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+					{
+						return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->SourceField);
+					});
+					return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->SourceField.ToString() : TEXT(""));
+				})
+			]
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
+		[
+			SNew(SComboBox<TSharedPtr<FString>>)
+			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions)
+			.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+			{
+				return SNew(STextBlock).Text(DropdownText(InItem));
+			})
+			.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+			{
+				if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+				{
+					CurrentMappingSource->Modify();
+					Mapping->TargetProperty = FName(**NewItem);
+					const int32 Index = MappingRows.Find(Mapping);
+					if (Index != INDEX_NONE)
+					{
+						CurrentMappingSource->InlineMappings[Index].TargetProperty = Mapping->TargetProperty;
+					}
+				}
+			})
+			.InitiallySelectedItem([this, Mapping]()
+			{
+				if (!Mapping.IsValid()) return TSharedPtr<FString>();
+				if (const TSharedPtr<FString>* FoundPtr = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+				{
+					return Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+				}))
+				{
+					return *FoundPtr;
+				}
+				return TSharedPtr<FString>();
+			}())
+			.Content()
+			[
+				SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+				{
+					const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+					{
+						return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+					});
+					return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
+				})
+			]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+		[
+			SNew(SButton)
+			.Text(NSLOCTEXT("YOLOInventory","Dash_RemoveMapping","X"))
+			.OnClicked_Lambda([this, Mapping]()
+			{
+				if (CurrentMappingSource.IsValid() && Mapping.IsValid())
+				{
+					const int32 Index = MappingRows.Find(Mapping);
+					if (Index != INDEX_NONE)
+					{
+						CurrentMappingSource->Modify();
+						MappingRows.RemoveAt(Index, 1, EAllowShrinking::No);
+						CurrentMappingSource->InlineMappings.RemoveAt(Index, 1, EAllowShrinking::No);
+						if (MappingListView.IsValid())
+						{
+							MappingListView->RequestListRefresh();
+						}
+					}
+				}
+				return FReply::Handled();
+			})
+		]
+	];
 }
 
 FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>& Entry) const
