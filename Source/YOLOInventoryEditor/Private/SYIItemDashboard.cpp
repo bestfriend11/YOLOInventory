@@ -21,6 +21,7 @@
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SSpacer.h"
+#include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/SHeaderRow.h"
@@ -36,6 +37,9 @@
 #include "IDetailsView.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "InputCoreTypes.h"
+#include "ObjectTools.h"
+#include "Algo/Sort.h"
 
 static FString GetRowStringFromStruct(const UScriptStruct* Struct, const uint8* RowData, FName Field)
 {
@@ -125,10 +129,129 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 							return FReply::Handled();
 						})
 					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0,0,8,0))
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","DashboardBulkCreate","Create Assets (Selected)"))
+						.ToolTipText(NSLOCTEXT("YOLOInventory","DashboardBulkCreate_Tip","Generate assets for all selected data-table rows"))
+						.OnClicked_Lambda([this]()
+						{
+							if (!ListView.IsValid())
+							{
+								return FReply::Handled();
+							}
+							const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+							bool bChanged = false;
+							for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Selected)
+							{
+								if (Entry.IsValid() && Entry->bIsDataTable)
+								{
+									bChanged |= CreateAssetFromEntry(*Entry);
+								}
+							}
+							if (bChanged)
+							{
+								Refresh();
+							}
+							return FReply::Handled();
+						})
+					]
 					+ SHorizontalBox::Slot().FillWidth(1.0f)
 					[
 						SNew(SSearchBox)
 						.OnTextChanged(this, &SYIItemDashboard::OnSearchTextChanged)
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(8,0,0,0))
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions) // reuse buffer temporarily
+						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+						})
+						.OnComboBoxOpening_Lambda([this]()
+						{
+							TargetPropertyOptions.Reset();
+							TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: All")));
+							TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: Data Rows")));
+							TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: Assets Only")));
+						})
+						.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						{
+							if (!NewItem.IsValid()) return;
+							if (*NewItem == TEXT("Type: Data Rows")) TypeFilter = EDashTypeFilter::DataTableRows;
+							else if (*NewItem == TEXT("Type: Assets Only")) TypeFilter = EDashTypeFilter::AssetsOnly;
+							else TypeFilter = EDashTypeFilter::All;
+							Refresh();
+						})
+						.InitiallySelectedItem(nullptr)
+						.Content()
+						[
+							SNew(STextBlock).Text_Lambda([this]()
+							{
+								switch (TypeFilter)
+								{
+								case EDashTypeFilter::DataTableRows: return FText::FromString(TEXT("Type: Data Rows"));
+								case EDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("Type: Assets Only"));
+								default: return FText::FromString(TEXT("Type: All"));
+								}
+							})
+						]
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(8,0,0,0))
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->ConverterOptions) // reuse buffer temporarily
+						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+						})
+						.OnComboBoxOpening_Lambda([this]()
+						{
+							ConverterOptions.Reset();
+							ConverterOptions.Add(MakeShared<FString>(TEXT("Status: All")));
+							ConverterOptions.Add(MakeShared<FString>(TEXT("Status: Needs Asset")));
+							ConverterOptions.Add(MakeShared<FString>(TEXT("Status: Has Asset")));
+							ConverterOptions.Add(MakeShared<FString>(TEXT("Status: Asset Only")));
+						})
+						.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						{
+							if (!NewItem.IsValid()) return;
+							if (*NewItem == TEXT("Status: Needs Asset")) StatusFilter = EDashStatusFilter::NeedsAsset;
+							else if (*NewItem == TEXT("Status: Has Asset")) StatusFilter = EDashStatusFilter::HasAsset;
+							else if (*NewItem == TEXT("Status: Asset Only")) StatusFilter = EDashStatusFilter::AssetOnly;
+							else StatusFilter = EDashStatusFilter::All;
+							Refresh();
+						})
+						.InitiallySelectedItem(nullptr)
+						.Content()
+						[
+							SNew(STextBlock).Text_Lambda([this]()
+							{
+								switch (StatusFilter)
+								{
+								case EDashStatusFilter::NeedsAsset: return FText::FromString(TEXT("Status: Needs Asset"));
+								case EDashStatusFilter::HasAsset: return FText::FromString(TEXT("Status: Has Asset"));
+								case EDashStatusFilter::AssetOnly: return FText::FromString(TEXT("Status: Asset Only"));
+								default: return FText::FromString(TEXT("Status: All"));
+								}
+							})
+						]
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(8,0,0,0))
+					[
+						SNew(SCheckBox)
+						.Style(&FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("ToggleButtonCheckBox"))
+						.Padding(FMargin(6,2))
+						.IsChecked_Lambda([this](){ return bGroupBySource ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+						.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+						{
+							bGroupBySource = (State == ECheckBoxState::Checked);
+							Refresh();
+						})
+						[
+							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_GroupBySource","Group by Source"))
+						]
 					]
 				]
 				+ SVerticalBox::Slot().FillHeight(1.f).Padding(8)
@@ -146,8 +269,9 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 					{
 						OpenEntry(Entry);
 					})
-			.HeaderRow
-			(
+					.OnKeyDownHandler(FOnKeyDown::CreateSP(this, &SYIItemDashboard::HandleListKeyDown))
+					.HeaderRow
+					(
 				SNew(SHeaderRow)
 				+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Code","Code")).FillWidth(0.15f)
 				+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Name","Name")).FillWidth(0.25f)
@@ -306,6 +430,20 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 		}
 		return FLinearColor(0.20f, 0.45f, 0.90f, 0.9f); // blue for pure assets
 	};
+	auto StatusText = [Entry]() -> FText
+	{
+		if (!Entry.IsValid())
+		{
+			return FText::FromString(TEXT("Unknown"));
+		}
+		if (Entry->bIsDataTable)
+		{
+			return Entry->bHasAsset
+				? NSLOCTEXT("YOLOInventory","Dash_Status_HasAsset","Generated asset exists")
+				: NSLOCTEXT("YOLOInventory","Dash_Status_NeedsAsset","Needs asset generation");
+		}
+		return NSLOCTEXT("YOLOInventory","Dash_Status_AssetOnly","Item asset");
+	};
 
 	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
 		.ToolTipText(BuildPreviewText(Entry))
@@ -317,6 +455,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 			.Padding(FMargin(2, 0))
 			.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
 			.BorderBackgroundColor(StatusColor())
+			.ToolTipText(StatusText())
 		]
 		+ SHorizontalBox::Slot().FillWidth(0.15f)
 		[
@@ -564,9 +703,48 @@ void SYIItemDashboard::Refresh()
 		}
 	}
 
+	// Optional grouping by source path to keep related rows together
+	if (bGroupBySource)
+	{
+		Algo::Sort(Items, [](const TSharedPtr<FYIItemDashboardEntry>& A, const TSharedPtr<FYIItemDashboardEntry>& B)
+		{
+			if (!A.IsValid() || !B.IsValid()) return A.IsValid();
+			int32 PathCompare = A->Source.Compare(B->Source);
+			if (PathCompare == 0)
+			{
+				return A->Name < B->Name;
+			}
+			return PathCompare < 0;
+		});
+	}
+
 	const FString SearchFilter = SearchText.ToString();
 	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Items)
 	{
+		// Type filter
+		if (TypeFilter == EDashTypeFilter::DataTableRows && !Entry->bIsDataTable)
+		{
+			continue;
+		}
+		if (TypeFilter == EDashTypeFilter::AssetsOnly && Entry->bIsDataTable)
+		{
+			continue;
+		}
+
+		// Status filter
+		if (StatusFilter == EDashStatusFilter::NeedsAsset && !(Entry->bIsDataTable && !Entry->bHasAsset))
+		{
+			continue;
+		}
+		if (StatusFilter == EDashStatusFilter::HasAsset && !(Entry->bIsDataTable && Entry->bHasAsset))
+		{
+			continue;
+		}
+		if (StatusFilter == EDashStatusFilter::AssetOnly && Entry->bIsDataTable)
+		{
+			continue;
+		}
+
 		const bool bPass = SearchFilter.IsEmpty() ||
 			Entry->Name.Contains(SearchFilter) ||
 			Entry->TemplateId.Contains(SearchFilter) ||
@@ -1062,6 +1240,104 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 	return BuildContextMenuForEntry(Selected[0]);
 }
 
+FReply SYIItemDashboard::HandleListKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent)
+{
+	if (!ListView.IsValid())
+	{
+		return FReply::Unhandled();
+	}
+
+	const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+	if (Selected.Num() == 0 || !Selected[0].IsValid())
+	{
+		return FReply::Unhandled();
+	}
+
+	const FKey Key = InKeyEvent.GetKey();
+
+	if (Key == EKeys::Enter || Key == EKeys::SpaceBar)
+	{
+		// Confirm bulk create
+		int32 RowsNeedingAsset = 0;
+		for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+		{
+			if (E.IsValid() && E->bIsDataTable)
+			{
+				RowsNeedingAsset++;
+			}
+		}
+
+		if (RowsNeedingAsset > 0)
+		{
+			const FText Msg = FText::Format(
+				NSLOCTEXT("YOLOInventory","Dash_ConfirmCreate","Create/update item assets for {0} selected row(s)?"),
+				FText::AsNumber(RowsNeedingAsset));
+			if (FMessageDialog::Open(EAppMsgType::YesNo, Msg) == EAppReturnType::Yes)
+			{
+				bool bChanged = false;
+				for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+				{
+					if (E.IsValid() && E->bIsDataTable)
+					{
+						bChanged |= CreateAssetFromEntry(*E);
+					}
+				}
+				if (bChanged)
+				{
+					Refresh();
+				}
+			}
+			return FReply::Handled();
+		}
+
+		OpenEntry(Selected[0]);
+		return FReply::Handled();
+	}
+
+	if (Key == EKeys::Delete)
+	{
+		TArray<UObject*> ToDelete;
+		for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+		{
+			if (!E.IsValid())
+			{
+				continue;
+			}
+			if (!E->bIsDataTable && E->Object.ToSoftObjectPath().IsValid())
+			{
+				if (UObject* Obj = E->Object.LoadSynchronous())
+				{
+					ToDelete.Add(Obj);
+				}
+			}
+			else if (E->bIsDataTable && E->ItemAsset.IsValid())
+			{
+				if (UObject* Obj = E->ItemAsset.LoadSynchronous())
+				{
+					ToDelete.Add(Obj);
+				}
+			}
+		}
+
+		if (ToDelete.Num() == 0)
+		{
+			return FReply::Handled();
+		}
+
+		const FText Msg = FText::Format(
+			NSLOCTEXT("YOLOInventory","Dash_ConfirmDelete","Delete {0} asset(s)? This cannot be undone."),
+			FText::AsNumber(ToDelete.Num()));
+		if (FMessageDialog::Open(EAppMsgType::YesNo, Msg) == EAppReturnType::Yes)
+		{
+			ObjectTools::DeleteObjects(ToDelete, /*bShowConfirmation=*/false);
+			Refresh();
+		}
+		return FReply::Handled();
+	}
+
+	return FReply::Unhandled();
+}
+
 void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source)
 {
 	MappingRows.Reset();
@@ -1319,8 +1595,25 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 {
 	if (!Entry.IsValid())
 	{
-		return FText();
+		return FText::FromString(TEXT("No entry selected."));
 	}
+
+	FString Status;
+	if (Entry->bIsDataTable)
+	{
+		Status = Entry->bHasAsset ? TEXT("Data Row (generated asset exists)") : TEXT("Data Row (needs asset)");
+	}
+	else
+	{
+		Status = TEXT("Item Asset");
+	}
+
+	FString Summary = FString::Printf(TEXT("%s\nType: %s\nCode: %lld\nTemplate: %s\nSource: %s"),
+		*Entry->Name,
+		*Status,
+		(long long)Entry->Code,
+		*Entry->TemplateId,
+		*Entry->Source);
 
 	if (GEngine)
 	{
@@ -1332,8 +1625,11 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 				{
 					return FText();
 				}
-				const FString Preview = FString::Printf(TEXT("%s\n%s"), *Def->DisplayName.ToString(), *Def->Description.ToString());
-				return FText::FromString(Preview);
+				if (!Def->Description.IsEmpty())
+				{
+					Summary += FString::Printf(TEXT("\n\n%s"), *Def->Description.ToString());
+				}
+				return FText::FromString(Summary);
 			}
 		}
 	}
@@ -1355,13 +1651,20 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 
 					if (!Name.IsEmpty() || !Desc.IsEmpty())
 					{
-						const FString Preview = Desc.IsEmpty() ? Name : FString::Printf(TEXT("%s\n%s"), *Name, *Desc);
-						return FText::FromString(Preview);
+						if (!Name.IsEmpty())
+						{
+							Summary += FString::Printf(TEXT("\nPreview Name: %s"), *Name);
+						}
+						if (!Desc.IsEmpty())
+						{
+							Summary += FString::Printf(TEXT("\nPreview Desc: %s"), *Desc);
+						}
+						return FText::FromString(Summary);
 					}
 				}
 			}
 		}
 	}
 
-	return FText::GetEmpty();
+	return FText::FromString(Summary);
 }

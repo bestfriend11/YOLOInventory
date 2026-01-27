@@ -7,6 +7,7 @@
 #include "UObject/SoftObjectPtr.h"
 #include "UObject/WeakObjectPtrTemplates.h"
 #include "Data/YIDataTableItemSource.h"
+#include "Containers/Array.h"
 
 class UYIDataTableItemSource;
 class UYIItemDefinition;
@@ -24,6 +25,21 @@ struct FYIItemDashboardEntry
 	TSoftObjectPtr<class UYIItemDefinition> ItemAsset;
 	TSoftObjectPtr<class UDataTable> DataTable;
 	TSoftObjectPtr<class UYIDataTableItemSource> DataSource;
+};
+
+enum class EDashTypeFilter : uint8
+{
+	All,
+	DataTableRows,
+	AssetsOnly
+};
+
+enum class EDashStatusFilter : uint8
+{
+	All,
+	NeedsAsset,
+	HasAsset,
+	AssetOnly
 };
 
 class SYIItemDashboard : public SCompoundWidget
@@ -51,6 +67,7 @@ private:
 	UObject* ResolveDetailObject(const FYIItemDashboardEntry& Entry) const;
 	void RefreshInlineMappingEditor(UYIDataTableItemSource* Source);
 	TSharedRef<ITableRow> MakeMappingRow(TSharedPtr<FYIFieldMapping> Mapping, const TSharedRef<STableViewBase>& OwnerTable);
+	FReply HandleListKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -66,4 +83,7 @@ private:
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	TArray<TSharedPtr<FString>> ConverterOptions;
 	FText SearchText;
+	EDashTypeFilter TypeFilter = EDashTypeFilter::All;
+	EDashStatusFilter StatusFilter = EDashStatusFilter::All;
+	bool bGroupBySource = false;
 };
