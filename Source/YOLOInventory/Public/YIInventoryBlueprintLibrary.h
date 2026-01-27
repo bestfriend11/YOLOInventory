@@ -9,6 +9,7 @@
 class UYIInventoryBag;
 class UYIItemDefinition;
 class UTexture2D;
+class AYIItemPickup;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYITooltipRequirementLine
@@ -113,11 +114,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Bag")
 	static bool GetFirstEmptyPosForItem(const UYIInventoryBag* Bag, const UYIItemDefinition* Definition, FIntPoint& OutPos);
 
+	/** Add an item by UniqueCode to a bag (server-authority recommended). Returns true on success. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Bag", meta=(DisplayName="Add Item To Bag By Code"))
+	static bool AddItemToBagByCode(UYIInventoryBag* Bag, int64 Code, int32 Count = 1);
+
 	// Build a simple tooltip data struct for a bag item
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Bag")
 	static bool GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext);
 	// Convenience overload with default/empty requirement context
 	static bool GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData);
+
+	/** Spawn a replicated pickup actor for an item definition code. Server-only; returns nullptr on clients. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Spawn", meta=(WorldContext="WorldContextObject", DisplayName="Spawn Item Pickup by Code"))
+	static AYIItemPickup* SpawnItemPickupByCode(UObject* WorldContextObject, int64 Code, const FTransform& Transform, int32 Count = 1, TSubclassOf<AYIItemPickup> PickupClass = nullptr);
+
+	/** Spawn a replicated pickup using a definition asset. Server-only; falls back to code lookup if asset null. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Spawn", meta=(WorldContext="WorldContextObject", DisplayName="Spawn Item Pickup from Definition"))
+	static AYIItemPickup* SpawnItemPickup(UObject* WorldContextObject, UYIItemDefinition* Definition, const FTransform& Transform, int32 Count = 1, TSubclassOf<AYIItemPickup> PickupClass = nullptr);
 
 	// Returns a color for a designer-defined rarity tag. Looks up a palette at /Game/YOLOInventory/RarityPalette_Default if present, else falls back to common names.
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Tooltip")

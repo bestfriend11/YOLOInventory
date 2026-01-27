@@ -17,6 +17,8 @@ public:
 
 private:
 	void HandleDebugConsoleCommand(const TArray<FString>& Args, UWorld* World);
+	void HandleAddItemConsoleCommand(const TArray<FString>& Args, UWorld* World);
 
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugConsoleCommand;
+	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> AddItemConsoleCommand;
 };

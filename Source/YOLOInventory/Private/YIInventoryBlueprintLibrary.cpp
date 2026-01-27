@@ -8,12 +8,19 @@
 #include "GameplayTagContainer.h"
 #include "YIInventoryTypes.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/GameplayStatics.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "YIItemBlueprintLibrary.h"
 #include "Modules/ModuleManager.h"
 #include "YOLOInventorySettings.h"
 #include "YIRequirement.h"
 #include "AbilitySystemComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "YIItemRegistrySubsystem.h"
+#include "YIItemPickup.h"
+
+static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code);
 
 bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsset* Affix, int32 Level, int32 Seed, float& OutRolledValue)
 {
@@ -269,6 +276,27 @@ bool UYIInventoryBlueprintLibrary::GetFirstEmptyPosForItem(const UYIInventoryBag
 	return Bag->FindFirstFit(Definition->DefaultSize, OutPos);
 }
 
+bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int64 Code, int32 Count)
+{
+	if (!Bag || Code == 0 || Count <= 0)
+	{
+		return false;
+	}
+
+	UYIItemDefinition* Def = YI_FindDefinitionByCode(Code);
+	if (!Def)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AddItemToBagByCode: definition for code %lld not found"), (long long)Code);
+		return false;
+	}
+
+	FYIBagItem NewItem;
+	NewItem.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Code, Count);
+	NewItem.Size = Def->DefaultSize;
+	int32 NewIdx = Bag->AddBagItem(NewItem);
+	return NewIdx != INDEX_NONE;
+}
+
 bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag, int32 Index, FYITooltipData& OutData, const FYIRequirementContext& RequirementContext)
 {
 	OutData = FYITooltipData();
@@ -503,4 +531,60 @@ FYIItemInstance UYIInventoryBlueprintLibrary::MakeItemInstanceByTemplateId(const
 	UYIItemDefinition* Def = FindItemDefinitionByTemplateId(TemplateId);
 	if (!Def) return FYIItemInstance();
 	return UYIItemBlueprintLibrary::MakeItemInstanceByCode(Def->UniqueCode, Count);
+}
+
+static UWorld* YI_GetWorldFromContext(UObject* WorldContextObject)
+{
+	return WorldContextObject ? WorldContextObject->GetWorld() : nullptr;
+}
+
+static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code)
+{
+	if (Code == 0 || !GEngine)
+	{
+		return nullptr;
+	}
+	if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+	{
+		return Registry->GetByCode(Code);
+	}
+	return nullptr;
+}
+
+AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupByCode(UObject* WorldContextObject, int64 Code, const FTransform& Transform, int32 Count, TSubclassOf<AYIItemPickup> PickupClass)
+{
+	UWorld* World = YI_GetWorldFromContext(WorldContextObject);
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return nullptr; // enforce authority-only spawn
+	}
+
+	UYIItemDefinition* Definition = YI_FindDefinitionByCode(Code);
+	if (!Definition)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SpawnItemPickupByCode: definition for code %lld not found."), (long long)Code);
+		return nullptr;
+	}
+
+	TSubclassOf<AYIItemPickup> ClassToSpawn = PickupClass ? PickupClass.Get() : AYIItemPickup::StaticClass();
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	Params.Owner = nullptr;
+	Params.Instigator = nullptr;
+
+	AYIItemPickup* Pickup = World->SpawnActorDeferred<AYIItemPickup>(ClassToSpawn, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (Pickup)
+	{
+		Pickup->ItemCode = Code;
+		Pickup->Count = FMath::Max(1, Count);
+		UGameplayStatics::FinishSpawningActor(Pickup, Transform);
+		Pickup->SetItemByCode(Code, Count);
+	}
+	return Pickup;
+}
+
+AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickup(UObject* WorldContextObject, UYIItemDefinition* Definition, const FTransform& Transform, int32 Count, TSubclassOf<AYIItemPickup> PickupClass)
+{
+	int64 Code = Definition ? Definition->UniqueCode : 0;
+	return SpawnItemPickupByCode(WorldContextObject, Code, Transform, Count, PickupClass);
 }
