@@ -81,7 +81,7 @@ FString UYIItemRegistrySubsystem::ExtractTemplateIdFromRow(const UScriptStruct* 
 	return FString();
 }
 
-static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr)
+static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
 {
 	if (!SourceProp || !DestProp || !SourcePtr || !DestPtr)
 	{
@@ -99,6 +99,30 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 	if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
 	{
 		FString Value = SrcStr->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::BoolFromText)
+		{
+			if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+			{
+				DestBool->SetPropertyValue(DestPtr, !Value.IsEmpty());
+				return true;
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToName)
+		{
+			if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+			{
+				DestName->SetPropertyValue(DestPtr, FName(*Value));
+				return true;
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToText)
+		{
+			if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+			{
+				DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+				return true;
+			}
+		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
 			DestStr->SetPropertyValue(DestPtr, Value);
@@ -118,6 +142,14 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 	if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
 	{
 		const FName Value = SrcName->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::ToText)
+		{
+			if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+			{
+				DestText->SetPropertyValue(DestPtr, FText::FromName(Value));
+				return true;
+			}
+		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
 			DestStr->SetPropertyValue(DestPtr, Value.ToString());
@@ -132,6 +164,14 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 	if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
 	{
 		const FText Value = SrcText->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::ToName)
+		{
+			if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+			{
+				DestName->SetPropertyValue(DestPtr, FName(*Value.ToString()));
+				return true;
+			}
+		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
 			DestStr->SetPropertyValue(DestPtr, Value.ToString());
@@ -259,7 +299,7 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 
 		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
-		CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr);
+		CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr, Mapping.Conversion);
 	}
 
 	OutDef = Def;
@@ -276,7 +316,8 @@ UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const U
 	UYIItemDefinition* CachedResult = nullptr;
 
 	// Inline mapping path (editor-friendly, no blueprint needed)
-	if (ApplyInlineMappings(Source, DataTable, RowName, CachedResult))
+	const bool bInlineFirst = Source && Source->TransformMode != EYITransformMode::TransformerOnly;
+	if (bInlineFirst && ApplyInlineMappings(Source, DataTable, RowName, CachedResult))
 	{
 		if (bCacheResult)
 		{
@@ -319,6 +360,7 @@ UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const U
 		CachedGeneratedDefinitions.FindOrAdd(Code) = Definition;
 	}
 
+	// Hybrid: transformer may further adjust the definition after inline applied; inline already returned early.
 	return Definition;
 }
 

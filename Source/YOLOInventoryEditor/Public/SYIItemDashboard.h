@@ -20,6 +20,8 @@ struct FYIItemDashboardEntry
 	bool bIsDataTable = false;
 	FName RowName = NAME_None;
 	TSoftObjectPtr<UObject> Object;
+	bool bHasAsset = false;
+	TSoftObjectPtr<class UYIItemDefinition> ItemAsset;
 	TSoftObjectPtr<class UDataTable> DataTable;
 	TSoftObjectPtr<class UYIDataTableItemSource> DataSource;
 };
@@ -33,7 +35,7 @@ public:
 	void Construct(const FArguments& InArgs);
 
 private:
-	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner) const;
+	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 	void Refresh();
 	void OnSearchTextChanged(const FText& NewText);
 	void OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry);
@@ -62,5 +64,6 @@ private:
 	TSharedPtr<class SListView<TSharedPtr<FYIFieldMapping>>> MappingListView;
 	TArray<TSharedPtr<FString>> SourceFieldOptions;
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
+	TArray<TSharedPtr<FString>> ConverterOptions;
 	FText SearchText;
 };

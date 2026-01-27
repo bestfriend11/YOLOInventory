@@ -20,6 +20,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/SHeaderRow.h"
@@ -134,7 +135,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 				[
 					SAssignNew(ListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
 					.ListItemsSource(&FilteredItems)
-					.SelectionMode(ESelectionMode::Single)
+					.SelectionMode(ESelectionMode::Multi)
 					.OnContextMenuOpening(FOnContextMenuOpening::CreateSP(this, &SYIItemDashboard::BuildListContextMenu))
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry, ESelectInfo::Type)
 					{
@@ -143,17 +144,18 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 					.OnGenerateRow(this, &SYIItemDashboard::MakeRowWidget)
 					.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry)
 					{
-						ShowDetailsForEntry(Entry);
+						OpenEntry(Entry);
 					})
-					.HeaderRow
-					(
-						SNew(SHeaderRow)
-						+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Code","Code")).FillWidth(0.15f)
-						+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Name","Name")).FillWidth(0.25f)
-						+ SHeaderRow::Column("Template").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Template","TemplateId")).FillWidth(0.2f)
-						+ SHeaderRow::Column("Type").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Type","Type")).FillWidth(0.1f)
-						+ SHeaderRow::Column("Source").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Source","Source")).FillWidth(0.45f)
-					)
+			.HeaderRow
+			(
+				SNew(SHeaderRow)
+				+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Code","Code")).FillWidth(0.15f)
+				+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Name","Name")).FillWidth(0.25f)
+				+ SHeaderRow::Column("Template").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Template","TemplateId")).FillWidth(0.2f)
+				+ SHeaderRow::Column("Type").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Type","Type")).FillWidth(0.1f)
+				+ SHeaderRow::Column("Source").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Source","Source")).FillWidth(0.3f)
+				+ SHeaderRow::Column("Asset").DefaultLabel(NSLOCTEXT("YOLOInventory","Dash_Asset","Asset")).FillWidth(0.1f)
+			)
 				]
 			]
 		]
@@ -182,11 +184,49 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 					SNew(SVerticalBox)
 					+ SVerticalBox::Slot().AutoHeight().Padding(4)
 					[
-						SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
-						[
-							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_InlineMappings","Inline Mappings"))
-						]
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_InlineMappings","Inline Mappings"))
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+				.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions) // reuse buffer; repopulated below
+				.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+				{
+					return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+				})
+				.OnComboBoxOpening_Lambda([this]()
+				{
+					TargetPropertyOptions.Reset();
+					TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Inline Only")));
+					TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Transformer Only")));
+					TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Inline then Transformer")));
+				})
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+				{
+					if (!CurrentMappingSource.IsValid() || !NewItem.IsValid()) return;
+					CurrentMappingSource->Modify();
+					if (*NewItem == TEXT("Inline Only")) CurrentMappingSource->TransformMode = EYITransformMode::InlineOnly;
+					else if (*NewItem == TEXT("Transformer Only")) CurrentMappingSource->TransformMode = EYITransformMode::TransformerOnly;
+					else CurrentMappingSource->TransformMode = EYITransformMode::HybridInlineThenTransformer;
+				})
+				.InitiallySelectedItem(nullptr)
+				.Content()
+				[
+					SNew(STextBlock).Text_Lambda([this]()
+					{
+						if (!CurrentMappingSource.IsValid()) return FText::FromString(TEXT("Mode"));
+						switch (CurrentMappingSource->TransformMode)
+						{
+						case EYITransformMode::InlineOnly: return FText::FromString(TEXT("Inline Only"));
+						case EYITransformMode::TransformerOnly: return FText::FromString(TEXT("Transformer Only"));
+						default: return FText::FromString(TEXT("Inline then Transformer"));
+						}
+					})
+				]
+			]
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
 						[
 							SNew(SCheckBox)
@@ -250,16 +290,39 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 	Refresh();
 }
 
-TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner) const
+TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
 {
+	auto StatusColor = [Entry]() -> FLinearColor
+	{
+		if (!Entry.IsValid())
+		{
+			return FLinearColor::Gray;
+		}
+		if (Entry->bIsDataTable)
+		{
+			return Entry->bHasAsset
+				? FLinearColor(0.18f, 0.65f, 0.32f, 0.9f)    // green tint for rows with generated asset
+				: FLinearColor(0.95f, 0.55f, 0.20f, 0.9f);   // orange for rows needing generation
+		}
+		return FLinearColor(0.20f, 0.45f, 0.90f, 0.9f); // blue for pure assets
+	};
+
 	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
 		.ToolTipText(BuildPreviewText(Entry))
 	[
 		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Fill)
+		[
+			SNew(SBorder)
+			.Padding(FMargin(2, 0))
+			.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(StatusColor())
+		]
 		+ SHorizontalBox::Slot().FillWidth(0.15f)
 		[
 			SNew(STextBlock)
 			.Text(FText::AsNumber(Entry->Code))
+			.ColorAndOpacity(StatusColor())
 		]
 		+ SHorizontalBox::Slot().FillWidth(0.25f)
 		[
@@ -275,10 +338,59 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 			SNew(STextBlock).Text(Entry->bIsDataTable
 				? NSLOCTEXT("YOLOInventory","Dash_Type_DataTable","Data Table")
 				: NSLOCTEXT("YOLOInventory","Dash_Type_Asset","Asset"))
+			.ColorAndOpacity(StatusColor())
 		]
 		+ SHorizontalBox::Slot().FillWidth(0.3f)
 		[
 			SNew(STextBlock).Text(FText::FromString(Entry->Source))
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+		[
+			Entry->bIsDataTable && Entry->bHasAsset
+			? StaticCastSharedRef<SWidget>(
+				SNew(SButton)
+				.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_OpenAsset","Select/Open generated item asset"))
+				.OnClicked_Lambda([this, Entry]()
+				{
+					if (!ListView.IsValid())
+					{
+						return FReply::Handled();
+					}
+
+					TSharedPtr<FYIItemDashboardEntry> AssetEntry;
+					for (const TSharedPtr<FYIItemDashboardEntry>& It : Items)
+					{
+						if (It.IsValid() && !It->bIsDataTable && It->Code == Entry->Code)
+						{
+							AssetEntry = It;
+							break;
+						}
+					}
+
+					if (AssetEntry.IsValid())
+					{
+						ListView->SetSelection(AssetEntry);
+						ShowDetailsForEntry(AssetEntry);
+					}
+					else if (Entry->ItemAsset.IsValid())
+					{
+						if (UObject* AssetObj = Entry->ItemAsset.LoadSynchronous())
+						{
+							LastDetailObject = AssetObj;
+							if (DetailsView.IsValid())
+							{
+								DetailsView->SetObject(AssetObj);
+							}
+						}
+					}
+					return FReply::Handled();
+				})
+				.Content()
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_AssetBadge","Asset"))
+				])
+			: StaticCastSharedRef<SWidget>(SNew(SSpacer).Size(FVector2D(40.f, 1.f)))
 		]
 	];
 }
@@ -287,6 +399,8 @@ void SYIItemDashboard::Refresh()
 {
 	Items.Reset();
 	FilteredItems.Reset();
+	TMap<int64, TSoftObjectPtr<UYIItemDefinition>> ExistingAssets;
+	TSet<FString> ExistingRowKeys;
 
 	if (GEngine)
 	{
@@ -308,6 +422,8 @@ void SYIItemDashboard::Refresh()
 
 				if (!Entry->bIsDataTable)
 				{
+					Entry->ItemAsset = TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath());
+					ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
 					if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(View.Object.LoadSynchronous()))
 					{
 						Entry->Name = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
@@ -321,6 +437,7 @@ void SYIItemDashboard::Refresh()
 				{
 					Entry->DataTable = TSoftObjectPtr<UDataTable>(FSoftObjectPath(View.SourcePath));
 					Entry->Name = View.RowName.IsNone() ? TEXT("Row") : View.RowName.ToString();
+					ExistingRowKeys.Add(FString::Printf(TEXT("%lld|%s"), Entry->Code, *Entry->RowName.ToString()));
 
 					// Try to read a preview name field from the row (configurable on the data source)
 					if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
@@ -347,14 +464,114 @@ void SYIItemDashboard::Refresh()
 		}
 	}
 
-	const FString Filter = SearchText.ToString();
+	// Ensure all data-table rows are represented even when a generated asset already exists
+	FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UYIDataTableItemSource::StaticClass()->GetClassPathName());
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Sources;
+	AssetRegistry.Get().GetAssets(Filter, Sources);
+
+	for (const FAssetData& SourceData : Sources)
+	{
+		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceData.GetAsset()))
+		{
+			if (UDataTable* Table = Source->ResolveDataTable())
+			{
+				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+				const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+				const FName TemplateField = Source->TemplateIdFieldName;
+
+				for (const auto& RowPair : Table->GetRowMap())
+				{
+					const FName RowName = RowPair.Key;
+					const uint8* RowData = RowPair.Value;
+
+					int64 CodeValue = 0;
+					bool bFoundCode = false;
+					FString TemplateIdValue;
+
+					for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
+					{
+						const FProperty* Prop = *It;
+						if (!Prop) continue;
+
+						if (Prop->GetFName() == CodeField)
+						{
+							if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+							{
+								if (Num->IsInteger())
+								{
+									CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+									bFoundCode = true;
+								}
+							}
+						}
+						else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
+						{
+							if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+							{
+								TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
+							}
+							else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+							{
+								TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+							}
+							else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+							{
+								TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+							}
+						}
+					}
+
+					if (!bFoundCode)
+					{
+						continue;
+					}
+
+					const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
+					if (ExistingRowKeys.Contains(RowKey))
+					{
+						continue;
+					}
+
+					TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
+					Entry->Code = CodeValue;
+					Entry->RowName = RowName;
+					Entry->bIsDataTable = true;
+					Entry->DataSource = Source;
+					Entry->DataTable = Table;
+					Entry->TemplateId = TemplateIdValue;
+					Entry->Source = SourceData.GetSoftObjectPath().ToString();
+					Entry->Name = RowName.ToString();
+
+					const FString PreviewName = GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
+					if (!PreviewName.IsEmpty())
+					{
+						Entry->Name = PreviewName;
+					}
+
+					if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
+					{
+						Entry->bHasAsset = true;
+						Entry->ItemAsset = *FoundAsset;
+					}
+
+					Items.Add(Entry);
+					ExistingRowKeys.Add(RowKey);
+				}
+			}
+		}
+	}
+
+	const FString SearchFilter = SearchText.ToString();
 	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Items)
 	{
-		const bool bPass = Filter.IsEmpty() ||
-			Entry->Name.Contains(Filter) ||
-			Entry->TemplateId.Contains(Filter) ||
-			Entry->Source.Contains(Filter) ||
-			(FString::FromInt((int32)Entry->Code).Contains(Filter));
+		const bool bPass = SearchFilter.IsEmpty() ||
+			Entry->Name.Contains(SearchFilter) ||
+			Entry->TemplateId.Contains(SearchFilter) ||
+			Entry->Source.Contains(SearchFilter) ||
+			(FString::FromInt((int32)Entry->Code).Contains(SearchFilter));
 		if (bPass)
 		{
 			FilteredItems.Add(Entry);
@@ -790,6 +1007,58 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 		return nullptr;
 	}
 
+	// Multi-select support: bulk create assets for rows
+	bool bAnyRows = false;
+	for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+	{
+		if (E.IsValid() && E->bIsDataTable)
+		{
+			bAnyRows = true;
+			break;
+		}
+	}
+
+	if (Selected.Num() > 1)
+	{
+		SYIItemDashboard* Self = this;
+		FMenuBuilder MenuBuilder(true, nullptr);
+
+		if (bAnyRows)
+		{
+			MenuBuilder.AddMenuEntry(
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkCreate", "Create Assets for Selected Rows"),
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkCreate_Tip", "Run transformer/inline mappings for all selected data table rows."),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([Self, Selected]()
+				{
+					bool bChanged = false;
+					for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+					{
+						if (E.IsValid() && E->bIsDataTable)
+						{
+							bChanged |= Self->CreateAssetFromEntry(*E);
+						}
+					}
+					if (bChanged)
+					{
+						Self->Refresh();
+					}
+				})));
+		}
+
+		// Provide single-entry actions for the first selected item as a convenience
+		if (Selected[0].IsValid())
+		{
+			MenuBuilder.AddSeparator();
+			if (TSharedPtr<SWidget> Single = BuildContextMenuForEntry(Selected[0]))
+			{
+				MenuBuilder.AddWidget(Single.ToSharedRef(), FText::GetEmpty(), true);
+			}
+		}
+
+		return MenuBuilder.MakeWidget();
+	}
+
 	return BuildContextMenuForEntry(Selected[0]);
 }
 
@@ -798,6 +1067,7 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	MappingRows.Reset();
 	SourceFieldOptions.Reset();
 	TargetPropertyOptions.Reset();
+	ConverterOptions.Reset();
 
 	if (!Source)
 	{
@@ -924,22 +1194,106 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				return TSharedPtr<FString>();
 			}())
 			.Content()
-			[
-				SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
-				{
-					const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
-					{
-						return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
-					});
-					return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
-				})
-			]
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
 		[
-			SNew(SButton)
-			.Text(NSLOCTEXT("YOLOInventory","Dash_RemoveMapping","X"))
-			.OnClicked_Lambda([this, Mapping]()
+			SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+			{
+				const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+				{
+					return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+				});
+				return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
+			})
+		]
+	]
+	+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(2)
+	[
+		SNew(SComboBox<TSharedPtr<FString>>)
+		.OptionsSource(&const_cast<SYIItemDashboard*>(this)->ConverterOptions)
+		.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+		{
+			return SNew(STextBlock).Text(DropdownText(InItem));
+		})
+		.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+		{
+			if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+			{
+				CurrentMappingSource->Modify();
+				EYIFieldMappingConversion NewConv = EYIFieldMappingConversion::None;
+				if (*NewItem == TEXT("To Name")) NewConv = EYIFieldMappingConversion::ToName;
+				else if (*NewItem == TEXT("To Text")) NewConv = EYIFieldMappingConversion::ToText;
+				else if (*NewItem == TEXT("To Int")) NewConv = EYIFieldMappingConversion::ToInt;
+				else if (*NewItem == TEXT("To Float")) NewConv = EYIFieldMappingConversion::ToFloat;
+				else if (*NewItem == TEXT("Bool from Int>0")) NewConv = EYIFieldMappingConversion::BoolFromInt;
+				else if (*NewItem == TEXT("Bool from Text (non-empty)")) NewConv = EYIFieldMappingConversion::BoolFromText;
+				Mapping->Conversion = NewConv;
+				const int32 Index = MappingRows.Find(Mapping);
+				if (Index != INDEX_NONE)
+				{
+					CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
+				}
+			}
+		})
+		.OnComboBoxOpening_Lambda([this]()
+		{
+			ConverterOptions.Reset();
+			ConverterOptions.Add(MakeShared<FString>(TEXT("None")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("To Name")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("To Text")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("To Int")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("To Float")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Int>0")));
+			ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Text (non-empty)")));
+		})
+		.InitiallySelectedItem([this, Mapping]()
+		{
+			if (!Mapping.IsValid()) return TSharedPtr<FString>();
+			const TCHAR* Label = TEXT("None");
+			switch (Mapping->Conversion)
+			{
+			case EYIFieldMappingConversion::ToName: Label = TEXT("To Name"); break;
+			case EYIFieldMappingConversion::ToText: Label = TEXT("To Text"); break;
+			case EYIFieldMappingConversion::ToInt: Label = TEXT("To Int"); break;
+			case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
+			case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
+			case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+			default: break;
+			}
+			for (const TSharedPtr<FString>& Opt : ConverterOptions)
+			{
+				if (Opt.IsValid() && *Opt == Label)
+				{
+					return Opt;
+				}
+			}
+			return TSharedPtr<FString>();
+		}())
+		.Content()
+		[
+			SNew(STextBlock).Text_Lambda([Mapping]()
+			{
+				const TCHAR* Label = TEXT("None");
+				if (Mapping.IsValid())
+				{
+					switch (Mapping->Conversion)
+					{
+					case EYIFieldMappingConversion::ToName: Label = TEXT("To Name"); break;
+					case EYIFieldMappingConversion::ToText: Label = TEXT("To Text"); break;
+					case EYIFieldMappingConversion::ToInt: Label = TEXT("To Int"); break;
+					case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
+					case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
+					case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+					default: break;
+					}
+				}
+				return FText::FromString(Label);
+			})
+		]
+	]
+	+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+	[
+		SNew(SButton)
+		.Text(NSLOCTEXT("YOLOInventory","Dash_RemoveMapping","X"))
+		.OnClicked_Lambda([this, Mapping]()
 			{
 				if (CurrentMappingSource.IsValid() && Mapping.IsValid())
 				{

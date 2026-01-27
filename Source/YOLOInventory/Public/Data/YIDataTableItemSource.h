@@ -5,6 +5,26 @@
 #include "CSVDataTransformer.h"
 #include "YIDataTableItemSource.generated.h"
 
+UENUM(BlueprintType)
+enum class EYIFieldMappingConversion : uint8
+{
+	None        UMETA(DisplayName="None"),
+	ToName      UMETA(DisplayName="To Name"),
+	ToText      UMETA(DisplayName="To Text"),
+	ToInt       UMETA(DisplayName="To Int"),
+	ToFloat     UMETA(DisplayName="To Float"),
+	BoolFromInt UMETA(DisplayName="Bool from Int>0"),
+	BoolFromText UMETA(DisplayName="Bool from Text (non-empty)")
+};
+
+UENUM(BlueprintType)
+enum class EYITransformMode : uint8
+{
+	InlineOnly              UMETA(DisplayName="Inline Mappings Only"),
+	TransformerOnly         UMETA(DisplayName="Transformer Only"),
+	HybridInlineThenTransformer UMETA(DisplayName="Inline then Transformer")
+};
+
 USTRUCT(BlueprintType)
 struct FYIFieldMapping
 {
@@ -17,6 +37,10 @@ struct FYIFieldMapping
 	/** Property name on the target item definition to write into. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
 	FName TargetProperty;
+
+	/** Optional conversion applied before assigning to the target. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	EYIFieldMappingConversion Conversion = EYIFieldMappingConversion::None;
 };
 
 class UDataTable;
@@ -62,6 +86,10 @@ public:
 	/** Enable simple inline field mappings instead of (or alongside) a transformer Blueprint. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
 	bool bUseInlineMappings = false;
+
+	/** How to combine inline mappings and transformer. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
+	EYITransformMode TransformMode = EYITransformMode::InlineOnly;
 
 	/** Mappings from data table columns to item definition properties (type-compatible copies). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
