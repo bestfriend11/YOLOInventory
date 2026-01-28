@@ -77,17 +77,17 @@ void FYOLOInventoryModule::HandleAddItemConsoleCommand(const TArray<FString>& Ar
 	int32 Count = (Args.Num() > 1) ? FCString::Atoi(*Args[1]) : 1;
 	Count = FMath::Max(1, Count);
 
-	APlayerController* PC = World->GetFirstPlayerController();
-	if (!PC)
+	APawn* Pawn = World->GetFirstPlayerController() ? World->GetFirstPlayerController()->GetPawn() : nullptr;
+	if (!Pawn)
 	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: no player controller found"));
+		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: no pawn found for first player"));
 		return;
 	}
 
-	UYIInventoryComponent* InvComp = PC->FindComponentByClass<UYIInventoryComponent>();
+	UYIInventoryComponent* InvComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
 	if (!InvComp || !InvComp->EquippedBag)
 	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: player has no inventory component or bag"));
+		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: pawn has no inventory component or bag"));
 		return;
 	}
 

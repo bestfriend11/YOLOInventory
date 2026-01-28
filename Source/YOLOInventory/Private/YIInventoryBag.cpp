@@ -2,6 +2,7 @@
 #include "YIItemDefinition.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "InventoryUtils.h"
+#include "UObject/Package.h"
 
 FIntPoint UYIInventoryBag::GetEffectiveSize(const FIntPoint InSize) const
 {
@@ -45,7 +46,7 @@ bool UYIInventoryBag::MoveItem(int32 Index, const FIntPoint NewPos)
 	Items.Insert(Tmp, Index);
 	if (!bCan) return false;
 	Items[Index].Pos = NewPos;
-	MarkPackageDirty();
+	if (ShouldMarkDirty()) { MarkPackageDirty(); }
 	OnChanged.Broadcast();
 	OnItemMoved.Broadcast(Index, NewPos);
 	return true;
@@ -122,7 +123,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 			if (Room > 0)
 			{
 				Items[Existing].Item.Count = FMath::Clamp(Items[Existing].Item.Count + FMath::Max(1, NewItem.Item.Count), 1, Def->MaxStackCount);
-				MarkPackageDirty();					OnChanged.Broadcast();				return Existing;
+				if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();				return Existing;
 			}
 			// If stack is full, fall through to creating a new stack of the same item
 		}
@@ -141,7 +142,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		Copy.Item.Count = FMath::Clamp(Copy.Item.Count, 1, Def->MaxStackCount);
 	}
 	int32 OutIndex = Items.Add(Copy);
-	MarkPackageDirty(); OnChanged.Broadcast();
+	if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
 	OnItemAdded.Broadcast(OutIndex, Items[OutIndex]);
 	return OutIndex;
 }
@@ -165,12 +166,12 @@ bool UYIInventoryBag::CombineStacks(int32 IndexA, int32 IndexB)
 	{
 		FYIBagItem RemovedB = B;
 		Items.RemoveAt(IndexB);
-		MarkPackageDirty(); OnChanged.Broadcast();
+		if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
 		OnItemRemoved.Broadcast(IndexB, RemovedB);
 	}
 	else
 	{
-		MarkPackageDirty(); OnChanged.Broadcast();
+		if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
 	}
 	return Moved > 0;
 }
@@ -191,13 +192,30 @@ int32 UYIInventoryBag::SplitStack(int32 Index, int32 Amount, const FIntPoint Pos
 	}
 	Src.Item.Count -= Amount;
 	int32 OutIdx = Items.Add(New);
-	MarkPackageDirty(); OnChanged.Broadcast();
+	if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
 	return OutIdx;
 }
 
 bool UYIInventoryBag::CanPlaceAtWithScale(const FIntPoint Pos, const FIntPoint Size) const
 {
 	return CanPlaceAt(Pos, GetEffectiveSize(Size));
+}
+
+bool UYIInventoryBag::ShouldMarkDirty() const
+{
+	// Skip dirtying in PIE/runtime instances (duplicates) and transient objects
+	if (HasAnyFlags(RF_Transient | RF_DuplicateTransient))
+	{
+		return false;
+	}
+	if (const UPackage* Package = GetOutermost())
+	{
+		if (Package->HasAnyPackageFlags(PKG_PlayInEditor | PKG_ContainsMapData))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 bool UYIInventoryBag::CanPlaceAtIgnoring(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex) const
@@ -357,3 +375,8 @@ void UYIInventoryBag::AutoPack()
 	MarkPackageDirty();
 	OnChanged.Broadcast();
 }
+#include "YIInventoryBag.h"
+#include "YIItemDefinition.h"
+#include "YIInventoryBlueprintLibrary.h"
+#include "InventoryUtils.h"
+#include "UObject/Package.h"

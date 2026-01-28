@@ -19,6 +19,9 @@
 #include "GameFramework/Actor.h"
 #include "YIItemRegistrySubsystem.h"
 #include "YIItemPickup.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "YIItemInstance.h"
 
 static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code);
 
@@ -587,4 +590,190 @@ AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickup(UObject* WorldConte
 {
 	int64 Code = Definition ? Definition->UniqueCode : 0;
 	return SpawnItemPickupByCode(WorldContextObject, Code, Transform, Count, PickupClass);
+}
+
+AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(UObject* WorldContextObject, const FYIItemInstance& Instance, const FTransform& Transform, TSubclassOf<AYIItemPickup> PickupClass)
+{
+	UWorld* World = YI_GetWorldFromContext(WorldContextObject);
+	if (!World || World->GetNetMode() == NM_Client || Instance.Count <= 0)
+	{
+		return nullptr;
+	}
+
+	int64 Code = 0;
+	if (Instance.Definition.IsValid())
+	{
+		Code = Instance.Definition.Get()->UniqueCode;
+	}
+	else if (Instance.Definition.ToSoftObjectPath().IsValid())
+	{
+		if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Instance.Definition.LoadSynchronous()))
+		{
+			Code = Def->UniqueCode;
+		}
+	}
+
+	TSubclassOf<AYIItemPickup> ClassToSpawn = PickupClass ? PickupClass.Get() : AYIItemPickup::StaticClass();
+	FActorSpawnParameters Params;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+	Params.Owner = nullptr;
+	Params.Instigator = nullptr;
+
+	AYIItemPickup* Pickup = World->SpawnActorDeferred<AYIItemPickup>(ClassToSpawn, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (Pickup)
+	{
+		Pickup->ItemCode = Code;
+		Pickup->Count = Instance.Count;
+		// Convert to net-safe instance
+		Pickup->ItemInstance.Definition = Instance.Definition;
+		Pickup->ItemInstance.Count = Instance.Count;
+		Pickup->ItemInstance.CustomStackKey = Instance.CustomStackKey;
+		Pickup->ItemInstance.bRotated = Instance.bRotated;
+		Pickup->ItemInstance.Affixes = Instance.Affixes;
+		Pickup->ItemInstance.Attributes.Reset();
+		for (const TPair<FName, float>& Pair : Instance.Attributes)
+		{
+			FYIAttributeKV KV; KV.Name = Pair.Key; KV.Value = Pair.Value;
+			Pickup->ItemInstance.Attributes.Add(KV);
+		}
+		UGameplayStatics::FinishSpawningActor(Pickup, Transform);
+		Pickup->RefreshVisuals(); // ensure visuals align
+	}
+	return Pickup;
+}
+
+bool UYIInventoryBlueprintLibrary::DropBagItemToWorld(UObject* WorldContextObject, UYIInventoryBag* Bag, int32 Index, const FTransform& SpawnTransform, int32 Count, TSubclassOf<AYIItemPickup> PickupClass)
+{
+	UWorld* World = YI_GetWorldFromContext(WorldContextObject);
+	if (!World || World->GetNetMode() == NM_Client || !Bag || !Bag->Items.IsValidIndex(Index))
+	{
+		return false;
+	}
+
+	FYIBagItem& Src = Bag->Items[Index];
+	int32 DropCount = (Count <= 0) ? Src.Item.Count : FMath::Min(Src.Item.Count, Count);
+	if (DropCount <= 0)
+	{
+		return false;
+	}
+
+	UYIItemDefinition* Def = Src.Item.Definition.IsValid() ? Src.Item.Definition.Get() : Src.Item.Definition.LoadSynchronous();
+	if (!Def)
+	{
+		return false;
+	}
+
+	FYIItemInstance DropInstance = Src.Item;
+	DropInstance.Count = DropCount;
+
+	AYIItemPickup* Pickup = SpawnItemPickupFromInstance(WorldContextObject, DropInstance, SpawnTransform, PickupClass);
+	if (!Pickup)
+	{
+		return false;
+	}
+
+	if (DropCount < Src.Item.Count)
+	{
+		Src.Item.Count -= DropCount;
+	}
+	else
+	{
+		FYIBagItem Removed = Src;
+		Bag->Items.RemoveAt(Index);
+		Bag->OnItemRemoved.Broadcast(Index, Removed);
+	}
+	Bag->OnChanged.Broadcast();
+	return true;
+}
+
+bool UYIInventoryBlueprintLibrary::DestroyBagItem(UObject* WorldContextObject, UYIInventoryBag* Bag, int32 Index, int32 Count)
+{
+	if (!Bag || !Bag->Items.IsValidIndex(Index))
+	{
+		return false;
+	}
+	if (UWorld* World = YI_GetWorldFromContext(WorldContextObject))
+	{
+		if (World->GetNetMode() == NM_Client)
+		{
+			return false;
+		}
+	}
+
+	FYIBagItem& Src = Bag->Items[Index];
+	int32 DestroyCount = (Count <= 0) ? Src.Item.Count : FMath::Min(Src.Item.Count, Count);
+	if (DestroyCount <= 0)
+	{
+		return false;
+	}
+
+	if (DestroyCount < Src.Item.Count)
+	{
+		Src.Item.Count -= DestroyCount;
+	}
+	else
+	{
+		FYIBagItem Removed = Src;
+		Bag->Items.RemoveAt(Index);
+		Bag->OnItemRemoved.Broadcast(Index, Removed);
+	}
+	Bag->OnChanged.Broadcast();
+	return true;
+}
+
+bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, const FYIItemInstance& Instance)
+{
+	if (!Bag || Instance.Count <= 0 || !Instance.Definition.IsValid())
+	{
+		return false;
+	}
+	UYIItemDefinition* Def = Instance.Definition.Get();
+	if (!Def)
+	{
+		Def = Instance.Definition.LoadSynchronous();
+	}
+	if (!Def)
+	{
+		return false;
+	}
+	FYIBagItem NewItem;
+	NewItem.Item = Instance;
+	NewItem.Size = Def->DefaultSize;
+	int32 AddedIdx = Bag->AddBagItem(NewItem);
+	return AddedIdx != INDEX_NONE;
+}
+
+bool UYIInventoryBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextObject, UYIInventoryBag* Bag, AYIItemPickup* Pickup)
+{
+	UWorld* World = YI_GetWorldFromContext(WorldContextObject);
+	if (!World || World->GetNetMode() == NM_Client || !Bag || !IsValid(Pickup))
+	{
+		return false;
+	}
+
+	const FYIItemInstanceNet& NetInstance = Pickup->ItemInstance;
+	if (!NetInstance.Definition.IsValid() || NetInstance.Count <= 0)
+	{
+		return false;
+	}
+
+	// Convert back to full instance
+	FYIItemInstance Full;
+	Full.Definition = NetInstance.Definition;
+	Full.Count = NetInstance.Count;
+	Full.CustomStackKey = NetInstance.CustomStackKey;
+	Full.bRotated = NetInstance.bRotated;
+	Full.Affixes = NetInstance.Affixes;
+	for (const FYIAttributeKV& KV : NetInstance.Attributes)
+	{
+		Full.Attributes.Add(KV.Name, KV.Value);
+	}
+
+	if (AddItemInstanceToBag(Bag, Full))
+	{
+		Pickup->Destroy();
+		Bag->OnChanged.Broadcast();
+		return true;
+	}
+	return false;
 }

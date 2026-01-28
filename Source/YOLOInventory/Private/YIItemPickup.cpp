@@ -8,6 +8,7 @@
 #include "YIItemRegistrySubsystem.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "YIItemInstance.h"
 
 AYIItemPickup::AYIItemPickup()
 {
@@ -37,6 +38,7 @@ void AYIItemPickup::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AYIItemPickup, ItemCode);
 	DOREPLIFETIME(AYIItemPickup, Count);
+	DOREPLIFETIME(AYIItemPickup, ItemInstance);
 }
 
 void AYIItemPickup::SetItemByCode(int64 InCode, int32 InCount)
@@ -47,6 +49,8 @@ void AYIItemPickup::SetItemByCode(int64 InCode, int32 InCount)
 	}
 	ItemCode = InCode;
 	Count = FMath::Max(1, InCount);
+	ItemInstance.Definition = Definition;
+	ItemInstance.Count = Count;
 	OnRep_ItemData();
 }
 
@@ -82,6 +86,11 @@ void AYIItemPickup::RefreshVisuals()
 
 	UYIItemDefinition* Def = nullptr;
 
+	if (!Def && ItemInstance.Definition.IsValid())
+	{
+		Def = ItemInstance.Definition.Get();
+	}
+
 	if (ItemCode != 0 && GEngine)
 	{
 		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
@@ -93,6 +102,11 @@ void AYIItemPickup::RefreshVisuals()
 	if (Def)
 	{
 		Definition = Def;
+		ItemCode = Def->UniqueCode;
+		if (ItemInstance.Definition != Definition)
+		{
+			ItemInstance.Definition = Definition;
+		}
 		// If definition provides display info (future), hook mesh/icon here.
 	}
 

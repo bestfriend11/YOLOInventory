@@ -36,7 +36,22 @@ public:
 	// Click callback (set during Construct)
 	FOnCellClicked OnCellClicked;
 
-	void SetBag(UYIInventoryBag* InBag) { Bag = InBag; }
+	/**
+	 * Assign a new bag and immediately rebuild internal occupancy / hover caches
+	 * so hit-testing, hover and drag detection work right after the swap.
+	 */
+	void SetBag(UYIInventoryBag* InBag)
+	{
+		Bag = InBag;
+		RebuildOccupancy();
+		// Reset hover/selection so stale indices from the previous bag don't linger.
+		HoverCell = FIntPoint(-1, -1);
+		HoveredItemIndex = INDEX_NONE;
+		HoveredItemTopLeft = FIntPoint(-1, -1);
+		HoveredItemSize = FIntPoint::ZeroValue;
+		SelectedCell = FIntPoint(-1, -1);
+		UpdateHoverSelection();
+	}
 	void SetCellPixelSize(float InSize) { CellSize = FVector2D(InSize, InSize); }
 	void SetWholeItemHover(bool bEnable) { bWholeItemHover = bEnable; }
 	void SetWholeItemSelection(bool bEnable) { bWholeItemSelection = bEnable; }
@@ -44,6 +59,13 @@ public:
 	void SetUseGlobalDragGhost(bool bEnable) { bUseGlobalDragGhost = bEnable; }
 	void SetCellHoverEnabled(bool bEnable) { bEnableCellHover = bEnable; if (!bEnable) { HoverCell = FIntPoint(-1,-1); UpdateHoverSelection(); } }
 	void SetMouseSelectionEnabled(bool bEnable) { bEnableMouseSelection = bEnable; if (!bEnable) { SelectedCell = FIntPoint(-1,-1); } }
+	/** Rebuild occupancy & invalidate layout; call after bag item mutations to refresh hover/drag hit tests. */
+	void RefreshFromBag()
+	{
+		RebuildOccupancy();
+		Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+		UpdateHoverSelection();
+	}
 
 	virtual int32 OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry, const FSlateRect& MyCullingRect,
 		FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;

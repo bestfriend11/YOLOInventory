@@ -1,4 +1,4 @@
-#include "InventoryGridWidget.h"
+﻿#include "InventoryGridWidget.h"
 #include "SInventoryGridWidget.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
@@ -271,7 +271,9 @@ int32 UInventoryGridWidget::GetSelectedItemIndex() const
 // Called when the bound bag changes (items added/removed/modified)
 void UInventoryGridWidget::OnBagChanged()
 {
-	// Bag changed (add/remove/etc.) — ensure selection hover/tooltips remain correct
+	// Bag changed (add/remove/etc.) — ensure selection/hover/tooltips stay correct
+	if (MySlateWidget.IsValid())
+	{ MySlateWidget->RefreshFromBag(); }
 	// Recompute selection-related state by re-broadcasting the current selection
 	HandleSelectionChanged(SelectedCell);
 	UpdateBoundTooltip();
@@ -519,7 +521,7 @@ if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NON
 			}
 			else
 			{
-				// Unattached drag (picked up from world) — accept the placement
+				// Unattached drag (picked up from world) â€” accept the placement
 				UE_LOG(LogTemp, Warning, TEXT("Inventory: Placed unattached dragged item into bag at index %d."), NewIdx);
 				RefreshBoundTooltip();
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, true);
@@ -779,6 +781,7 @@ void UInventoryGridWidget::SetBag(UYIInventoryBag* InBag)
 	if (MySlateWidget.IsValid())
 	{
 		MySlateWidget->SetBag(Bag);
+		MySlateWidget->RefreshFromBag();
 	}
 	// Rebind bag-changed delegate like SynchronizeProperties
 	if (CachedBag != Bag)
@@ -800,3 +803,4 @@ void UInventoryGridWidget::SetBag(UYIInventoryBag* InBag)
 	// Ensure tooltip reflects current selection and new bag
 	UpdateBoundTooltip();
 }
+

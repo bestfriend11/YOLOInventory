@@ -34,6 +34,33 @@ public:
 	// Legacy capability state removed
 	UPROPERTY()
 	TMap<FName, int32> DeprecatedCapabilityState_DoNotUse;
+
+protected:
+	// Only mark persistent assets dirty; runtime/PIE instances skip to avoid dirtying templates.
+	bool ShouldMarkDirty() const;
+};
+
+/** Minimal replicated view of a bag item to keep network footprint low. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYINetBagItem
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	int64 Code = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	int32 Count = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	FIntPoint Pos = FIntPoint::ZeroValue;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	FIntPoint Size = FIntPoint(1,1);
+
+	/** CustomStackKey to distinguish rolled variants without sending full affix data. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	int64 CustomStackKey = 0;
 };
 
 /**
@@ -184,4 +211,8 @@ public:
 	// Utility to get effective size considering MinifyScale (at least 1x1)
 	UFUNCTION(BlueprintCallable, Category="Bag")
 	FIntPoint GetEffectiveSize(const FIntPoint InSize) const;
+
+protected:
+	/** Only mark package dirty when this is a persistent asset (not PIE/runtime clone). */
+	bool ShouldMarkDirty() const;
 };

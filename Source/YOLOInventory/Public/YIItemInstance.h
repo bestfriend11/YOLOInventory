@@ -21,11 +21,11 @@ struct FYIItemInstance
 	int32 Count = 1;
 
 	// Unique ID for this specific instance (for persistence)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Item")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Item", meta=(IgnoreForMemberInitializationTest))
 	FGuid InstanceId;
 
 	// Unique ID that identifies this stack in a container (stacks of same def share a StackId)
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Item")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Item", meta=(IgnoreForMemberInitializationTest))
 	FGuid StackId;
 
 	// Optional custom stack key (hash) to control merge rules beyond Definition

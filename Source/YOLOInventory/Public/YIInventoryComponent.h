@@ -43,7 +43,7 @@ public:
 
 	// Quick accessors
 	UFUNCTION(BlueprintCallable, Category="Inventory")
-	UYIInventoryBag* GetBag() const { return EquippedBag; }
+	UYIInventoryBag* GetBag() const;
 
 	// Add an item to a bag; returns success
 	UFUNCTION(BlueprintCallable, Category="Inventory")
@@ -52,4 +52,35 @@ public:
 	// Remove a bag owned by this component
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool RemoveBag(UYIInventoryBag* Bag);
+
+	/** Server-only: push current bag state into net mirror to replicate to owning client. */
+	void SyncNetState();
+
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	// Owner-only replicated minimal bag state for UI; rebuilt into a transient bag on clients.
+	UPROPERTY(ReplicatedUsing=OnRep_NetBag, Transient)
+	TArray<FYINetBagItem> NetBagItems;
+
+	UFUNCTION()
+	void OnRep_NetBag();
+
+	/** Client-only preview bag built from NetBagItems (not authoritative). */
+	UPROPERTY(Transient)
+	TObjectPtr<UYIInventoryBag> ClientPreviewBag = nullptr;
+
+private:
+	FDelegateHandle BagChangedHandle;
+
+	// Cleanup delegate when component is destroyed
+	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
+
+	virtual void BeginPlay() override;
+
+	/** Create a runtime bag instance from a template asset (layout + items). */
+	UYIInventoryBag* CloneBagTemplate(const UYIInventoryBag* TemplateBag);
+
+	/** Returns true if the bag is an asset/template (outer is package/public). */
+	bool IsTemplateBag(const UYIInventoryBag* Bag) const;
 };

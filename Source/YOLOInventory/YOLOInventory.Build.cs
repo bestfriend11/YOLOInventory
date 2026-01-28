@@ -33,7 +33,9 @@ public class YOLOInventory : ModuleRules
             "Slate",
             "SlateCore",
 			"UMG",
-			"InputCore"
+			"InputCore",
+            "NetCore",
+            "Networking"
         });
 
         if (Target.bBuildEditor)

@@ -7,6 +7,28 @@
 class UStaticMeshComponent;
 class UYIItemDefinition;
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIAttributeKV
+{
+	GENERATED_BODY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") FName Name;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") float Value = 0.f;
+};
+
+/** Net-safe version of item instance for pickups (avoids TMap replication). */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIItemInstanceNet
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TSoftObjectPtr<UYIItemDefinition> Definition;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") int32 Count = 1;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") int64 CustomStackKey = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") bool bRotated = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TArray<struct FYIAffixInstance> Affixes;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TArray<FYIAttributeKV> Attributes;
+};
+
 /**
  * Simple replicated pickup that represents an item definition + count in the world.
  * Designed to be authoritative on the server; clients resolve the definition via the registry.
@@ -37,6 +59,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_ItemData, Category="YOLOInventory|Pickup")
 	int64 ItemCode;
 
+	/** Full item instance data (affixes, durability, attributes). Net-safe variant. */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing=OnRep_ItemData, Category="YOLOInventory|Pickup")
+	FYIItemInstanceNet ItemInstance;
+
 	/** Designer list of selectable definitions (editor convenience). Server uses SelectedDefinition if ItemCode is unset. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YOLOInventory|Pickup")
 	TArray<TSoftObjectPtr<UYIItemDefinition>> SelectableDefinitions;
@@ -45,15 +71,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YOLOInventory|Pickup", meta=(ClampMin="0"))
 	int32 SelectedDefinitionIndex = 0;
 
+	/** Refresh visuals from the loaded definition (safe on client/server). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Pickup")
+	void RefreshVisuals();
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="YOLOInventory|Pickup")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 
 	UFUNCTION()
 	void OnRep_ItemData();
-
-	/** Refresh visuals from the loaded definition (safe on client/server). */
-	void RefreshVisuals();
 
 	/** Soft ref cached to avoid repeated registry lookups. */
 	UPROPERTY()
