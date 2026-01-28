@@ -1,7 +1,8 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Engine/EngineTypes.h" // for FDirectoryPath
 #include "YIInventoryBag.h"
 #include "YIPlayerInventoryStateComponent.generated.h"
 
@@ -63,7 +64,7 @@ struct YOLOINVENTORY_API FYISavedBagSnapshot
 	bool bUseFolderFilter = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	TArray<FString> FolderFilters;
+	TArray<FDirectoryPath> FolderFilters;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	bool bAutoMergeOnAdd = true;

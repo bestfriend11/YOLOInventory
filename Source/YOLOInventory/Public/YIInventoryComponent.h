@@ -1,6 +1,7 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "YIInventoryBag.h"
 #include "YIInventoryComponent.generated.h"
 
 class UYIInventoryBag;

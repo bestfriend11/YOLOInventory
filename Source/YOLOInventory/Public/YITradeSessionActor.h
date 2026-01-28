@@ -4,6 +4,8 @@
 #include "GameFramework/Actor.h"
 #include "YIInventoryTypes.h"
 #include "YIPlayerInventoryStateComponent.h" // for FYIResourceWallet
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/Pawn.h"
 #include "YITradeSessionActor.generated.h"
 
 class UYIInventoryComponent;
@@ -16,6 +18,7 @@ enum class ETradeSide : uint8
 	SideB
 };
 
+/** Lightweight offer visible to UI (replicated owner-only). */
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYITradeOffer
 {
@@ -28,6 +31,15 @@ struct YOLOINVENTORY_API FYITradeOffer
 	/** Optional resource/currency offer. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FYIResourceWallet Resources;
+};
+
+/** Internal server-only record of an offered slice pulled from a bag. */
+struct FYITradeOfferSource
+{
+	TWeakObjectPtr<UYIInventoryComponent> SourceInv;
+	int32 SlotIndex = INDEX_NONE;
+	int32 Count = 0;
+	FYIBagItem ItemCopy; // keeps CustomStackKey/affixes
 };
 
 /**
@@ -52,7 +64,18 @@ public:
 	UPROPERTY(Replicated)
 	bool bSideBIsNPC = false;
 
-	// Offers (owner-only replicated so each side can see both)
+	/** Cached pawn refs for quick inventory access. */
+	UPROPERTY(Replicated)
+	TObjectPtr<APawn> PawnA;
+
+	UPROPERTY(Replicated)
+	TObjectPtr<APawn> PawnB;
+
+	/** Pawn used for side B if NPC (must have inventory component). */
+	UPROPERTY(Replicated)
+	TObjectPtr<APawn> NPCPawn;
+
+	// Offers (replicate to relevant clients; session should be relevant only to participants)
 	UPROPERTY(ReplicatedUsing=OnRep_Offers, Transient)
 	FYITradeOffer OfferA;
 
@@ -65,9 +88,25 @@ public:
 	UPROPERTY(Replicated)
 	bool bBReady = false;
 
+	// UI events (owning client)
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTradeSimpleEvent);
+
+	UPROPERTY(BlueprintAssignable, Category="Trade")
+	FTradeSimpleEvent OnOffersUpdated;
+
+	UPROPERTY(BlueprintAssignable, Category="Trade")
+	FTradeSimpleEvent OnTradeCommitted;
+
+	UPROPERTY(BlueprintAssignable, Category="Trade")
+	FTradeSimpleEvent OnTradeCancelled;
+
+	UPROPERTY(BlueprintAssignable, Category="Trade")
+	FTradeSimpleEvent OnTradeFailed;
+
 	// --- RPCs ---
+	/** Server: add from source bag slot (partial count allowed). */
 	UFUNCTION(Server, Reliable)
-	void ServerAddItem(ETradeSide Side, const FYINetBagItem& Item);
+	void ServerAddItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count);
 
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(ETradeSide Side, int32 Index);
@@ -80,6 +119,22 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerCancel();
+
+	// --- Client-facing Blueprint helpers (call on owning client; they proxy to server RPCs) ---
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void AddOfferFromBag(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count) { ServerAddItem(Side, SourceInv, SlotIndex, Count); }
+
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void RemoveOfferItem(ETradeSide Side, int32 Index) { ServerRemoveItem(Side, Index); }
+
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void SetResourceOffer(ETradeSide Side, FName Resource, int64 Amount) { ServerSetResource(Side, Resource, Amount); }
+
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void SetReady(ETradeSide Side, bool bReady) { ServerSetReady(Side, bReady); }
+
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void CancelTrade() { ServerCancel(); }
 
 	// Commit is internal after both sides ready
 	void TryCommit();
@@ -96,4 +151,15 @@ protected:
 	const FYITradeOffer& GetOffer(ETradeSide Side) const;
 
 	bool IsSideOwner(ETradeSide Side, APlayerController* PC) const;
+
+	// Server-only storage of real items/sources
+	TArray<FYITradeOfferSource> OfferSourcesA;
+	TArray<FYITradeOfferSource> OfferSourcesB;
+
+	FYITradeOfferSource& GetOfferSource(ETradeSide Side, int32 Index);
+	TArray<FYITradeOfferSource>& GetOfferSources(ETradeSide Side);
+
+	bool ApplyOffersToSide(ETradeSide From, ETradeSide To, FText& OutError);
+
+	UYIInventoryComponent* GetInventoryForSide(ETradeSide Side) const;
 };

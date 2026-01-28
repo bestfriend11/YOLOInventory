@@ -10,6 +10,7 @@ class UYIInventoryBag;
 class UYIItemDefinition;
 class UTexture2D;
 class AYIItemPickup;
+class AYITradeSessionActor;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYITooltipRequirementLine
@@ -161,4 +162,9 @@ public:
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Template")
     static class UYIAffixAsset* FindAffixByTemplateId(const FString& TemplateId);
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Template")
-    static FYIItemInstance MakeItemInstanceByTemplateId(const FString& TemplateId, int32 Count = 1);};
+    static FYIItemInstance MakeItemInstanceByTemplateId(const FString& TemplateId, int32 Count = 1);
+
+	/** Start a trade session between initiator (player pawn/controller) and target (player pawn or NPC). Server-only; returns the spawned session or nullptr. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade", meta=(WorldContext="WorldContextObject", BlueprintAuthorityOnly="true"))
+	static class AYITradeSessionActor* StartTradeSession(UObject* WorldContextObject, AActor* Initiator, AActor* Target, bool bTargetIsNPC);
+};

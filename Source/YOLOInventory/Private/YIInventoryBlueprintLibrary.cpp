@@ -17,7 +17,10 @@
 #include "AbilitySystemComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "YIItemRegistrySubsystem.h"
+#include "YITradeSessionActor.h"
 #include "YIItemPickup.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -776,4 +779,61 @@ bool UYIInventoryBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 		return true;
 	}
 	return false;
+}
+
+AYITradeSessionActor* UYIInventoryBlueprintLibrary::StartTradeSession(UObject* WorldContextObject, AActor* Initiator, AActor* Target, bool bTargetIsNPC)
+{
+	if (!WorldContextObject || !Initiator || !Target)
+	{
+		return nullptr;
+	}
+
+	UWorld* World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::ReturnNull);
+	if (!World || World->GetNetMode() == NM_Client)
+	{
+		return nullptr; // server only
+	}
+
+	// Resolve initiating player controller/state
+	APlayerController* PC = Cast<APlayerController>(Initiator->GetOwner());
+	if (!PC)
+	{
+		if (APawn* Pawn = Cast<APawn>(Initiator))
+		{
+			PC = Cast<APlayerController>(Pawn->GetController());
+		}
+	}
+	if (!PC || !PC->PlayerState)
+	{
+		return nullptr;
+	}
+
+	AYITradeSessionActor* Session = World->SpawnActor<AYITradeSessionActor>();
+	if (!Session)
+	{
+		return nullptr;
+	}
+
+	Session->PlayerA = PC->PlayerState;
+	Session->PawnA = Cast<APawn>(Initiator);
+	Session->SetOwner(PC);
+
+	if (bTargetIsNPC)
+	{
+		Session->bSideBIsNPC = true;
+		Session->NPCPawn = Cast<APawn>(Target);
+	}
+	else
+	{
+		APawn* TargetPawn = Cast<APawn>(Target);
+		APlayerController* TargetPC = TargetPawn ? Cast<APlayerController>(TargetPawn->GetController()) : nullptr;
+		if (TargetPC && TargetPC->PlayerState)
+		{
+			Session->PlayerB = TargetPC->PlayerState;
+			Session->PawnB = TargetPawn;
+		}
+	}
+
+	Session->ForceNetUpdate();
+	return Session;
 }
