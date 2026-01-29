@@ -5,6 +5,7 @@
 #include "YITradeInteractionComponent.generated.h"
 
 class AYITradeSessionActor;
+class UTradingScreenWidget;
 
 /**
  * Player-controller component that handles secure trade initiation and notifies the client UI.
@@ -71,6 +72,10 @@ private:
 
     /** Internal guard to ensure the component is only used on PlayerControllers. */
     bool IsOwnerValidForTrade(bool bLogWarning = false) const;
+
+    /** Cached widget if auto-show is enabled. */
+    UPROPERTY(Transient)
+    TWeakObjectPtr<UTradingScreenWidget> ActiveWidget;
 
     // Replication
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
