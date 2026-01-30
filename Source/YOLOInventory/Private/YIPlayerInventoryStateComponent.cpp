@@ -3,12 +3,45 @@
 #include "Net/UnrealNetwork.h"
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
+#include "YIInventorySaveGame.h"
 #include "GameFramework/Pawn.h"
-#include "UObject/Package.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 UYIPlayerInventoryStateComponent::UYIPlayerInventoryStateComponent()
 {
 	SetIsReplicatedByDefault(true);
+}
+
+void UYIPlayerInventoryStateComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Only the server should drive persistence + bag rebinding.
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority && bEnableAutoSave)
+	{
+		LoadFromDisk();
+		// Poll until a pawn exists, then bind to its bag changes.
+		TryAutoRegisterPawn();
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimer(AutoSavePollHandle, this, &UYIPlayerInventoryStateComponent::TryAutoRegisterPawn, 1.0f, true);
+		}
+	}
+}
+
+void UYIPlayerInventoryStateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(AutoSavePollHandle);
+		GetWorld()->GetTimerManager().ClearTimer(DebounceHandle);
+	}
+	UnbindAutoSave();
+	Super::EndPlay(EndPlayReason);
 }
 
 int32 UYIPlayerInventoryStateComponent::AddSharedBag(UYIInventoryBag* Bag)
@@ -32,7 +65,7 @@ int32 UYIPlayerInventoryStateComponent::AddPartyMember(const FYIPartyMemberEntry
 
 bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 PartyIndex)
 {
-	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority || !Pawn || !PartyMembers.IsValidIndex(PartyIndex))
+	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority || !Pawn)
 	{
 		return false;
 	}
@@ -41,6 +74,21 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 	if (!InvComp)
 	{
 		return false;
+	}
+
+	// If the requested index is invalid, auto-create a party entry using the pawn's equipped bag (if any)
+	if (!PartyMembers.IsValidIndex(PartyIndex))
+	{
+		if (!InvComp->EquippedBag)
+		{
+			return false; // cannot auto-create without a bag template
+		}
+
+		FYIPartyMemberEntry NewEntry;
+		NewEntry.PawnClass = Pawn->GetClass();
+		NewEntry.InventoryBag = InvComp->EquippedBag;
+		NewEntry.DisplayName = FText::FromString(Pawn->GetName());
+		PartyIndex = PartyMembers.Add(NewEntry);
 	}
 
 	const FYIPartyMemberEntry& Entry = PartyMembers[PartyIndex];
@@ -56,6 +104,14 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 	}
 
 	InvComp->EquippedBag = Bag;
+	BindAutoSave(Pawn); // ensure autosave tracks the newly assigned bag
+	ObservedPartyIndex = PartyIndex;
+	// If we already have a saved snapshot for this index, restore it; otherwise capture initial state.
+	if (!RestoreInventoryToPawn(Pawn))
+	{
+		SaveCurrentPawnInventory(Pawn);
+		SaveToDisk();
+	}
 	return true;
 }
 
@@ -153,8 +209,9 @@ bool UYIPlayerInventoryStateComponent::SaveCurrentPawnInventory(APawn* Pawn)
 	}
 	FYISavedBagSnapshot Snap;
 	CopyBagToSnapshot(InvComp->EquippedBag, Snap);
-	SavedBags.SetNum(1);
-	SavedBags[0] = Snap;
+	const int32 Index = ObservedPartyIndex;
+	SavedBags.SetNum(FMath::Max(SavedBags.Num(), Index + 1));
+	SavedBags[Index] = Snap;
 	return true;
 }
 
@@ -164,7 +221,8 @@ bool UYIPlayerInventoryStateComponent::RestoreInventoryToPawn(APawn* Pawn)
 	{
 		return false;
 	}
-	if (SavedBags.Num() <= 0)
+	const int32 Index = ObservedPartyIndex;
+	if (!SavedBags.IsValidIndex(Index))
 	{
 		return false;
 	}
@@ -176,7 +234,7 @@ bool UYIPlayerInventoryStateComponent::RestoreInventoryToPawn(APawn* Pawn)
 	}
 
 	// Build a runtime bag from snapshot; outer to pawn to ensure transient runtime use
-	UYIInventoryBag* RuntimeBag = SnapshotToBag(Pawn, SavedBags[0]);
+	UYIInventoryBag* RuntimeBag = SnapshotToBag(Pawn, SavedBags[Index]);
 	if (!RuntimeBag)
 	{
 		return false;
@@ -189,4 +247,137 @@ bool UYIPlayerInventoryStateComponent::RestoreInventoryToPawn(APawn* Pawn)
 		InvComp->SyncNetState();
 	}
 	return true;
+}
+
+void UYIPlayerInventoryStateComponent::BindAutoSave(APawn* Pawn)
+{
+	UnbindAutoSave();
+
+	if (!Pawn || Pawn->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	if (UYIInventoryComponent* Inv = Pawn->FindComponentByClass<UYIInventoryComponent>())
+	{
+		if (UYIInventoryBag* Bag = Inv->GetBag())
+		{
+			Bag->OnChanged.AddUObject(this, &UYIPlayerInventoryStateComponent::HandleBagChanged);
+			ObservedBag = Bag;
+			ObservedPawn = Pawn;
+		}
+	}
+}
+
+void UYIPlayerInventoryStateComponent::UnbindAutoSave()
+{
+	if (ObservedBag.IsValid())
+	{
+		ObservedBag->OnChanged.RemoveAll(this);
+	}
+	ObservedBag.Reset();
+	ObservedPawn.Reset();
+}
+
+void UYIPlayerInventoryStateComponent::HandleBagChanged()
+{
+	if (!bEnableAutoSave || !GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+	// Debounce to avoid saving mid-drag (AddBag removes then re-adds)
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(DebounceHandle, this, &UYIPlayerInventoryStateComponent::DebouncedSave, AutoSaveDebounceSeconds, false);
+	}
+}
+
+void UYIPlayerInventoryStateComponent::DebouncedSave()
+{
+	if (!ObservedPawn.IsValid())
+	{
+		return;
+	}
+	SaveCurrentPawnInventory(ObservedPawn.Get());
+	SaveToDisk();
+}
+
+void UYIPlayerInventoryStateComponent::SaveToDisk()
+{
+	if (!bEnableAutoSave || !GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(UGameplayStatics::CreateSaveGameObject(UYIInventorySaveGame::StaticClass()));
+	if (!Save) return;
+
+	Save->SavedBags = SavedBags;
+	Save->SavedResources = Resources;
+
+	if (bSaveInProgress)
+	{
+		return; // drop this request; next OnChanged will requeue
+	}
+	bSaveInProgress = true;
+
+	FAsyncSaveGameToSlotDelegate Finished;
+	Finished.BindLambda([this](const FString&, const int32, bool)
+	{
+		bSaveInProgress = false;
+	});
+	UGameplayStatics::AsyncSaveGameToSlot(Save, SaveSlotName, SaveUserIndex, Finished);
+}
+
+void UYIPlayerInventoryStateComponent::LoadFromDisk()
+{
+	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
+	{
+		return;
+	}
+
+	if (USaveGame* Raw = UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex))
+	{
+		if (UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(Raw))
+		{
+			SavedBags = Save->SavedBags;
+			Resources = Save->SavedResources;
+		}
+	}
+}
+
+void UYIPlayerInventoryStateComponent::TryAutoRegisterPawn()
+{
+	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	APawn* Pawn = nullptr;
+	if (APlayerState* PS = Cast<APlayerState>(GetOwner()))
+	{
+		Pawn = PS->GetPawn();
+		if (!Pawn)
+		{
+			if (AController* PC = Cast<AController>(PS->GetOwner()))
+			{
+				Pawn = PC->GetPawn();
+			}
+		}
+	}
+
+	if (Pawn && Pawn != ObservedPawn.Get())
+	{
+		BindAutoSave(Pawn);
+		// If we have saved data, restore into the pawn on first bind.
+		if (SavedBags.Num() > 0)
+		{
+			RestoreInventoryToPawn(Pawn);
+		}
+	}
 }

@@ -1,12 +1,15 @@
 #include "YITradeInteractionComponent.h"
 
 #include "YIInventoryBlueprintLibrary.h"
+#include "YIInventoryComponent.h"
+#include "YIInventoryBag.h"
 #include "YITradeSessionActor.h"
 #include "TradingScreenWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
+#include "Net/UnrealNetwork.h"
 
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
@@ -22,6 +25,13 @@ void UYITradeInteractionComponent::BeginPlay()
     if (!IsOwnerValidForTrade(true))
     {
         UE_LOG(LogTemp, Warning, TEXT("YITradeInteractionComponent should be on a PlayerController. Owner: %s"), *GetNameSafe(GetOwner()));
+    }
+
+    // Auto-bind to inventory on possession changes
+    if (APlayerController* PC = GetOwningPC())
+    {
+        PC->OnPossessedPawnChanged.AddDynamic(this, &UYITradeInteractionComponent::OnPossessedPawnChanged);
+        OnPossessedPawnChanged(nullptr, PC->GetPawn());
     }
 }
 
@@ -176,5 +186,88 @@ void UYITradeInteractionComponent::GetLifetimeReplicatedProps(TArray<FLifetimePr
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME_CONDITION(UYITradeInteractionComponent, CurrentSession, COND_OwnerOnly);
 }
-#include "Net/UnrealNetwork.h"
-#include "YIInventoryComponent.h"
+
+void UYITradeInteractionComponent::OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn)
+{
+    // Unbind old pawn bag delegates
+    if (OldPawn)
+    {
+        if (UYIInventoryComponent* Inv = OldPawn->FindComponentByClass<UYIInventoryComponent>())
+        {
+            if (UYIInventoryBag* Bag = Inv->GetBag())
+            {
+                Bag->OnItemAdded.RemoveDynamic(this, &UYITradeInteractionComponent::HandleBagItemAdded);
+                Bag->OnItemRemoved.RemoveDynamic(this, &UYITradeInteractionComponent::HandleBagItemRemoved);
+                Bag->OnItemMoved.RemoveDynamic(this, &UYITradeInteractionComponent::HandleBagItemMoved);
+                Bag->OnItemRotated.RemoveDynamic(this, &UYITradeInteractionComponent::HandleBagItemRotated);
+                Bag->OnItemTransferred.RemoveDynamic(this, &UYITradeInteractionComponent::HandleBagItemTransferred);
+            }
+        }
+    }
+
+    // Bind new pawn bag delegates
+    if (NewPawn)
+    {
+        if (UYIInventoryComponent* Inv = NewPawn->FindComponentByClass<UYIInventoryComponent>())
+        {
+            if (UYIInventoryBag* Bag = Inv->GetBag())
+            {
+                Bag->OnItemAdded.AddDynamic(this, &UYITradeInteractionComponent::HandleBagItemAdded);
+                Bag->OnItemRemoved.AddDynamic(this, &UYITradeInteractionComponent::HandleBagItemRemoved);
+                Bag->OnItemMoved.AddDynamic(this, &UYITradeInteractionComponent::HandleBagItemMoved);
+                Bag->OnItemRotated.AddDynamic(this, &UYITradeInteractionComponent::HandleBagItemRotated);
+                Bag->OnItemTransferred.AddDynamic(this, &UYITradeInteractionComponent::HandleBagItemTransferred);
+            }
+        }
+    }
+}
+
+void UYITradeInteractionComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
+{
+    if (bDebugTradeInteraction && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
+            FString::Printf(TEXT("[TradeInt] Added idx %d count %d"), Index, Item.Item.Count));
+    }
+    OnBagItemAdded.Broadcast(Index, Item);
+}
+
+void UYITradeInteractionComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
+{
+    if (bDebugTradeInteraction && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange,
+            FString::Printf(TEXT("[TradeInt] Removed idx %d"), Index));
+    }
+    OnBagItemRemoved.Broadcast(Index, Item);
+}
+
+void UYITradeInteractionComponent::HandleBagItemMoved(int32 Index, FIntPoint NewPos)
+{
+    if (bDebugTradeInteraction && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
+            FString::Printf(TEXT("[TradeInt] Moved idx %d -> (%d,%d)"), Index, NewPos.X, NewPos.Y));
+    }
+    OnBagItemMoved.Broadcast(Index, NewPos);
+}
+
+void UYITradeInteractionComponent::HandleBagItemRotated(int32 Index)
+{
+    if (bDebugTradeInteraction && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
+            FString::Printf(TEXT("[TradeInt] Rotated idx %d"), Index));
+    }
+    OnBagItemRotated.Broadcast(Index);
+}
+
+void UYITradeInteractionComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx)
+{
+    if (bDebugTradeInteraction && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::White,
+            FString::Printf(TEXT("[TradeInt] Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx));
+    }
+    OnBagItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
+}

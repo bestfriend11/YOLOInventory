@@ -88,8 +88,23 @@ public:
 	UPROPERTY(Replicated)
 	bool bBReady = false;
 
+	/** Full inventory snapshots (net-safe) for each side, owner-only replication. */
+	UPROPERTY(ReplicatedUsing=OnRep_Inventories, Transient)
+	TArray<FYINetBagItem> InventoryA;
+
+	UPROPERTY(ReplicatedUsing=OnRep_Inventories, Transient)
+	TArray<FYINetBagItem> InventoryB;
+	
+	/** Grid sizes for the mirrored inventories (per side). */
+	UPROPERTY(ReplicatedUsing=OnRep_Inventories, Transient)
+	FIntPoint InventorySizeA = FIntPoint(10,6);
+
+	UPROPERTY(ReplicatedUsing=OnRep_Inventories, Transient)
+	FIntPoint InventorySizeB = FIntPoint(10,6);
+
 	// UI events (owning client)
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTradeSimpleEvent);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTradeInventoryEvent);
 
 	UPROPERTY(BlueprintAssignable, Category="Trade")
 	FTradeSimpleEvent OnOffersUpdated;
@@ -102,6 +117,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="Trade")
 	FTradeSimpleEvent OnTradeFailed;
+
+	/** Fired when full inventory snapshots update. */
+	UPROPERTY(BlueprintAssignable, Category="Trade")
+	FTradeInventoryEvent OnInventoriesUpdated;
 
 	// --- RPCs ---
 	/** Server: add from source bag slot (partial count allowed). */
@@ -136,12 +155,29 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Trade")
 	void CancelTrade() { ServerCancel(); }
 
+	/** Blueprint: resolve which side a given player state represents (defaults to SideA if unknown). */
+	UFUNCTION(BlueprintPure, Category="Trade")
+	ETradeSide GetSideForPlayer(APlayerState* Player) const;
+
+	/** Blueprint: net-safe full inventory view for a side. */
+	UFUNCTION(BlueprintPure, Category="Trade")
+	TArray<FYINetBagItem> GetInventoryView(ETradeSide Side) const { return (Side == ETradeSide::SideA) ? InventoryA : InventoryB; }
+	UFUNCTION(BlueprintPure, Category="Trade")
+	FIntPoint GetInventorySize(ETradeSide Side) const { return (Side == ETradeSide::SideA) ? InventorySizeA : InventorySizeB; }
+
 	// Commit is internal after both sides ready
 	void TryCommit();
 
 	// Client hook to refresh UI when offers change
 	UFUNCTION()
 	void OnRep_Offers();
+
+	// Client hook to refresh UI when inventory snapshots change
+	UFUNCTION()
+	void OnRep_Inventories();
+
+	// Server: rebuild inventory snapshots for both sides.
+	void RefreshInventoryViews();
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

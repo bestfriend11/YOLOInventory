@@ -816,7 +816,6 @@ AYITradeSessionActor* UYIInventoryBlueprintLibrary::StartTradeSession(UObject* W
 
 	Session->PlayerA = PC->PlayerState;
 	Session->PawnA = Cast<APawn>(Initiator);
-	Session->SetOwner(PC);
 
 	if (bTargetIsNPC)
 	{
@@ -835,5 +834,6 @@ AYITradeSessionActor* UYIInventoryBlueprintLibrary::StartTradeSession(UObject* W
 	}
 
 	Session->ForceNetUpdate();
+	Session->RefreshInventoryViews(); // initial full inventory mirrors
 	return Session;
 }

@@ -2,10 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "YIInventoryBag.h"
 #include "YITradeInteractionComponent.generated.h"
 
 class AYITradeSessionActor;
 class UTradingScreenWidget;
+class UYIInventoryComponent;
+class UYIInventoryBag;
+struct FYIBagItem;
 
 /**
  * Player-controller component that handles secure trade initiation and notifies the client UI.
@@ -36,6 +40,24 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
     FOnTradeFailed OnTradeFailed;
 
+    // Bag activity delegates (local pawn)
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemAdded, int32, Index, FYIBagItem, Item);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemRemoved, int32, Index, FYIBagItem, Item);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemMoved, int32, Index, FIntPoint, NewPos);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBagItemRotated, int32, Index);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnBagItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
+
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Bag")
+    FOnBagItemAdded OnBagItemAdded;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Bag")
+    FOnBagItemRemoved OnBagItemRemoved;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Bag")
+    FOnBagItemMoved OnBagItemMoved;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Bag")
+    FOnBagItemRotated OnBagItemRotated;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Bag")
+    FOnBagItemTransferred OnBagItemTransferred;
+
     /** Optional: auto create and show a trading widget on the owning client when a session starts. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|UI")
     bool bAutoShowWidget = false;
@@ -62,6 +84,10 @@ protected:
     UPROPERTY(ReplicatedUsing=OnRep_CurrentSession, BlueprintReadOnly, Category="YOLOInventory|Trade")
     AYITradeSessionActor* CurrentSession = nullptr;
 
+    /** Debug: print on-screen messages for bag and trade events. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|Debug")
+    bool bDebugTradeInteraction = false;
+
     /** Called when CurrentSession replicates; will broadcast OnTradeSessionReady. */
     UFUNCTION()
     void OnRep_CurrentSession();
@@ -79,4 +105,18 @@ private:
 
     // Replication
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    UFUNCTION()
+    void OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn);
+
+    UFUNCTION()
+    void HandleBagItemAdded(int32 Index, FYIBagItem Item);
+    UFUNCTION()
+    void HandleBagItemRemoved(int32 Index, FYIBagItem Item);
+    UFUNCTION()
+    void HandleBagItemMoved(int32 Index, FIntPoint NewPos);
+    UFUNCTION()
+    void HandleBagItemRotated(int32 Index);
+    UFUNCTION()
+    void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
 };

@@ -29,14 +29,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Trading")
 	UInventoryGridWidget* GetRightGrid() const { return RightGrid; }
 
-	UFUNCTION(BlueprintCallable, Category="Trading")
-	UInventoryTooltipView* GetLeftTooltip() const { return LeftTooltip; }
-	UFUNCTION(BlueprintCallable, Category="Trading")
-	UInventoryTooltipView* GetRightTooltip() const { return RightTooltip; }
-
 	/** Assign the two bags that back the left and right grids. */
 	UFUNCTION(BlueprintCallable, Category="Trading")
 	void SetBags(class UYIInventoryBag* InLeftBag, class UYIInventoryBag* InRightBag);
+
+	/** Bind a trade session and the two live bags (ours and theirs). OtherPartyBag can be null to use the replicated mirror. */
+	UFUNCTION(BlueprintCallable, Category="Trading")
+	void SetSession(class AYITradeSessionActor* InSession, class UYIInventoryBag* LocalPlayerBag, class UYIInventoryBag* OtherPartyBag);
 
 	/** Convenience: transfer current selection from left to right (or vice versa). Returns true on success and gives new index. */
 	UFUNCTION(BlueprintCallable, Category="Trading")
@@ -49,9 +48,7 @@ protected:
 	UPROPERTY(meta=(BindWidget))
 	UInventoryGridWidget* RightGrid = nullptr;
 	UPROPERTY(meta=(BindWidget))
-	UInventoryTooltipView* LeftTooltip = nullptr;
-	UPROPERTY(meta=(BindWidget))
-	UInventoryTooltipView* RightTooltip = nullptr;
+	UInventoryTooltipView* SharedTooltip = nullptr;
 	// Global drag overlay (optional)
 	UPROPERTY(meta=(BindWidgetOptional))
 	class UInventoryDragOverlayUserWidget* DragOverlay = nullptr;
@@ -59,6 +56,28 @@ protected:
 	// Optional: track which grid has keyboard/gamepad focus for navigation
 	UPROPERTY(Transient)
 	UInventoryGridWidget* FocusedGrid = nullptr;
+
+	// Session wiring
+	UPROPERTY(Transient)
+	TObjectPtr<class AYITradeSessionActor> Session = nullptr;
+
+	// Runtime mirror bags for each side's offers/inventory
+	UPROPERTY(Transient)
+	TObjectPtr<class UYIInventoryBag> LeftMirrorBag = nullptr;
+	UPROPERTY(Transient)
+	TObjectPtr<class UYIInventoryBag> RightMirrorBag = nullptr;
+
+	// The local player's live bag used for offering items
+	UPROPERTY(Transient)
+	TObjectPtr<class UYIInventoryBag> LocalBag = nullptr;
+
+	// The other party's live bag (if available). If null, we show their replicated mirror.
+	UPROPERTY(Transient)
+	TObjectPtr<class UYIInventoryBag> OtherBag = nullptr;
+
+	// Set this to true if the local player is actually SideB (for AI-initiated trades etc.)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trading")
+	bool bLocalIsSideA = true;
 
 	// Input handlers used when this screen is top of UILayered stack
 	virtual bool HandleMoveUp() override;
@@ -76,4 +95,18 @@ protected:
 	void OnLeftCellSelected(FIntPoint NewCell);
 	UFUNCTION()
 	void OnRightCellSelected(FIntPoint NewCell);
+
+	// Session callbacks
+	UFUNCTION()
+	void HandleOffersUpdated();
+	UFUNCTION()
+	void HandleTradeCommitted();
+	UFUNCTION()
+	void HandleTradeCancelled();
+	UFUNCTION()
+	void HandleTradeFailed();
+
+	void RefreshOffers();
+	class UYIInventoryBag* BuildMirrorFromOffer(const struct FYITradeOffer& Offer);
+	class UYIInventoryBag* BuildMirrorFromInventory(const TArray<struct FYINetBagItem>& View, FIntPoint GridSize);
 };

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/EngineTypes.h" // for FDirectoryPath
+#include "TimerManager.h"
 #include "YIInventoryBag.h"
 #include "YIPlayerInventoryStateComponent.generated.h"
 
@@ -220,8 +221,21 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
 	bool RestoreInventoryToPawn(APawn* Pawn);
 
+	/** Auto-save toggle (server only). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	bool bEnableAutoSave = true;
+
+	/** Save slot/user for autosave (PIE/editor safe). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	FString SaveSlotName = TEXT("YOLOInventory_Autosave");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	int32 SaveUserIndex = 0;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
 	void OnRep_SharedBags() {}
@@ -238,4 +252,25 @@ protected:
 	/** Owner-only replicated snapshot(s) of saved pawn inventory bags. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_SavedBags, Category="Inventory")
 	TArray<FYISavedBagSnapshot> SavedBags;
+
+private:
+	// Auto-save helpers
+	void BindAutoSave(APawn* Pawn);
+	void UnbindAutoSave();
+	void HandleBagChanged();
+	void DebouncedSave();
+	void SaveToDisk();
+	void LoadFromDisk();
+	void TryAutoRegisterPawn();
+	FTimerHandle AutoSavePollHandle;
+	FTimerHandle DebounceHandle;
+	int32 ObservedPartyIndex = 0;
+	bool bSaveInProgress = false;
+
+	UPROPERTY(EditAnywhere, Category="YOLOInventory|Save", meta=(ClampMin="0.05"))
+	float AutoSaveDebounceSeconds = 0.35f;
+
+	// Observed pawn/bag for autosave
+	TWeakObjectPtr<APawn> ObservedPawn;
+	TWeakObjectPtr<UYIInventoryBag> ObservedBag;
 };
