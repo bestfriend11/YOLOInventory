@@ -209,6 +209,7 @@ void UYIInventoryComponent::SyncNetState()
 	NetBagItems.Reset();
 	if (EquippedBag)
 	{
+		NetBagGridSize = EquippedBag->GridSize;
 		for (const FYIBagItem& It : EquippedBag->Items)
 		{
 			if (It.Item.Count <= 0) continue;
@@ -243,15 +244,9 @@ void UYIInventoryComponent::OnRep_NetBag()
 	{
 		ClientPreviewBag = NewObject<UYIInventoryBag>(this);
 		if (!ClientPreviewBag) return;
-		// Default grid; if an equipped bag exists locally, copy layout
-		if (EquippedBag)
-		{
-			ClientPreviewBag->GridSize = EquippedBag->GridSize;
-			ClientPreviewBag->CellPixelSize = EquippedBag->CellPixelSize;
-			ClientPreviewBag->bAllowRotation = EquippedBag->bAllowRotation;
-			ClientPreviewBag->MinifyScale = EquippedBag->MinifyScale;
-		}
 	}
+
+	ClientPreviewBag->GridSize = NetBagGridSize;
 
 	ClientPreviewBag->Items.Reset();
 
@@ -275,4 +270,5 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagItems, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
 }

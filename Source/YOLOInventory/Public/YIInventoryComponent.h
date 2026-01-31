@@ -63,6 +63,8 @@ protected:
 	// Owner-only replicated minimal bag state for UI; rebuilt into a transient bag on clients.
 	UPROPERTY(ReplicatedUsing=OnRep_NetBag, Transient)
 	TArray<FYINetBagItem> NetBagItems;
+	UPROPERTY(Replicated, Transient)
+	FIntPoint NetBagGridSize = FIntPoint(0, 0);
 
 	UFUNCTION()
 	void OnRep_NetBag();
