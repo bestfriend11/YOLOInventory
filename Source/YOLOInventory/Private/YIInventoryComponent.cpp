@@ -4,6 +4,14 @@
 #include "Net/UnrealNetwork.h"
 #include "YIItemBlueprintLibrary.h"
 #include "UObject/Package.h"
+#include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Kismet/GameplayStatics.h"
+#include "InventoryScreenWidget.h"
+#include "TradingScreenWidget.h"
+#include "YITradeSessionActor.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -196,6 +204,8 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 		EquippedBag->OnChanged.Remove(BagChangedHandle);
 		BagChangedHandle.Reset();
 	}
+	CloseInventoryScreen();
+	CloseTradeScreen();
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
@@ -271,4 +281,102 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagItems, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
+}
+
+// -------- UI helpers --------
+
+UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
+{
+	if (!GetOwner()) return nullptr;
+	if (GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr; // no UI on dedicated server
+	if (ActiveInventoryScreen.IsValid())
+	{
+		if (UInventoryGridWidget* Grid = ActiveInventoryScreen->GetGrid())
+		{
+			Grid->SetBag(GetBag());
+		}
+		return ActiveInventoryScreen.Get();
+	}
+
+	if (!InventoryScreenClass.IsNull())
+	{
+		InventoryScreenClass.LoadSynchronous();
+	}
+	if (!InventoryScreenClass.IsValid()) return nullptr;
+
+	APlayerController* PC = nullptr;
+	if (APawn* Pawn = Cast<APawn>(GetOwner()))
+	{
+		PC = Cast<APlayerController>(Pawn->GetController());
+	}
+	else
+	{
+		PC = Cast<APlayerController>(GetOwner());
+	}
+	if (!PC || !PC->IsLocalController()) return nullptr;
+
+	UInventoryScreenWidget* Screen = CreateWidget<UInventoryScreenWidget>(PC, InventoryScreenClass.Get());
+	if (!Screen) return nullptr;
+
+	if (UInventoryGridWidget* Grid = Screen->GetGrid())
+	{
+		Grid->SetBag(GetBag());
+	}
+	Screen->AddToViewport();
+	ActiveInventoryScreen = Screen;
+	return Screen;
+}
+
+void UYIInventoryComponent::CloseInventoryScreen()
+{
+	if (ActiveInventoryScreen.IsValid())
+	{
+		ActiveInventoryScreen->RemoveFromParent();
+		ActiveInventoryScreen.Reset();
+	}
+}
+
+UTradingScreenWidget* UYIInventoryComponent::OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
+{
+	if (!Session) return nullptr;
+	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
+	if (ActiveTradeScreen.IsValid())
+	{
+		ActiveTradeScreen->SetSession(Session, LocalBag ? LocalBag : GetBag(), nullptr);
+		return ActiveTradeScreen.Get();
+	}
+
+	if (!TradingScreenClass.IsNull())
+	{
+		TradingScreenClass.LoadSynchronous();
+	}
+	if (!TradingScreenClass.IsValid()) return nullptr;
+
+	APlayerController* PC = nullptr;
+	if (APawn* Pawn = Cast<APawn>(GetOwner()))
+	{
+		PC = Cast<APlayerController>(Pawn->GetController());
+	}
+	else
+	{
+		PC = Cast<APlayerController>(GetOwner());
+	}
+	if (!PC || !PC->IsLocalController()) return nullptr;
+
+	UTradingScreenWidget* Screen = CreateWidget<UTradingScreenWidget>(PC, TradingScreenClass.Get());
+	if (!Screen) return nullptr;
+
+	Screen->SetSession(Session, LocalBag ? LocalBag : GetBag(), nullptr);
+	Screen->AddToViewport();
+	ActiveTradeScreen = Screen;
+	return Screen;
+}
+
+void UYIInventoryComponent::CloseTradeScreen()
+{
+	if (ActiveTradeScreen.IsValid())
+	{
+		ActiveTradeScreen->RemoveFromParent();
+		ActiveTradeScreen.Reset();
+	}
 }

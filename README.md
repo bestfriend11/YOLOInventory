@@ -11,14 +11,15 @@ A modular, network-ready inventory & trading plugin for Unreal Engine. It provid
 - Blueprint-friendly components plus C++ extension points and validation hooks.
 
 ## Folder layout
-- `Plugins/YOLOInventory/Source/YOLOInventory`          ï¿½ runtime systems (bags, items, networking, trade).
-- `Plugins/YOLOInventory/Source/YOLOInventoryEditor`    ï¿½ editor dashboards & helpers.
+- `Plugins/YOLOInventory/Source/YOLOInventory` – runtime systems (bags, items, networking, trade).
+- `Plugins/YOLOInventory/Source/YOLOInventoryEditor` – editor dashboards & helpers.
 - Key headers to start with:
-  - `YIInventoryComponent`            ï¿½ attach to pawns; holds the equipped bag and replicates a preview mirror.
-  - `YIPlayerInventoryStateComponent` ï¿½ add to PlayerState; owns party/shared bags, resources, autosave.
-  - `YITradeInteractionComponent`     ï¿½ add to PlayerController; client->server trade requests, UI hook.
-  - `YITradeSessionActor`             ï¿½ lightweight replicated session that mirrors both sidesï¿½ inventories.
-  - `InventoryGridWidget` / `TradingScreenWidget` ï¿½ UMG logic for grids and trading UI.
+  - `YIInventoryComponent`            – attach to pawns; holds the equipped bag and replicates a preview mirror.
+  - `YIPlayerInventoryStateComponent` – add to PlayerState; owns party/shared bags, resources, autosave.
+  - `YITradeInteractionComponent`     – add to PlayerController; client->server trade requests, UI hook.
+  - `YITradeSessionActor`             – lightweight replicated session that mirrors both sides’ inventories.
+  - `UYIShopComponent`                – attach to NPCs/shops; replicates stock to everyone, handles priced buys.
+  - `InventoryGridWidget` / `TradingScreenWidget` – UMG logic for grids and trading UI.
 
 ## Quick setup (multiplayer safe)
 1) **Enable plugin** in your UE project and restart the editor.
@@ -44,15 +45,20 @@ InvComp->OpenBag(RuntimeBag);
 - Clients receive `OnTradeSessionReady` (or auto UI shows if enabled). Left = local inventory, Right = other side.
 - Inventory and offer mirrors replicate live; moving items updates both views immediately.
 
+## Shop / vendor support
+- Attach `UYIShopComponent` to an NPC/actor and set a stock template bag and price listings.
+- Stock mirrors replicate to all clients; purchases are validated on the server and cost resources from `FYIResourceWallet`.
+- Restock can optionally clone from the template on an interval.
+
 ## Persistence
 - `UYIPlayerInventoryStateComponent` autosaves on bag `OnChanged` (debounced) using async SaveGame.
 - Loads on server `BeginPlay`, restores when a pawn is available. Works in PIE listen server + clients.
 
 ## Tips / gotchas
 - Always assign bags on the **server**. Clients cannot author bags.
-- Assets are cloned at runtime to keep templates clean; donï¿½t reuse one bag asset for multiple players.
+- Assets are cloned at runtime to keep templates clean; don’t reuse one bag asset for multiple players.
 - For UI correctness, ensure `OpenBag` is called after assigning a runtime bag so grids bind and replicate.
-- Net mirrors now include grid size (`NetBagGridSize`) to keep layouts consistent client-side.
+- Net mirrors include grid size to keep layouts consistent client-side.
 
 ## Console helpers
 - `yi.additem <code> <count>` (server) can be used to spawn items into the current bag (if enabled in your build).

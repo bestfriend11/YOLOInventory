@@ -2,9 +2,13 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
+#include "UObject/SoftObjectPtr.h"
 #include "YIInventoryComponent.generated.h"
 
 class UYIInventoryBag;
+class UInventoryScreenWidget;
+class UTradingScreenWidget;
+class AYITradeSessionActor;
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORY_API UYIInventoryComponent : public UActorComponent
@@ -57,6 +61,29 @@ public:
 	/** Server-only: push current bag state into net mirror to replicate to owning client. */
 	void SyncNetState();
 
+	/** Soft class references so designers can assign widgets once and call the helpers below. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	TSoftClassPtr<UTradingScreenWidget> TradingScreenClass;
+
+	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	UInventoryScreenWidget* OpenInventoryScreen();
+
+	/** Close and remove the inventory screen if it is open. */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	void CloseInventoryScreen();
+
+	/** Open a trading screen for an existing session (client-side). LocalBag can be left null to auto-use GetBag(). */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	UTradingScreenWidget* OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag = nullptr);
+
+	/** Close the trading screen if it is open. */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	void CloseTradeScreen();
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -75,6 +102,8 @@ protected:
 
 private:
 	FDelegateHandle BagChangedHandle;
+	TWeakObjectPtr<UInventoryScreenWidget> ActiveInventoryScreen;
+	TWeakObjectPtr<UTradingScreenWidget> ActiveTradeScreen;
 
 	// Cleanup delegate when component is destroyed
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;

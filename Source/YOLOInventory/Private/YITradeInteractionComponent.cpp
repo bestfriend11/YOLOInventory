@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
+#include "YIInventoryComponent.h"
 
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
@@ -88,14 +89,24 @@ void UYITradeInteractionComponent::Server_RequestTrade_Implementation(AActor* Ta
         OwnerActor->ForceNetUpdate(); // push replicated property to owning client
     }
 
-    // If this is a local controller (standalone or listen server owning client), drive UI immediately.
+    // Only the owning local controller drives UI immediately; remote clients will get OnRep when the actor resolves for them.
     if (PC->IsLocalController())
     {
         OnRep_CurrentSession();
     }
-    else
+
+    // If target is a player, also assign the session to their trade component so their client opens the UI.
+    if (!bTargetIsNPC)
     {
-        Client_TradeSessionStarted(Session); // remote client will still rely on OnRep once actor resolves
+        APawn* TargetPawn = Cast<APawn>(Target);
+        APlayerController* TargetPC = TargetPawn ? Cast<APlayerController>(TargetPawn->GetController()) : nullptr;
+        if (TargetPC)
+        {
+            if (UYITradeInteractionComponent* TargetComp = TargetPC->FindComponentByClass<UYITradeInteractionComponent>())
+            {
+                TargetComp->ServerAssignSession(Session);
+            }
+        }
     }
 }
 
@@ -149,42 +160,70 @@ bool UYITradeInteractionComponent::IsOwnerValidForTrade(bool bLogWarning) const
 
 void UYITradeInteractionComponent::OnRep_CurrentSession()
 {
-    if (CurrentSession)
-    {
-        OnTradeSessionReady.Broadcast(CurrentSession);
+	if (CurrentSession)
+	{
+		OnTradeSessionReady.Broadcast(CurrentSession);
 
-        if (bAutoShowWidget && AutoTradeWidgetClass && GetOwningPC())
-        {
-            UYIInventoryBag* LocalBag = nullptr;
-            if (APawn* P = GetOwningPC()->GetPawn())
+		if (bAutoShowWidget && GetOwningPC() && GetOwningPC()->IsLocalController())
+		{
+			// Prefer central UI helper on the inventory component
+			if (APawn* P = GetOwningPC()->GetPawn())
+			{
+				if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+				{
+					Inv->OpenTradeScreen(CurrentSession, Inv->GetBag());
+
+					// Ensure focus/input stays on this local controller window
+					GetOwningPC()->bShowMouseCursor = true;
+					FInputModeGameAndUI Mode;
+					Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+					Mode.SetHideCursorDuringCapture(false);
+					GetOwningPC()->SetInputMode(Mode);
+					return;
+				}
+			}
+            // Fallback to legacy auto widget path if no inventory component
+            if (AutoTradeWidgetClass)
             {
-                if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+                if (UTradingScreenWidget* WidgetInst = CreateWidget<UTradingScreenWidget>(GetOwningPC(), AutoTradeWidgetClass))
                 {
-                    LocalBag = Inv->GetBag();
-                }
-            }
-            if (UTradingScreenWidget* Widget = ActiveWidget.Get())
-            {
-                Widget->SetSession(CurrentSession, LocalBag, nullptr);
-            }
-            else
-            {
-                UTradingScreenWidget* WidgetInst = CreateWidget<UTradingScreenWidget>(GetOwningPC(), AutoTradeWidgetClass);
-                if (WidgetInst)
-                {
-                    ActiveWidget = WidgetInst;
                     WidgetInst->AddToViewport();
+                    UYIInventoryBag* LocalBag = nullptr;
+                    if (APawn* P = GetOwningPC()->GetPawn())
+                    {
+                        if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+                        {
+                            LocalBag = Inv->GetBag();
+                        }
+                    }
                     WidgetInst->SetSession(CurrentSession, LocalBag, nullptr);
                 }
             }
         }
-    }
+	}
+}
+
+void UYITradeInteractionComponent::ServerAssignSession(AYITradeSessionActor* Session)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	CurrentSession = Session;
+	if (AActor* OwnerActor = GetOwner())
+	{
+		OwnerActor->ForceNetUpdate();
+	}
+	if (APlayerController* PC = GetOwningPC())
+	{
+		if (PC->IsLocalController())
+		{
+			OnRep_CurrentSession();
+		}
+	}
 }
 
 void UYITradeInteractionComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME_CONDITION(UYITradeInteractionComponent, CurrentSession, COND_OwnerOnly);
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME_CONDITION(UYITradeInteractionComponent, CurrentSession, COND_OwnerOnly);
 }
 
 void UYITradeInteractionComponent::OnPossessedPawnChanged(APawn* OldPawn, APawn* NewPawn)

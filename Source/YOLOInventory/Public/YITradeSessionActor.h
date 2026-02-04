@@ -179,8 +179,13 @@ public:
 	// Server: rebuild inventory snapshots for both sides.
 	void RefreshInventoryViews();
 
+	// Keep mirrored inventories live while session is active.
+	void BindSideBag(ETradeSide Side);
+	void UnbindSideBags();
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	// Helper to access offer by side
 	FYITradeOffer& GetOffer(ETradeSide Side);
@@ -198,4 +203,9 @@ protected:
 	bool ApplyOffersToSide(ETradeSide From, ETradeSide To, FText& OutError);
 
 	UYIInventoryComponent* GetInventoryForSide(ETradeSide Side) const;
+
+	TWeakObjectPtr<class UYIInventoryBag> TrackedBagA;
+	TWeakObjectPtr<class UYIInventoryBag> TrackedBagB;
+	FDelegateHandle TrackedHandleA;
+	FDelegateHandle TrackedHandleB;
 };

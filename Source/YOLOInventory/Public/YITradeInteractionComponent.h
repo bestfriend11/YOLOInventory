@@ -67,11 +67,11 @@ public:
     TSubclassOf<class UTradingScreenWidget> AutoTradeWidgetClass;
 
 protected:
-    virtual void BeginPlay() override;
+	virtual void BeginPlay() override;
 
-    // Server-side authority handler (keep validation lightweight to avoid disconnects)
-    UFUNCTION(Server, Reliable, WithValidation)
-    void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
+	// Server-side authority handler (keep validation lightweight to avoid disconnects)
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
 
     // Client notifications
     UFUNCTION(Client, Reliable)
@@ -90,18 +90,17 @@ protected:
 
     /** Called when CurrentSession replicates; will broadcast OnTradeSessionReady. */
     UFUNCTION()
-    void OnRep_CurrentSession();
+	void OnRep_CurrentSession();
 
 private:
-    // Convenience to verify we are on a valid PC owner
-    APlayerController* GetOwningPC() const;
+	// Convenience to verify we are on a valid PC owner
+	APlayerController* GetOwningPC() const;
 
-    /** Internal guard to ensure the component is only used on PlayerControllers. */
-    bool IsOwnerValidForTrade(bool bLogWarning = false) const;
+	/** Internal guard to ensure the component is only used on PlayerControllers. */
+	bool IsOwnerValidForTrade(bool bLogWarning = false) const;
 
-    /** Cached widget if auto-show is enabled. */
-    UPROPERTY(Transient)
-    TWeakObjectPtr<UTradingScreenWidget> ActiveWidget;
+	/** Server helper: push a session reference into this component and replicate to its owner. */
+	void ServerAssignSession(AYITradeSessionActor* Session);
 
     // Replication
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

@@ -20,6 +20,12 @@ AYITradeSessionActor::AYITradeSessionActor()
     SetRootComponent(Root);
 }
 
+void AYITradeSessionActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindSideBags();
+	Super::EndPlay(EndPlayReason);
+}
+
 // Helper to produce a net-safe view of a bag (no maps)
 static void CopyBagToNetView(const UYIInventoryComponent* Inv, TArray<FYINetBagItem>& Out, FIntPoint& OutGridSize)
 {
@@ -88,6 +94,8 @@ bool AYITradeSessionActor::IsSideOwner(ETradeSide Side, APlayerController* PC) c
 void AYITradeSessionActor::RefreshInventoryViews()
 {
 	if (!HasAuthority()) return;
+	BindSideBag(ETradeSide::SideA);
+	BindSideBag(ETradeSide::SideB);
 	CopyBagToNetView(GetInventoryForSide(ETradeSide::SideA), InventoryA, InventorySizeA);
 	CopyBagToNetView(GetInventoryForSide(ETradeSide::SideB), InventoryB, InventorySizeB);
 	ForceNetUpdate();
@@ -276,6 +284,45 @@ void AYITradeSessionActor::OnRep_Inventories()
     if (OnInventoriesUpdated.IsBound()) { OnInventoriesUpdated.Broadcast(); }
     // Also fire offers updated so UI can refresh both mirrors in one pass
     if (OnOffersUpdated.IsBound()) { OnOffersUpdated.Broadcast(); }
+}
+
+void AYITradeSessionActor::BindSideBag(ETradeSide Side)
+{
+	if (!HasAuthority()) return;
+	UYIInventoryComponent* Inv = GetInventoryForSide(Side);
+	UYIInventoryBag* Bag = Inv ? Inv->GetBag() : nullptr;
+
+	TWeakObjectPtr<UYIInventoryBag>& Tracked = (Side == ETradeSide::SideA) ? TrackedBagA : TrackedBagB;
+	FDelegateHandle& Handle = (Side == ETradeSide::SideA) ? TrackedHandleA : TrackedHandleB;
+
+	if (Tracked.Get() == Bag) return; // already bound
+
+	// Unbind previous
+	if (Tracked.IsValid() && Handle.IsValid())
+	{
+		Tracked->OnChanged.Remove(Handle);
+		Handle.Reset();
+	}
+
+	Tracked = Bag;
+	if (Bag)
+	{
+		Handle = Bag->OnChanged.AddUObject(this, &AYITradeSessionActor::RefreshInventoryViews);
+	}
+}
+
+void AYITradeSessionActor::UnbindSideBags()
+{
+	if (TrackedBagA.IsValid() && TrackedHandleA.IsValid())
+	{
+		TrackedBagA->OnChanged.Remove(TrackedHandleA);
+		TrackedHandleA.Reset();
+	}
+	if (TrackedBagB.IsValid() && TrackedHandleB.IsValid())
+	{
+		TrackedBagB->OnChanged.Remove(TrackedHandleB);
+		TrackedHandleB.Reset();
+	}
 }
 
 void AYITradeSessionActor::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
