@@ -167,6 +167,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set the selected cell explicitly"))
 	void SetSelectedCell(FIntPoint Cell);
 
+	/** Allow or block moving items within this same grid (useful for read-only views). */
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void SetAllowSelfMove(bool bInAllow) { bAllowSelfMove = bInAllow; }
+
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCellSelected, FIntPoint, Cell);
 	/** Broadcast when a cell is selected (useful for other UI to react). */
 	UPROPERTY(BlueprintAssignable, Category="Inventory")
@@ -241,6 +245,8 @@ private:
 	ETradeSide TradeSide = static_cast<ETradeSide>(0);
 	UPROPERTY(Transient)
 	bool bHasTradeSide = false;
+	UPROPERTY(Transient)
+	bool bAllowSelfMove = true;
 	static TSet<TWeakObjectPtr<UInventoryGridWidget>> GRegisteredGrids;
 	TSharedPtr<SInventoryGridWidget> MySlateWidget;
 

@@ -179,7 +179,13 @@ void UTradingScreenWidget::RefreshOffers()
         LeftMirrorBag = BuildMirrorFromInventory(Session->GetInventoryView(LocalSide), Session->GetInventorySize(LocalSide));
         LocalBag = LeftMirrorBag;
     }
-    if (LeftGrid) { LeftGrid->SetBag(LocalBag); LeftGrid->SetTradeContext(Session, LocalSide); LeftGrid->RefreshBoundTooltip(); }
+    if (LeftGrid)
+    {
+        LeftGrid->SetBag(LocalBag);
+        LeftGrid->SetTradeContext(Session, LocalSide);
+        LeftGrid->SetAllowSelfMove(LocalBag != nullptr);
+        LeftGrid->RefreshBoundTooltip();
+    }
 
     // Right: prefer the other party's live bag if provided; otherwise mirror their full inventory snapshot
     if (RightMirrorBag)
@@ -190,13 +196,25 @@ void UTradingScreenWidget::RefreshOffers()
 
     if (OtherBag)
     {
-        if (RightGrid) { RightGrid->SetBag(OtherBag); RightGrid->SetTradeContext(Session, OtherSide); RightGrid->RefreshBoundTooltip(); }
+        if (RightGrid)
+        {
+            RightGrid->SetBag(OtherBag);
+            RightGrid->SetTradeContext(Session, OtherSide);
+            RightGrid->SetAllowSelfMove(false);
+            RightGrid->RefreshBoundTooltip();
+        }
     }
     else
     {
         const TArray<FYINetBagItem> OtherView = Session->GetInventoryView(OtherSide);
         RightMirrorBag = BuildMirrorFromInventory(OtherView, Session->GetInventorySize(OtherSide));
-        if (RightGrid) { RightGrid->SetBag(RightMirrorBag); RightGrid->SetTradeContext(Session, OtherSide); RightGrid->RefreshBoundTooltip(); }
+        if (RightGrid)
+        {
+            RightGrid->SetBag(RightMirrorBag);
+            RightGrid->SetTradeContext(Session, OtherSide);
+            RightGrid->SetAllowSelfMove(false);
+            RightGrid->RefreshBoundTooltip();
+        }
     }
 }
 

@@ -398,6 +398,11 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid == this)
 	{
+		if (!bAllowSelfMove)
+		{
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			return false;
+		}
 		// When pickup removed the item, SourceIndex is INDEX_NONE and the bag no longer contains it. Treat as add-at-cell or swap.
 		if (GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceIndex == INDEX_NONE)
 		{
