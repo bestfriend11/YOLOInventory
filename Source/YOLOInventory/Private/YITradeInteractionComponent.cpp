@@ -52,6 +52,15 @@ void UYITradeInteractionComponent::RequestTrade(AActor* Target, bool bTargetIsNP
     Server_RequestTrade(Target, bTargetIsNPC);
 }
 
+void UYITradeInteractionComponent::RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+{
+    if (!IsOwnerValidForTrade(true))
+    {
+        return;
+    }
+    Server_TransferItem(FromSide, ToSide, SourceIndex, DestPos, Count);
+}
+
 void UYITradeInteractionComponent::Server_RequestTrade_Implementation(AActor* Target, bool bTargetIsNPC)
 {
     APlayerController* PC = GetOwningPC();
@@ -114,6 +123,35 @@ bool UYITradeInteractionComponent::Server_RequestTrade_Validate(AActor* Target, 
 {
     // Keep validation permissive to avoid disconnects; do real checks in _Implementation.
     // Only sanity-check that we have a PC owner; if not, reject to prevent spoofing.
+    return IsOwnerValidForTrade(false);
+}
+
+void UYITradeInteractionComponent::Server_TransferItem_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+{
+    if (!IsOwnerValidForTrade(false) || !CurrentSession)
+    {
+        return;
+    }
+
+    APlayerController* PC = GetOwningPC();
+    if (!PC || !PC->PlayerState)
+    {
+        return;
+    }
+
+    // Only allow participants to move items.
+    const ETradeSide CallerSide = CurrentSession->GetSideForPlayer(PC->PlayerState);
+    if (CallerSide != ETradeSide::SideA && CallerSide != ETradeSide::SideB)
+    {
+        return;
+    }
+
+    // Allow any direction during an active trade (shop-style or free trade).
+    CurrentSession->ServerTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count);
+}
+
+bool UYITradeInteractionComponent::Server_TransferItem_Validate(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+{
     return IsOwnerValidForTrade(false);
 }
 

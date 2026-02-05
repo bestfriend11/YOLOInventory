@@ -8,6 +8,8 @@ class UYIInventoryBag;
 class SInventoryGridWidget;
 class UAbilitySystemComponent;
 struct FYIRequirementContext;
+class AYITradeSessionActor;
+enum class ETradeSide : uint8;
 
 /**
  * UInventoryGridWidget
@@ -203,10 +205,17 @@ public:
 	/** Cancel any active drag operation */
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void CancelDrag();
-	/** Returns true if a global inventory drag is active. */
-	static bool IsItemDragActive();
+	/** Returns true if a global inventory drag is active (filtered by context world if provided). */
+	static bool IsItemDragActive(const UWorld* ContextWorld = nullptr);
 	/** Get the currently dragged item (if any) and the source bag for context; returns false if no drag active. */
-	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag);
+	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld = nullptr);
+
+	/** Optional: route cross-owner transfers through a trade session (server-authoritative). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
+	void SetTradeSession(AYITradeSessionActor* InSession) { ActiveTradeSession = InSession; bHasTradeSide = false; }
+	/** Set trade context (session + side) so cross-bag drops can route through server. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
+	void SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide);
 	/** Fill OutData for the currently selected cell if an item exists there (returns true on success). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get tooltip data for the currently selected cell"))
 	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext) const;
@@ -226,6 +235,12 @@ public:
 	static void ForEachRegisteredGrid(TFunctionRef<void(UInventoryGridWidget*)> Callback);
 
 private:
+	UPROPERTY(Transient)
+	TObjectPtr<AYITradeSessionActor> ActiveTradeSession = nullptr;
+	UPROPERTY(Transient)
+	ETradeSide TradeSide = static_cast<ETradeSide>(0);
+	UPROPERTY(Transient)
+	bool bHasTradeSide = false;
 	static TSet<TWeakObjectPtr<UInventoryGridWidget>> GRegisteredGrids;
 	TSharedPtr<SInventoryGridWidget> MySlateWidget;
 

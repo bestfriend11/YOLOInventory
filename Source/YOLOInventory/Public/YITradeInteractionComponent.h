@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
+#include "YITradeSessionActor.h"
 #include "YITradeInteractionComponent.generated.h"
 
 class AYITradeSessionActor;
@@ -40,6 +41,10 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
     FOnTradeFailed OnTradeFailed;
 
+    /** Client call: request a server-authoritative item transfer during an active trade session. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade")
+    void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
+
     // Bag activity delegates (local pawn)
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemAdded, int32, Index, FYIBagItem, Item);
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemRemoved, int32, Index, FYIBagItem, Item);
@@ -72,6 +77,10 @@ protected:
 	// Server-side authority handler (keep validation lightweight to avoid disconnects)
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
+
+	/** Server: execute a transfer request during an active trade session. */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_TransferItem(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
 
     // Client notifications
     UFUNCTION(Client, Reliable)

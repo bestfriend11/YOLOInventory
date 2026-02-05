@@ -139,6 +139,10 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerCancel();
 
+	/** Server: transfer an item between sides using exact drop position (full stack if Count<=0). */
+	UFUNCTION(Server, Reliable)
+	void ServerTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
+
 	// --- Client-facing Blueprint helpers (call on owning client; they proxy to server RPCs) ---
 	UFUNCTION(BlueprintCallable, Category="Trade")
 	void AddOfferFromBag(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count) { ServerAddItem(Side, SourceInv, SlotIndex, Count); }
@@ -154,6 +158,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Trade")
 	void CancelTrade() { ServerCancel(); }
+
+	/** Client helper: request a direct item transfer between sides (bypasses offers). */
+	UFUNCTION(BlueprintCallable, Category="Trade")
+	void TransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0)
+	{
+		ServerTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count);
+	}
 
 	/** Blueprint: resolve which side a given player state represents (defaults to SideA if unknown). */
 	UFUNCTION(BlueprintPure, Category="Trade")

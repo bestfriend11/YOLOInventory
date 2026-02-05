@@ -24,7 +24,7 @@ void UInventoryDragOverlayUserWidget::NativeTick(const FGeometry& MyGeometry, fl
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
 	FYIBagItem DragItem; UYIInventoryBag* SrcBag = nullptr;
-	bShouldDraw = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag);
+	bShouldDraw = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
 	if (bShouldDraw && FSlateApplication::Get().GetActiveTopLevelWindow())
 	{
 		CachedCursorSS = FSlateApplication::Get().GetCursorPos() - FSlateApplication::Get().GetActiveTopLevelWindow()->GetPositionInScreen();
@@ -41,7 +41,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	// Build a debug string for on-screen display every frame
 	const bool bShowDebug = UYOLOInventorySettings::Get().bShowDebug;
 	FYIBagItem LiveDragItem; UYIInventoryBag* LiveSourceBag = nullptr;
-	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag);
+	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag, GetWorld());
 	FString Debug;
 	auto V2 = [](const FVector2D& V){ return FString::Printf(TEXT("(%.1f, %.1f)"), V.X, V.Y); };
 	auto V2i = [](const FIntPoint& P){ return FString::Printf(TEXT("(%d, %d)"), P.X, P.Y); };
@@ -166,7 +166,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		}
 		if (!bInside) return;
 		// Compute candidate footprint anchored at cursor center, clamped inside grid
-		FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr; UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag);
+		FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr; UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
 		const FIntPoint Foot = Grid->Bag->GetEffectiveSize(DragItem.Size);
 		const FVector2D HalfFootPx = FVector2D(Foot) * CellPx * 0.5f;
 		// Determine the cell that would center under the cursor

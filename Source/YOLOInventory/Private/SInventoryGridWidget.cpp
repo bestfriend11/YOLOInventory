@@ -290,7 +290,8 @@ void SInventoryGridWidget::Tick(const FGeometry& AllottedGeometry, const double 
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	// Safety: if this grid isn't hovered and a drag is active, ensure its ghost is disabled
 	FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr;
-	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag);
+	UWorld* ContextWorld = OwnerWidget.IsValid() ? OwnerWidget.Pin()->GetWorld() : nullptr;
+	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, ContextWorld);
 	if (!bDragActive)
 	{
 		if (bGhostActive)
@@ -323,7 +324,8 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 	// Always sync ghost to current global drag (covers displacement)
 	FYIBagItem DragItem;
 	UYIInventoryBag* SrcBag = nullptr;
-	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag);
+	UWorld* ContextWorld = OwnerWidget.IsValid() ? OwnerWidget.Pin()->GetWorld() : nullptr;
+	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, ContextWorld);
 
 	if (bDragActive)
 	{
@@ -521,12 +523,13 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 			SelectedCell = DropCell;
 			if (OnSelectedCellChanged.IsBound()) { OnSelectedCellChanged.Execute(SelectedCell); }
 		}
-		const bool bWasDragging = UInventoryGridWidget::IsItemDragActive();
+		UWorld* ContextWorld = OwnerWidget.IsValid() ? OwnerWidget.Pin()->GetWorld() : nullptr;
+		const bool bWasDragging = UInventoryGridWidget::IsItemDragActive(ContextWorld);
 		// Explicit click callback (used for pick-up / drop behaviour). This will drop if a drag is already active.
 		if (OnCellClicked.IsBound()) { OnCellClicked.Execute(DropCell); }
 
 		// If we were dragging and the drop succeeded, the global drag flag will now be false. Clear ghost and exit.
-		if (bWasDragging && UInventoryGridWidget::IsItemDragActive() == false)
+		if (bWasDragging && UInventoryGridWidget::IsItemDragActive(ContextWorld) == false)
 		{
 			bGhostActive = false;
 			Invalidate(EInvalidateWidgetReason::Paint);
@@ -534,7 +537,7 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 		}
 
 		// If a drag is still active (e.g., we picked up a displaced item), do not start another drag
-		if (UInventoryGridWidget::IsItemDragActive())
+		if (UInventoryGridWidget::IsItemDragActive(ContextWorld))
 		{
 			return FReply::Handled();
 		}

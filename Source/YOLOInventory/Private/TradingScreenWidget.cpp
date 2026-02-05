@@ -53,28 +53,8 @@ bool UTradingScreenWidget::TransferSelection(bool bLeftToRight, int32 Count, int
     OutDestIndex = INDEX_NONE;
     UInventoryGridWidget* Src = bLeftToRight ? LeftGrid : RightGrid;
     UInventoryGridWidget* Dst = bLeftToRight ? RightGrid : LeftGrid;
-    if (!Src || !Dst || !Src->Bag || !Dst->Bag) return false;
-    int32 Sel = Src->GetSelectedItemIndex();
-    if (Sel == INDEX_NONE) return false;
-
-    // Reuse InventoryScreenWidget helper behavior if available
-    // (Equivalent to manual Remove from Src and Add into Dst at highlighted placement via drag-drop rules.)
-    FYIBagItem Item = Src->Bag->Items.IsValidIndex(Sel) ? Src->Bag->Items[Sel] : FYIBagItem();
-    if (!Src->Bag->RemoveItem(Sel)) return false;
-    // Try to place at Dst current selected cell if valid (approximation for preferred drop), else use first-fit
-    FIntPoint DropCell = Dst->SelectedCell;
-    if (!Dst->Bag->CanPlaceAt(DropCell, Item.Size))
-    {
-        // fallback to find first fit
-        int32 TmpIdx = Dst->Bag->AddBagItem(Item);
-        if (TmpIdx == INDEX_NONE) { /* rollback */ Src->Bag->AddBagItem(Item); return false; }
-        OutDestIndex = TmpIdx; return true;
-    }
-    Item.Pos = DropCell;
-    int32 NewIdx = Dst->Bag->AddBagItem(Item);
-    if (NewIdx == INDEX_NONE) { Src->Bag->AddBagItem(Item); return false; }
-    OutDestIndex = NewIdx;
-    return true;
+    if (!Src || !Dst) return false;
+    return Src->TransferSelectedItemTo(Dst, Count, OutDestIndex);
 }
 
 void UTradingScreenWidget::SetSession(AYITradeSessionActor* InSession, UYIInventoryBag* LocalPlayerBag, UYIInventoryBag* OtherPartyBag)
@@ -185,11 +165,7 @@ void UTradingScreenWidget::RefreshOffers()
     {
         MyPS = GetOwningPlayerState();
     }
-    ETradeSide LocalSide = ETradeSide::SideA;
-    if (MyPS)
-    {
-        if (Session->PlayerB == MyPS) { LocalSide = ETradeSide::SideB; }
-    }
+    ETradeSide LocalSide = Session->GetSideForPlayer(MyPS);
     const ETradeSide OtherSide = (LocalSide == ETradeSide::SideA) ? ETradeSide::SideB : ETradeSide::SideA;
 
     // Left: show our live bag if provided, otherwise mirror our replicated view
@@ -203,7 +179,7 @@ void UTradingScreenWidget::RefreshOffers()
         LeftMirrorBag = BuildMirrorFromInventory(Session->GetInventoryView(LocalSide), Session->GetInventorySize(LocalSide));
         LocalBag = LeftMirrorBag;
     }
-    if (LeftGrid) { LeftGrid->SetBag(LocalBag); LeftGrid->RefreshBoundTooltip(); }
+    if (LeftGrid) { LeftGrid->SetBag(LocalBag); LeftGrid->SetTradeContext(Session, LocalSide); LeftGrid->RefreshBoundTooltip(); }
 
     // Right: prefer the other party's live bag if provided; otherwise mirror their full inventory snapshot
     if (RightMirrorBag)
@@ -214,13 +190,13 @@ void UTradingScreenWidget::RefreshOffers()
 
     if (OtherBag)
     {
-        if (RightGrid) { RightGrid->SetBag(OtherBag); RightGrid->RefreshBoundTooltip(); }
+        if (RightGrid) { RightGrid->SetBag(OtherBag); RightGrid->SetTradeContext(Session, OtherSide); RightGrid->RefreshBoundTooltip(); }
     }
     else
     {
         const TArray<FYINetBagItem> OtherView = Session->GetInventoryView(OtherSide);
         RightMirrorBag = BuildMirrorFromInventory(OtherView, Session->GetInventorySize(OtherSide));
-        if (RightGrid) { RightGrid->SetBag(RightMirrorBag); RightGrid->RefreshBoundTooltip(); }
+        if (RightGrid) { RightGrid->SetBag(RightMirrorBag); RightGrid->SetTradeContext(Session, OtherSide); RightGrid->RefreshBoundTooltip(); }
     }
 }
 

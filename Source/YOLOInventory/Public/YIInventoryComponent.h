@@ -61,6 +61,28 @@ public:
 	/** Server-only: push current bag state into net mirror to replicate to owning client. */
 	void SyncNetState();
 
+	// --------- Authority-safe inventory mutations (RPC-backed) ----------
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	bool MoveItem(int32 Index, FIntPoint NewPos);
+	UFUNCTION(Server, Reliable)
+	void ServerMoveItem(int32 Index, FIntPoint NewPos);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	bool RotateItem(int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerRotateItem(int32 Index);
+
+	/** Add an already-built bag item (e.g., from drag/drop). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	int32 AddBagItem(const FYIBagItem& Item);
+	UFUNCTION(Server, Reliable)
+	void ServerAddBagItem(const struct FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	bool RemoveItem(int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerRemoveItem(int32 Index);
+
 	/** Soft class references so designers can assign widgets once and call the helpers below. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
 	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;

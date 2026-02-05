@@ -12,6 +12,8 @@
 #include "YITradeSessionActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Net/UnrealNetwork.h"
+#include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -281,6 +283,121 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagItems, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
+}
+
+// -------- Net-safe bag mutations --------
+
+bool UYIInventoryComponent::MoveItem(int32 Index, FIntPoint NewPos)
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		if (EquippedBag && EquippedBag->MoveItem(Index, NewPos))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+	ServerMoveItem(Index, NewPos);
+	return true; // optimistic; OnRep_NetBag will update preview
+}
+
+void UYIInventoryComponent::ServerMoveItem_Implementation(int32 Index, FIntPoint NewPos)
+{
+	MoveItem(Index, NewPos); // will take authority branch
+}
+
+bool UYIInventoryComponent::RotateItem(int32 Index)
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		if (EquippedBag && EquippedBag->RotateItem(Index))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+	ServerRotateItem(Index);
+	return true;
+}
+
+void UYIInventoryComponent::ServerRotateItem_Implementation(int32 Index)
+{
+	RotateItem(Index); // authority branch
+}
+
+int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		if (EquippedBag)
+		{
+			int32 Idx = EquippedBag->AddBagItem(Item);
+			if (Idx != INDEX_NONE) { SyncNetState(); }
+			return Idx;
+		}
+		return INDEX_NONE;
+	}
+	// Client: send net-safe version
+	FYIItemInstanceNet Net;
+	Net.Definition = Item.Item.Definition;
+	Net.Count = Item.Item.Count;
+	Net.CustomStackKey = Item.Item.CustomStackKey;
+	Net.bRotated = Item.Item.bRotated;
+	Net.Affixes = Item.Item.Affixes;
+	Net.Attributes.Reset();
+	for (const TPair<FName, float>& KV : Item.Item.Attributes)
+	{
+		FYIAttributeKV OutKV; OutKV.Name = KV.Key; OutKV.Value = KV.Value; Net.Attributes.Add(OutKV);
+	}
+	ServerAddBagItem(Net, Item.Pos, Item.Size);
+	return 0; // optimistic dummy index; OnRep will refresh actual layout
+}
+
+static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
+{
+	FYIItemInstance Out;
+	Out.Definition = Net.Definition;
+	Out.Count = Net.Count;
+	Out.CustomStackKey = Net.CustomStackKey;
+	Out.bRotated = Net.bRotated;
+	Out.Affixes = Net.Affixes;
+	Out.Attributes.Reset();
+	for (const FYIAttributeKV& KV : Net.Attributes)
+	{
+		Out.Attributes.Add(KV.Name, KV.Value);
+	}
+	return Out;
+}
+
+void UYIInventoryComponent::ServerAddBagItem_Implementation(const FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size)
+{
+	FYIBagItem Item;
+	Item.Item = NetToFull(NetItem);
+	Item.Pos = Pos;
+	Item.Size = Size;
+	AddBagItem(Item);
+}
+
+bool UYIInventoryComponent::RemoveItem(int32 Index)
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		if (EquippedBag && EquippedBag->RemoveItem(Index))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+	ServerRemoveItem(Index);
+	return true;
+}
+
+void UYIInventoryComponent::ServerRemoveItem_Implementation(int32 Index)
+{
+	RemoveItem(Index);
 }
 
 // -------- UI helpers --------

@@ -1,6 +1,7 @@
 ﻿#include "InventoryGridWidget.h"
 #include "SInventoryGridWidget.h"
 #include "YIInventoryBag.h"
+#include "YIInventoryComponent.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "Widgets/InventoryTooltipView.h"
 #include "InventoryUtils.h"
@@ -8,6 +9,9 @@
 #include "InventoryActionMenuWidget.h"
 #include "AbilitySystemComponent.h"
 #include "YIRequirement.h"
+#include "YITradeSessionActor.h"
+#include "YITradeInteractionComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
@@ -20,7 +24,8 @@ static struct FInventoryGlobalDrag
 	FYIBagItem Item;
 	bool bRemovedFromSource = false; // true if we removed the item from its bag when drag started
 	bool bActive = false;
-	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; }
+	TWeakObjectPtr<UGameInstance> DragGI;
+	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; DragGI.Reset(); }
 } GInventoryDrag;
 
 // Check if placing a footprint at Pos would overlap at most one other item (ignoring SourceIdx). Returns that item index or INDEX_NONE.
@@ -28,6 +33,7 @@ static bool FindSingleOverlap(const UYIInventoryBag* Bag, int32 SourceIdx, const
 {
 	OutOverlapIdx = INDEX_NONE;
 	if (!Bag) return false;
+	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 	// bounds check
 	if (Pos.X < 0 || Pos.Y < 0 || Pos.X + Footprint.X > Bag->GridSize.X || Pos.Y + Footprint.Y > Bag->GridSize.Y) return false;
 	for (int32 i=0;i<Bag->Items.Num();++i)
@@ -75,11 +81,15 @@ void UInventoryGridWidget::BeginDestroy()
 
 void UInventoryGridWidget::ForEachRegisteredGrid(TFunctionRef<void(UInventoryGridWidget*)> Callback)
 {
+	UGameInstance* TargetGI = GInventoryDrag.DragGI.Get();
 	for (auto It = GRegisteredGrids.CreateIterator(); It; ++It)
 	{
 		if (UInventoryGridWidget* Grid = It->Get())
 		{
-			Callback(Grid);
+			if (!TargetGI || (Grid->GetWorld() && Grid->GetWorld()->GetGameInstance() == TargetGI))
+			{
+				Callback(Grid);
+			}
 		}
 	}
 }
@@ -346,17 +356,16 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	if (!Bag) return false;
 	int32 Idx = GetItemIndexAtCell(Bag, Cell);
 	if (Idx == INDEX_NONE) return false;
+	// Only allow drag within this game instance (prevents cross-PIE bleed)
+	if (UWorld* World = GetWorld())
+	{
+		GInventoryDrag.DragGI = World->GetGameInstance();
+	}
 	GInventoryDrag.SourceGrid = this;
 	GInventoryDrag.SourceIndex = Idx;
 	GInventoryDrag.Item = Bag->Items[Idx];
 	GInventoryDrag.SourcePos = GInventoryDrag.Item.Pos;
-	// Remove it from the bag immediately so the slot is visually free during drag
-	if (Bag->RemoveItem(Idx))
-	{
-		GInventoryDrag.bRemovedFromSource = true;
-		// Adjust SourceIndex if needed: after removal, index may shift; set to INDEX_NONE to signal unattached during drag
-		GInventoryDrag.SourceIndex = INDEX_NONE;
-	}
+	GInventoryDrag.bRemovedFromSource = false; // keep item in bag until drop is confirmed (prevents other clients seeing it vanish mid-drag)
 	GInventoryDrag.bActive = true;
 	// Notify listeners
 	OnItemDragStarted.Broadcast(this, Idx);
@@ -376,6 +385,15 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 {
 	if (!GInventoryDrag.bActive) return false;
 	if (!Bag) return false;
+	if (UWorld* World = GetWorld())
+	{
+		if (!GInventoryDrag.DragGI.IsValid() || GInventoryDrag.DragGI.Get() != World->GetGameInstance())
+		{
+			// Drag from another PIE instance; ignore
+			return false;
+		}
+	}
+	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid == this)
@@ -389,7 +407,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			{
 				// Temporarily disable auto-merge to enforce exact placement at target cell
 				bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false;
-				int32 NewIdx = Bag->AddBagItem(ToPlace);
+				int32 NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
 				Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 				if (NewIdx != INDEX_NONE)
 				{
@@ -418,13 +436,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			int32 NewIdx = INDEX_NONE;
 			if (Bag->CanPlaceAt(Cell, ToPlace.Size))
 			{
-				NewIdx = Bag->AddBagItem(ToPlace);
+				NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
 			}
 			if (NewIdx == INDEX_NONE)
 			{
 				// Rollback: reinsert victim to its original spot
 				SavedVictim.Pos = SavedVictim.Pos; // unchanged
-				Bag->AddBagItem(SavedVictim);
+				if (OwnerComp) OwnerComp->AddBagItem(SavedVictim); else Bag->AddBagItem(SavedVictim);
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, false);
 				return false;
 			}
@@ -439,8 +457,14 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			UpdateBoundTooltip();
 			return true;
 		}
-		if (!Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))
+		if (!(OwnerComp ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell)))
 		{
+			// Non-authority clients should not attempt in-place swaps; let the server resolve.
+			if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+			{
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				return false;
+			}
 			// Allow displacing a single overlapped item if the footprint only hits that one
 			const FYIBagItem& Src = Bag->Items[GInventoryDrag.SourceIndex];
 			const FIntPoint Foot = Bag->GetEffectiveSize(Src.Size);
@@ -452,12 +476,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			}
 			// Remove victim, adjust source index if needed, then attempt move again
 			FYIBagItem SavedVictim = Bag->Items[Victim];
-			Bag->RemoveItem(Victim);
+			if (OwnerComp) OwnerComp->RemoveItem(Victim); else Bag->RemoveItem(Victim);
 			if (Victim < GInventoryDrag.SourceIndex)
 			{
 				GInventoryDrag.SourceIndex -= 1;
 			}
-			if (!Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))
+			if (!(OwnerComp ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell)))
 			{
 			// Failed even after clearing victim; restore it in-place to avoid merge/stack side-effects
 			Bag->Items.Insert(SavedVictim, Victim);
@@ -484,6 +508,49 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Cross-bag: perform an atomic swap (drag item takes victim's slot, victim becomes active drag or drops)
 	FYIBagItem ToPlace = GInventoryDrag.Item;
 	ToPlace.Pos = Cell;
+	UYIInventoryComponent* SourceComp = (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag) ? GInventoryDrag.SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+
+	// If this grid participates in a trade session, route cross-bag transfer through the session (server authoritative).
+	if (ActiveTradeSession && GInventoryDrag.SourceGrid)
+	{
+		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+		if (SourceGrid->ActiveTradeSession == ActiveTradeSession && SourceGrid->bHasTradeSide && bHasTradeSide && GInventoryDrag.SourceIndex != INDEX_NONE)
+		{
+			if (OwnerComp && OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority())
+			{
+				ActiveTradeSession->ServerTransferItemBetweenSides(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+				GInventoryDrag.Reset();
+				RefreshBoundTooltip();
+				return true;
+			}
+			APlayerController* PC = GetOwningPlayer();
+			if (!PC && GetWorld())
+			{
+				PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+			}
+			if (PC)
+			{
+				if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
+				{
+					TradeComp->RequestTradeTransfer(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
+					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+					GInventoryDrag.Reset();
+					RefreshBoundTooltip();
+					return true;
+				}
+			}
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			return false;
+		}
+	}
+	
+	// If we are not authoritative, do not mutate bags directly for cross-bag operations.
+	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+	{
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		return false;
+	}
 	
 	// Check if placement at Cell is possible or if we need a victim swap
 	int32 VictimIdx = INDEX_NONE;
@@ -494,13 +561,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	{
 		// Clean placement: just add and remove from source
 		// Temporarily disable auto-merge to avoid merging dragged item into existing stacks during cross-bag direct placement
-int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
-if (NewIdx != INDEX_NONE)
+		int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
+		if (NewIdx != INDEX_NONE)
 		{
 			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
 {
 // If item was already removed at pickup, skip removing now
-if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || GInventoryDrag.SourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex))
+				if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || (SourceComp ? SourceComp->RemoveItem(GInventoryDrag.SourceIndex) : GInventoryDrag.SourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex)))
 				{
 					OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
 					if (GInventoryDrag.SourceGrid != this) GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
@@ -538,6 +605,18 @@ if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NON
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
 		return false;
 	}
+
+	// Non-authority clients should not perform in-place swaps; trigger server ops instead.
+	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+	{
+		// Try removing victim then adding dragged via RPC
+		UYIInventoryComponent* SrcCompInner = SourceComp;
+		if (SrcCompInner) SrcCompInner->RemoveItem(VictimIdx); // victim in dest bag index; safe because server will validate
+		OwnerComp->AddBagItem(ToPlace);
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+		GInventoryDrag.Reset();
+		return true;
+	}
 	
 	// We have a victim. Now perform an ATOMIC swap across bags:
 	// 1. Save both items
@@ -567,23 +646,25 @@ if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NON
 	UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Placed dragged into dest at idx %d. DestCount=%d"), VictimIdx, Bag->Items.Num());
 	
 	// 4. Remove the original dragged item from its source bag (if not already this grid and not the same as victim)
-	if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
-	{
-		UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
-		const int32 SourceIdx = GInventoryDrag.SourceIndex;
-		// Skip removal if the item was already removed at pickup or SourceIdx is invalid
-		if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
-		{
-			// Only remove if source is not the same as destination victim index
-			if (!(SourceBag == Bag && SourceIdx == VictimIdx))
+			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removing original dragged item from source bag. SourceIdx=%d SourceBagCountBefore=%d"), SourceIdx, SourceBag->Items.Num());
-				if (!SourceBag->RemoveItem(SourceIdx))
+				UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
+				UYIInventoryComponent* SrcCompInner = SourceBag->GetTypedOuter<UYIInventoryComponent>();
+				const int32 SourceIdx = GInventoryDrag.SourceIndex;
+				// Skip removal if the item was already removed at pickup or SourceIdx is invalid
+				if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
 				{
-					// Source removal failed; FULLY REVERT the destination change
-					Bag->Items[VictimIdx] = SavedVictim;
-					Bag->MarkPackageDirty();
-					Bag->OnChanged.Broadcast();
+					// Only remove if source is not the same as destination victim index
+					if (!(SourceBag == Bag && SourceIdx == VictimIdx))
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removing original dragged item from source bag. SourceIdx=%d SourceBagCountBefore=%d"), SourceIdx, SourceBag->Items.Num());
+						const bool bRemoved = SrcCompInner ? SrcCompInner->RemoveItem(SourceIdx) : SourceBag->RemoveItem(SourceIdx);
+						if (!bRemoved)
+						{
+							// Source removal failed; FULLY REVERT the destination change
+							Bag->Items[VictimIdx] = SavedVictim;
+							Bag->MarkPackageDirty();
+							Bag->OnChanged.Broadcast();
 					UE_LOG(LogTemp, Error, TEXT("Inventory Swap: Failed to remove original dragged item from source. Reverting. DestCount=%d"), Bag->Items.Num());
 					OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
 					GInventoryDrag.Reset();
@@ -646,17 +727,44 @@ void UInventoryGridWidget::CancelDrag()
 	}
 }
 
-bool UInventoryGridWidget::IsItemDragActive()
+bool UInventoryGridWidget::IsItemDragActive(const UWorld* ContextWorld)
 {
-	return GInventoryDrag.bActive;
+	if (!GInventoryDrag.bActive)
+	{
+		return false;
+	}
+	if (ContextWorld && GInventoryDrag.DragGI.IsValid() && ContextWorld->GetGameInstance() != GInventoryDrag.DragGI.Get())
+	{
+		return false;
+	}
+	return true;
 }
 
-bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventoryBag*& OutSourceBag)
+bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld)
 {
 	if (!GInventoryDrag.bActive) { OutSourceBag = nullptr; return false; }
+	if (ContextWorld && GInventoryDrag.DragGI.IsValid() && ContextWorld->GetGameInstance() != GInventoryDrag.DragGI.Get())
+	{
+		OutSourceBag = nullptr;
+		return false;
+	}
 	OutItem = GInventoryDrag.Item;
 	OutSourceBag = GInventoryDrag.SourceGrid ? GInventoryDrag.SourceGrid->Bag : nullptr;
 	return true;
+}
+
+void UInventoryGridWidget::SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide)
+{
+	ActiveTradeSession = InSession;
+	if (InSession)
+	{
+		TradeSide = InSide;
+		bHasTradeSide = true;
+	}
+	else
+	{
+		bHasTradeSide = false;
+	}
 }
 
 void UInventoryGridWidget::HandleCellClicked(const FIntPoint& Cell)
@@ -730,7 +838,27 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 	if (!Other || !Bag || !Other->Bag) return false;
 	int32 SourceIndex = GetSelectedItemIndex();
 	if (SourceIndex == INDEX_NONE) return false;
-	bool b = UYIInventoryBlueprintLibrary::TransferItemBetweenBags(Bag, Other->Bag, SourceIndex, Count, OutDestIndex);
+
+	// Trade session path: route transfer through server so both sides stay in sync.
+	if (ActiveTradeSession && Other->ActiveTradeSession == ActiveTradeSession && bHasTradeSide && Other->bHasTradeSide)
+	{
+		const FIntPoint DestCell = (Other->SelectedCell.X >= 0 && Other->SelectedCell.Y >= 0) ? Other->SelectedCell : FIntPoint(0, 0);
+		ActiveTradeSession->ServerTransferItemBetweenSides(TradeSide, Other->TradeSide, SourceIndex, DestCell, Count);
+		UpdateBoundTooltip();
+		Other->RefreshBoundTooltip();
+		OnItemTransferred.Broadcast(this, SourceIndex, INDEX_NONE);
+		Other->OnItemTransferred.Broadcast(this, SourceIndex, INDEX_NONE);
+		return true;
+	}
+
+	// Non-trade: only allow direct transfer on authority.
+	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
+	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
+	const bool b = UYIInventoryBlueprintLibrary::TransferItemBetweenBags(Bag, Other->Bag, SourceIndex, Count, OutDestIndex);
 	if (b)
 	{
 		// Refresh our tooltip and the other grid's tooltip

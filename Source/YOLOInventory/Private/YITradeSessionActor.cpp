@@ -99,6 +99,10 @@ void AYITradeSessionActor::RefreshInventoryViews()
 	CopyBagToNetView(GetInventoryForSide(ETradeSide::SideA), InventoryA, InventorySizeA);
 	CopyBagToNetView(GetInventoryForSide(ETradeSide::SideB), InventoryB, InventorySizeB);
 	ForceNetUpdate();
+
+	// Listen-server UI needs explicit notify (OnRep won't fire on server).
+	if (OnInventoriesUpdated.IsBound()) { OnInventoriesUpdated.Broadcast(); }
+	if (OnOffersUpdated.IsBound()) { OnOffersUpdated.Broadcast(); }
 }
 
 void AYITradeSessionActor::ServerAddItem_Implementation(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count)
@@ -184,6 +188,119 @@ void AYITradeSessionActor::ServerCancel_Implementation()
 {
     if (OnTradeCancelled.IsBound()) { OnTradeCancelled.Broadcast(); }
     Destroy();
+}
+
+// Helper to get item index at a specific cell in a bag (INDEX_NONE if none).
+static int32 GetTradeItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell)
+{
+    if (!Bag) return INDEX_NONE;
+    for (int32 i = 0; i < Bag->Items.Num(); ++i)
+    {
+        const FYIBagItem& It = Bag->Items[i];
+        const FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
+        if (Cell.X >= It.Pos.X && Cell.Y >= It.Pos.Y && Cell.X < It.Pos.X + Eff.X && Cell.Y < It.Pos.Y + Eff.Y)
+        {
+            return i;
+        }
+    }
+    return INDEX_NONE;
+}
+
+void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    UYIInventoryComponent* SrcInv = GetInventoryForSide(FromSide);
+    UYIInventoryComponent* DstInv = GetInventoryForSide(ToSide);
+    if (!SrcInv || !DstInv)
+    {
+        return;
+    }
+
+    UYIInventoryBag* SrcBag = SrcInv->GetBag();
+    UYIInventoryBag* DstBag = DstInv->GetBag();
+    if (!SrcBag || !DstBag || !SrcBag->Items.IsValidIndex(SourceIndex))
+    {
+        return;
+    }
+
+    FYIBagItem SrcItem = SrcBag->Items[SourceIndex];
+    if (SrcItem.Item.Count <= 0)
+    {
+        return;
+    }
+
+    const int32 MoveCount = (Count <= 0) ? SrcItem.Item.Count : FMath::Clamp(Count, 1, SrcItem.Item.Count);
+
+    // If the target cell is occupied by a compatible stack, merge instead of exact-place.
+    const int32 DestIdx = GetTradeItemIndexAtCell(DstBag, DestPos);
+    if (DestIdx != INDEX_NONE)
+    {
+        FYIBagItem& DestItem = DstBag->Items[DestIdx];
+        UYIItemDefinition* Def = DestItem.Item.Definition.IsValid() ? DestItem.Item.Definition.Get() : DestItem.Item.Definition.LoadSynchronous();
+        if (Def && Def->bAllowStacking && Def->MaxStackCount > 1 &&
+            DestItem.Item.Definition.ToSoftObjectPath() == SrcItem.Item.Definition.ToSoftObjectPath())
+        {
+            const int32 Room = Def->MaxStackCount - DestItem.Item.Count;
+            if (Room > 0)
+            {
+                const int32 Applied = FMath::Min(Room, MoveCount);
+                DestItem.Item.Count += Applied;
+                SrcItem.Item.Count -= Applied;
+                if (SrcItem.Item.Count <= 0)
+                {
+                    SrcBag->RemoveItem(SourceIndex);
+                }
+                else
+                {
+                    SrcBag->Items[SourceIndex].Item.Count = SrcItem.Item.Count;
+                    SrcBag->OnChanged.Broadcast();
+                }
+                DstBag->OnChanged.Broadcast();
+                SrcInv->SyncNetState();
+                DstInv->SyncNetState();
+                RefreshInventoryViews();
+            }
+        }
+        return;
+    }
+
+    // Exact placement for the dragged item.
+    FYIBagItem ToPlace = SrcItem;
+    ToPlace.Item.Count = MoveCount;
+    ToPlace.Pos = DestPos;
+    if (!DstBag->CanPlaceAt(DestPos, ToPlace.Size))
+    {
+        return;
+    }
+
+    const bool bSavedAutoMerge = DstBag->bAutoMergeOnAdd;
+    DstBag->bAutoMergeOnAdd = false;
+    const int32 NewIdx = DstBag->AddBagItem(ToPlace);
+    DstBag->bAutoMergeOnAdd = bSavedAutoMerge;
+
+    if (NewIdx == INDEX_NONE)
+    {
+        return;
+    }
+
+    // Remove from source (partial stack supported).
+    if (MoveCount < SrcItem.Item.Count)
+    {
+        SrcBag->Items[SourceIndex].Item.Count -= MoveCount;
+        SrcBag->OnChanged.Broadcast();
+    }
+    else
+    {
+        SrcBag->RemoveItem(SourceIndex);
+    }
+
+    SrcInv->SyncNetState();
+    DstInv->SyncNetState();
+    RefreshInventoryViews();
 }
 
 UYIInventoryComponent* AYITradeSessionActor::GetInventoryForSide(ETradeSide Side) const
