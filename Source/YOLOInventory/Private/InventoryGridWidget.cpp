@@ -12,6 +12,7 @@
 #include "YITradeSessionActor.h"
 #include "YITradeInteractionComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "YIItemPickup.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
@@ -24,9 +25,29 @@ static struct FInventoryGlobalDrag
 	FYIBagItem Item;
 	bool bRemovedFromSource = false; // true if we removed the item from its bag when drag started
 	bool bActive = false;
+	bool bFromExchange = false;
 	TWeakObjectPtr<UGameInstance> DragGI;
-	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; DragGI.Reset(); }
+	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; bFromExchange = false; DragGI.Reset(); }
 } GInventoryDrag;
+
+static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
+{
+	FYIItemInstanceNet Net;
+	Net.Definition = Item.Definition;
+	Net.Count = Item.Count;
+	Net.CustomStackKey = Item.CustomStackKey;
+	Net.bRotated = Item.bRotated;
+	Net.Affixes = Item.Affixes;
+	Net.Attributes.Reset();
+	for (const TPair<FName, float>& KV : Item.Attributes)
+	{
+		FYIAttributeKV Entry;
+		Entry.Name = KV.Key;
+		Entry.Value = KV.Value;
+		Net.Attributes.Add(Entry);
+	}
+	return Net;
+}
 
 // Check if placing a footprint at Pos would overlap at most one other item (ignoring SourceIdx). Returns that item index or INDEX_NONE.
 static bool FindSingleOverlap(const UYIInventoryBag* Bag, int32 SourceIdx, const FIntPoint& Pos, const FIntPoint& Footprint, int32& OutOverlapIdx)
@@ -344,9 +365,24 @@ bool UInventoryGridWidget::RequestOpenActionMenu(UInventoryActionMenuWidget* Men
 
 void UInventoryGridWidget::HandleHoverChanged(int32 HoveredIndex)
 {
+	const int32 PrevHovered = HoveredItemIndexCached;
 	// Broadcast hover state to Blueprint listeners
 	OnItemHoverChanged.Broadcast(HoveredIndex);
+	const bool bHasItem = HoveredIndex != INDEX_NONE;
+	OnHoverSlotChanged.Broadcast(HoveredIndex, bHasItem);
 	HoveredItemIndexCached = HoveredIndex;
+
+	if (PrevHovered != HoveredIndex)
+	{
+		if (bHasItem && HoverSlotSound)
+		{
+			UGameplayStatics::PlaySound2D(this, HoverSlotSound);
+		}
+		else if (!bHasItem && HoverEmptySound)
+		{
+			UGameplayStatics::PlaySound2D(this, HoverEmptySound);
+		}
+	}
 	UpdateBoundTooltip();
 	// Optionally refresh tooltip if there is no explicit selection but we want hover to drive tooltip (kept to selection-only for now)
 }
@@ -367,8 +403,13 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	GInventoryDrag.SourcePos = GInventoryDrag.Item.Pos;
 	GInventoryDrag.bRemovedFromSource = false; // keep item in bag until drop is confirmed (prevents other clients seeing it vanish mid-drag)
 	GInventoryDrag.bActive = true;
+	GInventoryDrag.bFromExchange = false;
 	// Notify listeners
 	OnItemDragStarted.Broadcast(this, Idx);
+	if (DragStartSound)
+	{
+		UGameplayStatics::PlaySound2D(this, DragStartSound);
+	}
 	// Clear selection so UI reflects pickup
 	SetSelectedCell(FIntPoint(-1, -1));
 	UpdateBoundTooltip();
@@ -394,6 +435,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		}
 	}
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
+	auto PlayDropSound = [this]()
+	{
+		if (DropSound)
+		{
+			UGameplayStatics::PlaySound2D(this, DropSound);
+		}
+	};
 
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid == this)
@@ -457,6 +505,8 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			GInventoryDrag.SourceIndex = INDEX_NONE;
 			GInventoryDrag.Item = SavedVictim;
 			GInventoryDrag.bRemovedFromSource = true;
+			GInventoryDrag.bFromExchange = true;
+			GInventoryDrag.SourcePos = SavedVictim.Pos;
 			GInventoryDrag.bActive = true;
 			OnItemDragStarted.Broadcast(this, INDEX_NONE);
 			UpdateBoundTooltip();
@@ -502,6 +552,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			OnItemDragStarted.Broadcast(this, INDEX_NONE);
 		}
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+		PlayDropSound();
 		if (GInventoryDrag.SourceGrid != nullptr || GInventoryDrag.SourceIndex != INDEX_NONE)
 		{
 			GInventoryDrag.Reset();
@@ -525,6 +576,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			{
 				ActiveTradeSession->ServerTransferItemBetweenSides(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+				PlayDropSound();
 				GInventoryDrag.Reset();
 				RefreshBoundTooltip();
 				return true;
@@ -540,6 +592,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				{
 					TradeComp->RequestTradeTransfer(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
 					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+					PlayDropSound();
 					GInventoryDrag.Reset();
 					RefreshBoundTooltip();
 					return true;
@@ -579,6 +632,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 					GInventoryDrag.SourceGrid->RefreshBoundTooltip();
 					RefreshBoundTooltip();
 					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+					PlayDropSound();
 					GInventoryDrag.Reset();
 					return true;
 				}
@@ -597,6 +651,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				UE_LOG(LogTemp, Warning, TEXT("Inventory: Placed unattached dragged item into bag at index %d."), NewIdx);
 				RefreshBoundTooltip();
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, true);
+				PlayDropSound();
 				GInventoryDrag.Reset();
 				return true;
 			}
@@ -619,6 +674,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		if (SrcCompInner) SrcCompInner->RemoveItem(VictimIdx); // victim in dest bag index; safe because server will validate
 		OwnerComp->AddBagItem(ToPlace);
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+		PlayDropSound();
 		GInventoryDrag.Reset();
 		return true;
 	}
@@ -690,6 +746,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// 5. Set victim as active drag for the next placement
 	RefreshBoundTooltip();
 	OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+	PlayDropSound();
 	UE_LOG(LogTemp, Warning, TEXT("Inventory Swap COMPLETE: NewDragItem=%s NewDragActive=%d DestCount=%d"), *GetDefName(SavedVictim), (int)GInventoryDrag.bActive, Bag->Items.Num());
 
 	// Update drag state: the victim is now at VictimIdx in this bag (linked, not unattached)
@@ -698,6 +755,8 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	GInventoryDrag.SourceIndex = INDEX_NONE;
 	GInventoryDrag.Item = SavedVictim;
 	GInventoryDrag.bRemovedFromSource = true; // victim no longer exists in any bag after being displaced
+	GInventoryDrag.bFromExchange = true;
+	GInventoryDrag.SourcePos = SavedVictim.Pos;
 	GInventoryDrag.bActive = true;
 	OnItemDragStarted.Broadcast(this, INDEX_NONE);
 	return true;
@@ -707,27 +766,69 @@ void UInventoryGridWidget::CancelDrag()
 {
 	if (GInventoryDrag.bActive)
 	{
+		if (CancelDragSound)
+		{
+			UGameplayStatics::PlaySound2D(this, CancelDragSound);
+		}
+
+		bool bDroppedToWorld = false;
 		// If we removed the item from its source bag at pickup, try to restore it at its original position
 		if (GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
 		{
 			UYIInventoryBag* SrcBag = GInventoryDrag.SourceGrid->Bag;
-			FYIBagItem Restore = GInventoryDrag.Item; Restore.Pos = GInventoryDrag.SourcePos;
-			// Try to add back; if it fails (blocked now), try to add anywhere to avoid loss
-			if (SrcBag->AddBagItem(Restore) == INDEX_NONE)
+			FYIBagItem Restore = GInventoryDrag.Item;
+
+			if (GInventoryDrag.bFromExchange)
 			{
-				// Fallback: place at first available cell
-				for (int y=0; y<SrcBag->GridSize.Y; ++y)
+				// Exchange drag: try original victim cell, then any fit, else drop to world
+				bool bPlaced = false;
+				if (SrcBag->CanPlaceAt(GInventoryDrag.SourcePos, Restore.Size))
 				{
-					bool bBreak=false;
-					for (int x=0; x<SrcBag->GridSize.X; ++x)
+					Restore.Pos = GInventoryDrag.SourcePos;
+					bPlaced = (SrcBag->AddBagItem(Restore) != INDEX_NONE);
+				}
+				if (!bPlaced)
+				{
+					FIntPoint FitPos;
+					if (SrcBag->FindFirstFit(Restore.Size, FitPos))
 					{
-						Restore.Pos = FIntPoint(x,y);
-						if (SrcBag->AddBagItem(Restore) != INDEX_NONE) { bBreak=true; break; }
+						Restore.Pos = FitPos;
+						bPlaced = (SrcBag->AddBagItem(Restore) != INDEX_NONE);
 					}
-					if (bBreak) break;
+				}
+				if (!bPlaced)
+				{
+					if (UYIInventoryComponent* OwnerComp = SrcBag->GetTypedOuter<UYIInventoryComponent>())
+					{
+						if (AActor* Owner = OwnerComp->GetOwner())
+						{
+							const FVector SpawnLoc = Owner->GetActorLocation() + Owner->GetActorForwardVector() * 80.f;
+							const FTransform SpawnTransform(Owner->GetActorRotation(), SpawnLoc);
+							const FYIItemInstanceNet NetItem = MakeNetItem(Restore.Item);
+							if (OwnerComp->DropItemToWorld(NetItem, SpawnTransform))
+							{
+								bDroppedToWorld = true;
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				Restore.Pos = GInventoryDrag.SourcePos;
+				// Try to add back; if it fails (blocked now), try to add anywhere to avoid loss
+				if (SrcBag->AddBagItem(Restore) == INDEX_NONE)
+				{
+					FIntPoint FitPos;
+					if (SrcBag->FindFirstFit(Restore.Size, FitPos))
+					{
+						Restore.Pos = FitPos;
+						SrcBag->AddBagItem(Restore);
+					}
 				}
 			}
 		}
+		OnItemDragCancelled.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.Item, bDroppedToWorld);
 		GInventoryDrag.Reset();
 	}
 }

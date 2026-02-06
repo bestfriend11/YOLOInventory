@@ -83,6 +83,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(int32 Index);
 
+	/** Drop an item instance to the world (server authoritative). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	bool DropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
+	UFUNCTION(Server, Reliable)
+	void ServerDropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
+
 	/** Soft class references so designers can assign widgets once and call the helpers below. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
 	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;

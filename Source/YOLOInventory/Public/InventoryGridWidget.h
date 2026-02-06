@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "Components/Widget.h"
 #include "GameplayTagContainer.h"
+#include "YIInventoryBag.h"
 #include "InventoryGridWidget.generated.h"
 
 class UYIInventoryBag;
@@ -9,6 +10,7 @@ class SInventoryGridWidget;
 class UAbilitySystemComponent;
 struct FYIRequirementContext;
 class AYITradeSessionActor;
+class USoundBase;
 enum class ETradeSide : uint8;
 
 /**
@@ -52,6 +54,26 @@ public:
 	/** If true, mouse clicks will update selection. Disable for mouse-driven PC inventories that don't need grid selection. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Input", meta=(ToolTip="Allow mouse clicks to change the selected cell"))
 	bool bEnableMouseSelection = false;
+
+	/** Optional SFX when drag starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	TObjectPtr<USoundBase> DragStartSound = nullptr;
+
+	/** Optional SFX when a drop succeeds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	TObjectPtr<USoundBase> DropSound = nullptr;
+
+	/** Optional SFX when a drag is canceled. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	TObjectPtr<USoundBase> CancelDragSound = nullptr;
+
+	/** Optional SFX when hovering a slot containing an item. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	TObjectPtr<USoundBase> HoverSlotSound = nullptr;
+
+	/** Optional SFX when hovering an empty slot. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	TObjectPtr<USoundBase> HoverEmptySound = nullptr;
 
 	/** Optional ASC/tags/XP for evaluating requirements in tooltips. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip", meta=(ToolTip="Ability System used to evaluate item requirements for tooltips"))
@@ -185,6 +207,11 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnItemHoverChanged, int32, HoveredItemIndex);
 	UPROPERTY(BlueprintAssignable, Category="Inventory")
 	FOnItemHoverChanged OnItemHoverChanged;
+
+	// Detailed hover event: includes whether the hovered slot has an item
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHoverSlotChanged, int32, HoveredItemIndex, bool, bHasItem);
+	UPROPERTY(BlueprintAssignable, Category="Inventory")
+	FOnHoverSlotChanged OnHoverSlotChanged;
 	// Drag & Drop events
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnItemDragStarted, UInventoryGridWidget*, SourceGrid, int32, SourceIndex);
 	UPROPERTY(BlueprintAssignable, Category="Inventory")
@@ -193,6 +220,11 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnItemDropped, UInventoryGridWidget*, DestGrid, int32, SourceIndex, FIntPoint, DestCell, bool, bSucceeded);
 	UPROPERTY(BlueprintAssignable, Category="Inventory")
 	FOnItemDropped OnItemDropped;
+
+	/** Fired when a drag is canceled; bDroppedToWorld indicates a forced drop due to no fit. */
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemDragCancelled, UInventoryGridWidget*, SourceGrid, FYIBagItem, Item, bool, bDroppedToWorld);
+	UPROPERTY(BlueprintAssignable, Category="Inventory")
+	FOnItemDragCancelled OnItemDragCancelled;
 
 	/** Start a drag using the item at Cell (returns false if no item at cell) */
 	UFUNCTION(BlueprintCallable, Category="Inventory")

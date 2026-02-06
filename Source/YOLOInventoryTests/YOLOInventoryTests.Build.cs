@@ -12,7 +12,8 @@ public class YOLOInventoryTests : ModuleRules
             "CoreUObject",
             "Engine",
             "GameplayTags",
-            "YOLOInventory"
+            "YOLOInventory",
+            "UnrealEd"
         });
     }
 }

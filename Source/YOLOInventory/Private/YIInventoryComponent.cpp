@@ -400,6 +400,27 @@ void UYIInventoryComponent::ServerRemoveItem_Implementation(int32 Index)
 	RemoveItem(Index);
 }
 
+bool UYIInventoryComponent::DropItemToWorld(const FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform)
+{
+	if (!GetOwner())
+	{
+		return false;
+	}
+	if (GetOwner()->HasAuthority())
+	{
+		FYIItemInstance Full = NetToFull(NetItem);
+		UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(GetOwner(), Full, SpawnTransform);
+		return true;
+	}
+	ServerDropItemToWorld(NetItem, SpawnTransform);
+	return true;
+}
+
+void UYIInventoryComponent::ServerDropItemToWorld_Implementation(const FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform)
+{
+	DropItemToWorld(NetItem, SpawnTransform);
+}
+
 // -------- UI helpers --------
 
 UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
