@@ -9,8 +9,10 @@ class YOLOINVENTORY_API SInventoryGridWidget : public SCompoundWidget
 public:
 	// Callbacks used by owning UInventoryGridWidget to react to hover/selection changes
 	DECLARE_DELEGATE_OneParam(FOnHoveredItemChanged, int32 /*HoveredItemIndex*/);
+	DECLARE_DELEGATE_OneParam(FOnHoveredCellChanged, const FIntPoint& /*HoveredCell*/);
 	DECLARE_DELEGATE_OneParam(FOnSelectedCellChanged, const FIntPoint& /*SelectedCell*/);
 	DECLARE_DELEGATE_OneParam(FOnCellClicked, const FIntPoint& /*ClickedCell*/);
+	DECLARE_DELEGATE_ThreeParams(FOnGhostPlacementChanged, const FIntPoint& /*TopLeftCell*/, bool /*bValid*/, bool /*bOutOfBounds*/);
 
 	SLATE_BEGIN_ARGS(SInventoryGridWidget){}
 		SLATE_ARGUMENT(UInventoryGridWidget*, OwnerWidget)
@@ -22,7 +24,9 @@ public:
 		SLATE_ARGUMENT(bool, bEnableCellHover)
 		SLATE_ARGUMENT(bool, bEnableMouseSelection)
 		SLATE_EVENT(FOnHoveredItemChanged, OnHoveredItemChanged)
+		SLATE_EVENT(FOnHoveredCellChanged, OnHoveredCellChanged)
 		SLATE_EVENT(FOnSelectedCellChanged, OnSelectedCellChanged)
+		SLATE_EVENT(FOnGhostPlacementChanged, OnGhostPlacementChanged)
 		// Called when a cell is explicitly clicked by the user (mouse button down)
 		SLATE_EVENT(FOnCellClicked, OnCellClicked)
 	SLATE_END_ARGS()
@@ -46,6 +50,10 @@ public:
 		RebuildOccupancy();
 		// Reset hover/selection so stale indices from the previous bag don't linger.
 		HoverCell = FIntPoint(-1, -1);
+		LastHoverCell = FIntPoint(-1, -1);
+		LastGhostTopLeft = FIntPoint(-1, -1);
+		bLastGhostValid = false;
+		bLastGhostOutOfBounds = false;
 		HoveredItemIndex = INDEX_NONE;
 		HoveredItemTopLeft = FIntPoint(-1, -1);
 		HoveredItemSize = FIntPoint::ZeroValue;
@@ -87,6 +95,10 @@ private:
 
 	// Cursor tracking
 	mutable FIntPoint HoverCell = FIntPoint::ZeroValue;
+	mutable FIntPoint LastHoverCell = FIntPoint(-1, -1);
+	mutable FIntPoint LastGhostTopLeft = FIntPoint(-1, -1);
+	mutable bool bLastGhostValid = false;
+	mutable bool bLastGhostOutOfBounds = false;
 	FIntPoint SelectedCell = FIntPoint(-1,-1);
 
 	// Whole-item hover selection
@@ -113,11 +125,14 @@ private:
 
 	// Callbacks (set during Construct)
 	FOnHoveredItemChanged OnHoveredItemChanged;
+	FOnHoveredCellChanged OnHoveredCellChanged;
 	FOnSelectedCellChanged OnSelectedCellChanged;
+	FOnGhostPlacementChanged OnGhostPlacementChanged;
 
 	// Ghost drag visual (click-to-drag without holding)
 	mutable bool bGhostActive = false;
 	mutable bool bGhostPlacementValid = false;
+	mutable bool bGhostOutOfBounds = false;
 	mutable int32 GhostOverlapIndex = INDEX_NONE;
 	mutable int32 GhostIgnoreIndex = INDEX_NONE;
 	mutable FVector2D GhostSize = FVector2D(32.f, 32.f);

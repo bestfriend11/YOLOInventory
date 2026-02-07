@@ -46,6 +46,12 @@ int32 SInventoryGridWidget::GetItemIndexAtCell(const FIntPoint& Cell) const
 
 void SInventoryGridWidget::UpdateHoverSelection()
 {
+	if (LastHoverCell != HoverCell)
+	{
+		LastHoverCell = HoverCell;
+		if (OnHoveredCellChanged.IsBound()) { OnHoveredCellChanged.Execute(HoverCell); }
+	}
+
 	if (!Bag.IsValid())
 	{
 		HoveredItemIndex = INDEX_NONE;
@@ -102,7 +108,9 @@ void SInventoryGridWidget::Construct(const FArguments& InArgs)
 
 	// Hook up Slate-provided callbacks
 	OnHoveredItemChanged = InArgs._OnHoveredItemChanged;
+	OnHoveredCellChanged = InArgs._OnHoveredCellChanged;
 	OnSelectedCellChanged = InArgs._OnSelectedCellChanged;
+	OnGhostPlacementChanged = InArgs._OnGhostPlacementChanged;
 	OnCellClicked = InArgs._OnCellClicked;
 
 	if (Bag.IsValid())
@@ -452,6 +460,7 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, co
 	{
 		bGhostPlacementValid = false;
 		GhostOverlapIndex = INDEX_NONE;
+		bGhostOutOfBounds = false;
 		return;
 	}
 
@@ -464,8 +473,20 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, co
 	);
 	GhostTopLeft = Candidate;
 	int32 Overlap = INDEX_NONE;
+	// bounds
+	bGhostOutOfBounds = (Candidate.X < 0 || Candidate.Y < 0 || Candidate.X + GhostFootprint.X > Bag->GridSize.X || Candidate.Y + GhostFootprint.Y > Bag->GridSize.Y);
 	bGhostPlacementValid = EvaluateGhostPlacement(Candidate, Overlap);
 	GhostOverlapIndex = Overlap;
+	if (LastGhostTopLeft != GhostTopLeft || bLastGhostValid != bGhostPlacementValid || bLastGhostOutOfBounds != bGhostOutOfBounds)
+	{
+		LastGhostTopLeft = GhostTopLeft;
+		bLastGhostValid = bGhostPlacementValid;
+		bLastGhostOutOfBounds = bGhostOutOfBounds;
+		if (OnGhostPlacementChanged.IsBound())
+		{
+			OnGhostPlacementChanged.Execute(GhostTopLeft, bGhostPlacementValid, bGhostOutOfBounds);
+		}
+	}
 }
 
 bool SInventoryGridWidget::EvaluateGhostPlacement(const FIntPoint& TopLeft, int32& OutOverlapIdx) const

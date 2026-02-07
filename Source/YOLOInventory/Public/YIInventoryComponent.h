@@ -96,6 +96,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
 	TSoftClassPtr<UTradingScreenWidget> TradingScreenClass;
 
+	/** Optional per-inventory SFX library for item-driven UI sounds. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Optional per-inventory SFX library for item-driven UI sounds"))
+	TSoftObjectPtr<class UYIItemSFXLibrary> ItemSFXLibrary;
+
+	/** Master toggle for all inventory UI sounds (drag/hover/drop/etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Master toggle for inventory UI sounds"))
+	bool bEnableInventorySounds = true;
+
 	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
 	UFUNCTION(BlueprintCallable, Category="UI")
 	UInventoryScreenWidget* OpenInventoryScreen();

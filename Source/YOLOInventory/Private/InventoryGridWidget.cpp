@@ -13,6 +13,7 @@
 #include "YITradeInteractionComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "YIItemPickup.h"
+#include "YIItemSFXLibrary.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
@@ -47,6 +48,54 @@ static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 		Net.Attributes.Add(Entry);
 	}
 	return Net;
+}
+
+static const UYIItemSFXLibrary* ResolveSFXLibrary(const UInventoryGridWidget* Grid)
+{
+	if (!Grid)
+	{
+		return nullptr;
+	}
+	if (Grid->ItemSFXLibrary.IsValid())
+	{
+		return Grid->ItemSFXLibrary.Get();
+	}
+	if (Grid->ItemSFXLibrary.ToSoftObjectPath().IsValid())
+	{
+		return Grid->ItemSFXLibrary.LoadSynchronous();
+	}
+	if (Grid->Bag)
+	{
+		if (const UYIInventoryComponent* OwnerComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>())
+		{
+			if (OwnerComp->ItemSFXLibrary.IsValid())
+			{
+				return OwnerComp->ItemSFXLibrary.Get();
+			}
+			if (OwnerComp->ItemSFXLibrary.ToSoftObjectPath().IsValid())
+			{
+				return OwnerComp->ItemSFXLibrary.LoadSynchronous();
+			}
+		}
+	}
+	return nullptr;
+}
+
+static UYIItemDefinition* ResolveItemDefForSFX(const FYIItemInstance& Item, bool bAllowLoad)
+{
+	UYIItemDefinition* Def = Item.Definition.Get();
+	if (!Def && bAllowLoad && Item.Definition.ToSoftObjectPath().IsValid())
+	{
+		Def = Item.Definition.LoadSynchronous();
+	}
+	return Def;
+}
+
+static USoundBase* ResolveItemSoundForEvent(const UInventoryGridWidget* Grid, const FYIItemInstance& Item, EYIItemSFXEvent Event)
+{
+	const UYIItemSFXLibrary* Library = ResolveSFXLibrary(Grid);
+	UYIItemDefinition* Def = ResolveItemDefForSFX(Item, Grid ? Grid->bLoadDefinitionForSFX : false);
+	return UYIInventoryBlueprintLibrary::ResolveItemSFXSound(Def, Library, Event);
 }
 
 // Check if placing a footprint at Pos would overlap at most one other item (ignoring SourceIdx). Returns that item index or INDEX_NONE.
@@ -127,6 +176,14 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		.OnHoveredItemChanged(SInventoryGridWidget::FOnHoveredItemChanged::CreateLambda([WeakThis = TWeakObjectPtr<UInventoryGridWidget>(this)](int32 Idx)
 		{
 			if (WeakThis.IsValid()) { WeakThis->HandleHoverChanged(Idx); }
+		}))
+		.OnHoveredCellChanged(SInventoryGridWidget::FOnHoveredCellChanged::CreateLambda([WeakThis = TWeakObjectPtr<UInventoryGridWidget>(this)](const FIntPoint& Cell)
+		{
+			if (WeakThis.IsValid()) { WeakThis->HandleHoverCellChanged(Cell); }
+		}))
+		.OnGhostPlacementChanged(SInventoryGridWidget::FOnGhostPlacementChanged::CreateLambda([WeakThis = TWeakObjectPtr<UInventoryGridWidget>(this)](const FIntPoint& Cell, bool bValid, bool bOutOfBounds)
+		{
+			if (WeakThis.IsValid()) { WeakThis->HandleGhostPlacementChanged(Cell, bValid, bOutOfBounds); }
 		}))
 		.OnSelectedCellChanged(SInventoryGridWidget::FOnSelectedCellChanged::CreateLambda([WeakThis = TWeakObjectPtr<UInventoryGridWidget>(this)](const FIntPoint& Cell)
 		{
@@ -374,17 +431,133 @@ void UInventoryGridWidget::HandleHoverChanged(int32 HoveredIndex)
 
 	if (PrevHovered != HoveredIndex)
 	{
-		if (bHasItem && HoverSlotSound)
+		if (IsHoverSoundEnabled() && bHasItem && Bag && Bag->Items.IsValidIndex(HoveredIndex))
 		{
-			UGameplayStatics::PlaySound2D(this, HoverSlotSound);
-		}
-		else if (!bHasItem && HoverEmptySound)
-		{
-			UGameplayStatics::PlaySound2D(this, HoverEmptySound);
+			if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, Bag->Items[HoveredIndex].Item, EYIItemSFXEvent::HoverItem))
+			{
+				UGameplayStatics::PlaySound2D(this, ItemSound);
+			}
+			else if (HoverSlotSound)
+			{
+				UGameplayStatics::PlaySound2D(this, HoverSlotSound);
+			}
 		}
 	}
 	UpdateBoundTooltip();
 	// Optionally refresh tooltip if there is no explicit selection but we want hover to drive tooltip (kept to selection-only for now)
+}
+
+void UInventoryGridWidget::HandleHoverCellChanged(const FIntPoint& NewCell)
+{
+	const FIntPoint PrevCell = HoveredCellCached;
+	HoveredCellCached = NewCell;
+
+	if (!bEnableCellHover || PrevCell == NewCell)
+	{
+		return;
+	}
+
+	if (GInventoryDrag.bActive)
+	{
+		return;
+	}
+
+	if (!Bag)
+	{
+		return;
+	}
+
+	const int32 HoverIdx = GetItemIndexAtCell(Bag, NewCell);
+	// Only play empty-slot hover sounds when we are hovering an empty cell.
+	if (IsHoverSoundEnabled() && HoverIdx == INDEX_NONE && HoverEmptySound)
+	{
+		UGameplayStatics::PlaySound2D(this, HoverEmptySound);
+	}
+}
+
+void UInventoryGridWidget::HandleGhostPlacementChanged(const FIntPoint& TopLeftCell, bool bValid, bool bOutOfBounds)
+{
+	(void)TopLeftCell;
+	// Only play ghost highlight SFX when dragging.
+	if (!GInventoryDrag.bActive)
+	{
+		return;
+	}
+	if (!IsDragHoverSoundEnabled())
+	{
+		return;
+	}
+	if (bOutOfBounds && !bPlayDragHoverOutOfBounds)
+	{
+		return;
+	}
+
+	if (bValid)
+	{
+		if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::HoverItem))
+		{
+			UGameplayStatics::PlaySound2D(this, ItemSound);
+		}
+		else if (DragHoverSound)
+		{
+			UGameplayStatics::PlaySound2D(this, DragHoverSound);
+		}
+		else if (HoverEmptySound)
+		{
+			UGameplayStatics::PlaySound2D(this, HoverEmptySound);
+		}
+	}
+	else
+	{
+		if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::InvalidMove))
+		{
+			UGameplayStatics::PlaySound2D(this, ItemSound);
+		}
+		else if (DragHoverInvalidSound)
+		{
+			UGameplayStatics::PlaySound2D(this, DragHoverInvalidSound);
+		}
+		else if (IsInvalidSoundEnabled() && InvalidMoveSound)
+		{
+			UGameplayStatics::PlaySound2D(this, InvalidMoveSound);
+		}
+	}
+}
+
+bool UInventoryGridWidget::IsInventorySoundEnabled() const
+{
+	if (!bEnableInventorySounds)
+	{
+		return false;
+	}
+	if (Bag)
+	{
+		if (const UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>())
+		{
+			return OwnerComp->bEnableInventorySounds;
+		}
+	}
+	return true;
+}
+
+bool UInventoryGridWidget::IsHoverSoundEnabled() const
+{
+	return IsInventorySoundEnabled() && bEnableHoverSounds;
+}
+
+bool UInventoryGridWidget::IsDragSoundEnabled() const
+{
+	return IsInventorySoundEnabled() && bEnableDragSounds;
+}
+
+bool UInventoryGridWidget::IsDragHoverSoundEnabled() const
+{
+	return IsInventorySoundEnabled() && bEnableDragHoverSounds;
+}
+
+bool UInventoryGridWidget::IsInvalidSoundEnabled() const
+{
+	return IsInventorySoundEnabled() && bEnableInvalidMoveSounds;
 }
 
 bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
@@ -406,9 +579,16 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	GInventoryDrag.bFromExchange = false;
 	// Notify listeners
 	OnItemDragStarted.Broadcast(this, Idx);
-	if (DragStartSound)
+	if (IsDragSoundEnabled())
 	{
-		UGameplayStatics::PlaySound2D(this, DragStartSound);
+		if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::DragStart))
+		{
+			UGameplayStatics::PlaySound2D(this, ItemSound);
+		}
+		else if (DragStartSound)
+		{
+			UGameplayStatics::PlaySound2D(this, DragStartSound);
+		}
 	}
 	// Clear selection so UI reflects pickup
 	SetSelectedCell(FIntPoint(-1, -1));
@@ -437,9 +617,32 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 	auto PlayDropSound = [this]()
 	{
-		if (DropSound)
+		if (!IsDragSoundEnabled())
+		{
+			return;
+		}
+		if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::Drop))
+		{
+			UGameplayStatics::PlaySound2D(this, ItemSound);
+		}
+		else if (DropSound)
 		{
 			UGameplayStatics::PlaySound2D(this, DropSound);
+		}
+	};
+	auto PlayInvalidMoveSound = [this]()
+	{
+		if (!IsInvalidSoundEnabled())
+		{
+			return;
+		}
+		if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::InvalidMove))
+		{
+			UGameplayStatics::PlaySound2D(this, ItemSound);
+		}
+		else if (InvalidMoveSound)
+		{
+			UGameplayStatics::PlaySound2D(this, InvalidMoveSound);
 		}
 	};
 
@@ -449,6 +652,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		if (!bAllowSelfMove)
 		{
 			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			PlayInvalidMoveSound();
 			return false;
 		}
 		// When pickup removed the item, SourceIndex is INDEX_NONE and the bag no longer contains it. Treat as add-at-cell or swap.
@@ -476,6 +680,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			if (!FindSingleOverlap(Bag, INDEX_NONE, Cell, Foot, Victim) || Victim == INDEX_NONE)
 			{
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			// Displace victim: remove it from the bag and continue dragging it (no swap/backfill)
@@ -483,6 +688,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			if (!Bag->RemoveItem(Victim))
 			{
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			// Place dragged item at Cell (exact)
@@ -497,6 +703,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				SavedVictim.Pos = SavedVictim.Pos; // unchanged
 				if (OwnerComp) OwnerComp->AddBagItem(SavedVictim); else Bag->AddBagItem(SavedVictim);
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			OnItemDropped.Broadcast(this, INDEX_NONE, Cell, true);
@@ -518,6 +725,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
 			{
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			// Allow displacing a single overlapped item if the footprint only hits that one
@@ -527,6 +735,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			if (!FindSingleOverlap(Bag, GInventoryDrag.SourceIndex, Cell, Foot, Victim) || Victim == INDEX_NONE)
 			{
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			// Remove victim, adjust source index if needed, then attempt move again
@@ -542,6 +751,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			Bag->Items.Insert(SavedVictim, Victim);
 			Bag->MarkPackageDirty(); Bag->OnChanged.Broadcast();
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				PlayInvalidMoveSound();
 				return false;
 			}
 			// Start a new drag with the displaced item
@@ -599,6 +809,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				}
 			}
 			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			PlayInvalidMoveSound();
 			return false;
 		}
 	}
@@ -607,6 +818,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
 	{
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
 		return false;
 	}
 	
@@ -641,6 +853,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 					// Remove from source failed; undo the add
 					Bag->RemoveItem(NewIdx);
 					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+					PlayInvalidMoveSound();
 					GInventoryDrag.Reset();
 					return false;
 				}
@@ -663,6 +876,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (!FindSingleOverlap(Bag, INDEX_NONE, Cell, Foot, VictimIdx) || VictimIdx == INDEX_NONE)
 	{
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
 		return false;
 	}
 
@@ -723,11 +937,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 						if (!bRemoved)
 						{
 							// Source removal failed; FULLY REVERT the destination change
-							Bag->Items[VictimIdx] = SavedVictim;
-							Bag->MarkPackageDirty();
-							Bag->OnChanged.Broadcast();
+					Bag->Items[VictimIdx] = SavedVictim;
+					Bag->MarkPackageDirty();
+					Bag->OnChanged.Broadcast();
 					UE_LOG(LogTemp, Error, TEXT("Inventory Swap: Failed to remove original dragged item from source. Reverting. DestCount=%d"), Bag->Items.Num());
 					OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
+					PlayInvalidMoveSound();
 					GInventoryDrag.Reset();
 					return false;
 				}
@@ -766,9 +981,16 @@ void UInventoryGridWidget::CancelDrag()
 {
 	if (GInventoryDrag.bActive)
 	{
-		if (CancelDragSound)
+		if (IsDragSoundEnabled())
 		{
-			UGameplayStatics::PlaySound2D(this, CancelDragSound);
+			if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::Cancel))
+			{
+				UGameplayStatics::PlaySound2D(this, ItemSound);
+			}
+			else if (CancelDragSound)
+			{
+				UGameplayStatics::PlaySound2D(this, CancelDragSound);
+			}
 		}
 
 		bool bDroppedToWorld = false;
@@ -828,7 +1050,7 @@ void UInventoryGridWidget::CancelDrag()
 				}
 			}
 		}
-		OnItemDragCancelled.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.Item, bDroppedToWorld);
+		OnItemDragCancelled.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.Item.Item, bDroppedToWorld);
 		GInventoryDrag.Reset();
 	}
 }

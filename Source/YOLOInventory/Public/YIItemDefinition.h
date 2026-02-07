@@ -9,6 +9,7 @@
 #include "YIEvolutionPath.h"
 #include "YIItemVariant.h"
 #include "YIScriptGraph.h"
+#include "YIItemSFXLibrary.h"
 #include "YIItemDefinition.generated.h"
 
 /**
@@ -49,6 +50,14 @@ public:
 	/** Designer-controlled rarity tag, e.g., Rarity.Common. Use tags so designers can customize rarity sets and UI color mapping. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Classification", meta=(ToolTip="Designer-controlled rarity tag (e.g., Rarity.Common)"))
 	FGameplayTag RarityTag;
+
+	/** Optional audio tag used to resolve item SFX (falls back to ItemType if unset). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio", meta=(ToolTip="Optional audio tag used to resolve item SFX (falls back to ItemType if unset)"))
+	FGameplayTag AudioTag;
+
+	/** Optional per-item SFX override (highest priority). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio", meta=(ToolTip="Optional per-item SFX override (highest priority)"))
+	TObjectPtr<UYIItemSFXProfile> SoundProfileOverride = nullptr;
 
 	// Stacking/uniqueness
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stacking", meta=(ToolTip="Whether multiple counts of this item can be stacked in a single slot"))

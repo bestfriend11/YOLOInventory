@@ -11,6 +11,7 @@ class UAbilitySystemComponent;
 struct FYIRequirementContext;
 class AYITradeSessionActor;
 class USoundBase;
+class UYIItemSFXLibrary;
 enum class ETradeSide : uint8;
 
 /**
@@ -49,31 +50,70 @@ public:
 
 	/** If true, the grid will track hover and draw hover highlights. Disabled by default for gamepad-first setups. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="Enable per-cell hover tracking/highlight"))
-	bool bEnableCellHover = false;
+	bool bEnableCellHover = true;
 
 	/** If true, mouse clicks will update selection. Disable for mouse-driven PC inventories that don't need grid selection. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Input", meta=(ToolTip="Allow mouse clicks to change the selected cell"))
 	bool bEnableMouseSelection = false;
 
 	/** Optional SFX when drag starts. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|General", meta=(ToolTip="Enable all inventory UI sounds for this grid"))
+	bool bEnableInventorySounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Hover", meta=(ToolTip="Enable hover sounds for slots"))
+	bool bEnableHoverSounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag", meta=(ToolTip="Enable drag highlight hover sounds"))
+	bool bEnableDragHoverSounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag", meta=(ToolTip="Enable drag start/drop/cancel sounds"))
+	bool bEnableDragSounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Invalid", meta=(ToolTip="Enable invalid move sounds"))
+	bool bEnableInvalidMoveSounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag", meta=(ToolTip="Play drag hover sounds even when the footprint is out of bounds"))
+	bool bPlayDragHoverOutOfBounds = false;
+
+	/** Optional SFX when drag starts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag")
 	TObjectPtr<USoundBase> DragStartSound = nullptr;
 
 	/** Optional SFX when a drop succeeds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag")
 	TObjectPtr<USoundBase> DropSound = nullptr;
 
 	/** Optional SFX when a drag is canceled. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag")
 	TObjectPtr<USoundBase> CancelDragSound = nullptr;
 
 	/** Optional SFX when hovering a slot containing an item. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Hover")
 	TObjectPtr<USoundBase> HoverSlotSound = nullptr;
 
 	/** Optional SFX when hovering an empty slot. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Hover")
 	TObjectPtr<USoundBase> HoverEmptySound = nullptr;
+
+	/** Optional SFX when dragging over a valid highlighted cell. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag")
+	TObjectPtr<USoundBase> DragHoverSound = nullptr;
+
+	/** Optional SFX when dragging over an invalid highlighted cell. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Drag")
+	TObjectPtr<USoundBase> DragHoverInvalidSound = nullptr;
+
+	/** Optional SFX when a move/drop is invalid. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|Invalid")
+	TObjectPtr<USoundBase> InvalidMoveSound = nullptr;
+
+	/** Optional SFX library for per-item sounds (override for this grid). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|General")
+	TSoftObjectPtr<UYIItemSFXLibrary> ItemSFXLibrary;
+
+	/** Allow loading definition assets for SFX lookup when not already loaded. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Audio|General")
+	bool bLoadDefinitionForSFX = true;
 
 	/** Optional ASC/tags/XP for evaluating requirements in tooltips. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Tooltip", meta=(ToolTip="Ability System used to evaluate item requirements for tooltips"))
@@ -222,7 +262,7 @@ public:
 	FOnItemDropped OnItemDropped;
 
 	/** Fired when a drag is canceled; bDroppedToWorld indicates a forced drop due to no fit. */
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemDragCancelled, UInventoryGridWidget*, SourceGrid, FYIBagItem, Item, bool, bDroppedToWorld);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnItemDragCancelled, UInventoryGridWidget*, SourceGrid, FYIItemInstance, Item, bool, bDroppedToWorld);
 	UPROPERTY(BlueprintAssignable, Category="Inventory")
 	FOnItemDragCancelled OnItemDragCancelled;
 
@@ -293,6 +333,7 @@ private:
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* CachedBag = nullptr;
 	int32 HoveredItemIndexCached = INDEX_NONE;
+	FIntPoint HoveredCellCached = FIntPoint(-1, -1);
 
 	// Helper to update the bound tooltip when selection changes
 	void UpdateBoundTooltip();
@@ -303,4 +344,12 @@ private:
 	// Internal handlers invoked from Slate callbacks
 	void HandleSelectionChanged(const FIntPoint& NewCell);
 	void HandleHoverChanged(int32 HoveredIndex);
+	void HandleHoverCellChanged(const FIntPoint& NewCell);
+	void HandleGhostPlacementChanged(const FIntPoint& TopLeftCell, bool bValid, bool bOutOfBounds);
+
+	bool IsInventorySoundEnabled() const;
+	bool IsHoverSoundEnabled() const;
+	bool IsDragSoundEnabled() const;
+	bool IsDragHoverSoundEnabled() const;
+	bool IsInvalidSoundEnabled() const;
 };

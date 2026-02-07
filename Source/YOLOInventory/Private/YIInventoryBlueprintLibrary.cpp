@@ -18,6 +18,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "GameplayTagsManager.h"
 #include "GameFramework/PlayerState.h"
 #include "YIItemRegistrySubsystem.h"
 #include "YITradeSessionActor.h"
@@ -836,4 +837,58 @@ AYITradeSessionActor* UYIInventoryBlueprintLibrary::StartTradeSession(UObject* W
 	Session->ForceNetUpdate();
 	Session->RefreshInventoryViews(); // initial full inventory mirrors
 	return Session;
+}
+
+const UYIItemSFXProfile* UYIInventoryBlueprintLibrary::ResolveItemSFXProfile(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library)
+{
+	if (!Library)
+	{
+		return nullptr;
+	}
+	if (Definition && Definition->SoundProfileOverride)
+	{
+		return Definition->SoundProfileOverride;
+	}
+
+	FGameplayTag Tag;
+	if (Definition)
+	{
+		Tag = Definition->AudioTag.IsValid() ? Definition->AudioTag : Definition->ItemType;
+	}
+
+	if (Tag.IsValid())
+	{
+		if (const TObjectPtr<UYIItemSFXProfile>* Found = Library->TagToProfile.Find(Tag))
+		{
+			return Found->Get();
+		}
+		const FGameplayTagContainer Parents = Tag.GetGameplayTagParents();
+		for (const FGameplayTag& Parent : Parents)
+		{
+			if (const TObjectPtr<UYIItemSFXProfile>* FoundParent = Library->TagToProfile.Find(Parent))
+			{
+				return FoundParent->Get();
+			}
+		}
+	}
+
+	return Library->DefaultProfile;
+}
+
+USoundBase* UYIInventoryBlueprintLibrary::ResolveItemSFXSound(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library, EYIItemSFXEvent Event)
+{
+	const UYIItemSFXProfile* Profile = ResolveItemSFXProfile(Definition, Library);
+	if (!Profile)
+	{
+		return nullptr;
+	}
+	switch (Event)
+	{
+		case EYIItemSFXEvent::HoverItem: return Profile->HoverItemSound;
+		case EYIItemSFXEvent::DragStart: return Profile->DragStartSound;
+		case EYIItemSFXEvent::Drop: return Profile->DropSound;
+		case EYIItemSFXEvent::Cancel: return Profile->CancelSound;
+		case EYIItemSFXEvent::InvalidMove: return Profile->InvalidMoveSound;
+		default: return nullptr;
+	}
 }

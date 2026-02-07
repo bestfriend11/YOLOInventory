@@ -4,6 +4,7 @@
 #include "GameplayTagContainer.h"
 #include "YIInventoryTypes.h"
 #include "YIItemInstance.h"
+#include "YIItemSFXLibrary.h"
 #include "YIInventoryBlueprintLibrary.generated.h"
 
 class UYIInventoryBag;
@@ -11,6 +12,9 @@ class UYIItemDefinition;
 class UTexture2D;
 class AYIItemPickup;
 class AYITradeSessionActor;
+class UYIItemSFXProfile;
+class UYIItemSFXLibrary;
+class USoundBase;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYITooltipRequirementLine
@@ -167,4 +171,12 @@ public:
 	/** Start a trade session between initiator (player pawn/controller) and target (player pawn or NPC). Server-only; returns the spawned session or nullptr. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade", meta=(WorldContext="WorldContextObject", BlueprintAuthorityOnly="true"))
 	static class AYITradeSessionActor* StartTradeSession(UObject* WorldContextObject, AActor* Initiator, AActor* Target, bool bTargetIsNPC);
+
+	/** Resolve item SFX profile based on item definition + library (override > tag > parent tags > default). */
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Audio")
+	static const UYIItemSFXProfile* ResolveItemSFXProfile(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library);
+
+	/** Resolve a specific SFX sound for an item + event. Returns nullptr if none. */
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Audio")
+	static USoundBase* ResolveItemSFXSound(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library, EYIItemSFXEvent Event);
 };
