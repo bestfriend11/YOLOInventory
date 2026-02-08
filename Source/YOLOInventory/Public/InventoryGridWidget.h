@@ -13,6 +13,7 @@ class AYITradeSessionActor;
 class USoundBase;
 class UYIItemSFXLibrary;
 enum class ETradeSide : uint8;
+class UYIShopComponent;
 
 /**
  * UInventoryGridWidget
@@ -292,6 +293,9 @@ public:
 	/** Set trade context (session + side) so cross-bag drops can route through server. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
 	void SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide);
+	/** Assign shop context for drag/drop purchases or selling. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Shop")
+	void SetShopContext(UYIShopComponent* InShop, bool bStockGrid);
 	/** Fill OutData for the currently selected cell if an item exists there (returns true on success). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get tooltip data for the currently selected cell"))
 	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext) const;
@@ -352,4 +356,9 @@ private:
 	bool IsDragSoundEnabled() const;
 	bool IsDragHoverSoundEnabled() const;
 	bool IsInvalidSoundEnabled() const;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UYIShopComponent> ActiveShopComponent = nullptr;
+	UPROPERTY(Transient)
+	bool bIsShopStockGrid = false;
 };

@@ -8,6 +8,9 @@
 #include "YIPlayerInventoryStateComponent.h"
 #include "YIItemDefinition.h"
 #include "YIItemBlueprintLibrary.h"
+#include "YITradeInteractionComponent.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/PlayerController.h"
 
 UYIShopComponent::UYIShopComponent()
 {
@@ -22,7 +25,10 @@ void UYIShopComponent::BeginPlay()
     if (GetOwner() && GetOwner()->HasAuthority())
     {
         BuildRuntimeStock();
-        RefreshMirror();
+        if (StockMode == EYIShopStockMode::SharedStock)
+        {
+            RefreshMirror();
+        }
         if (RestockInterval > 0.f)
         {
             GetWorld()->GetTimerManager().SetTimer(RestockTimer, this, &UYIShopComponent::BuildRuntimeStock, RestockInterval, true);
@@ -34,22 +40,20 @@ void UYIShopComponent::BuildRuntimeStock()
 {
     if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 
-    RuntimeStock = nullptr;
-    if (StockTemplate.IsValid())
+    RuntimeStock = CreateStockInstance();
+
+    if (StockMode == EYIShopStockMode::PerPlayerStock)
     {
-        RuntimeStock = DuplicateObject<UYIInventoryBag>(StockTemplate.Get(), this);
+        for (auto& Pair : PlayerStock)
+        {
+            Pair.Value = CreateStockInstance();
+        }
     }
-    else if (StockTemplate.ToSoftObjectPath().IsValid())
+
+    if (StockMode == EYIShopStockMode::SharedStock)
     {
-        RuntimeStock = DuplicateObject<UYIInventoryBag>(StockTemplate.LoadSynchronous(), this);
+        RefreshMirror();
     }
-    if (!RuntimeStock)
-    {
-        // create empty
-        RuntimeStock = NewObject<UYIInventoryBag>(this);
-        RuntimeStock->GridSize = FIntPoint(8,6);
-    }
-    RefreshMirror();
 }
 
 const FYIShopListing* UYIShopComponent::FindListing(int64 ItemCode) const
@@ -81,15 +85,19 @@ bool UYIShopComponent::ConsumePrice(UYIPlayerInventoryStateComponent* BuyerState
 
 void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
 {
-    if (!GetOwner() || !GetOwner()->HasAuthority() || !RuntimeStock || !BuyerInv || Count <= 0) return;
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !BuyerInv || Count <= 0) return;
 
-    if (!RuntimeStock->Items.IsValidIndex(StockIndex)) return;
-    FYIBagItem& StockItem = RuntimeStock->Items[StockIndex];
+    UYIPlayerInventoryStateComponent* BuyerState = BuyerInv->GetOwner() ? BuyerInv->GetOwner()->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
+    APlayerState* BuyerPS = BuyerState ? Cast<APlayerState>(BuyerState->GetOwner()) : nullptr;
+    UYIInventoryBag* StockBag = GetStockForPlayer(BuyerPS);
+    if (!StockBag) return;
+
+    if (!StockBag->Items.IsValidIndex(StockIndex)) return;
+    FYIBagItem& StockItem = StockBag->Items[StockIndex];
     if (StockItem.Item.Count < Count) return;
 
     const int64 Code = StockItem.Item.Definition.IsValid() ? StockItem.Item.Definition.Get()->UniqueCode : 0;
 
-    UYIPlayerInventoryStateComponent* BuyerState = BuyerInv->GetOwner() ? BuyerInv->GetOwner()->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
     if (!ConsumePrice(BuyerState, Code, Count)) return;
 
     // Slice and add
@@ -116,15 +124,117 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     StockItem.Item.Count -= Count;
     if (StockItem.Item.Count <= 0)
     {
-        RuntimeStock->RemoveItem(StockIndex);
+        StockBag->RemoveItem(StockIndex);
     }
     BuyerInv->SyncNetState();
-    RefreshMirror();
+    if (StockMode == EYIShopStockMode::SharedStock)
+    {
+        RefreshMirror();
+    }
+    else
+    {
+        NotifyStockForPlayer(BuyerPS);
+    }
 }
 
 bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
 {
     return true; // lightweight; implementation does full checks
+}
+
+void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority() || !SellerInv || Count <= 0 || !bAllowSelling) return;
+
+    UYIPlayerInventoryStateComponent* SellerState = SellerInv->GetOwner() ? SellerInv->GetOwner()->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
+    APlayerState* SellerPS = SellerState ? Cast<APlayerState>(SellerState->GetOwner()) : nullptr;
+
+    UYIInventoryBag* SellerBag = SellerInv->GetBag();
+    if (!SellerBag || !SellerBag->Items.IsValidIndex(SourceIndex)) return;
+
+    FYIBagItem OriginalItem = SellerBag->Items[SourceIndex];
+    if (OriginalItem.Item.Count < Count) return;
+
+    const int64 Code = OriginalItem.Item.Definition.IsValid() ? OriginalItem.Item.Definition.Get()->UniqueCode : 0;
+    const FYIShopListing* Listing = FindListing(Code);
+    if (!Listing && !bAllowSellingUnlisted)
+    {
+        return;
+    }
+
+    // Remove or reduce from seller bag first (authority).
+    if (OriginalItem.Item.Count == Count)
+    {
+        if (!SellerBag->RemoveItem(SourceIndex)) return;
+    }
+    else
+    {
+        SellerBag->Items[SourceIndex].Item.Count -= Count;
+        SellerBag->OnChanged.Broadcast();
+    }
+
+    // Add to shop stock (shared or per-player).
+    UYIInventoryBag* StockBag = GetStockForPlayer(SellerPS);
+    if (!StockBag)
+    {
+        // Restore seller item on failure.
+        if (OriginalItem.Item.Count == Count)
+        {
+            SellerBag->AddBagItem(OriginalItem);
+        }
+        else
+        {
+            SellerBag->Items[SourceIndex].Item.Count += Count;
+            SellerBag->OnChanged.Broadcast();
+        }
+        return;
+    }
+
+    FYIBagItem Slice = OriginalItem;
+    Slice.Item.Count = Count;
+    const int32 Added = StockBag->AddBagItem(Slice);
+    if (Added == INDEX_NONE)
+    {
+        // Restore seller item on failure.
+        if (OriginalItem.Item.Count == Count)
+        {
+            SellerBag->AddBagItem(OriginalItem);
+        }
+        else
+        {
+            SellerBag->Items[SourceIndex].Item.Count += Count;
+            SellerBag->OnChanged.Broadcast();
+        }
+        return;
+    }
+
+    // Pay seller if listing exists.
+    if (SellerState && Listing)
+    {
+        for (const FYIShopPrice& Price : Listing->Prices)
+        {
+            const int64 Pay = static_cast<int64>(Price.Amount * Count * SellPriceMultiplier);
+            if (Pay > 0)
+            {
+                SellerState->AddResource(Price.Resource, Pay);
+            }
+        }
+    }
+
+    SellerInv->SyncNetState();
+    if (StockMode == EYIShopStockMode::SharedStock)
+    {
+        RefreshMirror();
+    }
+    else
+    {
+        NotifyStockForPlayer(SellerPS);
+    }
+}
+
+bool UYIShopComponent::ServerSellItem_Validate(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
+{
+    return true;
 }
 
 void UYIShopComponent::RefreshMirror()
@@ -134,25 +244,7 @@ void UYIShopComponent::RefreshMirror()
     StockMirrorSize = FIntPoint(8,6);
     if (RuntimeStock)
     {
-        StockMirrorSize = RuntimeStock->GridSize;
-        for (const FYIBagItem& It : RuntimeStock->Items)
-        {
-            if (It.Item.Count <= 0) continue;
-            FYINetBagItem Net;
-            Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
-            if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
-            {
-                if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
-                {
-                    Net.Code = Def->UniqueCode;
-                }
-            }
-            Net.Count = It.Item.Count;
-            Net.Pos = It.Pos;
-            Net.Size = It.Size;
-            Net.CustomStackKey = It.Item.CustomStackKey;
-            StockMirror.Add(Net);
-        }
+        GetStockMirrorForBag(RuntimeStock, StockMirror, StockMirrorSize);
     }
     // Push
     if (AActor* OwnerActor = GetOwner())
@@ -171,4 +263,94 @@ void UYIShopComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(UYIShopComponent, StockMirror);
     DOREPLIFETIME(UYIShopComponent, StockMirrorSize);
+}
+
+UYIInventoryBag* UYIShopComponent::CreateStockInstance() const
+{
+    if (StockTemplate.IsValid())
+    {
+        return DuplicateObject<UYIInventoryBag>(StockTemplate.Get(), const_cast<UYIShopComponent*>(this));
+    }
+    if (StockTemplate.ToSoftObjectPath().IsValid())
+    {
+        if (UYIInventoryBag* Loaded = StockTemplate.LoadSynchronous())
+        {
+            return DuplicateObject<UYIInventoryBag>(Loaded, const_cast<UYIShopComponent*>(this));
+        }
+    }
+    UYIInventoryBag* NewBag = NewObject<UYIInventoryBag>(const_cast<UYIShopComponent*>(this));
+    NewBag->GridSize = FIntPoint(8,6);
+    return NewBag;
+}
+
+UYIInventoryBag* UYIShopComponent::GetStockForPlayer(APlayerState* PlayerState)
+{
+    if (StockMode == EYIShopStockMode::SharedStock)
+    {
+        return RuntimeStock;
+    }
+    if (StockMode == EYIShopStockMode::LocalOnly)
+    {
+        return RuntimeStock;
+    }
+    if (!PlayerState)
+    {
+        return RuntimeStock;
+    }
+    if (TObjectPtr<UYIInventoryBag>* Found = PlayerStock.Find(PlayerState))
+    {
+        return Found->Get();
+    }
+    UYIInventoryBag* NewBag = CreateStockInstance();
+    PlayerStock.Add(PlayerState, NewBag);
+    return NewBag;
+}
+
+void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const
+{
+    OutItems.Reset();
+    OutSize = FIntPoint(8,6);
+    if (!Bag) return;
+
+    OutSize = Bag->GridSize;
+    for (const FYIBagItem& It : Bag->Items)
+    {
+        if (It.Item.Count <= 0) continue;
+        FYINetBagItem Net;
+        Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
+        if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
+        {
+            if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
+            {
+                Net.Code = Def->UniqueCode;
+            }
+        }
+        Net.Count = It.Item.Count;
+        Net.Pos = It.Pos;
+        Net.Size = It.Size;
+        Net.CustomStackKey = It.Item.CustomStackKey;
+        OutItems.Add(Net);
+    }
+}
+
+void UYIShopComponent::GetStockMirrorForPlayer(APlayerState* PlayerState, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize)
+{
+	const UYIInventoryBag* StockBag = GetStockForPlayer(PlayerState);
+	GetStockMirrorForBag(StockBag, OutItems, OutSize);
+}
+
+void UYIShopComponent::NotifyStockForPlayer(APlayerState* PlayerState)
+{
+    if (!PlayerState) return;
+    APlayerController* PC = Cast<APlayerController>(PlayerState->GetOwner());
+    if (!PC) return;
+
+    UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>();
+    if (!TradeComp) return;
+
+    TArray<FYINetBagItem> OutItems;
+    FIntPoint OutSize = FIntPoint(0,0);
+    UYIInventoryBag* StockBag = GetStockForPlayer(PlayerState);
+    GetStockMirrorForBag(StockBag, OutItems, OutSize);
+    TradeComp->Client_ShopStockReady(this, OutItems, OutSize);
 }

@@ -10,7 +10,9 @@ class AYITradeSessionActor;
 class UTradingScreenWidget;
 class UYIInventoryComponent;
 class UYIInventoryBag;
+class UYIShopComponent;
 struct FYIBagItem;
+class UShopScreenWidget;
 
 /**
  * Player-controller component that handles secure trade initiation and notifies the client UI.
@@ -45,6 +47,39 @@ public:
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade")
     void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
 
+    /** Client call: request shop stock for a given shop component. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop")
+    void RequestShop(UYIShopComponent* Shop);
+
+    /** Optional Blueprint/CPP hook to accept or reject a shop request before it is sent to the server. */
+    UFUNCTION(BlueprintNativeEvent, Category="YOLOInventory|Shop")
+    bool ValidateShopRequest(UYIShopComponent* Shop) const;
+
+    /** Fired on owning client when shop stock is ready for UI. */
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShopStockUpdated, UYIShopComponent*, Shop);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop")
+    FOnShopStockUpdated OnShopStockUpdated;
+
+    /** Latest shop stock snapshot (client-owned). */
+    UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop")
+    UYIShopComponent* CurrentShop = nullptr;
+    UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop")
+    TArray<FYINetBagItem> CurrentShopStock;
+    UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop")
+    FIntPoint CurrentShopStockSize = FIntPoint(0,0);
+
+    /** Client call: buy an item from the active shop (server authoritative). */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop")
+    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv);
+
+    /** Client RPC: push shop stock data to owning client (used by server). */
+    UFUNCTION(Client, Reliable)
+    void Client_ShopStockReady(UYIShopComponent* Shop, const TArray<FYINetBagItem>& Stock, FIntPoint Size);
+
+    /** Client call: sell an item from the player's inventory into the shop (server authoritative). */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop")
+    void RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
+
     // Bag activity delegates (local pawn)
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemAdded, int32, Index, FYIBagItem, Item);
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemRemoved, int32, Index, FYIBagItem, Item);
@@ -71,12 +106,30 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|UI")
     TSubclassOf<class UTradingScreenWidget> AutoTradeWidgetClass;
 
+    /** Auto open the shop screen on the owning client when stock is ready. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|UI")
+    bool bAutoShowShopWidget = true;
+
+    /** Widget class to spawn when bAutoShowShopWidget is true (fallback if no inventory component). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|UI")
+    TSubclassOf<UShopScreenWidget> AutoShopWidgetClass;
+
 protected:
 	virtual void BeginPlay() override;
 
 	// Server-side authority handler (keep validation lightweight to avoid disconnects)
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
+
+	// Server-side shop handler
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestShop(UYIShopComponent* Shop);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
 	/** Server: execute a transfer request during an active trade session. */
 	UFUNCTION(Server, Reliable, WithValidation)

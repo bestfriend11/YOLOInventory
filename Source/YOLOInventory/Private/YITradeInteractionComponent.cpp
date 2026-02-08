@@ -2,9 +2,11 @@
 
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIInventoryComponent.h"
+#include "YIShopComponent.h"
 #include "YIInventoryBag.h"
 #include "YITradeSessionActor.h"
 #include "TradingScreenWidget.h"
+#include "ShopScreenWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
@@ -59,6 +61,49 @@ void UYITradeInteractionComponent::RequestTradeTransfer(ETradeSide FromSide, ETr
         return;
     }
     Server_TransferItem(FromSide, ToSide, SourceIndex, DestPos, Count);
+}
+
+void UYITradeInteractionComponent::RequestShop(UYIShopComponent* Shop)
+{
+    if (!IsOwnerValidForTrade(true))
+    {
+        return;
+    }
+    if (!Shop)
+    {
+        return;
+    }
+    if (!ValidateShopRequest(Shop))
+    {
+        return;
+    }
+    Server_RequestShop(Shop);
+}
+
+void UYITradeInteractionComponent::RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+{
+    if (!IsOwnerValidForTrade(true))
+    {
+        return;
+    }
+    if (!Shop || !BuyerInv || Count <= 0)
+    {
+        return;
+    }
+    Server_RequestShopBuy(Shop, StockIndex, Count, BuyerInv);
+}
+
+void UYITradeInteractionComponent::RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
+{
+    if (!IsOwnerValidForTrade(true))
+    {
+        return;
+    }
+    if (!Shop || !SellerInv || Count <= 0)
+    {
+        return;
+    }
+    Server_RequestShopSell(Shop, SourceIndex, Count, SellerInv);
 }
 
 void UYITradeInteractionComponent::Server_RequestTrade_Implementation(AActor* Target, bool bTargetIsNPC)
@@ -126,6 +171,90 @@ bool UYITradeInteractionComponent::Server_RequestTrade_Validate(AActor* Target, 
     return IsOwnerValidForTrade(false);
 }
 
+void UYITradeInteractionComponent::Server_RequestShop_Implementation(UYIShopComponent* Shop)
+{
+    if (!IsOwnerValidForTrade(false) || !Shop)
+    {
+        return;
+    }
+
+    APlayerController* PC = GetOwningPC();
+    if (!PC || !PC->PlayerState)
+    {
+        return;
+    }
+
+    TArray<FYINetBagItem> OutItems;
+    FIntPoint OutSize = FIntPoint(0,0);
+    Shop->GetStockMirrorForPlayer(PC->PlayerState, OutItems, OutSize);
+    Client_ShopStockReady(Shop, OutItems, OutSize);
+}
+
+bool UYITradeInteractionComponent::Server_RequestShop_Validate(UYIShopComponent* Shop)
+{
+    return IsOwnerValidForTrade(false) && Shop != nullptr;
+}
+
+void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+{
+    if (!IsOwnerValidForTrade(false) || !Shop || !BuyerInv || Count <= 0)
+    {
+        return;
+    }
+
+    APlayerController* PC = GetOwningPC();
+    if (!PC || !PC->PlayerState)
+    {
+        return;
+    }
+
+    // Only allow buying into the requester's inventory.
+    if (APawn* Pawn = PC->GetPawn())
+    {
+        if (BuyerInv->GetOwner() != Pawn)
+        {
+            return;
+        }
+    }
+
+    Shop->ServerBuyItem(StockIndex, Count, BuyerInv);
+}
+
+bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+{
+    return IsOwnerValidForTrade(false) && Shop != nullptr && BuyerInv != nullptr && Count > 0;
+}
+
+void UYITradeInteractionComponent::Server_RequestShopSell_Implementation(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
+{
+    if (!IsOwnerValidForTrade(false) || !Shop || !SellerInv || Count <= 0)
+    {
+        return;
+    }
+
+    APlayerController* PC = GetOwningPC();
+    if (!PC || !PC->PlayerState)
+    {
+        return;
+    }
+
+    // Only allow selling from the requester's inventory.
+    if (APawn* Pawn = PC->GetPawn())
+    {
+        if (SellerInv->GetOwner() != Pawn)
+        {
+            return;
+        }
+    }
+
+    Shop->ServerSellItem(SourceIndex, Count, SellerInv);
+}
+
+bool UYITradeInteractionComponent::Server_RequestShopSell_Validate(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
+{
+    return IsOwnerValidForTrade(false) && Shop != nullptr && SellerInv != nullptr && Count > 0;
+}
+
 void UYITradeInteractionComponent::Server_TransferItem_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
 {
     if (!IsOwnerValidForTrade(false) || !CurrentSession)
@@ -166,6 +295,11 @@ bool UYITradeInteractionComponent::ValidateTradeRequest_Implementation(AActor* T
     return true;
 }
 
+bool UYITradeInteractionComponent::ValidateShopRequest_Implementation(UYIShopComponent* Shop) const
+{
+    return Shop != nullptr;
+}
+
 void UYITradeInteractionComponent::Client_TradeSessionStarted_Implementation(AYITradeSessionActor* Session)
 {
     // Let replicated CurrentSession + OnRep drive UI once the actor is fully resolved client-side.
@@ -178,6 +312,49 @@ void UYITradeInteractionComponent::Client_TradeSessionFailed_Implementation(cons
     if (GEngine)
     {
         GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Red, Reason.ToString());
+    }
+}
+
+void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopComponent* Shop, const TArray<FYINetBagItem>& Stock, FIntPoint Size)
+{
+    CurrentShop = Shop;
+    CurrentShopStock = Stock;
+    CurrentShopStockSize = Size;
+    OnShopStockUpdated.Broadcast(Shop);
+
+    if (bAutoShowShopWidget && GetOwningPC() && GetOwningPC()->IsLocalController())
+    {
+        if (APawn* P = GetOwningPC()->GetPawn())
+        {
+            if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+            {
+                Inv->OpenShopScreen(Shop, Inv->GetBag(), Stock, Size);
+
+                // Ensure focus/input stays on this local controller window
+                GetOwningPC()->bShowMouseCursor = true;
+                FInputModeGameAndUI Mode;
+                Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+                Mode.SetHideCursorDuringCapture(false);
+                GetOwningPC()->SetInputMode(Mode);
+                return;
+            }
+        }
+        if (AutoShopWidgetClass)
+        {
+            if (UShopScreenWidget* WidgetInst = CreateWidget<UShopScreenWidget>(GetOwningPC(), AutoShopWidgetClass))
+            {
+                WidgetInst->AddToViewport();
+                UYIInventoryBag* LocalBag = nullptr;
+                if (APawn* P = GetOwningPC()->GetPawn())
+                {
+                    if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+                    {
+                        LocalBag = Inv->GetBag();
+                    }
+                }
+                WidgetInst->SetShop(Shop, LocalBag, Stock, Size);
+            }
+        }
     }
 }
 

@@ -8,7 +8,9 @@
 class UYIInventoryBag;
 class UInventoryScreenWidget;
 class UTradingScreenWidget;
+class UShopScreenWidget;
 class AYITradeSessionActor;
+class UYIShopComponent;
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORY_API UYIInventoryComponent : public UActorComponent
@@ -96,6 +98,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
 	TSoftClassPtr<UTradingScreenWidget> TradingScreenClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	TSoftClassPtr<UShopScreenWidget> ShopScreenClass;
+
 	/** Optional per-inventory SFX library for item-driven UI sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Optional per-inventory SFX library for item-driven UI sounds"))
 	TSoftObjectPtr<class UYIItemSFXLibrary> ItemSFXLibrary;
@@ -120,6 +125,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="UI")
 	void CloseTradeScreen();
 
+	/** Open a shop screen for a shop component (client-side). */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	UShopScreenWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
+
+	/** Close the shop screen if it is open. */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	void CloseShopScreen();
+
+	/** Close all inventory-related screens (inventory/trade/shop). */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	void CloseAllScreens();
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -140,6 +157,7 @@ private:
 	FDelegateHandle BagChangedHandle;
 	TWeakObjectPtr<UInventoryScreenWidget> ActiveInventoryScreen;
 	TWeakObjectPtr<UTradingScreenWidget> ActiveTradeScreen;
+	TWeakObjectPtr<UShopScreenWidget> ActiveShopScreen;
 
 	// Cleanup delegate when component is destroyed
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;

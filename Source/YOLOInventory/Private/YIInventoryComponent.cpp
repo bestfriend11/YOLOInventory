@@ -9,11 +9,13 @@
 #include "Kismet/GameplayStatics.h"
 #include "InventoryScreenWidget.h"
 #include "TradingScreenWidget.h"
+#include "ShopScreenWidget.h"
 #include "YITradeSessionActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
+#include "YIShopComponent.h"
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -208,6 +210,7 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 	}
 	CloseInventoryScreen();
 	CloseTradeScreen();
+	CloseShopScreen();
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
@@ -517,4 +520,56 @@ void UYIInventoryComponent::CloseTradeScreen()
 		ActiveTradeScreen->RemoveFromParent();
 		ActiveTradeScreen.Reset();
 	}
+}
+
+UShopScreenWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
+{
+	if (!Shop) return nullptr;
+	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
+	if (ActiveShopScreen.IsValid())
+	{
+		ActiveShopScreen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+		return ActiveShopScreen.Get();
+	}
+
+	if (!ShopScreenClass.IsNull())
+	{
+		ShopScreenClass.LoadSynchronous();
+	}
+	if (!ShopScreenClass.IsValid()) return nullptr;
+
+	APlayerController* PC = nullptr;
+	if (APawn* Pawn = Cast<APawn>(GetOwner()))
+	{
+		PC = Cast<APlayerController>(Pawn->GetController());
+	}
+	else
+	{
+		PC = Cast<APlayerController>(GetOwner());
+	}
+	if (!PC || !PC->IsLocalController()) return nullptr;
+
+	UShopScreenWidget* Screen = CreateWidget<UShopScreenWidget>(PC, ShopScreenClass.Get());
+	if (!Screen) return nullptr;
+
+	Screen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+	Screen->AddToViewport();
+	ActiveShopScreen = Screen;
+	return Screen;
+}
+
+void UYIInventoryComponent::CloseShopScreen()
+{
+	if (ActiveShopScreen.IsValid())
+	{
+		ActiveShopScreen->RemoveFromParent();
+		ActiveShopScreen.Reset();
+	}
+}
+
+void UYIInventoryComponent::CloseAllScreens()
+{
+	CloseInventoryScreen();
+	CloseTradeScreen();
+	CloseShopScreen();
 }

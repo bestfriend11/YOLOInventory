@@ -11,6 +11,7 @@
 #include "YIRequirement.h"
 #include "YITradeSessionActor.h"
 #include "YITradeInteractionComponent.h"
+#include "YIShopComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "YIItemPickup.h"
 #include "YIItemSFXLibrary.h"
@@ -524,6 +525,12 @@ void UInventoryGridWidget::HandleGhostPlacementChanged(const FIntPoint& TopLeftC
 	}
 }
 
+void UInventoryGridWidget::SetShopContext(UYIShopComponent* InShop, bool bStockGrid)
+{
+	ActiveShopComponent = InShop;
+	bIsShopStockGrid = bStockGrid;
+}
+
 bool UInventoryGridWidget::IsInventorySoundEnabled() const
 {
 	if (!bEnableInventorySounds)
@@ -775,6 +782,71 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	FYIBagItem ToPlace = GInventoryDrag.Item;
 	ToPlace.Pos = Cell;
 	UYIInventoryComponent* SourceComp = (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag) ? GInventoryDrag.SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+
+	// If this grid participates in a shop session, route drag from shop stock to buyer inventory via shop RPCs.
+	if (ActiveShopComponent && GInventoryDrag.SourceGrid)
+	{
+		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+		if (SourceGrid->ActiveShopComponent == ActiveShopComponent)
+		{
+			// Only allow drag FROM shop stock INTO player bag.
+			if (SourceGrid->bIsShopStockGrid && !bIsShopStockGrid && GInventoryDrag.SourceIndex != INDEX_NONE)
+			{
+				APlayerController* PC = GetOwningPlayer();
+				if (!PC && GetWorld())
+				{
+					PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+				}
+				if (PC)
+				{
+					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
+					{
+						const int32 BuyCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
+						TradeComp->RequestShopBuy(ActiveShopComponent, GInventoryDrag.SourceIndex, BuyCount, OwnerComp);
+						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+						PlayDropSound();
+						GInventoryDrag.Reset();
+						RefreshBoundTooltip();
+						return true;
+					}
+				}
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				PlayInvalidMoveSound();
+				return false;
+			}
+			// Allow drag FROM player bag INTO shop stock (sell).
+			if (!SourceGrid->bIsShopStockGrid && bIsShopStockGrid && GInventoryDrag.SourceIndex != INDEX_NONE)
+			{
+				APlayerController* PC = GetOwningPlayer();
+				if (!PC && GetWorld())
+				{
+					PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+				}
+				if (PC)
+				{
+					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
+					{
+						UYIInventoryComponent* ShopSourceComp = (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
+							? GInventoryDrag.SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+						const int32 SellCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
+						TradeComp->RequestShopSell(ActiveShopComponent, GInventoryDrag.SourceIndex, SellCount, ShopSourceComp);
+						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+						PlayDropSound();
+						GInventoryDrag.Reset();
+						RefreshBoundTooltip();
+						return true;
+					}
+				}
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+				PlayInvalidMoveSound();
+				return false;
+			}
+			// Block moving items into or within the shop stock grid.
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			PlayInvalidMoveSound();
+			return false;
+		}
+	}
 
 	// If this grid participates in a trade session, route cross-bag transfer through the session (server authoritative).
 	if (ActiveTradeSession && GInventoryDrag.SourceGrid)
