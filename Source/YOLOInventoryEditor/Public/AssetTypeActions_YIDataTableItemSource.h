@@ -9,4 +9,5 @@ public:
 	virtual FColor GetTypeColor() const override { return FColor(200, 200, 120); }
 	virtual UClass* GetSupportedClass() const override;
 	virtual uint32 GetCategories() override;
+	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<class IToolkitHost> EditWithinLevelEditor) override;
 };

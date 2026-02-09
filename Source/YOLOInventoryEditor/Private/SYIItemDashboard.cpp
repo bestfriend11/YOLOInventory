@@ -11,7 +11,6 @@
 #include "IAssetTools.h"
 #include "Editor.h"
 #include "Editor/EditorEngine.h"
-#include "Subsystems/AssetEditorSubsystem.h"
 #include "DataTableEditorModule.h"
 #include "Modules/ModuleManager.h"
 #include "Widgets/Input/SSearchBox.h"
@@ -759,18 +758,10 @@ void SYIItemDashboard::OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry)
 			}
 			return;
 		}
-
-		if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
-		{
-			if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
-			{
-				AssetEditor->OpenEditorForAsset(Table);
-			}
-		}
 	}
 }
 
-void SYIItemDashboard::OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& Entry) const
+void SYIItemDashboard::OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& Entry)
 {
 	if (!Entry.IsValid() || !Entry->DataSource.IsValid())
 	{
@@ -779,9 +770,9 @@ void SYIItemDashboard::OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& E
 
 	if (UObject* Obj = Entry->DataSource.LoadSynchronous())
 	{
-		if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
+		if (DetailsView.IsValid())
 		{
-			AssetEditor->OpenEditorForAsset(Obj);
+			DetailsView->SetObject(Obj);
 		}
 	}
 }
@@ -968,14 +959,14 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 	if (IsValid(ItemDef))
 	{
 		MenuBuilder.AddMenuEntry(
-			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenItemAsset", "Open Item Asset"),
-			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenItemAsset_Tip", "Open this item asset in the editor."),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenItemAsset", "Focus Item Asset"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenItemAsset_Tip", "Focus this item asset inside the dashboard."),
 			FSlateIcon(),
-			FUIAction(FExecuteAction::CreateLambda([ItemDef]()
+			FUIAction(FExecuteAction::CreateLambda([Self, ItemDef]()
 			{
-				if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
+				if (Self && IsValid(ItemDef))
 				{
-					AssetEditor->OpenEditorForAsset(ItemDef);
+					Self->OpenAsset(ItemDef);
 				}
 			})));
 
@@ -1026,16 +1017,16 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 		}
 
 		MenuBuilder.AddMenuEntry(
-			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataTable", "Open Data Table"),
-			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataTable_Tip", "Open the underlying data table for this row."),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataTable", "Focus Data Table"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataTable_Tip", "Focus the data table for this row inside the dashboard."),
 			FSlateIcon(),
-			FUIAction(FExecuteAction::CreateLambda([Entry]()
+			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
 			{
-				if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
+				if (Self && Entry.IsValid())
 				{
-					if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
+					if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
 					{
-						AssetEditor->OpenEditorForAsset(Table);
+						Self->OpenAsset(Table);
 					}
 				}
 			})));
@@ -1094,6 +1085,60 @@ void SYIItemDashboard::ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntr
 		{
 			MappingListView->RequestListRefresh();
 		}
+	}
+}
+
+void SYIItemDashboard::OpenAsset(UObject* Asset)
+{
+	if (!Asset)
+	{
+		return;
+	}
+
+	if (DetailsView.IsValid())
+	{
+		DetailsView->SetObject(Asset);
+	}
+
+	if (Items.Num() == 0)
+	{
+		Refresh();
+	}
+
+	TSharedPtr<FYIItemDashboardEntry> Match;
+	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Items)
+	{
+		if (!Entry.IsValid())
+		{
+			continue;
+		}
+		if (Entry->ItemAsset.IsValid() && Entry->ItemAsset.Get() == Asset)
+		{
+			Match = Entry;
+			break;
+		}
+		if (Entry->Object.IsValid() && Entry->Object.Get() == Asset)
+		{
+			Match = Entry;
+			break;
+		}
+		if (Entry->DataSource.IsValid() && Entry->DataSource.Get() == Asset)
+		{
+			Match = Entry;
+			break;
+		}
+		if (Entry->DataTable.IsValid() && Entry->DataTable.Get() == Asset)
+		{
+			Match = Entry;
+			break;
+		}
+	}
+
+	if (Match.IsValid() && ListView.IsValid())
+	{
+		ListView->SetSelection(Match);
+		ListView->RequestScrollIntoView(Match);
+		ShowDetailsForEntry(Match);
 	}
 }
 

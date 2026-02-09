@@ -11,3 +11,11 @@ uint32 FAssetTypeActions_YIAffix::GetCategories()
 {
 	return GetYoLoAssetCategoryBit();
 }
+
+void FAssetTypeActions_YIAffix::OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor)
+{
+	for (UObject* Obj : InObjects)
+	{
+		FYOLOInventoryEditorModule::Get().OpenDashboardForAsset(Obj);
+	}
+}

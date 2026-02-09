@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CoreMinimal.h"
 #include "Modules/ModuleInterface.h"
 #include "Modules/ModuleManager.h"
 
@@ -12,12 +13,19 @@ static inline uint32 GetYoLoAssetCategoryBit() { return GYOLOInventoryAssetCateg
 class FYOLOInventoryEditorModule : public IModuleInterface
 {
 public:
+	static FYOLOInventoryEditorModule& Get();
+
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
+
+	void OpenDashboardForAsset(UObject* Asset);
+	void RegisterDashboardWidget(const TSharedPtr<class SYIUnifiedDashboard>& Widget);
 
 private:
 	void RegisterAssetTypeActions();
 	void UnregisterAssetTypeActions();
 
 	TArray<TSharedPtr<class FAssetTypeActions_Base>> RegisteredAssetTypeActions;
+	TWeakPtr<class SYIUnifiedDashboard> DashboardWidget;
+	TWeakObjectPtr<UObject> PendingAsset;
 };

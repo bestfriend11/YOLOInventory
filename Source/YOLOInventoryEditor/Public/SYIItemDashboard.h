@@ -49,13 +49,14 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
+	void OpenAsset(UObject* Asset);
 
 private:
 	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 	void Refresh();
 	void OnSearchTextChanged(const FText& NewText);
 	void OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry);
-	void OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
+	void OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& Entry);
 	void CreateDataTableSourceAsset() const;
 	void ValidateUniqueCodes() const;
 	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;

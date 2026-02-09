@@ -17,7 +17,6 @@
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
-#include "Subsystems/AssetEditorSubsystem.h"
 #include "Editor.h"
 #include "Misc/PackageName.h"
 
@@ -99,12 +98,14 @@ void SYIAffixDashboard::OnAssetSelected(const FAssetData& AssetData)
 
 void SYIAffixDashboard::OnAssetDoubleClicked(const FAssetData& AssetData)
 {
-	if (UObject* Obj = AssetData.GetAsset())
+	OnAssetSelected(AssetData);
+}
+
+void SYIAffixDashboard::OpenAsset(UObject* Asset)
+{
+	if (DetailsView.IsValid() && Asset)
 	{
-		if (GEditor)
-		{
-			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(Obj);
-		}
+		DetailsView->SetObject(Asset);
 	}
 }
 

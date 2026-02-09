@@ -12,6 +12,7 @@ public:
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
+	void OpenAsset(UObject* Asset);
 
 private:
 	TSharedRef<class SWidget> BuildAssetPicker();

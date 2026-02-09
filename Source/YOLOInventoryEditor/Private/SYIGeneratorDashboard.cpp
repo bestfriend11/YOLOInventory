@@ -149,12 +149,19 @@ void SYIGeneratorDashboard::OnAssetSelected(const FAssetData& AssetData)
 
 void SYIGeneratorDashboard::OnAssetDoubleClicked(const FAssetData& AssetData)
 {
-	if (UObject* Obj = AssetData.GetAsset())
+	OnAssetSelected(AssetData);
+}
+
+void SYIGeneratorDashboard::OpenAsset(UObject* Asset)
+{
+	if (!DetailsView.IsValid())
 	{
-		if (GEditor)
-		{
-			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(Obj);
-		}
+		return;
+	}
+	if (Asset)
+	{
+		SelectedAsset = Asset;
+		DetailsView->SetObject(Asset);
 	}
 }
 
