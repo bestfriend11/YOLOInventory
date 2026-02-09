@@ -10,6 +10,14 @@
 #include "YIItemDefinitionFactory.h"
 #include "AssetTypeActions_YIInventoryBag.h"
 #include "AssetTypeActions_YIAffix.h"
+#include "AssetTypeActions_YIAttributeDef.h"
+#include "AssetTypeActions_YIAttributeMod.h"
+#include "AssetTypeActions_YIItemVariant.h"
+#include "AssetTypeActions_YIRarityPalette.h"
+#include "AssetTypeActions_YIEvolutionPath.h"
+#include "AssetTypeActions_YIItemSFXProfile.h"
+#include "AssetTypeActions_YIItemSFXLibrary.h"
+#include "AssetTypeActions_YIDataTableItemSource.h"
 #include "YIInventoryBagFactory.h"
 #include "ToolMenus.h"
 // #include "YIInventoryAssetEditor.h" // legacy editor removed
@@ -255,6 +263,46 @@ void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
 	}
 	{
 		TSharedRef<FAssetTypeActions_YIAffixPool> Action = MakeShared<FAssetTypeActions_YIAffixPool>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIAttributeDef> Action = MakeShared<FAssetTypeActions_YIAttributeDef>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIAttributeMod> Action = MakeShared<FAssetTypeActions_YIAttributeMod>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIItemVariant> Action = MakeShared<FAssetTypeActions_YIItemVariant>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIRarityPalette> Action = MakeShared<FAssetTypeActions_YIRarityPalette>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIEvolutionPath> Action = MakeShared<FAssetTypeActions_YIEvolutionPath>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIItemSFXProfile> Action = MakeShared<FAssetTypeActions_YIItemSFXProfile>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIItemSFXLibrary> Action = MakeShared<FAssetTypeActions_YIItemSFXLibrary>();
+		AssetTools.RegisterAssetTypeActions(Action);
+		RegisteredAssetTypeActions.Add(Action);
+	}
+	{
+		TSharedRef<FAssetTypeActions_YIDataTableItemSource> Action = MakeShared<FAssetTypeActions_YIDataTableItemSource>();
 		AssetTools.RegisterAssetTypeActions(Action);
 		RegisteredAssetTypeActions.Add(Action);
 	}
