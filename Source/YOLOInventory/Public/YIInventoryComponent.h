@@ -109,6 +109,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Master toggle for inventory UI sounds"))
 	bool bEnableInventorySounds = true;
 
+	/** Debug: print on-screen messages for inventory actions (add/move/drop/transfer). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Debug")
+	bool bDebugInventoryActions = false;
+
+	// -------- Inventory action delegates (designer-friendly) ----------
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemAdded, UYIInventoryBag*, Bag, int32, Index, FYIBagItem, Item);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemRemoved, UYIInventoryBag*, Bag, int32, Index, FYIBagItem, Item);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemMoved, UYIInventoryBag*, Bag, int32, Index, FIntPoint, NewPos);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemRotated, UYIInventoryBag*, Bag, int32, Index);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnInventoryItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemDroppedToWorld, const FYIItemInstanceNet&, Item, const FTransform&, SpawnTransform);
+
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemAdded OnInventoryItemAdded;
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemRemoved OnInventoryItemRemoved;
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemMoved OnInventoryItemMoved;
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemRotated OnInventoryItemRotated;
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemTransferred OnInventoryItemTransferred;
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	FOnInventoryItemDroppedToWorld OnInventoryItemDroppedToWorld;
+
 	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
 	UFUNCTION(BlueprintCallable, Category="UI")
 	UInventoryScreenWidget* OpenInventoryScreen();
@@ -128,6 +153,10 @@ public:
 	/** Open a shop screen for a shop component (client-side). */
 	UFUNCTION(BlueprintCallable, Category="UI")
 	UShopScreenWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
+
+	/** Update the shop screen if it is already open (no-op if closed). */
+	UFUNCTION(BlueprintCallable, Category="UI")
+	void UpdateShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
 
 	/** Close the shop screen if it is open. */
 	UFUNCTION(BlueprintCallable, Category="UI")
@@ -155,6 +184,7 @@ protected:
 
 private:
 	FDelegateHandle BagChangedHandle;
+	UYIInventoryBag* BagEventSource = nullptr;
 	TWeakObjectPtr<UInventoryScreenWidget> ActiveInventoryScreen;
 	TWeakObjectPtr<UTradingScreenWidget> ActiveTradeScreen;
 	TWeakObjectPtr<UShopScreenWidget> ActiveShopScreen;
@@ -169,4 +199,15 @@ private:
 
 	/** Returns true if the bag is an asset/template (outer is package/public). */
 	bool IsTemplateBag(const UYIInventoryBag* Bag) const;
+
+	UFUNCTION()
+	void HandleBagItemAdded(int32 Index, FYIBagItem Item);
+	UFUNCTION()
+	void HandleBagItemRemoved(int32 Index, FYIBagItem Item);
+	UFUNCTION()
+	void HandleBagItemMoved(int32 Index, FIntPoint NewPos);
+	UFUNCTION()
+	void HandleBagItemRotated(int32 Index);
+	UFUNCTION()
+	void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
 };

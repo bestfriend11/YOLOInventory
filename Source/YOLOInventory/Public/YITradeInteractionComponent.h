@@ -38,6 +38,14 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
     FOnTradeSessionReady OnTradeSessionReady;
 
+    /** Fired when trade UI should be considered opened/closed (designer-friendly). */
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeOpened, AYITradeSessionActor*, Session);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnTradeClosed);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
+    FOnTradeOpened OnTradeOpened;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
+    FOnTradeClosed OnTradeClosed;
+
     /** Fired on owning client if the request fails (authority rejects or spawn fails). */
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeFailed, FText, Reason);
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade")
@@ -60,6 +68,19 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop")
     FOnShopStockUpdated OnShopStockUpdated;
 
+    /** Fired when shop UI should be considered opened/closed (designer-friendly). */
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShopOpened, UYIShopComponent*, Shop);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnShopClosed);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop")
+    FOnShopOpened OnShopOpened;
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop")
+    FOnShopClosed OnShopClosed;
+
+    /** Fired on owning client when a shop buy/sell action completes. */
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnShopActionResult, UYIShopComponent*, Shop, bool, bSuccess, FText, Reason);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop")
+    FOnShopActionResult OnShopActionResult;
+
     /** Latest shop stock snapshot (client-owned). */
     UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop")
     UYIShopComponent* CurrentShop = nullptr;
@@ -75,6 +96,10 @@ public:
     /** Client RPC: push shop stock data to owning client (used by server). */
     UFUNCTION(Client, Reliable)
     void Client_ShopStockReady(UYIShopComponent* Shop, const TArray<FYINetBagItem>& Stock, FIntPoint Size);
+
+    /** Client RPC: notify result of a shop action. */
+    UFUNCTION(Client, Reliable)
+    void Client_ShopActionResult(UYIShopComponent* Shop, bool bSuccess, const FText& Reason);
 
     /** Client call: sell an item from the player's inventory into the shop (server authoritative). */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop")
@@ -114,8 +139,25 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|UI")
     TSubclassOf<UShopScreenWidget> AutoShopWidgetClass;
 
+    /** Maximum distance allowed to start a trade (interaction range). */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|Distance")
+    float TradeInteractionDistance = 350.f;
+
+    /** Distance allowed to keep a trade open before auto-close/cancel. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|Distance")
+    float TradeKeepAliveDistance = 800.f;
+
+    /** Maximum distance allowed to start a shop interaction. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|Distance")
+    float ShopInteractionDistance = 350.f;
+
+    /** Distance allowed to keep a shop open before auto-close. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|Distance")
+    float ShopKeepAliveDistance = 800.f;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	// Server-side authority handler (keep validation lightweight to avoid disconnects)
 	UFUNCTION(Server, Reliable, WithValidation)
@@ -161,6 +203,18 @@ private:
 	/** Internal guard to ensure the component is only used on PlayerControllers. */
 	bool IsOwnerValidForTrade(bool bLogWarning = false) const;
 
+    /** Distance helper. */
+    bool IsWithinDistance(const AActor* Target, float MaxDistance) const;
+
+    /** Resolve the other side actor for the current trade session. */
+    AActor* GetOtherTradeActor() const;
+
+    /** Close trade UI + broadcast event. */
+    void CloseTradeLocal(bool bCancelServer);
+
+    /** Close shop UI + broadcast event. */
+    void CloseShopLocal();
+
 	/** Server helper: push a session reference into this component and replicate to its owner. */
 	void ServerAssignSession(AYITradeSessionActor* Session);
 
@@ -180,4 +234,10 @@ private:
     void HandleBagItemRotated(int32 Index);
     UFUNCTION()
     void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
+
+    UFUNCTION()
+    void HandleTradeEnded();
+
+    TWeakObjectPtr<AYITradeSessionActor> BoundSession;
+    bool bShopOpened = false;
 };

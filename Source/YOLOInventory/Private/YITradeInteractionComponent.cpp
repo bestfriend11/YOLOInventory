@@ -16,7 +16,8 @@
 
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
-    PrimaryComponentTick.bCanEverTick = false;
+    PrimaryComponentTick.bCanEverTick = true;
+    SetComponentTickEnabled(false);
     SetIsReplicatedByDefault(true);
 }
 
@@ -38,6 +39,44 @@ void UYITradeInteractionComponent::BeginPlay()
     }
 }
 
+void UYITradeInteractionComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    APlayerController* PC = GetOwningPC();
+    if (!PC || !PC->IsLocalController())
+    {
+        return;
+    }
+
+    // Trade distance enforcement
+    if (CurrentSession)
+    {
+        if (AActor* Other = GetOtherTradeActor())
+        {
+            if (!IsWithinDistance(Other, TradeKeepAliveDistance))
+            {
+                CloseTradeLocal(true);
+            }
+        }
+    }
+
+    // Shop distance enforcement
+    if (CurrentShop && CurrentShop->GetOwner())
+    {
+        if (!IsWithinDistance(CurrentShop->GetOwner(), ShopKeepAliveDistance))
+        {
+            CloseShopLocal();
+        }
+    }
+
+    // Disable tick when nothing is active
+    if (!CurrentSession && !CurrentShop)
+    {
+        SetComponentTickEnabled(false);
+    }
+}
+
 void UYITradeInteractionComponent::RequestTrade(AActor* Target, bool bTargetIsNPC)
 {
     // Client entry point: validate locally (Blueprints can override), then forward to server
@@ -49,6 +88,11 @@ void UYITradeInteractionComponent::RequestTrade(AActor* Target, bool bTargetIsNP
     if (!ValidateTradeRequest(Target, bTargetIsNPC))
     {
         Client_TradeSessionFailed(NSLOCTEXT("YOLOInventory", "Trade_ClientRejected", "Trade request rejected"));
+        return;
+    }
+    if (!IsWithinDistance(Target, TradeInteractionDistance))
+    {
+        Client_TradeSessionFailed(NSLOCTEXT("YOLOInventory", "Trade_TooFar", "Target is too far"));
         return;
     }
     Server_RequestTrade(Target, bTargetIsNPC);
@@ -74,6 +118,10 @@ void UYITradeInteractionComponent::RequestShop(UYIShopComponent* Shop)
         return;
     }
     if (!ValidateShopRequest(Shop))
+    {
+        return;
+    }
+    if (Shop->GetOwner() && !IsWithinDistance(Shop->GetOwner(), ShopInteractionDistance))
     {
         return;
     }
@@ -199,12 +247,14 @@ void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopC
 {
     if (!IsOwnerValidForTrade(false) || !Shop || !BuyerInv || Count <= 0)
     {
+        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_Invalid", "Invalid buy request"));
         return;
     }
 
     APlayerController* PC = GetOwningPC();
     if (!PC || !PC->PlayerState)
     {
+        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoPC", "No player controller"));
         return;
     }
 
@@ -213,11 +263,13 @@ void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopC
     {
         if (BuyerInv->GetOwner() != Pawn)
         {
+            Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_WrongOwner", "Invalid inventory owner"));
             return;
         }
     }
 
     Shop->ServerBuyItem(StockIndex, Count, BuyerInv);
+    Client_ShopActionResult(Shop, true, NSLOCTEXT("YOLOInventory", "Shop_Buy_OK", "Purchase requested"));
 }
 
 bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
@@ -229,12 +281,14 @@ void UYITradeInteractionComponent::Server_RequestShopSell_Implementation(UYIShop
 {
     if (!IsOwnerValidForTrade(false) || !Shop || !SellerInv || Count <= 0)
     {
+        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_Invalid", "Invalid sell request"));
         return;
     }
 
     APlayerController* PC = GetOwningPC();
     if (!PC || !PC->PlayerState)
     {
+        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_NoPC", "No player controller"));
         return;
     }
 
@@ -243,11 +297,13 @@ void UYITradeInteractionComponent::Server_RequestShopSell_Implementation(UYIShop
     {
         if (SellerInv->GetOwner() != Pawn)
         {
+            Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_WrongOwner", "Invalid inventory owner"));
             return;
         }
     }
 
     Shop->ServerSellItem(SourceIndex, Count, SellerInv);
+    Client_ShopActionResult(Shop, true, NSLOCTEXT("YOLOInventory", "Shop_Sell_OK", "Sale requested"));
 }
 
 bool UYITradeInteractionComponent::Server_RequestShopSell_Validate(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
@@ -322,13 +378,18 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
     CurrentShopStockSize = Size;
     OnShopStockUpdated.Broadcast(Shop);
 
-    if (bAutoShowShopWidget && GetOwningPC() && GetOwningPC()->IsLocalController())
+    if (GetOwningPC() && GetOwningPC()->IsLocalController())
     {
         if (APawn* P = GetOwningPC()->GetPawn())
         {
             if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
             {
-                Inv->OpenShopScreen(Shop, Inv->GetBag(), Stock, Size);
+                // Always update if a shop screen is already open.
+                Inv->UpdateShopScreen(Shop, Inv->GetBag(), Stock, Size);
+                if (bAutoShowShopWidget)
+                {
+                    Inv->OpenShopScreen(Shop, Inv->GetBag(), Stock, Size);
+                }
 
                 // Ensure focus/input stays on this local controller window
                 GetOwningPC()->bShowMouseCursor = true;
@@ -336,10 +397,9 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
                 Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
                 Mode.SetHideCursorDuringCapture(false);
                 GetOwningPC()->SetInputMode(Mode);
-                return;
             }
         }
-        if (AutoShopWidgetClass)
+        if (bAutoShowShopWidget && AutoShopWidgetClass)
         {
             if (UShopScreenWidget* WidgetInst = CreateWidget<UShopScreenWidget>(GetOwningPC(), AutoShopWidgetClass))
             {
@@ -355,6 +415,26 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
                 WidgetInst->SetShop(Shop, LocalBag, Stock, Size);
             }
         }
+    }
+
+    if (CurrentShop)
+    {
+        if (!bShopOpened)
+        {
+            OnShopOpened.Broadcast(CurrentShop);
+            bShopOpened = true;
+        }
+        SetComponentTickEnabled(true);
+    }
+}
+
+void UYITradeInteractionComponent::Client_ShopActionResult_Implementation(UYIShopComponent* Shop, bool bSuccess, const FText& Reason)
+{
+    OnShopActionResult.Broadcast(Shop, bSuccess, Reason);
+    if (bDebugTradeInteraction && GEngine)
+    {
+        const FColor Color = bSuccess ? FColor::Green : FColor::Red;
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, Color, Reason.ToString());
     }
 }
 
@@ -378,6 +458,19 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
 	if (CurrentSession)
 	{
 		OnTradeSessionReady.Broadcast(CurrentSession);
+        OnTradeOpened.Broadcast(CurrentSession);
+
+        if (BoundSession.IsValid())
+        {
+            BoundSession->OnTradeCancelled.RemoveAll(this);
+            BoundSession->OnTradeCommitted.RemoveAll(this);
+            BoundSession->OnTradeFailed.RemoveAll(this);
+        }
+        BoundSession = CurrentSession;
+        CurrentSession->OnTradeCancelled.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
+        CurrentSession->OnTradeCommitted.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
+        CurrentSession->OnTradeFailed.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
+        SetComponentTickEnabled(true);
 
 		if (bAutoShowWidget && GetOwningPC() && GetOwningPC()->IsLocalController())
 		{
@@ -412,10 +505,10 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
                         }
                     }
                     WidgetInst->SetSession(CurrentSession, LocalBag, nullptr);
-                }
-            }
-        }
+			}
+		}
 	}
+}
 }
 
 void UYITradeInteractionComponent::ServerAssignSession(AYITradeSessionActor* Session)
@@ -524,4 +617,93 @@ void UYITradeInteractionComponent::HandleBagItemTransferred(UYIInventoryBag* Src
             FString::Printf(TEXT("[TradeInt] Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx));
     }
     OnBagItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
+}
+
+bool UYITradeInteractionComponent::IsWithinDistance(const AActor* Target, float MaxDistance) const
+{
+    if (!Target || !GetOwningPC()) return false;
+    const APawn* MyPawn = GetOwningPC()->GetPawn();
+    if (!MyPawn) return false;
+    const float DistSq = FVector::DistSquared(MyPawn->GetActorLocation(), Target->GetActorLocation());
+    return DistSq <= FMath::Square(MaxDistance);
+}
+
+AActor* UYITradeInteractionComponent::GetOtherTradeActor() const
+{
+    if (!CurrentSession || !GetOwningPC() || !GetOwningPC()->PlayerState) return nullptr;
+    const ETradeSide MySide = CurrentSession->GetSideForPlayer(GetOwningPC()->PlayerState);
+    if (MySide == ETradeSide::SideA)
+    {
+        return CurrentSession->bSideBIsNPC ? Cast<AActor>(CurrentSession->NPCPawn) : Cast<AActor>(CurrentSession->PawnB);
+    }
+    if (MySide == ETradeSide::SideB)
+    {
+        return Cast<AActor>(CurrentSession->PawnA);
+    }
+    return nullptr;
+}
+
+void UYITradeInteractionComponent::CloseTradeLocal(bool bCancelServer)
+{
+    if (CurrentSession)
+    {
+        if (bCancelServer)
+        {
+            CurrentSession->ServerCancel();
+        }
+        if (APlayerController* PC = GetOwningPC())
+        {
+            if (APawn* P = PC->GetPawn())
+            {
+                if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+                {
+                    Inv->CloseTradeScreen();
+                }
+            }
+        }
+    }
+    if (BoundSession.IsValid())
+    {
+        BoundSession->OnTradeCancelled.RemoveAll(this);
+        BoundSession->OnTradeCommitted.RemoveAll(this);
+        BoundSession->OnTradeFailed.RemoveAll(this);
+        BoundSession = nullptr;
+    }
+    CurrentSession = nullptr;
+    OnTradeClosed.Broadcast();
+    if (!CurrentSession && !CurrentShop)
+    {
+        SetComponentTickEnabled(false);
+    }
+}
+
+void UYITradeInteractionComponent::CloseShopLocal()
+{
+    if (CurrentShop)
+    {
+        if (APlayerController* PC = GetOwningPC())
+        {
+            if (APawn* P = PC->GetPawn())
+            {
+                if (UYIInventoryComponent* Inv = P->FindComponentByClass<UYIInventoryComponent>())
+                {
+                    Inv->CloseShopScreen();
+                }
+            }
+        }
+    }
+    CurrentShop = nullptr;
+    CurrentShopStock.Reset();
+    CurrentShopStockSize = FIntPoint(0, 0);
+    OnShopClosed.Broadcast();
+    bShopOpened = false;
+    if (!CurrentSession && !CurrentShop)
+    {
+        SetComponentTickEnabled(false);
+    }
+}
+
+void UYITradeInteractionComponent::HandleTradeEnded()
+{
+    CloseTradeLocal(false);
 }

@@ -55,11 +55,26 @@ void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 		EquippedBag->OnChanged.Remove(BagChangedHandle);
 		BagChangedHandle.Reset();
 	}
+	if (BagEventSource)
+	{
+		BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
+		BagEventSource->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
+		BagEventSource->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
+		BagEventSource->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
+		BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
+		BagEventSource = nullptr;
+	}
 
 	EquippedBag = Bag;
 	if (EquippedBag)
 	{
 		BagChangedHandle = EquippedBag->OnChanged.AddUObject(this, &UYIInventoryComponent::SyncNetState);
+		BagEventSource = EquippedBag;
+		BagEventSource->OnItemAdded.AddDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
+		BagEventSource->OnItemRemoved.AddDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
+		BagEventSource->OnItemMoved.AddDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
+		BagEventSource->OnItemRotated.AddDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
+		BagEventSource->OnItemTransferred.AddDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
 	}
 
 	if (GetOwner() && GetOwner()->HasAuthority())
@@ -207,6 +222,15 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 	{
 		EquippedBag->OnChanged.Remove(BagChangedHandle);
 		BagChangedHandle.Reset();
+	}
+	if (BagEventSource)
+	{
+		BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
+		BagEventSource->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
+		BagEventSource->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
+		BagEventSource->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
+		BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
+		BagEventSource = nullptr;
 	}
 	CloseInventoryScreen();
 	CloseTradeScreen();
@@ -413,6 +437,12 @@ bool UYIInventoryComponent::DropItemToWorld(const FYIItemInstanceNet& NetItem, c
 	{
 		FYIItemInstance Full = NetToFull(NetItem);
 		UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(GetOwner(), Full, SpawnTransform);
+		OnInventoryItemDroppedToWorld.Broadcast(NetItem, SpawnTransform);
+		if (bDebugInventoryActions && GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
+				FString::Printf(TEXT("[Inventory] Dropped to world (%d)"), NetItem.Count));
+		}
 		return true;
 	}
 	ServerDropItemToWorld(NetItem, SpawnTransform);
@@ -422,6 +452,56 @@ bool UYIInventoryComponent::DropItemToWorld(const FYIItemInstanceNet& NetItem, c
 void UYIInventoryComponent::ServerDropItemToWorld_Implementation(const FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform)
 {
 	DropItemToWorld(NetItem, SpawnTransform);
+}
+
+void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
+{
+	OnInventoryItemAdded.Broadcast(EquippedBag, Index, Item);
+	if (bDebugInventoryActions && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
+			FString::Printf(TEXT("[Inventory] Added idx %d x%d"), Index, Item.Item.Count));
+	}
+}
+
+void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
+{
+	OnInventoryItemRemoved.Broadcast(EquippedBag, Index, Item);
+	if (bDebugInventoryActions && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange,
+			FString::Printf(TEXT("[Inventory] Removed idx %d"), Index));
+	}
+}
+
+void UYIInventoryComponent::HandleBagItemMoved(int32 Index, FIntPoint NewPos)
+{
+	OnInventoryItemMoved.Broadcast(EquippedBag, Index, NewPos);
+	if (bDebugInventoryActions && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
+			FString::Printf(TEXT("[Inventory] Moved idx %d -> (%d,%d)"), Index, NewPos.X, NewPos.Y));
+	}
+}
+
+void UYIInventoryComponent::HandleBagItemRotated(int32 Index)
+{
+	OnInventoryItemRotated.Broadcast(EquippedBag, Index);
+	if (bDebugInventoryActions && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
+			FString::Printf(TEXT("[Inventory] Rotated idx %d"), Index));
+	}
+}
+
+void UYIInventoryComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx)
+{
+	OnInventoryItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
+	if (bDebugInventoryActions && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::White,
+			FString::Printf(TEXT("[Inventory] Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx));
+	}
 }
 
 // -------- UI helpers --------
@@ -556,6 +636,15 @@ UShopScreenWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop,
 	Screen->AddToViewport();
 	ActiveShopScreen = Screen;
 	return Screen;
+}
+
+void UYIInventoryComponent::UpdateShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
+{
+	if (!Shop) return;
+	if (ActiveShopScreen.IsValid())
+	{
+		ActiveShopScreen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+	}
 }
 
 void UYIInventoryComponent::CloseShopScreen()

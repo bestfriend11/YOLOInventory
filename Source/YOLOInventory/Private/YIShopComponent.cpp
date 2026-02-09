@@ -12,6 +12,18 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 
+static void NotifyShopActionResult(APlayerState* PlayerState, UYIShopComponent* Shop, bool bSuccess, const FText& Reason)
+{
+    if (!PlayerState) return;
+    if (APlayerController* PC = Cast<APlayerController>(PlayerState->GetOwner()))
+    {
+        if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
+        {
+            TradeComp->Client_ShopActionResult(Shop, bSuccess, Reason);
+        }
+    }
+}
+
 UYIShopComponent::UYIShopComponent()
 {
     PrimaryComponentTick.bCanEverTick = false;
@@ -87,18 +99,43 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !BuyerInv || Count <= 0) return;
 
-    UYIPlayerInventoryStateComponent* BuyerState = BuyerInv->GetOwner() ? BuyerInv->GetOwner()->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
-    APlayerState* BuyerPS = BuyerState ? Cast<APlayerState>(BuyerState->GetOwner()) : nullptr;
+    APawn* BuyerPawn = Cast<APawn>(BuyerInv->GetOwner());
+    APlayerState* BuyerPS = BuyerPawn ? BuyerPawn->GetPlayerState() : nullptr;
+    if (!BuyerPS && BuyerPawn && BuyerPawn->GetController())
+    {
+        BuyerPS = BuyerPawn->GetController()->PlayerState;
+    }
+    UYIPlayerInventoryStateComponent* BuyerState = BuyerPS ? BuyerPS->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
     UYIInventoryBag* StockBag = GetStockForPlayer(BuyerPS);
-    if (!StockBag) return;
+    if (!StockBag)
+    {
+        OnShopPurchase.Broadcast(BuyerPS, 0, Count, false);
+        NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoStock", "Shop has no stock"));
+        return;
+    }
 
-    if (!StockBag->Items.IsValidIndex(StockIndex)) return;
+    if (!StockBag->Items.IsValidIndex(StockIndex))
+    {
+        OnShopPurchase.Broadcast(BuyerPS, 0, Count, false);
+        NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_InvalidIndex", "Invalid stock index"));
+        return;
+    }
     FYIBagItem& StockItem = StockBag->Items[StockIndex];
-    if (StockItem.Item.Count < Count) return;
+    if (StockItem.Item.Count < Count)
+    {
+        OnShopPurchase.Broadcast(BuyerPS, 0, Count, false);
+        NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NotEnough", "Not enough stock"));
+        return;
+    }
 
     const int64 Code = StockItem.Item.Definition.IsValid() ? StockItem.Item.Definition.Get()->UniqueCode : 0;
 
-    if (!ConsumePrice(BuyerState, Code, Count)) return;
+    if (!ConsumePrice(BuyerState, Code, Count))
+    {
+        OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
+        NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoFunds", "Not enough resources"));
+        return;
+    }
 
     // Slice and add
     FYIBagItem Slice = StockItem;
@@ -118,6 +155,8 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
                 }
             }
         }
+        OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
+        NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoSpace", "No space in inventory"));
         return;
     }
 
@@ -135,6 +174,14 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     {
         NotifyStockForPlayer(BuyerPS);
     }
+
+    OnShopPurchase.Broadcast(BuyerPS, Code, Count, true);
+    NotifyShopActionResult(BuyerPS, this, true, NSLOCTEXT("YOLOInventory", "Shop_Buy_Success", "Purchased"));
+    if (bDebugShopActions && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
+            FString::Printf(TEXT("[Shop] Buy code=%lld x%d"), Code, Count));
+    }
 }
 
 bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
@@ -146,19 +193,36 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !SellerInv || Count <= 0 || !bAllowSelling) return;
 
-    UYIPlayerInventoryStateComponent* SellerState = SellerInv->GetOwner() ? SellerInv->GetOwner()->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
-    APlayerState* SellerPS = SellerState ? Cast<APlayerState>(SellerState->GetOwner()) : nullptr;
+    APawn* SellerPawn = Cast<APawn>(SellerInv->GetOwner());
+    APlayerState* SellerPS = SellerPawn ? SellerPawn->GetPlayerState() : nullptr;
+    if (!SellerPS && SellerPawn && SellerPawn->GetController())
+    {
+        SellerPS = SellerPawn->GetController()->PlayerState;
+    }
+    UYIPlayerInventoryStateComponent* SellerState = SellerPS ? SellerPS->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
 
     UYIInventoryBag* SellerBag = SellerInv->GetBag();
-    if (!SellerBag || !SellerBag->Items.IsValidIndex(SourceIndex)) return;
+    if (!SellerBag || !SellerBag->Items.IsValidIndex(SourceIndex))
+    {
+        OnShopSale.Broadcast(SellerPS, 0, Count, false);
+        NotifyShopActionResult(SellerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_InvalidIndex", "Invalid inventory index"));
+        return;
+    }
 
     FYIBagItem OriginalItem = SellerBag->Items[SourceIndex];
-    if (OriginalItem.Item.Count < Count) return;
+    if (OriginalItem.Item.Count < Count)
+    {
+        OnShopSale.Broadcast(SellerPS, 0, Count, false);
+        NotifyShopActionResult(SellerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_NotEnough", "Not enough items to sell"));
+        return;
+    }
 
     const int64 Code = OriginalItem.Item.Definition.IsValid() ? OriginalItem.Item.Definition.Get()->UniqueCode : 0;
     const FYIShopListing* Listing = FindListing(Code);
     if (!Listing && !bAllowSellingUnlisted)
     {
+        OnShopSale.Broadcast(SellerPS, Code, Count, false);
+        NotifyShopActionResult(SellerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_Unlisted", "Item cannot be sold here"));
         return;
     }
 
@@ -187,6 +251,8 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
             SellerBag->Items[SourceIndex].Item.Count += Count;
             SellerBag->OnChanged.Broadcast();
         }
+        OnShopSale.Broadcast(SellerPS, Code, Count, false);
+        NotifyShopActionResult(SellerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_NoStock", "Shop cannot accept items"));
         return;
     }
 
@@ -205,6 +271,8 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
             SellerBag->Items[SourceIndex].Item.Count += Count;
             SellerBag->OnChanged.Broadcast();
         }
+        OnShopSale.Broadcast(SellerPS, Code, Count, false);
+        NotifyShopActionResult(SellerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_NoSpace", "Shop stock is full"));
         return;
     }
 
@@ -230,6 +298,14 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
     {
         NotifyStockForPlayer(SellerPS);
     }
+
+    OnShopSale.Broadcast(SellerPS, Code, Count, true);
+    NotifyShopActionResult(SellerPS, this, true, NSLOCTEXT("YOLOInventory", "Shop_Sell_Success", "Sold"));
+    if (bDebugShopActions && GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
+            FString::Printf(TEXT("[Shop] Sell code=%lld x%d"), Code, Count));
+    }
 }
 
 bool UYIShopComponent::ServerSellItem_Validate(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
@@ -250,6 +326,11 @@ void UYIShopComponent::RefreshMirror()
     if (AActor* OwnerActor = GetOwner())
     {
         OwnerActor->ForceNetUpdate();
+    }
+    // Listen-server UI needs a local notify (OnRep won't fire on server)
+    if (GetWorld() && GetWorld()->GetNetMode() != NM_DedicatedServer)
+    {
+        OnStockMirrorUpdated.Broadcast();
     }
 }
 

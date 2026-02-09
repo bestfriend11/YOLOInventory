@@ -90,6 +90,19 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
     bool bAllowSellingUnlisted = true;
 
+    /** Debug: print on-screen messages for shop actions. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop|Debug")
+    bool bDebugShopActions = false;
+
+    // Shop action events (designer-friendly)
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnShopPurchase, APlayerState*, Buyer, int64, ItemCode, int32, Count, bool, bSuccess);
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnShopSale, APlayerState*, Seller, int64, ItemCode, int32, Count, bool, bSuccess);
+
+    UPROPERTY(BlueprintAssignable, Category="Shop|Events")
+    FOnShopPurchase OnShopPurchase;
+    UPROPERTY(BlueprintAssignable, Category="Shop|Events")
+    FOnShopSale OnShopSale;
+
     /** Auto-restock from template every interval (seconds). 0 disables. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
     float RestockInterval = 0.f;
