@@ -38,6 +38,8 @@
 #include "YIAffixPoolFactory.h"
 #include "YIAffixPoolAsset.h"
 #include "SYIItemDashboard.h"
+#include "SYIAffixDashboard.h"
+#include "SYIGeneratorDashboard.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
 
@@ -45,6 +47,8 @@ TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
 uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
+static const FName YOLOInventoryAffixTabName(TEXT("YOLOInventory_Affixes"));
+static const FName YOLOInventoryGeneratorTabName(TEXT("YOLOInventory_Generators"));
 
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Toolkits/IToolkitHost.h"
@@ -87,6 +91,32 @@ void FYOLOInventoryEditorModule::StartupModule()
 	}))
 	.SetDisplayName(NSLOCTEXT("YOLOInventory","DashboardTabName","YOLO Inventory Dashboard"))
 	.SetTooltipText(NSLOCTEXT("YOLOInventory","DashboardTabTooltip","View all YOLO Inventory items (assets + data table rows)"))
+	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(YOLOInventoryAffixTabName, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+	{
+		return SNew(SDockTab)
+			.TabRole(ETabRole::NomadTab)
+			.Label(NSLOCTEXT("YOLOInventory","AffixTab","YOLO Inventory Affixes"))
+			[
+				SNew(SYIAffixDashboard)
+			];
+	}))
+	.SetDisplayName(NSLOCTEXT("YOLOInventory","AffixTabName","YOLO Inventory Affixes"))
+	.SetTooltipText(NSLOCTEXT("YOLOInventory","AffixTabTooltip","Create and edit affixes and affix pools"))
+	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(YOLOInventoryGeneratorTabName, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+	{
+		return SNew(SDockTab)
+			.TabRole(ETabRole::NomadTab)
+			.Label(NSLOCTEXT("YOLOInventory","GeneratorTab","YOLO Inventory Generators"))
+			[
+				SNew(SYIGeneratorDashboard)
+			];
+	}))
+	.SetDisplayName(NSLOCTEXT("YOLOInventory","GeneratorTabName","YOLO Inventory Generators"))
+	.SetTooltipText(NSLOCTEXT("YOLOInventory","GeneratorTabTooltip","Create loot tables, rarity profiles and test generators"))
 	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
 
 	// // Ensure an example Affix asset exists for authoring docs/demo
@@ -152,6 +182,8 @@ void FYOLOInventoryEditorModule::StartupModule()
 			);
 		};
 		AddMenuEntry(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","MenuDashboard","Dashboard"));
+		AddMenuEntry(YOLOInventoryAffixTabName, NSLOCTEXT("YOLOInventory","MenuAffixes","Affixes"));
+		AddMenuEntry(YOLOInventoryGeneratorTabName, NSLOCTEXT("YOLOInventory","MenuGenerators","Generators"));
 		AddMenuEntry(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","MenuPalette","Palette"));
 		AddMenuEntry(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","MenuGraph","Graph"));
 		AddMenuEntry(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","MenuScript","Script"));
@@ -175,6 +207,8 @@ void FYOLOInventoryEditorModule::StartupModule()
 				));
 			};
 			AddTool(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","ToolDashboard","Dashboard"), "ContentBrowser.TabIcon");
+			AddTool(YOLOInventoryAffixTabName, NSLOCTEXT("YOLOInventory","ToolAffixes","Affixes"), "ContentBrowser.TabIcon");
+			AddTool(YOLOInventoryGeneratorTabName, NSLOCTEXT("YOLOInventory","ToolGenerators","Generators"), "ContentBrowser.TabIcon");
 			AddTool(FName("YOLOInventory_Palette"), NSLOCTEXT("YOLOInventory","ToolPalette","Palette"), "Icons.Details");
 			AddTool(FName("YOLOInventory_Graph"), NSLOCTEXT("YOLOInventory","ToolGraph","Graph"), "GraphEditor.Event_16x");
 			AddTool(FName("YOLOInventory_Script"), NSLOCTEXT("YOLOInventory","ToolScript","Script"), "Kismet.Tabs.Palette");
@@ -212,6 +246,8 @@ void FYOLOInventoryEditorModule::StartupModule()
 void FYOLOInventoryEditorModule::ShutdownModule()
 {
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryDashboardTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryAffixTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryGeneratorTabName);
 	UnregisterAssetTypeActions();
 	if (GYOLONodeFactory.IsValid())
 	{

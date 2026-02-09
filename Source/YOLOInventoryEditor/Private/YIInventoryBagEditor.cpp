@@ -17,9 +17,25 @@
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Styling/AppStyle.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
+#include "Widgets/Views/SListView.h"
+#include "SYIItemDashboard.h"
+#include "YIItemRegistrySubsystem.h"
+#include "Data/YIDataTableItemSource.h"
+#include "CSVBPFunctionLibrary.h"
+#include "RowData.h"
+#include "AssetToolsModule.h"
+#include "IAssetTools.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Factories/BlueprintFactory.h"
+#include "YIItemDefinitionFactory.h"
+#include "PackageTools.h"
+#include "ObjectTools.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "YIEditorRowHelpers.h"
 
 TWeakPtr<FYIInventoryBagEditor> FYIInventoryBagEditor::ActiveEditor;
 
@@ -110,6 +126,8 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnDetailsTab(const FSpawnTabArgs&
 
 TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs& Args)
 {
+	RefreshDataRowEntries();
+
 	FAssetPickerConfig Picker;
 	Picker.InitialAssetViewType = EAssetViewType::Tile;
 	Picker.Filter.ClassPaths.Add(UYIItemDefinition::StaticClass()->GetClassPathName());
@@ -141,7 +159,138 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs&
 	Picker.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateSP(this, &FYIInventoryBagEditor::OnPaletteAssetDoubleClicked);
 
 	FContentBrowserModule& CB = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
-	return SNew(SDockTab)[ CB.Get().CreateAssetPicker(Picker) ];
+	TSharedRef<SWidget> AssetPickerWidget = CB.Get().CreateAssetPicker(Picker);
+
+	TSharedRef<SWidget> DataRowWidget =
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory","BagPaletteRefreshRows","Refresh Rows"))
+				.OnClicked_Lambda([this]()
+				{
+					RefreshDataRowEntries();
+					if (DataRowListView.IsValid())
+					{
+						DataRowListView->RequestListRefresh();
+					}
+					return FReply::Handled();
+				})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory","BagPaletteCreateAll","Create Missing Assets"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","BagPaletteCreateAll_TT","Create assets for all rows that do not yet have an item asset."))
+				.OnClicked_Lambda([this]()
+				{
+					for (const TSharedPtr<FYIItemDashboardEntry>& Entry : DataRowEntries)
+					{
+						if (Entry.IsValid() && Entry->bIsDataTable && !Entry->bHasAsset)
+						{
+							CreateAssetFromEntry(*Entry);
+						}
+					}
+					RefreshDataRowEntries();
+					if (DataRowListView.IsValid())
+					{
+						DataRowListView->RequestListRefresh();
+					}
+					return FReply::Handled();
+				})
+			]
+		]
+		+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
+		[
+			SAssignNew(DataRowListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
+			.ListItemsSource(&DataRowEntries)
+			.OnGenerateRow(this, &FYIInventoryBagEditor::MakeDataRowWidget)
+			.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry)
+			{
+				if (!Entry.IsValid())
+				{
+					return;
+				}
+				if (Entry->ItemAsset.IsValid())
+				{
+					OnPaletteAssetDoubleClicked(FAssetData(Entry->ItemAsset.Get()));
+				}
+				else if (CreateAssetFromEntry(*Entry))
+				{
+					RefreshDataRowEntries();
+					if (Entry->ItemAsset.IsValid())
+					{
+						OnPaletteAssetDoubleClicked(FAssetData(Entry->ItemAsset.Get()));
+					}
+				}
+			})
+			.OnContextMenuOpening_Lambda([this]()
+			{
+				if (!DataRowListView.IsValid())
+				{
+					return TSharedPtr<SWidget>();
+				}
+				TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = DataRowListView->GetSelectedItems();
+				if (Selected.Num() == 1)
+				{
+					return BuildDataRowContextMenu(Selected[0]);
+				}
+				return TSharedPtr<SWidget>();
+			})
+		];
+
+	return SNew(SDockTab)
+	[
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+				.IsChecked_Lambda([this](){ return PaletteMode == EYIBagPaletteMode::Assets ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+				{
+					if (State == ECheckBoxState::Checked)
+					{
+						PaletteMode = EYIBagPaletteMode::Assets;
+					}
+				})
+				.Content()
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteAssets","Assets"))
+				]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+				.IsChecked_Lambda([this](){ return PaletteMode == EYIBagPaletteMode::DataRows ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+				{
+					if (State == ECheckBoxState::Checked)
+					{
+						PaletteMode = EYIBagPaletteMode::DataRows;
+					}
+				})
+				.Content()
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteRows","Data Rows"))
+				]
+			]
+		]
+		+ SVerticalBox::Slot().FillHeight(1.f)
+		[
+			SNew(SWidgetSwitcher)
+			.WidgetIndex_Lambda([this]() { return PaletteMode == EYIBagPaletteMode::Assets ? 0 : 1; })
+			+ SWidgetSwitcher::Slot()[ AssetPickerWidget ]
+			+ SWidgetSwitcher::Slot()[ DataRowWidget ]
+		]
+	];
 }
 
 TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnInfoTab(const FSpawnTabArgs& Args)
@@ -249,4 +398,360 @@ void FYIInventoryBagEditor::OnPaletteAssetDoubleClicked(const FAssetData& AssetD
 			GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAssets(ToOpen);
 		}
 	}
+}
+
+void FYIInventoryBagEditor::RefreshDataRowEntries()
+{
+	DataRowEntries.Reset();
+	TMap<int64, TSoftObjectPtr<UYIItemDefinition>> ExistingAssets;
+	TSet<FString> ExistingRowKeys;
+
+	if (GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			TArray<FYIItemRegistryView> ViewItems;
+			Registry->GetAllItems(ViewItems, true);
+
+			for (const FYIItemRegistryView& View : ViewItems)
+			{
+				if (!View.bIsDataTable)
+				{
+					ExistingAssets.Add(View.UniqueCode, TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath()));
+				}
+				else
+				{
+					ExistingRowKeys.Add(FString::Printf(TEXT("%lld|%s"), View.UniqueCode, *View.RowName.ToString()));
+				}
+			}
+		}
+	}
+
+	FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	FARFilter Filter;
+	Filter.ClassPaths.Add(UYIDataTableItemSource::StaticClass()->GetClassPathName());
+	Filter.bRecursiveClasses = true;
+	TArray<FAssetData> Sources;
+	AssetRegistry.Get().GetAssets(Filter, Sources);
+
+	for (const FAssetData& SourceData : Sources)
+	{
+		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceData.GetAsset()))
+		{
+			if (UDataTable* Table = Source->ResolveDataTable())
+			{
+				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+				const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+				const FName TemplateField = Source->TemplateIdFieldName;
+
+				for (const auto& RowPair : Table->GetRowMap())
+				{
+					const FName RowName = RowPair.Key;
+					const uint8* RowData = RowPair.Value;
+
+					int64 CodeValue = 0;
+					bool bFoundCode = false;
+					FString TemplateIdValue;
+
+					for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
+					{
+						const FProperty* Prop = *It;
+						if (!Prop) continue;
+
+						if (Prop->GetFName() == CodeField)
+						{
+							if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+							{
+								if (Num->IsInteger())
+								{
+									CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+									bFoundCode = true;
+								}
+							}
+						}
+						else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
+						{
+							if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+							{
+								TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
+							}
+							else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+							{
+								TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+							}
+							else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+							{
+								TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+							}
+						}
+					}
+
+					if (!bFoundCode)
+					{
+						continue;
+					}
+
+					const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
+					if (ExistingRowKeys.Contains(RowKey))
+					{
+						continue;
+					}
+
+					TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
+					Entry->Code = CodeValue;
+					Entry->RowName = RowName;
+					Entry->bIsDataTable = true;
+					Entry->DataSource = Source;
+					Entry->DataTable = Table;
+					Entry->TemplateId = TemplateIdValue;
+					Entry->Source = SourceData.GetSoftObjectPath().ToString();
+					Entry->Name = RowName.ToString();
+
+					const FString PreviewName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
+					if (!PreviewName.IsEmpty())
+					{
+						Entry->Name = PreviewName;
+					}
+
+					if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
+					{
+						Entry->bHasAsset = true;
+						Entry->ItemAsset = *FoundAsset;
+					}
+
+					DataRowEntries.Add(Entry);
+					ExistingRowKeys.Add(RowKey);
+				}
+			}
+		}
+	}
+}
+
+TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
+{
+	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
+		[
+			SNew(STextBlock).Text(Entry.IsValid() ? FText::FromString(Entry->Name) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.35f).Padding(2)
+		[
+			SNew(STextBlock).Text(Entry.IsValid() ? FText::FromString(Entry->Source) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+		[
+			Entry.IsValid() && Entry->bHasAsset
+			? SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteHasAsset","Asset"))
+			: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteMissingAsset","Missing"))
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+		[
+			SNew(SButton)
+			.Text(NSLOCTEXT("YOLOInventory","BagPaletteCreateAsset","Create"))
+			.IsEnabled_Lambda([Entry](){ return Entry.IsValid() && Entry->bIsDataTable; })
+			.OnClicked_Lambda([this, Entry]()
+			{
+				if (Entry.IsValid())
+				{
+					CreateAssetFromEntry(*Entry);
+					RefreshDataRowEntries();
+					if (DataRowListView.IsValid())
+					{
+						DataRowListView->RequestListRefresh();
+					}
+				}
+				return FReply::Handled();
+			})
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+		[
+			SNew(SButton)
+			.Text(NSLOCTEXT("YOLOInventory","BagPaletteAddToBag","Add"))
+			.IsEnabled_Lambda([Entry](){ return Entry.IsValid(); })
+			.OnClicked_Lambda([this, Entry]()
+			{
+				if (Entry.IsValid())
+				{
+					AddEntryToBag(*Entry);
+				}
+				return FReply::Handled();
+			})
+		]
+	];
+}
+
+TSharedPtr<SWidget> FYIInventoryBagEditor::BuildDataRowContextMenu(const TSharedPtr<FYIItemDashboardEntry>& Entry) const
+{
+	if (!Entry.IsValid())
+	{
+		return nullptr;
+	}
+
+	FMenuBuilder MenuBuilder(true, nullptr);
+	MenuBuilder.AddMenuEntry(
+		NSLOCTEXT("YOLOInventory","BagRow_CreateAsset","Create Item Asset from Row"),
+		NSLOCTEXT("YOLOInventory","BagRow_CreateAsset_TT","Run the transformer on this row and create/update the item asset."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateLambda([this, Entry]()
+		{
+			if (Entry.IsValid())
+			{
+				CreateAssetFromEntry(*Entry);
+			}
+		}))
+	);
+	if (Entry->ItemAsset.IsValid())
+	{
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory","BagRow_OpenAsset","Open Item Asset"),
+			NSLOCTEXT("YOLOInventory","BagRow_OpenAsset_TT","Open this item asset in the editor."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Entry]()
+			{
+				if (Entry.IsValid() && Entry->ItemAsset.IsValid())
+				{
+					if (UAssetEditorSubsystem* AssetEditor = GEditor ? GEditor->GetEditorSubsystem<UAssetEditorSubsystem>() : nullptr)
+					{
+						AssetEditor->OpenEditorForAsset(Entry->ItemAsset.Get());
+					}
+				}
+			}))
+		);
+	}
+	return MenuBuilder.MakeWidget();
+}
+
+bool FYIInventoryBagEditor::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const
+{
+	if (!Entry.bIsDataTable || !Entry.DataSource.IsValid())
+	{
+		return false;
+	}
+
+	UYIDataTableItemSource* Source = Entry.DataSource.LoadSynchronous();
+	if (!Source)
+	{
+		return false;
+	}
+
+	const bool bHasInline = Source->bUseInlineMappings && Source->InlineMappings.Num() > 0;
+	if (!Source->TransformerClass && !bHasInline)
+	{
+		return false;
+	}
+
+	UDataTable* Table = Source->DataTable.LoadSynchronous();
+	if (!Table || !Table->RowStruct)
+	{
+		return false;
+	}
+
+	const uint8* const* Found = Table->GetRowMap().Find(Entry.RowName);
+	const uint8* RowPtr = Found ? *Found : nullptr;
+	if (!RowPtr)
+	{
+		return false;
+	}
+
+	const FName AssetNameField = Source->AssetNameFieldName.IsNone() ? TEXT("AssetName") : Source->AssetNameFieldName;
+	const FName PackagePathField = Source->PackagePathFieldName.IsNone() ? TEXT("PackagePath") : Source->PackagePathFieldName;
+
+	FString AssetName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowPtr, AssetNameField);
+	FString PackagePath = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowPtr, PackagePathField);
+
+	if (AssetName.IsEmpty())
+	{
+		AssetName = Entry.RowName.IsNone() ? FString::Printf(TEXT("Item_%lld"), (long long)Entry.Code) : Entry.RowName.ToString();
+	}
+	if (PackagePath.IsEmpty())
+	{
+		PackagePath = TEXT("/Game/YOLOInventory/Generated");
+	}
+
+	URowData* RowWrapper = NewObject<URowData>();
+	RowWrapper->Address = const_cast<uint8*>(RowPtr);
+	RowWrapper->Struct = Table->RowStruct;
+
+	UObject* Transformed = nullptr;
+	if (TSubclassOf<UCSVDataTransformer> Effective = Source->GetEffectiveTransformerClass())
+	{
+		if (UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Effective))
+		{
+			Transformed = Transformer->TransformObject(RowWrapper);
+		}
+	}
+	UYIItemDefinition* Def = Cast<UYIItemDefinition>(Transformed);
+	if (!Def)
+	{
+		return false;
+	}
+
+	const FString AssetLongPath = PackagePath / AssetName;
+	const FString SanitizedPackage = UPackageTools::SanitizePackageName(AssetLongPath);
+	const FString ObjectPath = SanitizedPackage + TEXT(".") + AssetName;
+
+	if (UYIItemDefinition* Existing = Cast<UYIItemDefinition>(StaticLoadObject(UYIItemDefinition::StaticClass(), nullptr, *ObjectPath)))
+	{
+		if (UCSVBPFunctionLibrary::AutoAssignProperties(RowWrapper, Existing, {}))
+		{
+			Existing->MarkPackageDirty();
+			return true;
+		}
+		return false;
+	}
+
+	UPackage* Pkg = CreatePackage(*SanitizedPackage);
+	UObject* NewAsset = NewObject<UObject>(Pkg, Def->GetClass(), *AssetName, RF_Public | RF_Standalone | RF_Transactional, Def);
+	if (!NewAsset)
+	{
+		return false;
+	}
+
+	FAssetRegistryModule::AssetCreated(NewAsset);
+	Pkg->MarkPackageDirty();
+	return true;
+}
+
+void FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
+{
+	if (!Bag)
+	{
+		return;
+	}
+
+	UYIItemDefinition* Def = nullptr;
+	if (Entry.ItemAsset.IsValid())
+	{
+		Def = Entry.ItemAsset.Get();
+	}
+	if (!Def && Entry.bIsDataTable)
+	{
+		if (CreateAssetFromEntry(Entry))
+		{
+			if (Entry.ItemAsset.IsValid())
+			{
+				Def = Entry.ItemAsset.Get();
+			}
+		}
+	}
+	if (!Def && GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Def = Registry->GetByCode(Entry.Code);
+		}
+	}
+	if (!Def)
+	{
+		return;
+	}
+
+	FYIBagItem NewItem;
+	NewItem.Item.Definition = Def;
+	NewItem.Item.Count = 1;
+	NewItem.Size = Def->DefaultSize;
+	NewItem.Pos = FIntPoint::ZeroValue;
+	Bag->AddBagItem(NewItem);
 }

@@ -7,6 +7,16 @@ class UYIInventoryBag;
 class SWidget;
 class SDockTab;
 class SBagEditor;
+class ITableRow;
+class STableViewBase;
+template<typename ItemType> class SListView;
+struct FYIItemDashboardEntry;
+
+enum class EYIBagPaletteMode : uint8
+{
+	Assets,
+	DataRows
+};
 
 class YOLOINVENTORYEDITOR_API FYIInventoryBagEditor : public FAssetEditorToolkit
 {
@@ -36,10 +46,18 @@ public:
 
 private:
 	virtual void UnregisterTabSpawners(const TSharedRef<class FTabManager>& InTabManager) override;
+	void RefreshDataRowEntries();
+	TSharedRef<ITableRow> MakeDataRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
+	TSharedPtr<SWidget> BuildDataRowContextMenu(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
+	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;
+	void AddEntryToBag(const FYIItemDashboardEntry& Entry);
 
 	TSharedPtr<SBagEditor> GridWidget;
 	// Cache for SComboBox options since OptionsSource_Lambda is not supported
 	TArray<TSharedPtr<FString>> SortOptionsCache;
 	TSharedPtr<class SComboBox<TSharedPtr<FString>>> SortCombo;
+	TSharedPtr<SListView<TSharedPtr<FYIItemDashboardEntry>>> DataRowListView;
+	TArray<TSharedPtr<FYIItemDashboardEntry>> DataRowEntries;
+	EYIBagPaletteMode PaletteMode = EYIBagPaletteMode::Assets;
 	UYIInventoryBag* Bag = nullptr;
 };
