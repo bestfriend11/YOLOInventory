@@ -128,7 +128,7 @@ void UYITradeInteractionComponent::RequestShop(UYIShopComponent* Shop)
     Server_RequestShop(Shop);
 }
 
-void UYITradeInteractionComponent::RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+void UYITradeInteractionComponent::RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
     if (!IsOwnerValidForTrade(true))
     {
@@ -138,7 +138,7 @@ void UYITradeInteractionComponent::RequestShopBuy(UYIShopComponent* Shop, int32 
     {
         return;
     }
-    Server_RequestShopBuy(Shop, StockIndex, Count, BuyerInv);
+    Server_RequestShopBuy(Shop, StockIndex, Count, BuyerInv, DestPos);
 }
 
 void UYITradeInteractionComponent::RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
@@ -243,7 +243,7 @@ bool UYITradeInteractionComponent::Server_RequestShop_Validate(UYIShopComponent*
     return IsOwnerValidForTrade(false) && Shop != nullptr;
 }
 
-void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
     if (!IsOwnerValidForTrade(false) || !Shop || !BuyerInv || Count <= 0)
     {
@@ -268,11 +268,11 @@ void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopC
         }
     }
 
-    Shop->ServerBuyItem(StockIndex, Count, BuyerInv);
+    Shop->ServerBuyItem(StockIndex, Count, BuyerInv, DestPos);
     Client_ShopActionResult(Shop, true, NSLOCTEXT("YOLOInventory", "Shop_Buy_OK", "Purchase requested"));
 }
 
-bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
     return IsOwnerValidForTrade(false) && Shop != nullptr && BuyerInv != nullptr && Count > 0;
 }

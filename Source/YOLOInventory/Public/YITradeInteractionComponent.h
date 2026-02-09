@@ -89,9 +89,9 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop")
     FIntPoint CurrentShopStockSize = FIntPoint(0,0);
 
-    /** Client call: buy an item from the active shop (server authoritative). */
+    /** Client call: buy an item from the active shop (server authoritative). DestPos optional for exact placement. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop")
-    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv);
+    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
 
     /** Client RPC: push shop stock data to owning client (used by server). */
     UFUNCTION(Client, Reliable)
@@ -168,7 +168,7 @@ protected:
 	void Server_RequestShop(UYIShopComponent* Shop);
 
 	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv);
+	void Server_RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);

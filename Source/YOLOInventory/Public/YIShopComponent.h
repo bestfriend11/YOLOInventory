@@ -82,6 +82,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
     bool bAllowSelling = true;
 
+    /** Auto-pack stock after buy/sell to keep it tidy. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    bool bAutoSortStock = true;
+
     /** Sell price multiplier applied to listing prices (e.g. 0.5 = 50% of buy price). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ClampMin="0.0", ClampMax="1.0"))
     float SellPriceMultiplier = 0.5f;
@@ -128,7 +132,7 @@ public:
 
     /** Server: attempt to buy a slot from this shop into buyer's inventory component. */
     UFUNCTION(Server, Reliable, WithValidation)
-    void ServerBuyItem(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv);
+    void ServerBuyItem(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
 
     /** Server: attempt to sell a slot from player's inventory into this shop. */
     UFUNCTION(Server, Reliable, WithValidation)

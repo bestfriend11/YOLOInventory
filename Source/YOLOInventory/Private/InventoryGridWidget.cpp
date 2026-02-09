@@ -802,7 +802,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 					{
 						const int32 BuyCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
-						TradeComp->RequestShopBuy(ActiveShopComponent, GInventoryDrag.SourceIndex, BuyCount, OwnerComp);
+						TradeComp->RequestShopBuy(ActiveShopComponent, GInventoryDrag.SourceIndex, BuyCount, OwnerComp, Cell);
 						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 						PlayDropSound();
 						GInventoryDrag.Reset();

@@ -95,7 +95,7 @@ bool UYIShopComponent::ConsumePrice(UYIPlayerInventoryStateComponent* BuyerState
     return true;
 }
 
-void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
     if (!GetOwner() || !GetOwner()->HasAuthority() || !BuyerInv || Count <= 0) return;
 
@@ -130,6 +130,24 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
 
     const int64 Code = StockItem.Item.Definition.IsValid() ? StockItem.Item.Definition.Get()->UniqueCode : 0;
 
+    // If a destination is specified, enforce placement before charging.
+    if (DestPos.X >= 0 && DestPos.Y >= 0)
+    {
+        UYIInventoryBag* BuyerBag = BuyerInv->GetBag();
+        if (!BuyerBag)
+        {
+            OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
+            NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoBag", "No inventory bag"));
+            return;
+        }
+        if (!BuyerBag->CanPlaceAt(DestPos, StockItem.Size))
+        {
+            OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
+            NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_InvalidCell", "Invalid placement"));
+            return;
+        }
+    }
+
     if (!ConsumePrice(BuyerState, Code, Count))
     {
         OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
@@ -140,7 +158,25 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     // Slice and add
     FYIBagItem Slice = StockItem;
     Slice.Item.Count = Count;
-    int32 Added = BuyerInv->GetBag() ? BuyerInv->GetBag()->AddBagItem(Slice) : INDEX_NONE;
+    if (DestPos.X >= 0 && DestPos.Y >= 0)
+    {
+        Slice.Pos = DestPos;
+    }
+    int32 Added = INDEX_NONE;
+    if (UYIInventoryBag* BuyerBag = BuyerInv->GetBag())
+    {
+        if (DestPos.X >= 0 && DestPos.Y >= 0)
+        {
+            const bool bSavedAutoMerge = BuyerBag->bAutoMergeOnAdd;
+            BuyerBag->bAutoMergeOnAdd = false;
+            Added = BuyerBag->AddBagItem(Slice);
+            BuyerBag->bAutoMergeOnAdd = bSavedAutoMerge;
+        }
+        else
+        {
+            Added = BuyerBag->AddBagItem(Slice);
+        }
+    }
     if (Added == INDEX_NONE)
     {
         // refund resources
@@ -166,6 +202,11 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
         StockBag->RemoveItem(StockIndex);
     }
     BuyerInv->SyncNetState();
+    if (bAutoSortStock && StockBag)
+    {
+        StockBag->AutoPack();
+    }
+
     if (StockMode == EYIShopStockMode::SharedStock)
     {
         RefreshMirror();
@@ -184,7 +225,7 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     }
 }
 
-bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv)
+bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
     return true; // lightweight; implementation does full checks
 }
@@ -290,6 +331,11 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
     }
 
     SellerInv->SyncNetState();
+    if (bAutoSortStock && StockBag)
+    {
+        StockBag->AutoPack();
+    }
+
     if (StockMode == EYIShopStockMode::SharedStock)
     {
         RefreshMirror();
