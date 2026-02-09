@@ -6,7 +6,6 @@
 #include "YIItemDefinition.h"
 
 #include "AssetTypeActions_Base.h"
-#include "YIInventoryFactory.h"
 #include "YIItemDefinitionFactory.h"
 #include "AssetTypeActions_YIInventoryBag.h"
 #include "AssetTypeActions_YIAffix.h"
@@ -41,31 +40,8 @@ TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 
-class FAssetTypeActions_YIInventoryAsset : public FAssetTypeActions_Base
-{
-public:
-	virtual FText GetName() const override { return NSLOCTEXT("YOLOInventory", "AssetTypeName", "YOLO Inventory"); }
-	virtual FColor GetTypeColor() const override { return FColor(200, 80, 220); }
-	virtual UClass* GetSupportedClass() const override { return UYIItemDefinition::StaticClass(); }
-	virtual uint32 GetCategories() override { return GYOLOInventoryAssetCategory; }
-	virtual bool HasActions(const TArray<UObject*>& InObjects) const override { return true; }
-	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor) override;
-};
-
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Toolkits/IToolkitHost.h"
-
-void FAssetTypeActions_YIInventoryAsset::OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor)
-{
-	for (UObject* Obj : InObjects)
-	{
-		if (UYIItemDefinition* Asset = Cast<UYIItemDefinition>(Obj))
-		{
-			TSharedRef<FYIItemDefinitionEditor> Editor = MakeShared<FYIItemDefinitionEditor>();
-			Editor->Init(Asset, EditWithinLevelEditor);
-		}
-	}
-}
 
 class FAssetTypeActions_YIItemDefinition : public FAssetTypeActions_Base
 {
@@ -241,11 +217,6 @@ void FYOLOInventoryEditorModule::ShutdownModule()
 void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
 {
 	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	{
-		TSharedRef<FAssetTypeActions_YIInventoryAsset> Action = MakeShared<FAssetTypeActions_YIInventoryAsset>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
 	{
 		TSharedRef<FAssetTypeActions_YIInventoryBag> Action = MakeShared<FAssetTypeActions_YIInventoryBag>();
 		AssetTools.RegisterAssetTypeActions(Action);
