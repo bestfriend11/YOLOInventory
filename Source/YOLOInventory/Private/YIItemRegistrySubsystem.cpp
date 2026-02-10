@@ -11,6 +11,8 @@
 #include "YIItemDefinition.h"
 #include "UObject/StructOnScope.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "GameplayTagContainer.h"
+#include "Engine/Texture.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIItemRegistry, Log, All);
 
@@ -140,6 +142,30 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 			DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
 			return true;
 		}
+		if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+		{
+			if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+			{
+				if (DestStruct->Struct == FGameplayTag::StaticStruct())
+				{
+					FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+					*TagPtr = FGameplayTag::RequestGameplayTag(FName(*Value), false);
+					return true;
+				}
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		{
+			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+			{
+				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				{
+					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
+					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
+					return true;
+				}
+			}
+		}
 	}
 	if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
 	{
@@ -161,6 +187,30 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 		{
 			DestText->SetPropertyValue(DestPtr, FText::FromName(Value));
 			return true;
+		}
+		if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+		{
+			if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+			{
+				if (DestStruct->Struct == FGameplayTag::StaticStruct())
+				{
+					FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+					*TagPtr = FGameplayTag::RequestGameplayTag(Value, false);
+					return true;
+				}
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		{
+			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+			{
+				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				{
+					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
+					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
+					return true;
+				}
+			}
 		}
 	}
 	if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
@@ -188,6 +238,30 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 		{
 			DestText->SetPropertyValue(DestPtr, Value);
 			return true;
+		}
+		if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+		{
+			if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+			{
+				if (DestStruct->Struct == FGameplayTag::StaticStruct())
+				{
+					FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+					*TagPtr = FGameplayTag::RequestGameplayTag(FName(*Value.ToString()), false);
+					return true;
+				}
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		{
+			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+			{
+				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				{
+					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
+					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
+					return true;
+				}
+			}
 		}
 	}
 
@@ -238,6 +312,24 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				DestNum->SetFloatingPointPropertyValue(DestPtr, bVal ? 1.0 : 0.0);
 			}
 			return true;
+		}
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+	{
+		if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+		{
+			if (DestStruct->Struct == FGameplayTag::StaticStruct())
+			{
+				if (const FStructProperty* SrcStruct = CastField<FStructProperty>(SourceProp))
+				{
+					if (SrcStruct->Struct == FGameplayTag::StaticStruct())
+					{
+						DestStruct->CopyCompleteValue(DestPtr, SourcePtr);
+						return true;
+					}
+				}
+			}
 		}
 	}
 
@@ -403,6 +495,58 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 
 		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
+
+		if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+		{
+			if (Mapping.SourceFieldB.IsNone())
+			{
+				continue;
+			}
+			FProperty* SourcePropB = nullptr;
+			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
+			{
+				if (It->GetAuthoredName().Equals(Mapping.SourceFieldB.ToString(), ESearchCase::IgnoreCase))
+				{
+					SourcePropB = *It;
+					break;
+				}
+			}
+			if (!SourcePropB)
+			{
+				continue;
+			}
+
+			const FNumericProperty* NumA = CastField<FNumericProperty>(SourceProp);
+			const FNumericProperty* NumB = CastField<FNumericProperty>(SourcePropB);
+			if (!NumA || !NumB)
+			{
+				continue;
+			}
+
+			const double X = NumA->IsFloatingPoint() ? NumA->GetFloatingPointPropertyValue(SrcPtr) : (double)NumA->GetSignedIntPropertyValue(SrcPtr);
+			const uint8* SrcPtrB = SourcePropB->ContainerPtrToValuePtr<uint8>(RowPtr);
+			const double Y = NumB->IsFloatingPoint() ? NumB->GetFloatingPointPropertyValue(SrcPtrB) : (double)NumB->GetSignedIntPropertyValue(SrcPtrB);
+
+			if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+			{
+				if (DestStruct->Struct == TBaseStructure<FVector2D>::Get())
+				{
+					FVector2D* Vec = reinterpret_cast<FVector2D*>(DestPtr);
+					*Vec = FVector2D((float)X, (float)Y);
+					ApplyTransformFunction(Mapping, DestProp, DestPtr);
+					continue;
+				}
+				if (DestStruct->Struct == TBaseStructure<FIntPoint>::Get())
+				{
+					FIntPoint* Pt = reinterpret_cast<FIntPoint*>(DestPtr);
+					*Pt = FIntPoint((int32)X, (int32)Y);
+					ApplyTransformFunction(Mapping, DestProp, DestPtr);
+					continue;
+				}
+			}
+			continue;
+		}
+
 		if (CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr, Mapping.Conversion))
 		{
 			ApplyTransformFunction(Mapping, DestProp, DestPtr);

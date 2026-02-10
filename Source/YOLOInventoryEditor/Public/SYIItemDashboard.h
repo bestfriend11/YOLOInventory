@@ -122,4 +122,8 @@ private:
 	EDashTypeFilter TypeFilter = EDashTypeFilter::All;
 	EDashStatusFilter StatusFilter = EDashStatusFilter::All;
 	bool bGroupBySource = false;
+	bool bShowDetailsPanel = true;
+	bool bShowMappingPanel = true;
+	bool bShowPreviewPanel = true;
+	bool bShowLogPanel = true;
 };

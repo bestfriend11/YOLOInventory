@@ -16,7 +16,10 @@ enum class EYIFieldMappingConversion : uint8
 	ToInt       UMETA(DisplayName="To Int"),
 	ToFloat     UMETA(DisplayName="To Float"),
 	BoolFromInt UMETA(DisplayName="Bool from Int>0"),
-	BoolFromText UMETA(DisplayName="Bool from Text (non-empty)")
+	BoolFromText UMETA(DisplayName="Bool from Text (non-empty)"),
+	ToGameplayTag UMETA(DisplayName="To Gameplay Tag"),
+	ToSoftTexture UMETA(DisplayName="To Texture (Soft)"),
+	Vector2DFromXY UMETA(DisplayName="Vector2D from XY Fields")
 };
 
 UENUM(BlueprintType)
@@ -43,6 +46,10 @@ struct FYIFieldMapping
 	/** Optional conversion applied before assigning to the target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
 	EYIFieldMappingConversion Conversion = EYIFieldMappingConversion::None;
+
+	/** Optional second source field (used by Vector2DFromXY conversion). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	FName SourceFieldB;
 
 	/** Optional transform function library (BlueprintFunctionLibrary). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping", meta=(AllowedClasses="/Script/Engine.BlueprintFunctionLibrary"))
