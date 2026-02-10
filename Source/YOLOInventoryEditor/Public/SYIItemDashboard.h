@@ -72,6 +72,7 @@ private:
 	FReply HandleListKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
 	void RefreshLogEntries();
 	TSharedRef<ITableRow> MakeLogRow(TSharedPtr<struct FYIEditorLogEntry> Entry, const TSharedRef<STableViewBase>& Owner);
+	void AutoMatchInlineMappings(bool bAddAllFields);
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -86,6 +87,8 @@ private:
 	TArray<TSharedPtr<FString>> SourceFieldOptions;
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	TArray<TSharedPtr<FString>> ConverterOptions;
+	TMap<FName, FProperty*> SourceFieldPropCache;
+	TMap<FName, FProperty*> TargetFieldPropCache;
 	TArray<TSharedPtr<struct FYIEditorLogEntry>> LogEntries;
 	TSharedPtr<class SListView<TSharedPtr<struct FYIEditorLogEntry>>> LogListView;
 	FDelegateHandle LogChangedHandle;

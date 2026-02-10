@@ -353,6 +353,28 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
 						[
 							SNew(SButton)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_AutoMatch","Auto Match"))
+							.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_AutoMatch_TT","Match fields by name and update missing source fields."))
+							.OnClicked_Lambda([this]()
+							{
+								AutoMatchInlineMappings(false);
+								return FReply::Handled();
+							})
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+						[
+							SNew(SButton)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_AddAllFields","Add All Fields"))
+							.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_AddAllFields_TT","Add mapping rows for every item definition field, and auto-match where possible."))
+							.OnClicked_Lambda([this]()
+							{
+								AutoMatchInlineMappings(true);
+								return FReply::Handled();
+							})
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8,0)
+						[
+							SNew(SButton)
 							.Text(NSLOCTEXT("YOLOInventory","Dash_ClearMapping","Clear"))
 							.OnClicked_Lambda([this]()
 							{
@@ -1470,6 +1492,8 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	SourceFieldOptions.Reset();
 	TargetPropertyOptions.Reset();
 	ConverterOptions.Reset();
+	SourceFieldPropCache.Reset();
+	TargetFieldPropCache.Reset();
 
 	if (!Source)
 	{
@@ -1487,13 +1511,17 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 		{
 			for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
 			{
-				SourceFieldOptions.Add(MakeShared<FString>((*It)->GetAuthoredName()));
+				const FName FieldName((*It)->GetAuthoredName());
+				SourceFieldOptions.Add(MakeShared<FString>(FieldName.ToString()));
+				SourceFieldPropCache.Add(FieldName, *It);
 			}
 		}
 	}
 	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
 	{
-		TargetPropertyOptions.Add(MakeShared<FString>((*It)->GetAuthoredName()));
+		const FName FieldName((*It)->GetAuthoredName());
+		TargetPropertyOptions.Add(MakeShared<FString>(FieldName.ToString()));
+		TargetFieldPropCache.Add(FieldName, *It);
 	}
 
 	for (const FYIFieldMapping& M : Source->InlineMappings)
@@ -1507,6 +1535,149 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	}
 }
 
+void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
+{
+	if (!CurrentMappingSource.IsValid())
+	{
+		return;
+	}
+
+	UYIDataTableItemSource* Source = CurrentMappingSource.Get();
+	if (!Source)
+	{
+		return;
+	}
+
+	UDataTable* Table = Source->DataTable.LoadSynchronous();
+	if (!Table || !Table->RowStruct)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_AutoMatch_NoTable","Auto-match failed: data table missing or no row struct."),
+			FText::FromString(Source->GetPathName()));
+		return;
+	}
+
+	auto NormalizeField = [](const FString& In)->FString
+	{
+		FString Out;
+		Out.Reserve(In.Len());
+		for (TCHAR C : In)
+		{
+			if (FChar::IsAlnum(C))
+			{
+				Out.AppendChar(FChar::ToLower(C));
+			}
+		}
+		return Out;
+	};
+
+	TMap<FString, FName> SourceByNorm;
+	TMap<FString, FName> SourceByLower;
+	for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
+	{
+		const FName FieldName((*It)->GetAuthoredName());
+		const FString NameStr = FieldName.ToString();
+		SourceByNorm.Add(NormalizeField(NameStr), FieldName);
+		SourceByLower.Add(NameStr.ToLower(), FieldName);
+	}
+
+	TSet<FName> ExistingTargets;
+	for (const FYIFieldMapping& M : Source->InlineMappings)
+	{
+		if (!M.TargetProperty.IsNone())
+		{
+			ExistingTargets.Add(M.TargetProperty);
+		}
+	}
+
+	bool bChanged = false;
+
+	auto GuessConversion = [&](const FProperty* SourceProp, const FProperty* TargetProp)->EYIFieldMappingConversion
+	{
+		if (!SourceProp || !TargetProp)
+		{
+			return EYIFieldMappingConversion::None;
+		}
+		if (CastField<FBoolProperty>(TargetProp))
+		{
+			if (CastField<FNumericProperty>(SourceProp))
+			{
+				return EYIFieldMappingConversion::BoolFromInt;
+			}
+			if (CastField<FStrProperty>(SourceProp) || CastField<FTextProperty>(SourceProp) || CastField<FNameProperty>(SourceProp))
+			{
+				return EYIFieldMappingConversion::BoolFromText;
+			}
+		}
+		if (CastField<FNameProperty>(TargetProp)) return EYIFieldMappingConversion::ToName;
+		if (CastField<FTextProperty>(TargetProp)) return EYIFieldMappingConversion::ToText;
+		if (const FNumericProperty* NumTarget = CastField<FNumericProperty>(TargetProp))
+		{
+			if (NumTarget->IsInteger()) return EYIFieldMappingConversion::ToInt;
+			return EYIFieldMappingConversion::ToFloat;
+		}
+		return EYIFieldMappingConversion::None;
+	};
+
+	// First, patch existing mappings that have missing source fields
+	for (FYIFieldMapping& M : Source->InlineMappings)
+	{
+		if (M.TargetProperty.IsNone() || !M.SourceField.IsNone())
+		{
+			continue;
+		}
+		const FString TargetLower = M.TargetProperty.ToString().ToLower();
+		const FString TargetNorm = NormalizeField(M.TargetProperty.ToString());
+		FName Match = NAME_None;
+		if (const FName* Found = SourceByLower.Find(TargetLower)) Match = *Found;
+		else if (const FName* FoundNorm = SourceByNorm.Find(TargetNorm)) Match = *FoundNorm;
+		if (!Match.IsNone())
+		{
+			M.SourceField = Match;
+			const FProperty* SourceProp = SourceFieldPropCache.FindRef(Match);
+			const FProperty* TargetProp = TargetFieldPropCache.FindRef(M.TargetProperty);
+			M.Conversion = GuessConversion(SourceProp, TargetProp);
+			bChanged = true;
+		}
+	}
+
+	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+	{
+		const FName TargetName((*It)->GetAuthoredName());
+		if (!bAddAllFields && ExistingTargets.Contains(TargetName))
+		{
+			continue;
+		}
+
+		const FString TargetLower = TargetName.ToString().ToLower();
+		const FString TargetNorm = NormalizeField(TargetName.ToString());
+		FName Match = NAME_None;
+		if (const FName* Found = SourceByLower.Find(TargetLower)) Match = *Found;
+		else if (const FName* FoundNorm = SourceByNorm.Find(TargetNorm)) Match = *FoundNorm;
+
+		if (!bAddAllFields && Match.IsNone())
+		{
+			continue;
+		}
+
+		FYIFieldMapping NewMap;
+		NewMap.TargetProperty = TargetName;
+		NewMap.SourceField = Match;
+		NewMap.Conversion = GuessConversion(SourceFieldPropCache.FindRef(Match), *It);
+		Source->InlineMappings.Add(NewMap);
+		bChanged = true;
+	}
+
+	if (bChanged)
+	{
+		Source->Modify();
+		RefreshInlineMappingEditor(Source);
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
+			NSLOCTEXT("YOLOInventory","Dash_AutoMatch_Done","Auto-match updated inline mappings."),
+			FText::FromString(Source->GetPathName()));
+	}
+}
+
 TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMapping> Mapping, const TSharedRef<STableViewBase>& OwnerTable)
 {
 	auto DropdownText = [](const TSharedPtr<FString>& Str)->FText
@@ -1514,16 +1685,129 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		return Str.IsValid() ? FText::FromString(*Str) : FText::GetEmpty();
 	};
 
+	auto GetTypeInfo = [](const FProperty* Prop, FString& OutLabel, FLinearColor& OutColor)
+	{
+		OutLabel = TEXT("?");
+		OutColor = FLinearColor(0.5f, 0.5f, 0.5f);
+		if (!Prop) return;
+		if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+		{
+			OutLabel = Num->IsInteger() ? TEXT("Int") : TEXT("Float");
+			OutColor = Num->IsInteger() ? FLinearColor(0.3f, 0.7f, 1.f) : FLinearColor(0.3f, 1.f, 0.6f);
+			return;
+		}
+		if (CastField<FBoolProperty>(Prop)) { OutLabel = TEXT("Bool"); OutColor = FLinearColor(1.f, 0.85f, 0.3f); return; }
+		if (CastField<FNameProperty>(Prop)) { OutLabel = TEXT("Name"); OutColor = FLinearColor(0.4f, 0.7f, 1.f); return; }
+		if (CastField<FStrProperty>(Prop)) { OutLabel = TEXT("String"); OutColor = FLinearColor(0.7f, 0.5f, 1.f); return; }
+		if (CastField<FTextProperty>(Prop)) { OutLabel = TEXT("Text"); OutColor = FLinearColor(0.3f, 0.9f, 0.9f); return; }
+		if (CastField<FEnumProperty>(Prop)) { OutLabel = TEXT("Enum"); OutColor = FLinearColor(1.f, 0.6f, 0.2f); return; }
+		if (CastField<FStructProperty>(Prop)) { OutLabel = TEXT("Struct"); OutColor = FLinearColor(0.6f, 0.6f, 0.6f); return; }
+		if (CastField<FObjectPropertyBase>(Prop)) { OutLabel = TEXT("Object"); OutColor = FLinearColor(0.8f, 0.6f, 0.3f); return; }
+		if (CastField<FSoftObjectProperty>(Prop)) { OutLabel = TEXT("SoftObj"); OutColor = FLinearColor(0.8f, 0.6f, 0.3f); return; }
+		if (CastField<FArrayProperty>(Prop)) { OutLabel = TEXT("Array"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
+		if (CastField<FMapProperty>(Prop)) { OutLabel = TEXT("Map"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
+		if (CastField<FSetProperty>(Prop)) { OutLabel = TEXT("Set"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
+	};
+
+	auto MakeTypeBadge = [&](const FProperty* Prop)->TSharedRef<SWidget>
+	{
+		FString Label;
+		FLinearColor Color;
+		GetTypeInfo(Prop, Label, Color);
+		return SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+			.Padding(FMargin(4,1))
+			.BorderBackgroundColor(Color)
+			[
+				SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+			];
+	};
+
+	auto GetSourceProp = [this, Mapping]() -> FProperty*
+	{
+		if (!Mapping.IsValid() || Mapping->SourceField.IsNone()) return nullptr;
+		if (FProperty** Found = SourceFieldPropCache.Find(Mapping->SourceField)) return *Found;
+		return nullptr;
+	};
+
+	auto GetTargetProp = [this, Mapping]() -> FProperty*
+	{
+		if (!Mapping.IsValid() || Mapping->TargetProperty.IsNone()) return nullptr;
+		if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty)) return *Found;
+		return nullptr;
+	};
+
+	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
+	{
+		if (!Mapping.IsValid())
+		{
+			return SNew(SSpacer);
+		}
+		const FProperty* SourceProp = GetSourceProp();
+		const FProperty* TargetProp = GetTargetProp();
+		if (!SourceProp || !TargetProp)
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Error"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingMissing","Missing source or target field."));
+		}
+		const bool bTypesMatch = SourceProp->GetClass() == TargetProp->GetClass();
+		const bool bBothNumeric = CastField<FNumericProperty>(SourceProp) && CastField<FNumericProperty>(TargetProp);
+		const bool bBothTextish =
+			(CastField<FStrProperty>(SourceProp) || CastField<FNameProperty>(SourceProp) || CastField<FTextProperty>(SourceProp)) &&
+			(CastField<FStrProperty>(TargetProp) || CastField<FNameProperty>(TargetProp) || CastField<FTextProperty>(TargetProp));
+		const bool bCompatible = bTypesMatch || bBothNumeric || bBothTextish;
+		if (!bCompatible && Mapping->Conversion == EYIFieldMappingConversion::None)
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTypeMismatch","Type mismatch. Add a conversion."));
+		}
+		return SNew(SImage)
+			.Image(FAppStyle::Get().GetBrush("Icons.Check"))
+			.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingOk","Mapping looks OK."));
+	};
+
 	return SNew(STableRow<TSharedPtr<FYIFieldMapping>>, OwnerTable)
 	[
 		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2).VAlign(VAlign_Center)
+		[
+			BuildStatusWidget()
+		]
 		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
 		[
 			SNew(SComboBox<TSharedPtr<FString>>)
 			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->SourceFieldOptions)
-			.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+			.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
 			{
-				return SNew(STextBlock).Text(DropdownText(InItem));
+				const FName FieldName = InItem.IsValid() ? FName(**InItem) : NAME_None;
+				FString Label;
+				FLinearColor Color;
+				FProperty* Prop = nullptr;
+				if (FieldName != NAME_None)
+				{
+					if (FProperty** Found = const_cast<SYIItemDashboard*>(this)->SourceFieldPropCache.Find(FieldName))
+					{
+						Prop = *Found;
+					}
+				}
+				GetTypeInfo(Prop, Label, Color);
+				return SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+						.Padding(FMargin(3,1))
+						.BorderBackgroundColor(Color)
+						[
+							SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+						]
+					]
+					+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4,0)
+					[
+						SNew(STextBlock).Text(DropdownText(InItem))
+					];
 			})
 			.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 			{
@@ -1552,23 +1836,57 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			}())
 			.Content()
 			[
-				SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
-				{
-					const TSharedPtr<FString>* Found = SourceFieldOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+				[
+					MakeTypeBadge(GetSourceProp())
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4,0)
+				[
+					SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
 					{
-						return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->SourceField);
-					});
-					return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->SourceField.ToString() : TEXT(""));
-				})
+						const TSharedPtr<FString>* Found = SourceFieldOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+						{
+							return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->SourceField);
+						});
+						return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->SourceField.ToString() : TEXT(""));
+					})
+				]
 			]
 		]
 		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
 		[
 			SNew(SComboBox<TSharedPtr<FString>>)
 			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions)
-			.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+			.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
 			{
-				return SNew(STextBlock).Text(DropdownText(InItem));
+				const FName FieldName = InItem.IsValid() ? FName(**InItem) : NAME_None;
+				FString Label;
+				FLinearColor Color;
+				FProperty* Prop = nullptr;
+				if (FieldName != NAME_None)
+				{
+					if (FProperty** Found = const_cast<SYIItemDashboard*>(this)->TargetFieldPropCache.Find(FieldName))
+					{
+						Prop = *Found;
+					}
+				}
+				GetTypeInfo(Prop, Label, Color);
+				return SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+						.Padding(FMargin(3,1))
+						.BorderBackgroundColor(Color)
+						[
+							SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+						]
+					]
+					+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4,0)
+					[
+						SNew(STextBlock).Text(DropdownText(InItem))
+					];
 			})
 			.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 			{
@@ -1596,17 +1914,25 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				return TSharedPtr<FString>();
 			}())
 			.Content()
-		[
-			SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
-			{
-				const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
-				{
-					return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
-				});
-				return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
-			})
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+				[
+					MakeTypeBadge(GetTargetProp())
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4,0)
+				[
+					SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+					{
+						const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+						{
+							return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+						});
+						return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
+					})
+				]
+			]
 		]
-	]
 	+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(2)
 	[
 		SNew(SComboBox<TSharedPtr<FString>>)
