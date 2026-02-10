@@ -4,8 +4,8 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Input/Reply.h"
 #include "Input/Events.h"
-#include "UObject/SoftObjectPtr.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "UObject/SoftObjectPtr.h"
 #include "Data/YIDataTableItemSource.h"
 #include "Containers/Array.h"
 
@@ -25,6 +25,24 @@ struct FYIItemDashboardEntry
 	TSoftObjectPtr<class UYIItemDefinition> ItemAsset;
 	TSoftObjectPtr<class UDataTable> DataTable;
 	TSoftObjectPtr<class UYIDataTableItemSource> DataSource;
+};
+
+struct FYITransformFunctionInfo
+{
+	FString DisplayName;
+	TSoftClassPtr<class UBlueprintFunctionLibrary> Library;
+	FName FunctionName;
+};
+
+struct FYIMappingPreviewRow
+{
+	FName SourceField;
+	FName TargetProperty;
+	FString SourceValue;
+	FString ConvertedValue;
+	FString TransformedValue;
+	FText Status;
+	FLinearColor StatusColor = FLinearColor::White;
 };
 
 enum class EDashTypeFilter : uint8
@@ -73,6 +91,9 @@ private:
 	void RefreshLogEntries();
 	TSharedRef<ITableRow> MakeLogRow(TSharedPtr<struct FYIEditorLogEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 	void AutoMatchInlineMappings(bool bAddAllFields);
+	void BuildTransformFunctionOptions();
+	void RefreshMappingPreview();
+	TSharedRef<ITableRow> MakePreviewRow(TSharedPtr<FYIMappingPreviewRow> Row, const TSharedRef<STableViewBase>& Owner);
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -89,6 +110,11 @@ private:
 	TArray<TSharedPtr<FString>> ConverterOptions;
 	TMap<FName, FProperty*> SourceFieldPropCache;
 	TMap<FName, FProperty*> TargetFieldPropCache;
+	TArray<TSharedPtr<FYITransformFunctionInfo>> TransformFunctionOptions;
+	TArray<TSharedPtr<FYIMappingPreviewRow>> MappingPreviewRows;
+	TSharedPtr<class SListView<TSharedPtr<FYIMappingPreviewRow>>> MappingPreviewListView;
+	TArray<TSharedPtr<FString>> PreviewRowOptions;
+	FName PreviewRowName = NAME_None;
 	TArray<TSharedPtr<struct FYIEditorLogEntry>> LogEntries;
 	TSharedPtr<class SListView<TSharedPtr<struct FYIEditorLogEntry>>> LogListView;
 	FDelegateHandle LogChangedHandle;

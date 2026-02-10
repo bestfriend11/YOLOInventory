@@ -30,6 +30,7 @@
 #include "Widgets/Layout/SExpandableArea.h"
 #include "Widgets/Input/SButton.h"
 #include "Styling/AppStyle.h"
+#include "YIInventoryEditorModule.h"
 
 void SYIUnifiedDashboard::Construct(const FArguments& InArgs)
 {
@@ -80,25 +81,14 @@ void SYIUnifiedDashboard::Construct(const FArguments& InArgs)
 					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 					.Padding(8)
 					[
-						SAssignNew(HelpSwitcher, SWidgetSwitcher)
-						+ SWidgetSwitcher::Slot()
-						[
-							BuildHelpForItems()
-						]
-						+ SWidgetSwitcher::Slot()
-						[
-							BuildHelpForAffixes()
-						]
-						+ SWidgetSwitcher::Slot()
-						[
-							BuildHelpForGenerators()
-						]
+						SAssignNew(HelpPanel, SYIUnifiedHelpPanel)
 					]
 				]
 			]
 		]
 	];
 
+	FYOLOInventoryEditorModule::Get().RegisterHelpWidget(HelpPanel);
 	SetActiveTab(EYIUnifiedDashboardTab::Items);
 }
 
@@ -131,10 +121,11 @@ void SYIUnifiedDashboard::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		break;
 	}
 	TabSwitcher->SetActiveWidgetIndex(Index);
-	if (HelpSwitcher.IsValid())
+	if (HelpPanel.IsValid())
 	{
-		HelpSwitcher->SetActiveWidgetIndex(Index);
+		HelpPanel->SetActiveTab(ActiveTab);
 	}
+	FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(Index);
 }
 
 void SYIUnifiedDashboard::OpenAsset(UObject* Asset)
@@ -175,7 +166,44 @@ void SYIUnifiedDashboard::OpenAsset(UObject* Asset)
 	}
 }
 
-TSharedRef<SWidget> SYIUnifiedDashboard::MakeHelpCard(const FText& Title, const FText& Body, const FLinearColor& Accent, bool bExpanded)
+void SYIUnifiedHelpPanel::Construct(const FArguments& InArgs)
+{
+	ChildSlot
+	[
+		SAssignNew(HelpSwitcher, SWidgetSwitcher)
+		+ SWidgetSwitcher::Slot()
+		[
+			BuildHelpForItems()
+		]
+		+ SWidgetSwitcher::Slot()
+		[
+			BuildHelpForAffixes()
+		]
+		+ SWidgetSwitcher::Slot()
+		[
+			BuildHelpForGenerators()
+		]
+	];
+}
+
+void SYIUnifiedHelpPanel::SetActiveTab(EYIUnifiedDashboardTab NewTab)
+{
+	if (!HelpSwitcher.IsValid())
+	{
+		return;
+	}
+	int32 Index = 0;
+	switch (NewTab)
+	{
+	case EYIUnifiedDashboardTab::Items: Index = 0; break;
+	case EYIUnifiedDashboardTab::Affixes: Index = 1; break;
+	case EYIUnifiedDashboardTab::Generators: Index = 2; break;
+	default: break;
+	}
+	HelpSwitcher->SetActiveWidgetIndex(Index);
+}
+
+TSharedRef<SWidget> SYIUnifiedHelpPanel::MakeHelpCard(const FText& Title, const FText& Body, const FLinearColor& Accent, bool bExpanded)
 {
 	return SNew(SExpandableArea)
 		.InitiallyCollapsed(!bExpanded)
@@ -199,7 +227,7 @@ TSharedRef<SWidget> SYIUnifiedDashboard::MakeHelpCard(const FText& Title, const 
 		];
 }
 
-TSharedRef<SWidget> SYIUnifiedDashboard::MakeWizardStep(int32 StepNumber, const FText& Title, const FText& Body, const FText& ButtonText, TFunction<void()> OnClick)
+TSharedRef<SWidget> SYIUnifiedHelpPanel::MakeWizardStep(int32 StepNumber, const FText& Title, const FText& Body, const FText& ButtonText, TFunction<void()> OnClick)
 {
 	return SNew(SBorder)
 		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
@@ -234,7 +262,7 @@ TSharedRef<SWidget> SYIUnifiedDashboard::MakeWizardStep(int32 StepNumber, const 
 		];
 }
 
-TSharedRef<SWidget> SYIUnifiedDashboard::BuildHelpForItems()
+TSharedRef<SWidget> SYIUnifiedHelpPanel::BuildHelpForItems()
 {
 	return SNew(SScrollBox)
 		+ SScrollBox::Slot()
@@ -303,7 +331,7 @@ TSharedRef<SWidget> SYIUnifiedDashboard::BuildHelpForItems()
 		];
 }
 
-TSharedRef<SWidget> SYIUnifiedDashboard::BuildHelpForAffixes()
+TSharedRef<SWidget> SYIUnifiedHelpPanel::BuildHelpForAffixes()
 {
 	return SNew(SScrollBox)
 		+ SScrollBox::Slot()
@@ -361,7 +389,7 @@ TSharedRef<SWidget> SYIUnifiedDashboard::BuildHelpForAffixes()
 		];
 }
 
-TSharedRef<SWidget> SYIUnifiedDashboard::BuildHelpForGenerators()
+TSharedRef<SWidget> SYIUnifiedHelpPanel::BuildHelpForGenerators()
 {
 	return SNew(SScrollBox)
 		+ SScrollBox::Slot()
@@ -445,34 +473,34 @@ static void CreateAssetWithFactory(UFactory* Factory, const FString& TargetPath,
 	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
 }
 
-void SYIUnifiedDashboard::CreateItemSource()
+void SYIUnifiedHelpPanel::CreateItemSource()
 {
 	UDataAssetFactory* Factory = NewObject<UDataAssetFactory>();
 	Factory->DataAssetClass = UYIDataTableItemSource::StaticClass();
 	CreateAssetWithFactory(Factory, TEXT("/Game/YOLOInventory/ItemSources"), TEXT("ItemSource"));
 }
 
-void SYIUnifiedDashboard::CreateAffix()
+void SYIUnifiedHelpPanel::CreateAffix()
 {
 	CreateAssetWithFactory(NewObject<UYIAffixFactory>(), TEXT("/Game/YOLOInventory/Affixes"), TEXT("Affix"));
 }
 
-void SYIUnifiedDashboard::CreateAffixPool()
+void SYIUnifiedHelpPanel::CreateAffixPool()
 {
 	CreateAssetWithFactory(NewObject<UYIAffixPoolFactory>(), TEXT("/Game/YOLOInventory/Affixes"), TEXT("AffixPool"));
 }
 
-void SYIUnifiedDashboard::CreateLootTable()
+void SYIUnifiedHelpPanel::CreateLootTable()
 {
 	CreateAssetWithFactory(NewObject<UYILootTableFactory>(), TEXT("/Game/YOLOInventory/Loot"), TEXT("LootTable"));
 }
 
-void SYIUnifiedDashboard::CreateRarityProfile()
+void SYIUnifiedHelpPanel::CreateRarityProfile()
 {
 	CreateAssetWithFactory(NewObject<UYIRarityProfileFactory>(), TEXT("/Game/YOLOInventory/Rarity"), TEXT("RarityProfile"));
 }
 
-void SYIUnifiedDashboard::CreateItemGenerator()
+void SYIUnifiedHelpPanel::CreateItemGenerator()
 {
 	CreateAssetWithFactory(NewObject<UYIItemGeneratorFactory>(), TEXT("/Game/YOLOInventory/Generators"), TEXT("ItemGenerator"));
 }

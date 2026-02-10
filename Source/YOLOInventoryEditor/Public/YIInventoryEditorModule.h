@@ -20,6 +20,8 @@ public:
 
 	void OpenDashboardForAsset(UObject* Asset);
 	void RegisterDashboardWidget(const TSharedPtr<class SYIUnifiedDashboard>& Widget);
+	void RegisterHelpWidget(const TSharedPtr<class SYIUnifiedHelpPanel>& Widget);
+	void UpdateHelpTabIndex(int32 Index);
 
 private:
 	void RegisterAssetTypeActions();
@@ -27,5 +29,7 @@ private:
 
 	TArray<TSharedPtr<class FAssetTypeActions_Base>> RegisteredAssetTypeActions;
 	TWeakPtr<class SYIUnifiedDashboard> DashboardWidget;
+	TArray<TWeakPtr<class SYIUnifiedHelpPanel>> HelpWidgets;
+	int32 LastHelpTabIndex = 0;
 	TWeakObjectPtr<UObject> PendingAsset;
 };

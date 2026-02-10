@@ -44,6 +44,7 @@ TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
 uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
+static const FName YOLOInventoryHelpTabName(TEXT("YOLOInventory_Help"));
 
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Toolkits/IToolkitHost.h"
@@ -100,6 +101,33 @@ void FYOLOInventoryEditorModule::RegisterDashboardWidget(const TSharedPtr<SYIUni
 		}
 	}
 }
+
+void FYOLOInventoryEditorModule::RegisterHelpWidget(const TSharedPtr<SYIUnifiedHelpPanel>& Widget)
+{
+	if (!Widget.IsValid())
+	{
+		return;
+	}
+	HelpWidgets.Add(Widget);
+	const int32 Clamped = FMath::Clamp(LastHelpTabIndex, 0, 2);
+	Widget->SetActiveTab(static_cast<EYIUnifiedDashboardTab>(Clamped));
+}
+
+void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
+{
+	LastHelpTabIndex = FMath::Clamp(Index, 0, 2);
+	for (int32 i = HelpWidgets.Num() - 1; i >= 0; --i)
+	{
+		if (TSharedPtr<SYIUnifiedHelpPanel> Widget = HelpWidgets[i].Pin())
+		{
+			Widget->SetActiveTab(static_cast<EYIUnifiedDashboardTab>(LastHelpTabIndex));
+		}
+		else
+		{
+			HelpWidgets.RemoveAt(i, 1, EAllowShrinking::No);
+		}
+	}
+}
 void FYOLOInventoryEditorModule::StartupModule()
 {
 	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
@@ -121,6 +149,21 @@ void FYOLOInventoryEditorModule::StartupModule()
 	.SetDisplayName(NSLOCTEXT("YOLOInventory","DashboardTabName","YOLO Inventory Dashboard"))
 	.SetTooltipText(NSLOCTEXT("YOLOInventory","DashboardTabTooltip","View all YOLO Inventory items (assets + data table rows)"))
 	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
+
+	FGlobalTabmanager::Get()->RegisterNomadTabSpawner(YOLOInventoryHelpTabName, FOnSpawnTab::CreateLambda([](const FSpawnTabArgs& Args)
+	{
+		TSharedRef<SYIUnifiedHelpPanel> HelpPanel = SNew(SYIUnifiedHelpPanel);
+		FYOLOInventoryEditorModule::Get().RegisterHelpWidget(HelpPanel);
+		return SNew(SDockTab)
+			.TabRole(ETabRole::NomadTab)
+			.Label(NSLOCTEXT("YOLOInventory","HelpTab","YOLO Inventory Help"))
+			[
+				HelpPanel
+			];
+	}))
+	.SetDisplayName(NSLOCTEXT("YOLOInventory","HelpTabName","YOLO Inventory Help"))
+	.SetTooltipText(NSLOCTEXT("YOLOInventory","HelpTabTooltip","Dockable help, wizards, and workflow guidance"))
+	.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Help"));
 
 	// // Ensure an example Affix asset exists for authoring docs/demo
 	// {
@@ -185,6 +228,7 @@ void FYOLOInventoryEditorModule::StartupModule()
 			);
 		};
 		AddMenuEntry(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","MenuDashboard","Dashboard"));
+		AddMenuEntry(YOLOInventoryHelpTabName, NSLOCTEXT("YOLOInventory","MenuHelp","Help"));
 
 		if (UToolMenu* Toolbar = UToolMenus::Get()->ExtendMenu("LevelEditor.LevelEditorToolBar"))
 		{
@@ -204,6 +248,7 @@ void FYOLOInventoryEditorModule::StartupModule()
 				));
 			};
 			AddTool(YOLOInventoryDashboardTabName, NSLOCTEXT("YOLOInventory","ToolDashboard","Dashboard"), "ContentBrowser.TabIcon");
+			AddTool(YOLOInventoryHelpTabName, NSLOCTEXT("YOLOInventory","ToolHelp","Help"), "Icons.Help");
 		}
 
 		// Add Tools menu action to validate unique item codes
@@ -237,6 +282,7 @@ void FYOLOInventoryEditorModule::StartupModule()
 void FYOLOInventoryEditorModule::ShutdownModule()
 {
 	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryDashboardTabName);
+	FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(YOLOInventoryHelpTabName);
 	UnregisterAssetTypeActions();
 	if (GYOLONodeFactory.IsValid())
 	{

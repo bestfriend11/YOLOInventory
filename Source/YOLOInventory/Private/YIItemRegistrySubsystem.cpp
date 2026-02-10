@@ -9,6 +9,8 @@
 #include "Engine/AssetManager.h"
 #include "Data/YIDataTableItemSource.h"
 #include "YIItemDefinition.h"
+#include "UObject/StructOnScope.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIItemRegistry, Log, All);
 
@@ -242,6 +244,108 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 	return false;
 }
 
+static bool GetTransformFunctionProps(UFunction* Function, FProperty*& OutInput, FProperty*& OutOutput)
+{
+	OutInput = nullptr;
+	OutOutput = nullptr;
+	if (!Function)
+	{
+		return false;
+	}
+
+	for (TFieldIterator<FProperty> It(Function); It; ++It)
+	{
+		if (!It->HasAnyPropertyFlags(CPF_Parm))
+		{
+			continue;
+		}
+		if (It->HasAnyPropertyFlags(CPF_ReturnParm))
+		{
+			if (OutOutput)
+			{
+				return false;
+			}
+			OutOutput = *It;
+			continue;
+		}
+		if (It->HasAnyPropertyFlags(CPF_OutParm))
+		{
+			if (OutOutput)
+			{
+				return false;
+			}
+			OutOutput = *It;
+			continue;
+		}
+
+		if (OutInput)
+		{
+			return false;
+		}
+		OutInput = *It;
+	}
+
+	return OutInput && OutOutput;
+}
+
+static bool ApplyTransformFunction(const FYIFieldMapping& Mapping, FProperty* DestProp, uint8* DestPtr)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (Mapping.TransformFunction.IsNone())
+	{
+		return false;
+	}
+
+	UClass* LibraryClass = Mapping.TransformLibrary.LoadSynchronous();
+	if (!LibraryClass)
+	{
+		return false;
+	}
+
+	UFunction* Function = LibraryClass->FindFunctionByName(Mapping.TransformFunction);
+	if (!Function)
+	{
+		return false;
+	}
+
+	FProperty* InputProp = nullptr;
+	FProperty* OutputProp = nullptr;
+	if (!GetTransformFunctionProps(Function, InputProp, OutputProp))
+	{
+		return false;
+	}
+
+	FStructOnScope Params(Function);
+	uint8* ParamsMem = Params.GetStructMemory();
+
+	uint8* InputPtr = InputProp->ContainerPtrToValuePtr<uint8>(ParamsMem);
+	uint8* OutputPtr = OutputProp->ContainerPtrToValuePtr<uint8>(ParamsMem);
+
+	if (!CopyValueBetweenProperties(DestProp, DestPtr, InputProp, InputPtr, EYIFieldMappingConversion::None))
+	{
+		return false;
+	}
+
+	UObject* CDO = LibraryClass->GetDefaultObject();
+	if (!CDO)
+	{
+		return false;
+	}
+
+	CDO->ProcessEvent(Function, ParamsMem);
+
+	if (!CopyValueBetweenProperties(OutputProp, OutputPtr, DestProp, DestPtr, EYIFieldMappingConversion::None))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDataTable* DataTable, FName RowName, UYIItemDefinition*& OutDef)
 {
 	if (!Source || !DataTable || !DataTable->RowStruct || !Source->bUseInlineMappings || Source->InlineMappings.Num() == 0)
@@ -299,7 +403,10 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 
 		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
-		CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr, Mapping.Conversion);
+		if (CopyValueBetweenProperties(SourceProp, SrcPtr, DestProp, DestPtr, Mapping.Conversion))
+		{
+			ApplyTransformFunction(Mapping, DestProp, DestPtr);
+		}
 	}
 
 	OutDef = Def;

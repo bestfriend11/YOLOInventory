@@ -3,8 +3,10 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "CSVDataTransformer.h"
+#include "UObject/SoftObjectPtr.h"
 #include "YIDataTableItemSource.generated.h"
 
+class UBlueprintFunctionLibrary;
 UENUM(BlueprintType)
 enum class EYIFieldMappingConversion : uint8
 {
@@ -41,6 +43,14 @@ struct FYIFieldMapping
 	/** Optional conversion applied before assigning to the target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
 	EYIFieldMappingConversion Conversion = EYIFieldMappingConversion::None;
+
+	/** Optional transform function library (BlueprintFunctionLibrary). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping", meta=(AllowedClasses="/Script/Engine.BlueprintFunctionLibrary"))
+	TSoftClassPtr<class UBlueprintFunctionLibrary> TransformLibrary;
+
+	/** Optional transform function (marked with meta: YIInlineTransform). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	FName TransformFunction;
 };
 
 class UDataTable;

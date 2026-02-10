@@ -38,9 +38,314 @@
 #include "Widgets/Input/SCheckBox.h"
 #include "InputCoreTypes.h"
 #include "ObjectTools.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
+#include "UObject/UObjectIterator.h"
+#include "UObject/StructOnScope.h"
+#include "Engine/PrimaryDataAsset.h"
 #include "Algo/Sort.h"
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
+
+static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!SourceProp || !DestProp || !SourcePtr || !DestPtr)
+	{
+		return false;
+	}
+
+	if (SourceProp->SameType(DestProp))
+	{
+		SourceProp->CopyCompleteValue(DestPtr, SourcePtr);
+		return true;
+	}
+
+	if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+	{
+		const FString Value = SrcStr->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::BoolFromText)
+		{
+			if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+			{
+				DestBool->SetPropertyValue(DestPtr, !Value.IsEmpty());
+				return true;
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToName)
+		{
+			if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+			{
+				DestName->SetPropertyValue(DestPtr, FName(*Value));
+				return true;
+			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToText)
+		{
+			if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+			{
+				DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+				return true;
+			}
+		}
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value);
+			return true;
+		}
+		if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+		{
+			DestName->SetPropertyValue(DestPtr, FName(*Value));
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+			return true;
+		}
+	}
+	if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+	{
+		const FName Value = SrcName->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::ToText)
+		{
+			if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+			{
+				DestText->SetPropertyValue(DestPtr, FText::FromName(Value));
+				return true;
+			}
+		}
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value.ToString());
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, FText::FromName(Value));
+			return true;
+		}
+	}
+	if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+	{
+		const FText Value = SrcText->GetPropertyValue(SourcePtr);
+		if (Conversion == EYIFieldMappingConversion::ToName)
+		{
+			if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+			{
+				DestName->SetPropertyValue(DestPtr, FName(*Value.ToString()));
+				return true;
+			}
+		}
+		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+		{
+			DestStr->SetPropertyValue(DestPtr, Value.ToString());
+			return true;
+		}
+		if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+		{
+			DestName->SetPropertyValue(DestPtr, FName(*Value.ToString()));
+			return true;
+		}
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, Value);
+			return true;
+		}
+	}
+
+	if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+	{
+		if (const FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+		{
+			double Value = 0.0;
+			if (SrcNum->IsFloatingPoint())
+			{
+				Value = SrcNum->GetFloatingPointPropertyValue(SourcePtr);
+			}
+			else
+			{
+				Value = (double)SrcNum->GetSignedIntPropertyValue(SourcePtr);
+			}
+			if (DestNum->IsInteger())
+			{
+				DestNum->SetIntPropertyValue(DestPtr, (int64)Value);
+			}
+			else
+			{
+				DestNum->SetFloatingPointPropertyValue(DestPtr, Value);
+			}
+			return true;
+		}
+	}
+
+	if (const FBoolProperty* SrcBool = CastField<FBoolProperty>(SourceProp))
+	{
+		const bool bVal = SrcBool->GetPropertyValue(SourcePtr);
+		if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+		{
+			DestBool->SetPropertyValue(DestPtr, bVal);
+			return true;
+		}
+		if (FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+		{
+			if (DestNum->IsInteger())
+			{
+				DestNum->SetIntPropertyValue(DestPtr, bVal ? (int64)1 : (int64)0);
+			}
+			else
+			{
+				DestNum->SetFloatingPointPropertyValue(DestPtr, bVal ? 1.0 : 0.0);
+			}
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool GetTransformFunctionProps(UFunction* Function, FProperty*& OutInput, FProperty*& OutOutput)
+{
+	OutInput = nullptr;
+	OutOutput = nullptr;
+	if (!Function)
+	{
+		return false;
+	}
+
+	for (TFieldIterator<FProperty> It(Function); It; ++It)
+	{
+		if (!It->HasAnyPropertyFlags(CPF_Parm))
+		{
+			continue;
+		}
+		if (It->HasAnyPropertyFlags(CPF_ReturnParm))
+		{
+			if (OutOutput)
+			{
+				return false;
+			}
+			OutOutput = *It;
+			continue;
+		}
+		if (It->HasAnyPropertyFlags(CPF_OutParm))
+		{
+			if (OutOutput)
+			{
+				return false;
+			}
+			OutOutput = *It;
+			continue;
+		}
+
+		if (OutInput)
+		{
+			return false;
+		}
+		OutInput = *It;
+	}
+
+	return OutInput && OutOutput;
+}
+
+static bool ApplyTransformFunctionEditor(const FYIFieldMapping& Mapping, FProperty* DestProp, uint8* DestPtr, FString* OutError = nullptr)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (Mapping.TransformFunction.IsNone())
+	{
+		return false;
+	}
+
+	UClass* LibraryClass = Mapping.TransformLibrary.LoadSynchronous();
+	if (!LibraryClass)
+	{
+		if (OutError) { *OutError = TEXT("Transform library missing."); }
+		return false;
+	}
+
+	UFunction* Function = LibraryClass->FindFunctionByName(Mapping.TransformFunction);
+	if (!Function)
+	{
+		if (OutError) { *OutError = TEXT("Transform function not found."); }
+		return false;
+	}
+
+	FProperty* InputProp = nullptr;
+	FProperty* OutputProp = nullptr;
+	if (!GetTransformFunctionProps(Function, InputProp, OutputProp))
+	{
+		if (OutError) { *OutError = TEXT("Transform function signature invalid."); }
+		return false;
+	}
+
+	FStructOnScope Params(Function);
+	uint8* ParamsMem = Params.GetStructMemory();
+	uint8* InputPtr = InputProp->ContainerPtrToValuePtr<uint8>(ParamsMem);
+	uint8* OutputPtr = OutputProp->ContainerPtrToValuePtr<uint8>(ParamsMem);
+
+	if (!CopyValueBetweenPropertiesEditor(DestProp, DestPtr, InputProp, InputPtr, EYIFieldMappingConversion::None))
+	{
+		if (OutError) { *OutError = TEXT("Transform input copy failed."); }
+		return false;
+	}
+
+	UObject* CDO = LibraryClass->GetDefaultObject();
+	if (!CDO)
+	{
+		if (OutError) { *OutError = TEXT("Transform library CDO missing."); }
+		return false;
+	}
+
+	CDO->ProcessEvent(Function, ParamsMem);
+
+	if (!CopyValueBetweenPropertiesEditor(OutputProp, OutputPtr, DestProp, DestPtr, EYIFieldMappingConversion::None))
+	{
+		if (OutError) { *OutError = TEXT("Transform output copy failed."); }
+		return false;
+	}
+
+	return true;
+}
+
+static FString ExportPropertyValueToString(const FProperty* Prop, const uint8* ValuePtr)
+{
+	if (!Prop || !ValuePtr)
+	{
+		return FString();
+	}
+	FString Out;
+	Prop->ExportTextItem_Direct(Out, ValuePtr, nullptr, nullptr, PPF_None);
+	return Out;
+}
+
+static EYIFieldMappingConversion GuessConversionForProps(const FProperty* SourceProp, const FProperty* TargetProp)
+{
+	if (!SourceProp || !TargetProp)
+	{
+		return EYIFieldMappingConversion::None;
+	}
+	if (CastField<FBoolProperty>(TargetProp))
+	{
+		if (CastField<FNumericProperty>(SourceProp))
+		{
+			return EYIFieldMappingConversion::BoolFromInt;
+		}
+		if (CastField<FStrProperty>(SourceProp) || CastField<FTextProperty>(SourceProp) || CastField<FNameProperty>(SourceProp))
+		{
+			return EYIFieldMappingConversion::BoolFromText;
+		}
+	}
+	if (CastField<FNameProperty>(TargetProp)) return EYIFieldMappingConversion::ToName;
+	if (CastField<FTextProperty>(TargetProp)) return EYIFieldMappingConversion::ToText;
+	if (const FNumericProperty* NumTarget = CastField<FNumericProperty>(TargetProp))
+	{
+		if (NumTarget->IsInteger()) return EYIFieldMappingConversion::ToInt;
+		return EYIFieldMappingConversion::ToFloat;
+	}
+	return EYIFieldMappingConversion::None;
+}
 
 void SYIItemDashboard::Construct(const FArguments& InArgs)
 {
@@ -388,12 +693,84 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 							})
 						]
 					]
-					+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
+					+ SVerticalBox::Slot().FillHeight(0.65f).Padding(4)
 					[
 						SAssignNew(MappingListView, SListView<TSharedPtr<FYIFieldMapping>>)
 						.ListItemsSource(&MappingRows)
 						.OnGenerateRow(this, &SYIItemDashboard::MakeMappingRow)
 						.SelectionMode(ESelectionMode::Single)
+					]
+					+ SVerticalBox::Slot().FillHeight(0.35f).Padding(4)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+						[
+							SNew(SVerticalBox)
+							+ SVerticalBox::Slot().AutoHeight().Padding(4)
+							[
+								SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","Dash_PreviewTitle","Live Preview"))
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(6,0)
+								[
+									SNew(SComboBox<TSharedPtr<FString>>)
+									.OptionsSource(&const_cast<SYIItemDashboard*>(this)->PreviewRowOptions)
+									.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+									{
+										return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+									})
+									.OnComboBoxOpening_Lambda([this]()
+									{
+										PreviewRowOptions.Reset();
+										if (CurrentMappingSource.IsValid())
+										{
+											if (UDataTable* Table = CurrentMappingSource->DataTable.LoadSynchronous())
+											{
+												TArray<FName> RowNames = Table->GetRowNames();
+												RowNames.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+												for (const FName& RowName : RowNames)
+												{
+													PreviewRowOptions.Add(MakeShared<FString>(RowName.ToString()));
+												}
+											}
+										}
+									})
+									.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+									{
+										if (NewItem.IsValid())
+										{
+											PreviewRowName = FName(**NewItem);
+											RefreshMappingPreview();
+										}
+									})
+									.Content()
+									[
+										SNew(STextBlock).Text_Lambda([this]()
+										{
+											return PreviewRowName.IsNone() ? NSLOCTEXT("YOLOInventory","Dash_PreviewRow","Select Row") : FText::FromName(PreviewRowName);
+										})
+									]
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(6,0)
+								[
+									SNew(SButton)
+									.Text(NSLOCTEXT("YOLOInventory","Dash_PreviewRefresh","Refresh"))
+									.OnClicked_Lambda([this]()
+									{
+										RefreshMappingPreview();
+										return FReply::Handled();
+									})
+								]
+							]
+							+ SVerticalBox::Slot().FillHeight(1.f)
+							[
+								SAssignNew(MappingPreviewListView, SListView<TSharedPtr<FYIMappingPreviewRow>>)
+								.ListItemsSource(&MappingPreviewRows)
+								.OnGenerateRow(this, &SYIItemDashboard::MakePreviewRow)
+							]
+						]
 					]
 				]
 			]
@@ -1494,12 +1871,17 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	ConverterOptions.Reset();
 	SourceFieldPropCache.Reset();
 	TargetFieldPropCache.Reset();
+	TransformFunctionOptions.Reset();
 
 	if (!Source)
 	{
 		if (MappingListView.IsValid())
 		{
 			MappingListView->RequestListRefresh();
+		}
+		if (MappingPreviewListView.IsValid())
+		{
+			MappingPreviewListView->RequestListRefresh();
 		}
 		return;
 	}
@@ -1519,6 +1901,11 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	}
 	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
 	{
+		const UClass* OwnerClass = It->GetOwnerClass();
+		if (OwnerClass == UPrimaryDataAsset::StaticClass() || OwnerClass == UObject::StaticClass())
+		{
+			continue;
+		}
 		const FName FieldName((*It)->GetAuthoredName());
 		TargetPropertyOptions.Add(MakeShared<FString>(FieldName.ToString()));
 		TargetFieldPropCache.Add(FieldName, *It);
@@ -1529,10 +1916,222 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 		MappingRows.Add(MakeShared<FYIFieldMapping>(M));
 	}
 
+	BuildTransformFunctionOptions();
+	RefreshMappingPreview();
+
 	if (MappingListView.IsValid())
 	{
 		MappingListView->RequestListRefresh();
 	}
+	if (MappingPreviewListView.IsValid())
+	{
+		MappingPreviewListView->RequestListRefresh();
+	}
+}
+
+void SYIItemDashboard::BuildTransformFunctionOptions()
+{
+	TransformFunctionOptions.Reset();
+
+	TSharedPtr<FYITransformFunctionInfo> NoneOption = MakeShared<FYITransformFunctionInfo>();
+	NoneOption->DisplayName = TEXT("None");
+	NoneOption->FunctionName = NAME_None;
+	TransformFunctionOptions.Add(NoneOption);
+
+	for (TObjectIterator<UClass> It; It; ++It)
+	{
+		UClass* Class = *It;
+		if (!Class || !Class->IsChildOf(UBlueprintFunctionLibrary::StaticClass()))
+		{
+			continue;
+		}
+
+		for (TFieldIterator<UFunction> FuncIt(Class, EFieldIteratorFlags::IncludeSuper); FuncIt; ++FuncIt)
+		{
+			UFunction* Function = *FuncIt;
+			if (!Function || !Function->HasMetaData(TEXT("YIInlineTransform")))
+			{
+				continue;
+			}
+
+			TSharedPtr<FYITransformFunctionInfo> Info = MakeShared<FYITransformFunctionInfo>();
+			Info->Library = Class;
+			Info->FunctionName = Function->GetFName();
+			Info->DisplayName = FString::Printf(TEXT("%s::%s"), *Class->GetName(), *Function->GetName());
+			TransformFunctionOptions.Add(Info);
+		}
+	}
+
+	if (TransformFunctionOptions.Num() > 1)
+	{
+		TransformFunctionOptions.Sort([](const TSharedPtr<FYITransformFunctionInfo>& A, const TSharedPtr<FYITransformFunctionInfo>& B)
+		{
+			if (!A.IsValid() || !B.IsValid()) return false;
+			if (A->FunctionName.IsNone()) return true;
+			if (B->FunctionName.IsNone()) return false;
+			return A->DisplayName < B->DisplayName;
+		});
+	}
+}
+
+void SYIItemDashboard::RefreshMappingPreview()
+{
+	MappingPreviewRows.Reset();
+
+	if (!CurrentMappingSource.IsValid())
+	{
+		return;
+	}
+
+	UYIDataTableItemSource* Source = CurrentMappingSource.Get();
+	UDataTable* Table = Source ? Source->DataTable.LoadSynchronous() : nullptr;
+	if (!Table || !Table->RowStruct)
+	{
+		return;
+	}
+
+	if (PreviewRowName.IsNone())
+	{
+		TArray<FName> RowNames = Table->GetRowNames();
+		RowNames.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+		if (RowNames.Num() > 0)
+		{
+			PreviewRowName = RowNames[0];
+		}
+	}
+
+	if (PreviewRowName.IsNone())
+	{
+		return;
+	}
+
+	const uint8* const* FoundRow = Table->GetRowMap().Find(PreviewRowName);
+	const uint8* RowPtr = FoundRow ? *FoundRow : nullptr;
+	if (!RowPtr)
+	{
+		TArray<FName> RowNames = Table->GetRowNames();
+		RowNames.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
+		if (RowNames.Num() == 0)
+		{
+			return;
+		}
+		PreviewRowName = RowNames[0];
+		FoundRow = Table->GetRowMap().Find(PreviewRowName);
+		RowPtr = FoundRow ? *FoundRow : nullptr;
+		if (!RowPtr)
+		{
+			return;
+		}
+	}
+
+	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
+	{
+		TSharedPtr<FYIMappingPreviewRow> Row = MakeShared<FYIMappingPreviewRow>();
+		Row->SourceField = Mapping.SourceField;
+		Row->TargetProperty = Mapping.TargetProperty;
+
+		const FProperty* SourceProp = Mapping.SourceField.IsNone() ? nullptr : SourceFieldPropCache.FindRef(Mapping.SourceField);
+		FProperty* TargetProp = Mapping.TargetProperty.IsNone() ? nullptr : TargetFieldPropCache.FindRef(Mapping.TargetProperty);
+
+		if (!SourceProp || !TargetProp)
+		{
+			Row->Status = NSLOCTEXT("YOLOInventory","Dash_PreviewMissing","Missing field.");
+			Row->StatusColor = FLinearColor(1.f, 0.25f, 0.2f);
+			MappingPreviewRows.Add(Row);
+			continue;
+		}
+
+		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
+		Row->SourceValue = ExportPropertyValueToString(SourceProp, SrcPtr);
+
+		TArray<uint8> Temp;
+		Temp.SetNumZeroed(TargetProp->GetSize());
+		TargetProp->InitializeValue(Temp.GetData());
+
+		bool bWarn = false;
+		bool bConverted = CopyValueBetweenPropertiesEditor(SourceProp, SrcPtr, TargetProp, Temp.GetData(), Mapping.Conversion);
+		if (bConverted)
+		{
+			Row->ConvertedValue = ExportPropertyValueToString(TargetProp, Temp.GetData());
+		}
+		else
+		{
+			Row->ConvertedValue = TEXT("<conversion failed>");
+			bWarn = true;
+		}
+
+		if (!Mapping.TransformFunction.IsNone())
+		{
+			FString TransformError;
+			const bool bTransformed = ApplyTransformFunctionEditor(Mapping, TargetProp, Temp.GetData(), &TransformError);
+			if (bTransformed)
+			{
+				Row->TransformedValue = ExportPropertyValueToString(TargetProp, Temp.GetData());
+			}
+			else
+			{
+				Row->TransformedValue = FString::Printf(TEXT("<transform failed: %s>"), *TransformError);
+				bWarn = true;
+			}
+		}
+		else
+		{
+			Row->TransformedValue = Row->ConvertedValue;
+		}
+
+		TargetProp->DestroyValue(Temp.GetData());
+
+		if (bWarn)
+		{
+			Row->Status = NSLOCTEXT("YOLOInventory","Dash_PreviewWarn","Warn");
+			Row->StatusColor = FLinearColor(1.f, 0.75f, 0.2f);
+		}
+		else
+		{
+			Row->Status = NSLOCTEXT("YOLOInventory","Dash_PreviewOk","OK");
+			Row->StatusColor = FLinearColor(0.2f, 0.8f, 0.4f);
+		}
+		MappingPreviewRows.Add(Row);
+	}
+
+	if (MappingPreviewListView.IsValid())
+	{
+		MappingPreviewListView->RequestListRefresh();
+	}
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakePreviewRow(TSharedPtr<FYIMappingPreviewRow> Row, const TSharedRef<STableViewBase>& Owner)
+{
+	return SNew(STableRow<TSharedPtr<FYIMappingPreviewRow>>, Owner)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+		[
+			SNew(STextBlock)
+			.Text(Row.IsValid() ? Row->Status : FText::GetEmpty())
+			.ColorAndOpacity(Row.IsValid() ? Row->StatusColor : FLinearColor::Gray)
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(4,0)
+		[
+			SNew(STextBlock).Text(Row.IsValid() ? FText::FromName(Row->SourceField) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(4,0)
+		[
+			SNew(STextBlock).Text(Row.IsValid() ? FText::FromName(Row->TargetProperty) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(4,0)
+		[
+			SNew(STextBlock).Text(Row.IsValid() ? FText::FromString(Row->SourceValue) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(4,0)
+		[
+			SNew(STextBlock).Text(Row.IsValid() ? FText::FromString(Row->ConvertedValue) : FText::GetEmpty())
+		]
+		+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(4,0)
+		[
+			SNew(STextBlock).Text(Row.IsValid() ? FText::FromString(Row->TransformedValue) : FText::GetEmpty())
+		]
+	];
 }
 
 void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
@@ -1573,12 +2172,17 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 
 	TMap<FString, FName> SourceByNorm;
 	TMap<FString, FName> SourceByLower;
+	struct FSourceCandidate { FName Name; FString Lower; FString Norm; };
+	TArray<FSourceCandidate> SourceCandidates;
 	for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
 	{
 		const FName FieldName((*It)->GetAuthoredName());
 		const FString NameStr = FieldName.ToString();
-		SourceByNorm.Add(NormalizeField(NameStr), FieldName);
-		SourceByLower.Add(NameStr.ToLower(), FieldName);
+		const FString Lower = NameStr.ToLower();
+		const FString Norm = NormalizeField(NameStr);
+		SourceByNorm.Add(Norm, FieldName);
+		SourceByLower.Add(Lower, FieldName);
+		SourceCandidates.Add({ FieldName, Lower, Norm });
 	}
 
 	TSet<FName> ExistingTargets;
@@ -1592,32 +2196,57 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 
 	bool bChanged = false;
 
-	auto GuessConversion = [&](const FProperty* SourceProp, const FProperty* TargetProp)->EYIFieldMappingConversion
+	auto FindBestMatch = [&](const FName& TargetField)->FName
 	{
-		if (!SourceProp || !TargetProp)
+		if (TargetField.IsNone())
 		{
-			return EYIFieldMappingConversion::None;
+			return NAME_None;
 		}
-		if (CastField<FBoolProperty>(TargetProp))
+		const FString TargetStr = TargetField.ToString();
+		const FString TargetLower = TargetStr.ToLower();
+		const FString TargetNorm = NormalizeField(TargetStr);
+		if (TargetLower.IsEmpty() || TargetNorm.IsEmpty())
 		{
-			if (CastField<FNumericProperty>(SourceProp))
+			return NAME_None;
+		}
+
+		if (const FName* Found = SourceByLower.Find(TargetLower)) return *Found;
+		if (const FName* FoundNorm = SourceByNorm.Find(TargetNorm)) return *FoundNorm;
+
+		int32 BestScore = 0;
+		FName BestMatch = NAME_None;
+
+		for (const FSourceCandidate& C : SourceCandidates)
+		{
+			int32 Score = 0;
+			if (C.Norm == TargetNorm)
 			{
-				return EYIFieldMappingConversion::BoolFromInt;
+				Score = 100;
 			}
-			if (CastField<FStrProperty>(SourceProp) || CastField<FTextProperty>(SourceProp) || CastField<FNameProperty>(SourceProp))
+			else if (C.Norm.StartsWith(TargetNorm) || C.Norm.EndsWith(TargetNorm))
 			{
-				return EYIFieldMappingConversion::BoolFromText;
+				const int32 MinLen = FMath::Min(C.Norm.Len(), TargetNorm.Len());
+				const int32 MaxLen = FMath::Max(C.Norm.Len(), TargetNorm.Len());
+				Score = 85 + (MaxLen > 0 ? (MinLen * 10 / MaxLen) : 0);
+			}
+			else if (C.Norm.Contains(TargetNorm) || TargetNorm.Contains(C.Norm))
+			{
+				const int32 MinLen = FMath::Min(C.Norm.Len(), TargetNorm.Len());
+				const int32 MaxLen = FMath::Max(C.Norm.Len(), TargetNorm.Len());
+				Score = 70 + (MaxLen > 0 ? (MinLen * 10 / MaxLen) : 0);
+			}
+
+			if (Score > BestScore)
+			{
+				BestScore = Score;
+				BestMatch = C.Name;
 			}
 		}
-		if (CastField<FNameProperty>(TargetProp)) return EYIFieldMappingConversion::ToName;
-		if (CastField<FTextProperty>(TargetProp)) return EYIFieldMappingConversion::ToText;
-		if (const FNumericProperty* NumTarget = CastField<FNumericProperty>(TargetProp))
-		{
-			if (NumTarget->IsInteger()) return EYIFieldMappingConversion::ToInt;
-			return EYIFieldMappingConversion::ToFloat;
-		}
-		return EYIFieldMappingConversion::None;
+
+		return BestMatch;
 	};
+
+	int32 MatchCount = 0;
 
 	// First, patch existing mappings that have missing source fields
 	for (FYIFieldMapping& M : Source->InlineMappings)
@@ -1626,34 +2255,31 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 		{
 			continue;
 		}
-		const FString TargetLower = M.TargetProperty.ToString().ToLower();
-		const FString TargetNorm = NormalizeField(M.TargetProperty.ToString());
-		FName Match = NAME_None;
-		if (const FName* Found = SourceByLower.Find(TargetLower)) Match = *Found;
-		else if (const FName* FoundNorm = SourceByNorm.Find(TargetNorm)) Match = *FoundNorm;
+		const FName Match = FindBestMatch(M.TargetProperty);
 		if (!Match.IsNone())
 		{
 			M.SourceField = Match;
 			const FProperty* SourceProp = SourceFieldPropCache.FindRef(Match);
 			const FProperty* TargetProp = TargetFieldPropCache.FindRef(M.TargetProperty);
-			M.Conversion = GuessConversion(SourceProp, TargetProp);
+			M.Conversion = GuessConversionForProps(SourceProp, TargetProp);
 			bChanged = true;
+			++MatchCount;
 		}
 	}
 
 	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
 	{
-		const FName TargetName((*It)->GetAuthoredName());
-		if (!bAddAllFields && ExistingTargets.Contains(TargetName))
+		const UClass* OwnerClass = It->GetOwnerClass();
+		if (OwnerClass == UPrimaryDataAsset::StaticClass() || OwnerClass == UObject::StaticClass())
 		{
 			continue;
 		}
-
-		const FString TargetLower = TargetName.ToString().ToLower();
-		const FString TargetNorm = NormalizeField(TargetName.ToString());
-		FName Match = NAME_None;
-		if (const FName* Found = SourceByLower.Find(TargetLower)) Match = *Found;
-		else if (const FName* FoundNorm = SourceByNorm.Find(TargetNorm)) Match = *FoundNorm;
+		const FName TargetName((*It)->GetAuthoredName());
+		if (ExistingTargets.Contains(TargetName))
+		{
+			continue;
+		}
+		const FName Match = FindBestMatch(TargetName);
 
 		if (!bAddAllFields && Match.IsNone())
 		{
@@ -1663,9 +2289,14 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 		FYIFieldMapping NewMap;
 		NewMap.TargetProperty = TargetName;
 		NewMap.SourceField = Match;
-		NewMap.Conversion = GuessConversion(SourceFieldPropCache.FindRef(Match), *It);
+		NewMap.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(Match), *It);
 		Source->InlineMappings.Add(NewMap);
+		ExistingTargets.Add(TargetName);
 		bChanged = true;
+		if (!Match.IsNone())
+		{
+			++MatchCount;
+		}
 	}
 
 	if (bChanged)
@@ -1673,7 +2304,7 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 		Source->Modify();
 		RefreshInlineMappingEditor(Source);
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
-			NSLOCTEXT("YOLOInventory","Dash_AutoMatch_Done","Auto-match updated inline mappings."),
+			FText::Format(NSLOCTEXT("YOLOInventory","Dash_AutoMatch_Done","Auto-match updated inline mappings. Matched {0} fields."), FText::AsNumber(MatchCount)),
 			FText::FromString(Source->GetPathName()));
 	}
 }
@@ -1739,6 +2370,22 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 
 	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
 	{
+		auto IsCompatible = [](const FProperty* A, const FProperty* B) -> bool
+		{
+			if (!A || !B)
+			{
+				return false;
+			}
+			const bool bTypesMatch = A->GetClass() == B->GetClass();
+			const bool bBothNumeric = CastField<FNumericProperty>(A) && CastField<FNumericProperty>(B);
+			const bool bBothTextish =
+				(CastField<FStrProperty>(A) || CastField<FNameProperty>(A) || CastField<FTextProperty>(A)) &&
+				(CastField<FStrProperty>(B) || CastField<FNameProperty>(B) || CastField<FTextProperty>(B));
+			const bool bBoolNumeric = (CastField<FBoolProperty>(A) && CastField<FNumericProperty>(B)) ||
+				(CastField<FNumericProperty>(A) && CastField<FBoolProperty>(B));
+			return bTypesMatch || bBothNumeric || bBothTextish || bBoolNumeric;
+		};
+
 		if (!Mapping.IsValid())
 		{
 			return SNew(SSpacer);
@@ -1763,6 +2410,52 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
 				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTypeMismatch","Type mismatch. Add a conversion."));
 		}
+
+		if (Mapping->TransformFunction.IsNone())
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Check"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingOk","Mapping looks OK."));
+		}
+
+		UClass* LibraryClass = Mapping->TransformLibrary.LoadSynchronous();
+		if (!LibraryClass)
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTransformMissing","Transform library not found."));
+		}
+
+		UFunction* Function = LibraryClass->FindFunctionByName(Mapping->TransformFunction);
+		if (!Function)
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTransformFuncMissing","Transform function not found."));
+		}
+
+		FProperty* InputProp = nullptr;
+		FProperty* OutputProp = nullptr;
+		if (!GetTransformFunctionProps(Function, InputProp, OutputProp))
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTransformSigBad","Transform signature should be (In) -> Out or (In, Out)."));
+		}
+
+		if (!IsCompatible(TargetProp, InputProp))
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTransformInputBad","Transform input type does not match target type."));
+		}
+		if (!IsCompatible(OutputProp, TargetProp))
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingTransformOutputBad","Transform output type does not match target type."));
+		}
+
 		return SNew(SImage)
 			.Image(FAppStyle::Get().GetBrush("Icons.Check"))
 			.ToolTipText(NSLOCTEXT("YOLOInventory","Dash_MappingOk","Mapping looks OK."));
@@ -1775,7 +2468,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		[
 			BuildStatusWidget()
 		]
-		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
+		+ SHorizontalBox::Slot().FillWidth(0.32f).Padding(2)
 		[
 			SNew(SComboBox<TSharedPtr<FString>>)
 			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->SourceFieldOptions)
@@ -1815,11 +2508,20 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				{
 					CurrentMappingSource->Modify();
 					Mapping->SourceField = FName(**NewItem);
+					if (Mapping->Conversion == EYIFieldMappingConversion::None)
+					{
+						const FProperty* SourceProp = GetSourceProp();
+						const FProperty* TargetProp = GetTargetProp();
+						const EYIFieldMappingConversion Guess = GuessConversionForProps(SourceProp, TargetProp);
+						Mapping->Conversion = Guess;
+					}
 					const int32 Index = MappingRows.Find(Mapping);
 					if (Index != INDEX_NONE)
 					{
 						CurrentMappingSource->InlineMappings[Index].SourceField = Mapping->SourceField;
+						CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 					}
+					RefreshMappingPreview();
 				}
 			})
 			.InitiallySelectedItem([this, Mapping]()
@@ -1854,7 +2556,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				]
 			]
 		]
-		+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2)
+		+ SHorizontalBox::Slot().FillWidth(0.32f).Padding(2)
 		[
 			SNew(SComboBox<TSharedPtr<FString>>)
 			.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions)
@@ -1894,11 +2596,20 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				{
 					CurrentMappingSource->Modify();
 					Mapping->TargetProperty = FName(**NewItem);
+					if (Mapping->Conversion == EYIFieldMappingConversion::None)
+					{
+						const FProperty* SourceProp = GetSourceProp();
+						const FProperty* TargetProp = GetTargetProp();
+						const EYIFieldMappingConversion Guess = GuessConversionForProps(SourceProp, TargetProp);
+						Mapping->Conversion = Guess;
+					}
 					const int32 Index = MappingRows.Find(Mapping);
 					if (Index != INDEX_NONE)
 					{
 						CurrentMappingSource->InlineMappings[Index].TargetProperty = Mapping->TargetProperty;
+						CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 					}
+					RefreshMappingPreview();
 				}
 			})
 			.InitiallySelectedItem([this, Mapping]()
@@ -1933,7 +2644,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				]
 			]
 		]
-	+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(2)
+	+ SHorizontalBox::Slot().FillWidth(0.16f).Padding(2)
 	[
 		SNew(SComboBox<TSharedPtr<FString>>)
 		.OptionsSource(&const_cast<SYIItemDashboard*>(this)->ConverterOptions)
@@ -1942,11 +2653,11 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			return SNew(STextBlock).Text(DropdownText(InItem));
 		})
 		.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
-		{
-			if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 			{
-				CurrentMappingSource->Modify();
-				EYIFieldMappingConversion NewConv = EYIFieldMappingConversion::None;
+				if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+				{
+					CurrentMappingSource->Modify();
+					EYIFieldMappingConversion NewConv = EYIFieldMappingConversion::None;
 				if (*NewItem == TEXT("To Name")) NewConv = EYIFieldMappingConversion::ToName;
 				else if (*NewItem == TEXT("To Text")) NewConv = EYIFieldMappingConversion::ToText;
 				else if (*NewItem == TEXT("To Int")) NewConv = EYIFieldMappingConversion::ToInt;
@@ -1955,12 +2666,13 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				else if (*NewItem == TEXT("Bool from Text (non-empty)")) NewConv = EYIFieldMappingConversion::BoolFromText;
 				Mapping->Conversion = NewConv;
 				const int32 Index = MappingRows.Find(Mapping);
-				if (Index != INDEX_NONE)
-				{
-					CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
+					if (Index != INDEX_NONE)
+					{
+						CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
+					}
+					RefreshMappingPreview();
 				}
-			}
-		})
+			})
 		.OnComboBoxOpening_Lambda([this]()
 		{
 			ConverterOptions.Reset();
@@ -2017,6 +2729,70 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			})
 		]
 	]
+	+ SHorizontalBox::Slot().FillWidth(0.20f).Padding(2)
+	[
+		SNew(SComboBox<TSharedPtr<FYITransformFunctionInfo>>)
+		.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TransformFunctionOptions)
+		.OnGenerateWidget_Lambda([](TSharedPtr<FYITransformFunctionInfo> InItem)
+		{
+			return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(InItem->DisplayName) : FText::GetEmpty());
+		})
+		.OnComboBoxOpening_Lambda([this]()
+		{
+			BuildTransformFunctionOptions();
+		})
+		.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
+		{
+			if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+			{
+				CurrentMappingSource->Modify();
+				Mapping->TransformFunction = NewItem->FunctionName;
+				Mapping->TransformLibrary = NewItem->Library;
+				const int32 Index = MappingRows.Find(Mapping);
+				if (Index != INDEX_NONE)
+				{
+					CurrentMappingSource->InlineMappings[Index].TransformFunction = Mapping->TransformFunction;
+					CurrentMappingSource->InlineMappings[Index].TransformLibrary = Mapping->TransformLibrary;
+				}
+				RefreshMappingPreview();
+			}
+		})
+		.InitiallySelectedItem([this, Mapping]()
+		{
+			if (!Mapping.IsValid())
+			{
+				return TSharedPtr<FYITransformFunctionInfo>();
+			}
+			for (const TSharedPtr<FYITransformFunctionInfo>& Opt : TransformFunctionOptions)
+			{
+				if (!Opt.IsValid())
+				{
+					continue;
+				}
+				if (Opt->FunctionName.IsNone() && Mapping->TransformFunction.IsNone())
+				{
+					return Opt;
+				}
+				if (Opt->FunctionName == Mapping->TransformFunction &&
+					Opt->Library.ToSoftObjectPath() == Mapping->TransformLibrary.ToSoftObjectPath())
+				{
+					return Opt;
+				}
+			}
+			return TSharedPtr<FYITransformFunctionInfo>();
+		}())
+		.Content()
+		[
+			SNew(STextBlock).Text_Lambda([Mapping]()
+			{
+				if (Mapping.IsValid() && !Mapping->TransformFunction.IsNone())
+				{
+					return FText::FromName(Mapping->TransformFunction);
+				}
+				return NSLOCTEXT("YOLOInventory","Dash_TransformNone","None");
+			})
+		]
+	]
 	+ SHorizontalBox::Slot().AutoWidth().Padding(2)
 	[
 		SNew(SButton)
@@ -2035,6 +2811,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 						{
 							MappingListView->RequestListRefresh();
 						}
+						RefreshMappingPreview();
 					}
 				}
 				return FReply::Handled();
