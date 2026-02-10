@@ -193,10 +193,16 @@ FReply SBagEditor::OnMouseButtonDown(const FGeometry& MyGeometry, const FPointer
 			if (FSlateRect(ItemPos, ItemPos + ItemSize).ContainsPoint(Local))
 			{
 				SelectedIndex = i;
+				OnSelectionChanged.ExecuteIfBound(SelectedIndex);
 				DraggingIndex = i;
 				DragOffset = Local - ItemPos;
 				return FReply::Handled().CaptureMouse(AsShared());
 			}
+		}
+		if (SelectedIndex != INDEX_NONE)
+		{
+			SelectedIndex = INDEX_NONE;
+			OnSelectionChanged.ExecuteIfBound(SelectedIndex);
 		}
 	}
 	return FReply::Unhandled();
@@ -502,6 +508,7 @@ int32 SBagEditor::HitIndexAtRelease(const FIntPoint& Cell) const
 void SBagEditor::Construct(const FArguments& InArgs)
 {
 	Bag = InArgs._Bag;
+	OnSelectionChanged = InArgs._OnSelectionChanged;
 	if (Bag.IsValid()) { CellSize = FVector2D(Bag->CellPixelSize, Bag->CellPixelSize); }
 
 	if (Bag.IsValid()) { BagChangedHandle = Bag->OnChanged.AddLambda([this]() { Invalidate(EInvalidateWidgetReason::PaintAndVolatility); UpdateTooltipVisibility(); }); }
@@ -674,6 +681,7 @@ int32 SBagEditor::HitIndexAtRelease(const FIntPoint& Cell) const
 void SBagEditor::Construct(const FArguments& InArgs)
 {
 	Bag = InArgs._Bag;
+	OnSelectionChanged = InArgs._OnSelectionChanged;
 	if (Bag.IsValid()) { CellSize = FVector2D(Bag->CellPixelSize, Bag->CellPixelSize); }
 
 	if (Bag.IsValid()) { BagChangedHandle = Bag->OnChanged.AddLambda([this]() { Invalidate(EInvalidateWidgetReason::PaintAndVolatility); UpdateTooltipVisibility(); }); }

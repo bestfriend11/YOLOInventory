@@ -20,9 +20,13 @@ class UYIInventoryBag;
 class YOLOINVENTORYEDITOR_API SBagEditor : public SCompoundWidget
 {
 public:
+	DECLARE_DELEGATE_OneParam(FOnSelectionChanged, int32);
+
 	SLATE_BEGIN_ARGS(SBagEditor) {}
 		/** The inventory bag asset this widget edits. */
 		SLATE_ARGUMENT(UYIInventoryBag*, Bag)
+		/** Fired when the selected item index changes. */
+		SLATE_EVENT(FOnSelectionChanged, OnSelectionChanged)
 	SLATE_END_ARGS()
 
 	/** Construct the widget with the given bag. */
@@ -72,6 +76,7 @@ public:
 private:
 	// Underlying bag asset (may be invalid during teardown). Use weak pointer to avoid dangling refs.
 	TWeakObjectPtr<UYIInventoryBag> Bag;
+	FOnSelectionChanged OnSelectionChanged;
 
 	// Current visual cell size used for painting. Initialized from Bag->CellPixelSize at Construct.
 	FVector2D CellSize = FVector2D(32.f, 32.f);

@@ -27,6 +27,7 @@ public:
 private:
 	EYIUnifiedDashboardTab ActiveTab = EYIUnifiedDashboardTab::Items;
 	TSharedPtr<class SWidgetSwitcher> TabSwitcher;
+	TSharedPtr<class SWidgetSwitcher> HelpSwitcher;
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
 	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
@@ -34,4 +35,16 @@ private:
 	EYIUnifiedDashboardTab GetActiveTab() const { return ActiveTab; }
 	void HandleTabChanged(EYIUnifiedDashboardTab NewTab);
 	void SetActiveTab(EYIUnifiedDashboardTab NewTab);
+	TSharedRef<SWidget> BuildHelpForItems();
+	TSharedRef<SWidget> BuildHelpForAffixes();
+	TSharedRef<SWidget> BuildHelpForGenerators();
+	TSharedRef<SWidget> MakeHelpCard(const FText& Title, const FText& Body, const FLinearColor& Accent, bool bExpanded = true);
+	TSharedRef<SWidget> MakeWizardStep(int32 StepNumber, const FText& Title, const FText& Body, const FText& ButtonText, TFunction<void()> OnClick);
+
+	void CreateItemSource();
+	void CreateAffix();
+	void CreateAffixPool();
+	void CreateLootTable();
+	void CreateRarityProfile();
+	void CreateItemGenerator();
 };

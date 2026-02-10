@@ -46,13 +46,15 @@ public:
 
 private:
 	virtual void UnregisterTabSpawners(const TSharedRef<class FTabManager>& InTabManager) override;
+	void HandleGridSelectionChanged(int32 Index);
 	void RefreshDataRowEntries();
 	TSharedRef<ITableRow> MakeDataRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 	TSharedPtr<SWidget> BuildDataRowContextMenu(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
 	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;
-	void AddEntryToBag(const FYIItemDashboardEntry& Entry);
+	bool AddEntryToBag(const FYIItemDashboardEntry& Entry);
 
 	TSharedPtr<SBagEditor> GridWidget;
+	TSharedPtr<class IDetailsView> DetailsView;
 	// Cache for SComboBox options since OptionsSource_Lambda is not supported
 	TArray<TSharedPtr<FString>> SortOptionsCache;
 	TSharedPtr<class SComboBox<TSharedPtr<FString>>> SortCombo;

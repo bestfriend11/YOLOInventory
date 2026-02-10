@@ -110,7 +110,9 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnGridTab(const FSpawnTabArgs& Ar
 {
 	return SNew(SDockTab)
 	[
-		SAssignNew(GridWidget, SBagEditor).Bag(Bag)
+		SAssignNew(GridWidget, SBagEditor)
+			.Bag(Bag)
+			.OnSelectionChanged(SBagEditor::FOnSelectionChanged::CreateSP(this, &FYIInventoryBagEditor::HandleGridSelectionChanged))
 	];
 }
 
@@ -119,9 +121,34 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnDetailsTab(const FSpawnTabArgs&
 	FPropertyEditorModule& PropModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FDetailsViewArgs DArgs;
 	DArgs.bHideSelectionTip = true;
-	TSharedRef<IDetailsView> Details = PropModule.CreateDetailView(DArgs);
-	Details->SetObject(Bag);
-	return SNew(SDockTab)[ Details ];
+	DetailsView = PropModule.CreateDetailView(DArgs);
+	DetailsView->SetObject(Bag);
+	return SNew(SDockTab)[ DetailsView.ToSharedRef() ];
+}
+
+void FYIInventoryBagEditor::HandleGridSelectionChanged(int32 Index)
+{
+	if (!DetailsView.IsValid() || !Bag)
+	{
+		return;
+	}
+
+	if (Index == INDEX_NONE || !Bag->Items.IsValidIndex(Index))
+	{
+		DetailsView->SetObject(Bag);
+		return;
+	}
+
+	FYIBagItem& Item = Bag->Items[Index];
+	UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
+	if (Def)
+	{
+		DetailsView->SetObject(Def);
+	}
+	else
+	{
+		DetailsView->SetObject(Bag);
+	}
 }
 
 TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs& Args)
@@ -208,6 +235,32 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs&
 			SAssignNew(DataRowListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
 			.ListItemsSource(&DataRowEntries)
 			.OnGenerateRow(this, &FYIInventoryBagEditor::MakeDataRowWidget)
+			.OnSelectionChanged_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry, ESelectInfo::Type)
+			{
+				if (!DetailsView.IsValid())
+				{
+					return;
+				}
+				if (Entry.IsValid())
+				{
+					if (Entry->ItemAsset.IsValid())
+					{
+						DetailsView->SetObject(Entry->ItemAsset.Get());
+					}
+					else if (Entry->DataSource.IsValid())
+					{
+						DetailsView->SetObject(Entry->DataSource.Get());
+					}
+					else
+					{
+						DetailsView->SetObject(Bag);
+					}
+				}
+				else
+				{
+					DetailsView->SetObject(Bag);
+				}
+			})
 			.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIItemDashboardEntry> Entry)
 			{
 				if (!Entry.IsValid())
@@ -405,6 +458,7 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 	DataRowEntries.Reset();
 	TMap<int64, TSoftObjectPtr<UYIItemDefinition>> ExistingAssets;
 	TSet<FString> ExistingRowKeys;
+	TSet<FSoftObjectPath> RegistrySourcePaths;
 
 	if (GEngine)
 	{
@@ -422,6 +476,44 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 				else
 				{
 					ExistingRowKeys.Add(FString::Printf(TEXT("%lld|%s"), View.UniqueCode, *View.RowName.ToString()));
+					if (View.DataSource.IsValid())
+					{
+						RegistrySourcePaths.Add(View.DataSource.ToSoftObjectPath());
+					}
+
+					TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
+					Entry->Code = View.UniqueCode;
+					Entry->RowName = View.RowName;
+					Entry->bIsDataTable = true;
+					Entry->DataSource = View.DataSource;
+					Entry->TemplateId = View.TemplateId;
+					Entry->Source = View.SourcePath;
+					Entry->Name = View.RowName.IsNone() ? TEXT("Row") : View.RowName.ToString();
+
+					if (UYIDataTableItemSource* Source = View.DataSource.LoadSynchronous())
+					{
+						if (UDataTable* Table = Source->ResolveDataTable())
+						{
+							Entry->DataTable = Table;
+							const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+							if (const uint8* const* Found = Table->GetRowMap().Find(View.RowName))
+							{
+								const FString RowDisplay = YIEditor_GetRowStringFromStruct(Table->RowStruct, *Found, PreviewField);
+								if (!RowDisplay.IsEmpty())
+								{
+									Entry->Name = RowDisplay;
+								}
+							}
+						}
+					}
+
+					if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(View.UniqueCode))
+					{
+						Entry->bHasAsset = true;
+						Entry->ItemAsset = *FoundAsset;
+					}
+
+					DataRowEntries.Add(Entry);
 				}
 			}
 		}
@@ -434,95 +526,123 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 	TArray<FAssetData> Sources;
 	AssetRegistry.Get().GetAssets(Filter, Sources);
 
+	TSet<FSoftObjectPath> SeenSourcePaths;
+	auto ProcessSource = [&](UYIDataTableItemSource* Source, const FSoftObjectPath& SourcePath)
+	{
+		if (!Source)
+		{
+			return;
+		}
+		if (UDataTable* Table = Source->ResolveDataTable())
+		{
+			const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+			const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+			const FName TemplateField = Source->TemplateIdFieldName;
+
+			for (const auto& RowPair : Table->GetRowMap())
+			{
+				const FName RowName = RowPair.Key;
+				const uint8* RowData = RowPair.Value;
+
+				int64 CodeValue = 0;
+				bool bFoundCode = false;
+				FString TemplateIdValue;
+
+				for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
+				{
+					const FProperty* Prop = *It;
+					if (!Prop) continue;
+
+					if (Prop->GetFName() == CodeField)
+					{
+						if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+						{
+							if (Num->IsInteger())
+							{
+								CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+								bFoundCode = true;
+							}
+						}
+					}
+					else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
+					{
+						if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+						{
+							TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
+						}
+						else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+						{
+							TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+						}
+						else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+						{
+							TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+						}
+					}
+				}
+
+				if (!bFoundCode)
+				{
+					continue;
+				}
+
+				const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
+				if (ExistingRowKeys.Contains(RowKey))
+				{
+					continue;
+				}
+				TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
+				Entry->Code = CodeValue;
+				Entry->RowName = RowName;
+				Entry->bIsDataTable = true;
+				Entry->DataSource = Source;
+				Entry->DataTable = Table;
+				Entry->TemplateId = TemplateIdValue;
+				Entry->Source = SourcePath.ToString();
+				Entry->Name = RowName.ToString();
+
+				const FString PreviewName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
+				if (!PreviewName.IsEmpty())
+				{
+					Entry->Name = PreviewName;
+				}
+
+				if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
+				{
+					Entry->bHasAsset = true;
+					Entry->ItemAsset = *FoundAsset;
+				}
+
+				DataRowEntries.Add(Entry);
+				ExistingRowKeys.Add(RowKey);
+			}
+		}
+	};
+
 	for (const FAssetData& SourceData : Sources)
 	{
-		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceData.GetAsset()))
+		UObject* SourceObj = SourceData.GetAsset();
+		if (!SourceObj)
 		{
-			if (UDataTable* Table = Source->ResolveDataTable())
-			{
-				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
-				const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
-				const FName TemplateField = Source->TemplateIdFieldName;
+			SourceObj = SourceData.ToSoftObjectPath().TryLoad();
+		}
+		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceObj))
+		{
+			const FSoftObjectPath SourcePath = SourceData.ToSoftObjectPath();
+			SeenSourcePaths.Add(SourcePath);
+			ProcessSource(Source, SourcePath);
+		}
+	}
 
-				for (const auto& RowPair : Table->GetRowMap())
-				{
-					const FName RowName = RowPair.Key;
-					const uint8* RowData = RowPair.Value;
-
-					int64 CodeValue = 0;
-					bool bFoundCode = false;
-					FString TemplateIdValue;
-
-					for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
-					{
-						const FProperty* Prop = *It;
-						if (!Prop) continue;
-
-						if (Prop->GetFName() == CodeField)
-						{
-							if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
-							{
-								if (Num->IsInteger())
-								{
-									CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
-									bFoundCode = true;
-								}
-							}
-						}
-						else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
-						{
-							if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
-							{
-								TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
-							}
-							else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
-							{
-								TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
-							}
-							else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
-							{
-								TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
-							}
-						}
-					}
-
-					if (!bFoundCode)
-					{
-						continue;
-					}
-
-					const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
-					if (ExistingRowKeys.Contains(RowKey))
-					{
-						continue;
-					}
-
-					TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
-					Entry->Code = CodeValue;
-					Entry->RowName = RowName;
-					Entry->bIsDataTable = true;
-					Entry->DataSource = Source;
-					Entry->DataTable = Table;
-					Entry->TemplateId = TemplateIdValue;
-					Entry->Source = SourceData.GetSoftObjectPath().ToString();
-					Entry->Name = RowName.ToString();
-
-					const FString PreviewName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
-					if (!PreviewName.IsEmpty())
-					{
-						Entry->Name = PreviewName;
-					}
-
-					if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
-					{
-						Entry->bHasAsset = true;
-						Entry->ItemAsset = *FoundAsset;
-					}
-
-					DataRowEntries.Add(Entry);
-					ExistingRowKeys.Add(RowKey);
-				}
-			}
+	for (const FSoftObjectPath& SourcePath : RegistrySourcePaths)
+	{
+		if (SeenSourcePaths.Contains(SourcePath))
+		{
+			continue;
+		}
+		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourcePath.TryLoad()))
+		{
+			ProcessSource(Source, SourcePath);
 		}
 	}
 }
@@ -555,7 +675,13 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIIte
 			{
 				if (Entry.IsValid())
 				{
-					CreateAssetFromEntry(*Entry);
+					const bool bCreated = CreateAssetFromEntry(*Entry);
+					if (!bCreated)
+					{
+						FNotificationInfo Info(NSLOCTEXT("YOLOInventory","BagPaletteCreateFailed","Create failed. Check DataTable source + transformer/inline mapping."));
+						Info.ExpireDuration = 4.f;
+						FSlateNotificationManager::Get().AddNotification(Info);
+					}
 					RefreshDataRowEntries();
 					if (DataRowListView.IsValid())
 					{
@@ -574,7 +700,12 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIIte
 			{
 				if (Entry.IsValid())
 				{
-					AddEntryToBag(*Entry);
+					if (!AddEntryToBag(*Entry))
+					{
+						FNotificationInfo Info(NSLOCTEXT("YOLOInventory","BagPaletteAddFailed","Add failed. No valid item definition found for this entry."));
+						Info.ExpireDuration = 4.f;
+						FSlateNotificationManager::Get().AddNotification(Info);
+					}
 				}
 				return FReply::Handled();
 			})
@@ -674,15 +805,22 @@ bool FYIInventoryBagEditor::CreateAssetFromEntry(const FYIItemDashboardEntry& En
 	RowWrapper->Address = const_cast<uint8*>(RowPtr);
 	RowWrapper->Struct = Table->RowStruct;
 
-	UObject* Transformed = nullptr;
+	UYIItemDefinition* Def = nullptr;
 	if (TSubclassOf<UCSVDataTransformer> Effective = Source->GetEffectiveTransformerClass())
 	{
 		if (UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Effective))
 		{
-			Transformed = Transformer->TransformObject(RowWrapper);
+			Def = Cast<UYIItemDefinition>(Transformer->TransformObject(RowWrapper));
 		}
 	}
-	UYIItemDefinition* Def = Cast<UYIItemDefinition>(Transformed);
+	if (!Def && GEngine)
+	{
+		// Inline mapping path (no transformer)
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Def = Registry->GetByCode(Entry.Code);
+		}
+	}
 	if (!Def)
 	{
 		return false;
@@ -714,17 +852,24 @@ bool FYIInventoryBagEditor::CreateAssetFromEntry(const FYIItemDashboardEntry& En
 	return true;
 }
 
-void FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
+bool FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
 {
 	if (!Bag)
 	{
-		return;
+		return false;
 	}
 
 	UYIItemDefinition* Def = nullptr;
 	if (Entry.ItemAsset.IsValid())
 	{
 		Def = Entry.ItemAsset.Get();
+	}
+	if (!Def && GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Def = Registry->GetByCode(Entry.Code);
+		}
 	}
 	if (!Def && Entry.bIsDataTable)
 	{
@@ -736,17 +881,10 @@ void FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
 			}
 		}
 	}
-	if (!Def && GEngine)
-	{
-		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
-		{
-			Def = Registry->GetByCode(Entry.Code);
-		}
-	}
 	if (!Def)
 	{
-		return;
-	}
+		return false;
+	 }
 
 	FYIBagItem NewItem;
 	NewItem.Item.Definition = Def;
@@ -754,4 +892,5 @@ void FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
 	NewItem.Size = Def->DefaultSize;
 	NewItem.Pos = FIntPoint::ZeroValue;
 	Bag->AddBagItem(NewItem);
+	return true;
 }
