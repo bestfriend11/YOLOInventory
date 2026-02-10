@@ -36,6 +36,7 @@
 #include "ObjectTools.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "YIEditorRowHelpers.h"
+#include "YIEditorMessageLog.h"
 
 TWeakPtr<FYIInventoryBagEditor> FYIInventoryBagEditor::ActiveEditor;
 
@@ -681,6 +682,9 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIIte
 						FNotificationInfo Info(NSLOCTEXT("YOLOInventory","BagPaletteCreateFailed","Create failed. Check DataTable source + transformer/inline mapping."));
 						Info.ExpireDuration = 4.f;
 						FSlateNotificationManager::Get().AddNotification(Info);
+						FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+							NSLOCTEXT("YOLOInventory","BagPaletteCreateFailed_Log","Bag palette create failed."),
+							Entry.IsValid() ? FText::FromString(Entry->Source) : FText());
 					}
 					RefreshDataRowEntries();
 					if (DataRowListView.IsValid())
@@ -705,6 +709,9 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIIte
 						FNotificationInfo Info(NSLOCTEXT("YOLOInventory","BagPaletteAddFailed","Add failed. No valid item definition found for this entry."));
 						Info.ExpireDuration = 4.f;
 						FSlateNotificationManager::Get().AddNotification(Info);
+						FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+							NSLOCTEXT("YOLOInventory","BagPaletteAddFailed_Log","Bag palette add failed."),
+							Entry.IsValid() ? FText::FromString(Entry->Source) : FText());
 					}
 				}
 				return FReply::Handled();

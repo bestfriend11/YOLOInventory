@@ -50,6 +50,7 @@ public:
 
 	void Construct(const FArguments& InArgs);
 	void OpenAsset(UObject* Asset);
+	virtual ~SYIItemDashboard();
 
 private:
 	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
@@ -69,6 +70,8 @@ private:
 	void RefreshInlineMappingEditor(UYIDataTableItemSource* Source);
 	TSharedRef<ITableRow> MakeMappingRow(TSharedPtr<FYIFieldMapping> Mapping, const TSharedRef<STableViewBase>& OwnerTable);
 	FReply HandleListKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent);
+	void RefreshLogEntries();
+	TSharedRef<ITableRow> MakeLogRow(TSharedPtr<struct FYIEditorLogEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -83,6 +86,9 @@ private:
 	TArray<TSharedPtr<FString>> SourceFieldOptions;
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	TArray<TSharedPtr<FString>> ConverterOptions;
+	TArray<TSharedPtr<struct FYIEditorLogEntry>> LogEntries;
+	TSharedPtr<class SListView<TSharedPtr<struct FYIEditorLogEntry>>> LogListView;
+	FDelegateHandle LogChangedHandle;
 	FText SearchText;
 	EDashTypeFilter TypeFilter = EDashTypeFilter::All;
 	EDashStatusFilter StatusFilter = EDashStatusFilter::All;

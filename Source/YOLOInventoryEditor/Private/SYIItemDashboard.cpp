@@ -40,6 +40,7 @@
 #include "ObjectTools.h"
 #include "Algo/Sort.h"
 #include "YIEditorRowHelpers.h"
+#include "YIEditorMessageLog.h"
 
 void SYIItemDashboard::Construct(const FArguments& InArgs)
 {
@@ -50,6 +51,8 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 	DetailArgs.bAllowMultipleTopLevelObjects = false;
 	DetailArgs.bShowOptions = true;
 	DetailsView = PropModule.CreateDetailView(DetailArgs);
+	LogChangedHandle = FYIEditorMessageLog::OnLogChanged().AddSP(this, &SYIItemDashboard::RefreshLogEntries);
+	RefreshLogEntries();
 
 	ChildSlot
 	[
@@ -372,10 +375,99 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 					]
 				]
 			]
+			+ SVerticalBox::Slot().FillHeight(0.25f).Padding(4)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+						[
+							SNew(STextBlock)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_ErrorsTitle","Errors & Notifications"))
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(6,0)
+						[
+							SNew(SButton)
+							.Text(NSLOCTEXT("YOLOInventory","Dash_ErrorsClear","Clear"))
+							.OnClicked_Lambda([this]()
+							{
+								FYIEditorMessageLog::Clear();
+								return FReply::Handled();
+							})
+						]
+					]
+					+ SVerticalBox::Slot().FillHeight(1.f)
+					[
+						SAssignNew(LogListView, SListView<TSharedPtr<FYIEditorLogEntry>>)
+						.ListItemsSource(&LogEntries)
+						.OnGenerateRow(this, &SYIItemDashboard::MakeLogRow)
+					]
+				]
+			]
 		]
 	];
 
 	Refresh();
+}
+
+SYIItemDashboard::~SYIItemDashboard()
+{
+	if (LogChangedHandle.IsValid())
+	{
+		FYIEditorMessageLog::OnLogChanged().Remove(LogChangedHandle);
+		LogChangedHandle.Reset();
+	}
+}
+
+void SYIItemDashboard::RefreshLogEntries()
+{
+	LogEntries.Reset();
+	for (const FYIEditorLogEntry& Entry : FYIEditorMessageLog::GetEntries())
+	{
+		LogEntries.Add(MakeShared<FYIEditorLogEntry>(Entry));
+	}
+	if (LogListView.IsValid())
+	{
+		LogListView->RequestListRefresh();
+	}
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakeLogRow(TSharedPtr<FYIEditorLogEntry> Entry, const TSharedRef<STableViewBase>& Owner)
+{
+	const FLinearColor SeverityColor = Entry.IsValid() && Entry->Severity == EYIEditorLogSeverity::Error
+		? FLinearColor(1.f, 0.25f, 0.2f)
+		: Entry.IsValid() && Entry->Severity == EYIEditorLogSeverity::Warning
+			? FLinearColor(1.f, 0.75f, 0.2f)
+			: FLinearColor(0.6f, 0.9f, 0.8f);
+
+	const FText TimeText = Entry.IsValid() ? FText::FromString(Entry->TimeUtc.ToString(TEXT("%H:%M:%S"))) : FText::GetEmpty();
+	const FText ContextText = (Entry.IsValid() && !Entry->Context.IsEmpty()) ? Entry->Context : FText::GetEmpty();
+
+	return SNew(STableRow<TSharedPtr<FYIEditorLogEntry>>, Owner)
+	[
+		SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot().AutoWidth().Padding(2,0)
+		[
+			SNew(STextBlock).Text(TimeText).ColorAndOpacity(FSlateColor(FLinearColor(0.6f,0.6f,0.6f)))
+		]
+		+ SHorizontalBox::Slot().AutoWidth().Padding(6,0)
+		[
+			SNew(STextBlock)
+			.Text(Entry.IsValid() ? Entry->Message : FText::GetEmpty())
+			.ColorAndOpacity(FSlateColor(SeverityColor))
+		]
+		+ SHorizontalBox::Slot().FillWidth(1.f).Padding(6,0)
+		[
+			SNew(STextBlock)
+			.Text(ContextText)
+			.ColorAndOpacity(FSlateColor(FLinearColor(0.7f,0.7f,0.7f)))
+			.WrapTextAt(420.f)
+		]
+	];
 }
 
 TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
@@ -805,12 +897,18 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 {
 	if (!Entry.bIsDataTable || !Entry.DataSource.IsValid())
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_NoDataSource","Create failed: entry has no data source."),
+			FText::FromString(Entry.Source));
 		return false;
 	}
 
 	UYIDataTableItemSource* Source = Entry.DataSource.LoadSynchronous();
 	if (!Source)
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_SourceLoad","Create failed: could not load data source."),
+			FText::FromString(Entry.Source));
 		return false;
 	}
 
@@ -844,6 +942,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 
 		if (!Source->TransformerClass)
 		{
+			FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+				NSLOCTEXT("YOLOInventory","Dash_CreateFail_NoTransformer","Create failed: transformer missing (and inline mapping disabled)."),
+				FText::FromString(Source->GetPathName()));
 			return false;
 		}
 	}
@@ -851,6 +952,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	UDataTable* Table = Source->DataTable.LoadSynchronous();
 	if (!Table || !Table->RowStruct)
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_NoTable","Create failed: data table missing or has no row struct."),
+			FText::FromString(Source->GetPathName()));
 		return false;
 	}
 
@@ -858,6 +962,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	const uint8* RowPtr = Found ? *Found : nullptr;
 	if (!RowPtr)
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_NoRow","Create failed: row not found in data table."),
+			FText::FromString(Entry.RowName.ToString()));
 		return false;
 	}
 
@@ -898,6 +1005,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	UYIItemDefinition* Def = Cast<UYIItemDefinition>(Transformed);
 	if (!Def)
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_Transform","Create failed: transformer/inline mapping returned null."),
+			FText::FromString(Entry.RowName.ToString()));
 		return false;
 	}
 
@@ -913,6 +1023,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 			Existing->MarkPackageDirty();
 			return true;
 		}
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_Update","Create failed: unable to update existing asset from row."),
+			FText::FromString(ObjectPath));
 		return false;
 	}
 
@@ -920,6 +1033,9 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	UObject* NewAsset = NewObject<UObject>(Pkg, Def->GetClass(), *AssetName, RF_Public | RF_Standalone | RF_Transactional, Def);
 	if (!NewAsset)
 	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+			NSLOCTEXT("YOLOInventory","Dash_CreateFail_NewAsset","Create failed: could not create asset object."),
+			FText::FromString(ObjectPath));
 		return false;
 	}
 
