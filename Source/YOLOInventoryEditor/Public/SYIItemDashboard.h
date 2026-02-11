@@ -45,6 +45,44 @@ struct FYIMappingPreviewRow
 	FLinearColor StatusColor = FLinearColor::White;
 };
 
+enum class EYIDashboardIssueSeverity : uint8
+{
+	Info,
+	Warning,
+	Error
+};
+
+struct FYIPreflightIssue
+{
+	EYIDashboardIssueSeverity Severity = EYIDashboardIssueSeverity::Info;
+	bool bBlocking = false;
+	FText Message;
+	FText Context;
+};
+
+struct FYIFieldDiffRow
+{
+	FName FieldName = NAME_None;
+	FString BeforeValue;
+	FString AfterValue;
+	FText Status;
+	FLinearColor StatusColor = FLinearColor::White;
+};
+
+enum class EYIBatchJobStatus : uint8
+{
+	Pending,
+	Succeeded,
+	Failed
+};
+
+struct FYIBatchJobEntry
+{
+	TSharedPtr<FYIItemDashboardEntry> Entry;
+	EYIBatchJobStatus Status = EYIBatchJobStatus::Pending;
+	FText Result;
+};
+
 enum class EDashTypeFilter : uint8
 {
 	All,
@@ -95,6 +133,15 @@ private:
 	void BuildTransformFunctionOptions();
 	void RefreshMappingPreview();
 	TSharedRef<ITableRow> MakePreviewRow(TSharedPtr<FYIMappingPreviewRow> Row, const TSharedRef<STableViewBase>& Owner);
+	void RebuildPreflightForSelection();
+	bool RunPreflightForEntry(const FYIItemDashboardEntry& Entry, TArray<FYIPreflightIssue>& OutIssues, bool bLogIssues) const;
+	TSharedRef<ITableRow> MakePreflightRow(TSharedPtr<FYIPreflightIssue> Entry, const TSharedRef<STableViewBase>& Owner);
+	void RebuildDiffForSelection();
+	TSharedRef<ITableRow> MakeDiffRow(TSharedPtr<FYIFieldDiffRow> Row, const TSharedRef<STableViewBase>& Owner);
+	void EnqueueSelectedRows();
+	void ProcessBatchQueue();
+	TSharedRef<ITableRow> MakeBatchRow(TSharedPtr<FYIBatchJobEntry> Row, const TSharedRef<STableViewBase>& Owner);
+	void ApplySuggestedMappings();
 
 private:
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
@@ -117,7 +164,17 @@ private:
 	TArray<TSharedPtr<FString>> PreviewRowOptions;
 	FName PreviewRowName = NAME_None;
 	TArray<TSharedPtr<struct FYIEditorLogEntry>> LogEntries;
+	TArray<TSharedPtr<struct FYIEditorLogEntry>> FilteredLogEntries;
 	TSharedPtr<class SListView<TSharedPtr<struct FYIEditorLogEntry>>> LogListView;
+	bool bShowInfoLogs = true;
+	bool bShowWarningLogs = true;
+	bool bShowErrorLogs = true;
+	TArray<TSharedPtr<FYIPreflightIssue>> PreflightIssues;
+	TSharedPtr<class SListView<TSharedPtr<FYIPreflightIssue>>> PreflightListView;
+	TArray<TSharedPtr<FYIFieldDiffRow>> DiffRows;
+	TSharedPtr<class SListView<TSharedPtr<FYIFieldDiffRow>>> DiffListView;
+	TArray<TSharedPtr<FYIBatchJobEntry>> BatchQueueEntries;
+	TSharedPtr<class SListView<TSharedPtr<FYIBatchJobEntry>>> BatchQueueListView;
 	FDelegateHandle LogChangedHandle;
 	FText SearchText;
 	EDashTypeFilter TypeFilter = EDashTypeFilter::All;
@@ -127,4 +184,7 @@ private:
 	bool bShowMappingPanel = true;
 	bool bShowPreviewPanel = true;
 	bool bShowLogPanel = true;
+	bool bShowPreflightPanel = true;
+	bool bShowDiffPanel = true;
+	bool bShowBatchPanel = true;
 };

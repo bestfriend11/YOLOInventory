@@ -19,6 +19,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Text/STextBlock.h"
@@ -538,7 +539,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarPreview", "Preview"))
 										]
 								]
-							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
 								[
 									SNew(SCheckBox)
 										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
@@ -547,6 +548,177 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 										[
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarLogs", "Logs"))
 										]
+								]
+							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SCheckBox)
+										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+										.IsChecked_Lambda([this]() { return bShowPreflightPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowPreflightPanel = (State == ECheckBoxState::Checked); })
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarPreflight", "Preflight"))
+										]
+								]
+							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SCheckBox)
+										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+										.IsChecked_Lambda([this]() { return bShowDiffPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowDiffPanel = (State == ECheckBoxState::Checked); })
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarDiff", "Diff"))
+										]
+								]
+							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SCheckBox)
+										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+										.IsChecked_Lambda([this]() { return bShowBatchPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowBatchPanel = (State == ECheckBoxState::Checked); })
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarBatch", "Batch"))
+										]
+								]
+						]
+				]
+			+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 4)
+				[
+					SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+						.Padding(6)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ActionBar", "Actions:"))
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_Create", "Create/Update Selected"))
+										.OnClicked_Lambda([this]()
+											{
+												bool bChanged = false;
+												if (ListView.IsValid())
+												{
+													const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+													for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+													{
+														if (E.IsValid() && E->bIsDataTable)
+														{
+															bChanged |= CreateAssetFromEntry(*E);
+														}
+													}
+												}
+												if (bChanged)
+												{
+													Refresh();
+												}
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_UpdateLinked", "Update Linked Asset"))
+										.OnClicked_Lambda([this]()
+											{
+												if (!ListView.IsValid())
+												{
+													return FReply::Handled();
+												}
+												const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+												bool bChanged = false;
+												for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+												{
+													if (!E.IsValid())
+													{
+														continue;
+													}
+													UObject* Obj = E->Object.LoadSynchronous();
+													if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Obj))
+													{
+														bChanged |= UpdateAssetFromLinkedSource(Def);
+													}
+												}
+												if (bChanged)
+												{
+													Refresh();
+												}
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_Preflight", "Preflight Selected"))
+										.OnClicked_Lambda([this]()
+											{
+												RebuildPreflightForSelection();
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_ApplySuggested", "Apply Suggested Mapping"))
+										.OnClicked_Lambda([this]()
+											{
+												ApplySuggestedMappings();
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_Queue", "Queue Selected"))
+										.OnClicked_Lambda([this]()
+											{
+												EnqueueSelectedRows();
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_RunQueue", "Run Queue"))
+										.OnClicked_Lambda([this]()
+											{
+												ProcessBatchQueue();
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center)
+								[
+									SNew(STextBlock)
+										.Text_Lambda([this]()
+											{
+												if (!ListView.IsValid())
+												{
+													return NSLOCTEXT("YOLOInventory", "Dash_Workflow_NoList", "Workflow: Idle");
+												}
+												const int32 SelectedCount = ListView->GetNumItemsSelected();
+												if (SelectedCount <= 0)
+												{
+													return NSLOCTEXT("YOLOInventory", "Dash_Workflow_Select", "Workflow: Select row or linked item");
+												}
+												if (SelectedCount > 1)
+												{
+													return NSLOCTEXT("YOLOInventory", "Dash_Workflow_Bulk", "Workflow: Bulk validate / generate");
+												}
+												if (PreflightIssues.Num() > 0)
+												{
+													for (const TSharedPtr<FYIPreflightIssue>& Issue : PreflightIssues)
+													{
+														if (Issue.IsValid() && Issue->bBlocking)
+														{
+															return NSLOCTEXT("YOLOInventory", "Dash_Workflow_Blocking", "Workflow: Fix blocking preflight errors");
+														}
+													}
+													return NSLOCTEXT("YOLOInventory", "Dash_Workflow_Warn", "Workflow: Ready with warnings");
+												}
+												return NSLOCTEXT("YOLOInventory", "Dash_Workflow_Ready", "Workflow: Ready to generate/update");
+											})
 								]
 						]
 				]
@@ -891,6 +1063,34 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																		return FReply::Handled();
 																	})
 														]
+													+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center).Padding(8, 0)
+														[
+															SNew(STextBlock)
+																.Text_Lambda([this]()
+																	{
+																		if (!CurrentMappingSource.IsValid())
+																		{
+																			return NSLOCTEXT("YOLOInventory", "Dash_Confidence_NoSource", "Confidence: N/A");
+																		}
+																		const int32 Total = CurrentMappingSource->InlineMappings.Num();
+																		int32 Ready = 0;
+																		int32 NeedsFix = 0;
+																		for (const FYIFieldMapping& M : CurrentMappingSource->InlineMappings)
+																		{
+																			const bool bHasSource = !M.SourceField.IsNone();
+																			const bool bHasTarget = !M.TargetProperty.IsNone();
+																			if (bHasSource && bHasTarget)
+																			{
+																				++Ready;
+																			}
+																			else
+																			{
+																				++NeedsFix;
+																			}
+																		}
+																		return FText::Format(NSLOCTEXT("YOLOInventory", "Dash_ConfidenceFmt", "Confidence: Ready {0}/{1}, Needs Fix {2}"), FText::AsNumber(Ready), FText::AsNumber(Total), FText::AsNumber(NeedsFix));
+																	})
+														]
 												]
 											+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
 												[
@@ -982,40 +1182,129 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												]
 										]
 								]
-							+ SVerticalBox::Slot().FillHeight(0.25f).Padding(4)
+							+ SVerticalBox::Slot().FillHeight(0.4f).Padding(4)
 								[
-									SNew(SBorder)
-										.Visibility_Lambda([this]()
-											{
-												return bShowLogPanel ? EVisibility::Visible : EVisibility::Collapsed;
-											})
-										.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+									SNew(SSplitter)
+										.Orientation(Orient_Vertical)
+										+ SSplitter::Slot().Value(0.25f)
 										[
-											SNew(SVerticalBox)
-												+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+											SNew(SBorder)
+												.Visibility_Lambda([this]() { return bShowPreflightPanel ? EVisibility::Visible : EVisibility::Collapsed; })
+												.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
 												[
-													SNew(SHorizontalBox)
-														+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+													SNew(SVerticalBox)
+														+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
 														[
-															SNew(STextBlock)
-																.Text(NSLOCTEXT("YOLOInventory", "Dash_ErrorsTitle", "Errors & Notifications"))
+															SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_PreflightTitle", "Preflight"))
 														]
-														+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0)
+														+ SVerticalBox::Slot().FillHeight(1.f)
 														[
-															SNew(SButton)
-																.Text(NSLOCTEXT("YOLOInventory", "Dash_ErrorsClear", "Clear"))
-																.OnClicked_Lambda([this]()
-																	{
-																		FYIEditorMessageLog::Clear();
-																		return FReply::Handled();
-																	})
+															SAssignNew(PreflightListView, SListView<TSharedPtr<FYIPreflightIssue>>)
+																.ListItemsSource(&PreflightIssues)
+																.OnGenerateRow(this, &SYIItemDashboard::MakePreflightRow)
 														]
 												]
-											+ SVerticalBox::Slot().FillHeight(1.f)
+										]
+										+ SSplitter::Slot().Value(0.25f)
+										[
+											SNew(SBorder)
+												.Visibility_Lambda([this]() { return bShowDiffPanel ? EVisibility::Visible : EVisibility::Collapsed; })
+												.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
 												[
-													SAssignNew(LogListView, SListView<TSharedPtr<FYIEditorLogEntry>>)
-														.ListItemsSource(&LogEntries)
-														.OnGenerateRow(this, &SYIItemDashboard::MakeLogRow)
+													SNew(SVerticalBox)
+														+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+														[
+															SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_DiffTitle", "Before/After Diff"))
+														]
+														+ SVerticalBox::Slot().FillHeight(1.f)
+														[
+															SAssignNew(DiffListView, SListView<TSharedPtr<FYIFieldDiffRow>>)
+																.ListItemsSource(&DiffRows)
+																.OnGenerateRow(this, &SYIItemDashboard::MakeDiffRow)
+														]
+												]
+										]
+										+ SSplitter::Slot().Value(0.2f)
+										[
+											SNew(SBorder)
+												.Visibility_Lambda([this]() { return bShowBatchPanel ? EVisibility::Visible : EVisibility::Collapsed; })
+												.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+												[
+													SNew(SVerticalBox)
+														+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+														[
+															SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_BatchTitle", "Batch Queue"))
+														]
+														+ SVerticalBox::Slot().FillHeight(1.f)
+														[
+															SAssignNew(BatchQueueListView, SListView<TSharedPtr<FYIBatchJobEntry>>)
+																.ListItemsSource(&BatchQueueEntries)
+																.OnGenerateRow(this, &SYIItemDashboard::MakeBatchRow)
+														]
+												]
+										]
+										+ SSplitter::Slot().Value(0.3f)
+										[
+											SNew(SBorder)
+												.Visibility_Lambda([this]()
+													{
+														return bShowLogPanel ? EVisibility::Visible : EVisibility::Collapsed;
+													})
+												.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+												[
+													SNew(SVerticalBox)
+														+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+														[
+															SNew(SHorizontalBox)
+																+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+																[
+																	SNew(STextBlock)
+																		.Text(NSLOCTEXT("YOLOInventory", "Dash_ErrorsTitle", "Errors & Notifications"))
+																]
+																+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+																[
+																	SNew(SCheckBox)
+																		.IsChecked_Lambda([this]() { return bShowErrorLogs ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+																		.OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bShowErrorLogs = (S == ECheckBoxState::Checked); RefreshLogEntries(); })
+																		[
+																			SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_Filter_Error", "Errors"))
+																		]
+																]
+																+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+																[
+																	SNew(SCheckBox)
+																		.IsChecked_Lambda([this]() { return bShowWarningLogs ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+																		.OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bShowWarningLogs = (S == ECheckBoxState::Checked); RefreshLogEntries(); })
+																		[
+																			SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_Filter_Warn", "Warnings"))
+																		]
+																]
+																+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+																[
+																	SNew(SCheckBox)
+																		.IsChecked_Lambda([this]() { return bShowInfoLogs ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+																		.OnCheckStateChanged_Lambda([this](ECheckBoxState S) { bShowInfoLogs = (S == ECheckBoxState::Checked); RefreshLogEntries(); })
+																		[
+																			SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_Filter_Info", "Info"))
+																		]
+																]
+																+ SHorizontalBox::Slot().AutoWidth().Padding(6, 0)
+																[
+																	SNew(SButton)
+																		.Text(NSLOCTEXT("YOLOInventory", "Dash_ErrorsClear", "Clear"))
+																		.OnClicked_Lambda([this]()
+																			{
+																				FYIEditorMessageLog::Clear();
+																				return FReply::Handled();
+																			})
+																]
+														]
+														+ SVerticalBox::Slot().FillHeight(1.f)
+														[
+															SAssignNew(LogListView, SListView<TSharedPtr<FYIEditorLogEntry>>)
+																.ListItemsSource(&FilteredLogEntries)
+																.OnGenerateRow(this, &SYIItemDashboard::MakeLogRow)
+														]
 												]
 										]
 								]
@@ -1038,9 +1327,19 @@ SYIItemDashboard::~SYIItemDashboard()
 void SYIItemDashboard::RefreshLogEntries()
 {
 	LogEntries.Reset();
+	FilteredLogEntries.Reset();
 	for (const FYIEditorLogEntry& Entry : FYIEditorMessageLog::GetEntries())
 	{
-		LogEntries.Add(MakeShared<FYIEditorLogEntry>(Entry));
+		TSharedPtr<FYIEditorLogEntry> Wrapped = MakeShared<FYIEditorLogEntry>(Entry);
+		LogEntries.Add(Wrapped);
+		const bool bPass =
+			(Entry.Severity == EYIEditorLogSeverity::Error && bShowErrorLogs) ||
+			(Entry.Severity == EYIEditorLogSeverity::Warning && bShowWarningLogs) ||
+			(Entry.Severity == EYIEditorLogSeverity::Info && bShowInfoLogs);
+		if (bPass)
+		{
+			FilteredLogEntries.Add(Wrapped);
+		}
 	}
 	if (LogListView.IsValid())
 	{
@@ -1080,6 +1379,395 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeLogRow(TSharedPtr<FYIEditorLogEntry>
 						.WrapTextAt(420.f)
 				]
 		];
+}
+
+bool SYIItemDashboard::RunPreflightForEntry(const FYIItemDashboardEntry& Entry, TArray<FYIPreflightIssue>& OutIssues, bool bLogIssues) const
+{
+	auto AddIssue = [&](EYIDashboardIssueSeverity Severity, bool bBlocking, const FText& Message, const FText& Context)
+	{
+		FYIPreflightIssue Issue;
+		Issue.Severity = Severity;
+		Issue.bBlocking = bBlocking;
+		Issue.Message = Message;
+		Issue.Context = Context;
+		OutIssues.Add(Issue);
+		if (bLogIssues)
+		{
+			FYIEditorMessageLog::Add(
+				Severity == EYIDashboardIssueSeverity::Error ? EYIEditorLogSeverity::Error :
+				Severity == EYIDashboardIssueSeverity::Warning ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
+				Message,
+				Context);
+		}
+	};
+
+	if (Entry.Code == 0)
+	{
+		AddIssue(EYIDashboardIssueSeverity::Error, true,
+			NSLOCTEXT("YOLOInventory", "Dash_Preflight_CodeMissing", "UniqueCode is 0."),
+			FText::FromString(Entry.Name));
+	}
+
+	if (Entry.bIsDataTable)
+	{
+		UYIDataTableItemSource* Source = Entry.DataSource.LoadSynchronous();
+		if (!Source)
+		{
+			AddIssue(EYIDashboardIssueSeverity::Error, true,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_SourceMissing", "Data source is missing or failed to load."),
+				FText::FromString(Entry.Source));
+			return false;
+		}
+
+		UDataTable* Table = Source->DataTable.LoadSynchronous();
+		if (!Table || !Table->RowStruct)
+		{
+			AddIssue(EYIDashboardIssueSeverity::Error, true,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_TableMissing", "Data table is missing or row struct is invalid."),
+				FText::FromString(Source->GetPathName()));
+			return false;
+		}
+
+		if (!Table->GetRowMap().Contains(Entry.RowName))
+		{
+			AddIssue(EYIDashboardIssueSeverity::Error, true,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_RowMissing", "Row does not exist in data table."),
+				FText::FromString(Entry.RowName.ToString()));
+		}
+
+		const bool bHasInline = Source->bUseInlineMappings && Source->InlineMappings.Num() > 0;
+		if (!Source->TransformerClass && !bHasInline)
+		{
+			AddIssue(EYIDashboardIssueSeverity::Error, true,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_TransformMissing", "No transformer class and no inline mappings are configured."),
+				FText::FromString(Source->GetPathName()));
+		}
+		if (Source->bUseInlineMappings && Source->InlineMappings.Num() == 0)
+		{
+			AddIssue(EYIDashboardIssueSeverity::Warning, false,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_InlineEnabledEmpty", "Inline mapping is enabled but has no mappings."),
+				FText::FromString(Source->GetPathName()));
+		}
+	}
+	else
+	{
+		if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Entry.Object.LoadSynchronous()))
+		{
+			if (Def->SourceDataSource.IsNull() || Def->SourceRowName.IsNone())
+			{
+				AddIssue(EYIDashboardIssueSeverity::Info, false,
+					NSLOCTEXT("YOLOInventory", "Dash_Preflight_UnlinkedAsset", "Item asset is not linked to a data source row."),
+					FText::FromString(Def->GetPathName()));
+			}
+		}
+	}
+
+	bool bHasBlocking = false;
+	for (const FYIPreflightIssue& Issue : OutIssues)
+	{
+		if (Issue.bBlocking)
+		{
+			bHasBlocking = true;
+			break;
+		}
+	}
+	if (!OutIssues.Num())
+	{
+		AddIssue(EYIDashboardIssueSeverity::Info, false,
+			NSLOCTEXT("YOLOInventory", "Dash_Preflight_Clear", "Preflight passed."),
+			FText::FromString(Entry.Name));
+	}
+	return !bHasBlocking;
+}
+
+void SYIItemDashboard::RebuildPreflightForSelection()
+{
+	PreflightIssues.Reset();
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+		{
+			if (!E.IsValid())
+			{
+				continue;
+			}
+			TArray<FYIPreflightIssue> LocalIssues;
+			RunPreflightForEntry(*E, LocalIssues, false);
+			for (const FYIPreflightIssue& Issue : LocalIssues)
+			{
+				PreflightIssues.Add(MakeShared<FYIPreflightIssue>(Issue));
+			}
+		}
+	}
+	if (PreflightIssues.Num() == 0)
+	{
+		TSharedPtr<FYIPreflightIssue> Info = MakeShared<FYIPreflightIssue>();
+		Info->Severity = EYIDashboardIssueSeverity::Info;
+		Info->Message = NSLOCTEXT("YOLOInventory", "Dash_Preflight_NoSelection", "Select one or more entries to run preflight.");
+		PreflightIssues.Add(Info);
+	}
+	if (PreflightListView.IsValid())
+	{
+		PreflightListView->RequestListRefresh();
+	}
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakePreflightRow(TSharedPtr<FYIPreflightIssue> Entry, const TSharedRef<STableViewBase>& Owner)
+{
+	const FLinearColor SeverityColor = Entry.IsValid() && Entry->Severity == EYIDashboardIssueSeverity::Error
+		? FLinearColor(1.f, 0.25f, 0.2f)
+		: Entry.IsValid() && Entry->Severity == EYIDashboardIssueSeverity::Warning
+		? FLinearColor(1.f, 0.75f, 0.2f)
+		: FLinearColor(0.6f, 0.9f, 0.8f);
+	return SNew(STableRow<TSharedPtr<FYIPreflightIssue>>, Owner)
+		[
+			SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Entry.IsValid() && Entry->bBlocking ? NSLOCTEXT("YOLOInventory", "Dash_Preflight_Block", "BLOCK") : NSLOCTEXT("YOLOInventory", "Dash_Preflight_Note", "NOTE"))
+						.ColorAndOpacity(FSlateColor(SeverityColor))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(6, 0)
+				[
+					SNew(STextBlock).Text(Entry.IsValid() ? Entry->Message : FText::GetEmpty()).ColorAndOpacity(FSlateColor(SeverityColor))
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(6, 0)
+				[
+					SNew(STextBlock).Text(Entry.IsValid() ? Entry->Context : FText::GetEmpty()).ColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.7f, 0.7f)))
+				]
+		];
+}
+
+void SYIItemDashboard::RebuildDiffForSelection()
+{
+	DiffRows.Reset();
+	if (!ListView.IsValid())
+	{
+		return;
+	}
+
+	const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+	if (Selected.Num() != 1 || !Selected[0].IsValid())
+	{
+		TSharedPtr<FYIFieldDiffRow> Row = MakeShared<FYIFieldDiffRow>();
+		Row->Status = NSLOCTEXT("YOLOInventory", "Dash_Diff_SelectOne", "Select exactly one row for diff.");
+		Row->StatusColor = FLinearColor(0.75f, 0.75f, 0.75f);
+		DiffRows.Add(Row);
+		if (DiffListView.IsValid())
+		{
+			DiffListView->RequestListRefresh();
+		}
+		return;
+	}
+
+	const TSharedPtr<FYIItemDashboardEntry> Entry = Selected[0];
+	UYIItemDefinition* BeforeDef = nullptr;
+	if (Entry->ItemAsset.IsValid())
+	{
+		BeforeDef = Entry->ItemAsset.LoadSynchronous();
+	}
+	if (!BeforeDef)
+	{
+		BeforeDef = Cast<UYIItemDefinition>(Entry->Object.LoadSynchronous());
+	}
+
+	UYIItemDefinition* AfterDef = nullptr;
+	if (GEngine)
+	{
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Registry->BuildIndex(true);
+			AfterDef = Registry->GetByCode(Entry->Code);
+		}
+	}
+
+	if (!BeforeDef && !AfterDef)
+	{
+		TSharedPtr<FYIFieldDiffRow> Row = MakeShared<FYIFieldDiffRow>();
+		Row->Status = NSLOCTEXT("YOLOInventory", "Dash_Diff_NoData", "No asset or transformed output available.");
+		Row->StatusColor = FLinearColor(1.f, 0.75f, 0.2f);
+		DiffRows.Add(Row);
+		if (DiffListView.IsValid())
+		{
+			DiffListView->RequestListRefresh();
+		}
+		return;
+	}
+
+	int32 ChangedCount = 0;
+	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+	{
+		FProperty* Prop = *It;
+		if (!Prop || Prop->HasAnyPropertyFlags(CPF_Transient))
+		{
+			continue;
+		}
+		const uint8* BeforePtr = BeforeDef ? Prop->ContainerPtrToValuePtr<uint8>(BeforeDef) : nullptr;
+		const uint8* AfterPtr = AfterDef ? Prop->ContainerPtrToValuePtr<uint8>(AfterDef) : nullptr;
+
+		FString BeforeValue;
+		FString AfterValue;
+		if (BeforePtr)
+		{
+			Prop->ExportTextItem_Direct(BeforeValue, BeforePtr, nullptr, nullptr, PPF_None);
+		}
+		if (AfterPtr)
+		{
+			Prop->ExportTextItem_Direct(AfterValue, AfterPtr, nullptr, nullptr, PPF_None);
+		}
+
+		if (!BeforeValue.Equals(AfterValue, ESearchCase::CaseSensitive))
+		{
+			++ChangedCount;
+			TSharedPtr<FYIFieldDiffRow> Row = MakeShared<FYIFieldDiffRow>();
+			Row->FieldName = Prop->GetFName();
+			Row->BeforeValue = BeforeValue;
+			Row->AfterValue = AfterValue;
+			Row->Status = NSLOCTEXT("YOLOInventory", "Dash_Diff_Changed", "Changed");
+			Row->StatusColor = FLinearColor(0.95f, 0.75f, 0.2f);
+			DiffRows.Add(Row);
+		}
+	}
+
+	if (ChangedCount == 0)
+	{
+		TSharedPtr<FYIFieldDiffRow> Row = MakeShared<FYIFieldDiffRow>();
+		Row->Status = NSLOCTEXT("YOLOInventory", "Dash_Diff_NoChanges", "No field differences.");
+		Row->StatusColor = FLinearColor(0.2f, 0.8f, 0.4f);
+		DiffRows.Add(Row);
+	}
+
+	if (DiffListView.IsValid())
+	{
+		DiffListView->RequestListRefresh();
+	}
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakeDiffRow(TSharedPtr<FYIFieldDiffRow> Row, const TSharedRef<STableViewBase>& Owner)
+{
+	return SNew(STableRow<TSharedPtr<FYIFieldDiffRow>>, Owner)
+		[
+			SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() ? FText::FromName(Row->FieldName) : FText::GetEmpty())
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.35f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() ? FText::FromString(Row->BeforeValue) : FText::GetEmpty())
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.35f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() ? FText::FromString(Row->AfterValue) : FText::GetEmpty())
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.1f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() ? Row->Status : FText::GetEmpty()).ColorAndOpacity(FSlateColor(Row.IsValid() ? Row->StatusColor : FLinearColor::White))
+				]
+		];
+}
+
+void SYIItemDashboard::EnqueueSelectedRows()
+{
+	if (!ListView.IsValid())
+	{
+		return;
+	}
+	const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+	for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+	{
+		if (!E.IsValid() || !E->bIsDataTable)
+		{
+			continue;
+		}
+		const bool bAlreadyQueued = BatchQueueEntries.ContainsByPredicate([E](const TSharedPtr<FYIBatchJobEntry>& Job)
+			{
+				return Job.IsValid() && Job->Entry.IsValid() && Job->Entry->Code == E->Code && Job->Entry->RowName == E->RowName && Job->Status == EYIBatchJobStatus::Pending;
+			});
+		if (bAlreadyQueued)
+		{
+			continue;
+		}
+		TSharedPtr<FYIBatchJobEntry> Job = MakeShared<FYIBatchJobEntry>();
+		Job->Entry = E;
+		Job->Status = EYIBatchJobStatus::Pending;
+		Job->Result = NSLOCTEXT("YOLOInventory", "Dash_Batch_Pending", "Pending");
+		BatchQueueEntries.Add(Job);
+	}
+	if (BatchQueueListView.IsValid())
+	{
+		BatchQueueListView->RequestListRefresh();
+	}
+}
+
+void SYIItemDashboard::ProcessBatchQueue()
+{
+	int32 Succeeded = 0;
+	int32 Failed = 0;
+	for (const TSharedPtr<FYIBatchJobEntry>& Job : BatchQueueEntries)
+	{
+		if (!Job.IsValid() || !Job->Entry.IsValid() || Job->Status != EYIBatchJobStatus::Pending)
+		{
+			continue;
+		}
+		const bool bOk = CreateAssetFromEntry(*Job->Entry);
+		Job->Status = bOk ? EYIBatchJobStatus::Succeeded : EYIBatchJobStatus::Failed;
+		Job->Result = bOk ? NSLOCTEXT("YOLOInventory", "Dash_Batch_Success", "Success") : NSLOCTEXT("YOLOInventory", "Dash_Batch_Failed", "Failed");
+		if (bOk)
+		{
+			++Succeeded;
+		}
+		else
+		{
+			++Failed;
+		}
+	}
+	if (BatchQueueListView.IsValid())
+	{
+		BatchQueueListView->RequestListRefresh();
+	}
+	if (Succeeded > 0)
+	{
+		Refresh();
+	}
+	FYIEditorMessageLog::Add(
+		Failed > 0 ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
+		FText::Format(NSLOCTEXT("YOLOInventory", "Dash_Batch_Result", "Batch complete. Success: {0}, Failed: {1}"), FText::AsNumber(Succeeded), FText::AsNumber(Failed)));
+}
+
+TSharedRef<ITableRow> SYIItemDashboard::MakeBatchRow(TSharedPtr<FYIBatchJobEntry> Row, const TSharedRef<STableViewBase>& Owner)
+{
+	const FLinearColor StatusColor = !Row.IsValid() ? FLinearColor::Gray :
+		(Row->Status == EYIBatchJobStatus::Succeeded ? FLinearColor(0.2f, 0.8f, 0.4f) :
+		(Row->Status == EYIBatchJobStatus::Failed ? FLinearColor(1.f, 0.25f, 0.2f) :
+		FLinearColor(0.8f, 0.8f, 0.8f)));
+	return SNew(STableRow<TSharedPtr<FYIBatchJobEntry>>, Owner)
+		[
+			SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(0.2f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() && Row->Entry.IsValid() ? FText::AsNumber(Row->Entry->Code) : FText::GetEmpty())
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() && Row->Entry.IsValid() ? FText::FromString(Row->Entry->Name) : FText::GetEmpty())
+				]
+				+ SHorizontalBox::Slot().FillWidth(0.35f).Padding(2, 0)
+				[
+					SNew(STextBlock).Text(Row.IsValid() ? Row->Result : FText::GetEmpty()).ColorAndOpacity(FSlateColor(StatusColor))
+				]
+		];
+}
+
+void SYIItemDashboard::ApplySuggestedMappings()
+{
+	AutoMatchInlineMappings(false);
+	if (CurrentMappingSource.IsValid() && CurrentMappingSource->InlineMappings.Num() == 0)
+	{
+		AutoMatchInlineMappings(true);
+	}
+	RefreshMappingPreview();
 }
 
 TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
@@ -1430,6 +2118,8 @@ void SYIItemDashboard::Refresh()
 	{
 		ListView->RequestListRefresh();
 	}
+	RebuildPreflightForSelection();
+	RebuildDiffForSelection();
 }
 
 void SYIItemDashboard::OnSearchTextChanged(const FText& NewText)
@@ -1523,6 +2213,12 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
 			NSLOCTEXT("YOLOInventory", "Dash_CreateFail_SourceLoad", "Create failed: could not load data source."),
 			FText::FromString(Entry.Source));
+		return false;
+	}
+
+	TArray<FYIPreflightIssue> LocalIssues;
+	if (!RunPreflightForEntry(Entry, LocalIssues, true))
+	{
 		return false;
 	}
 
@@ -1786,6 +2482,40 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 	else
 	{
 		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_PreflightRow", "Preflight Row"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_PreflightRow_Tip", "Run preflight validation for this row."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
+				{
+					if (!Self || !Entry.IsValid())
+					{
+						return;
+					}
+					TArray<FYIPreflightIssue> Issues;
+					Self->RunPreflightForEntry(*Entry, Issues, true);
+					Self->RebuildPreflightForSelection();
+				})));
+
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_QueueRow", "Queue Row"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_QueueRow_Tip", "Add this row to the batch queue."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
+				{
+					if (!Self || !Entry.IsValid())
+					{
+						return;
+					}
+					if (Self->ListView.IsValid())
+					{
+						Self->ListView->SetSelection(Entry);
+					}
+					Self->EnqueueSelectedRows();
+				})));
+
+		MenuBuilder.AddSeparator();
+
+		MenuBuilder.AddMenuEntry(
 			NSLOCTEXT("YOLOInventory", "Dash_Context_CreateAsset", "Create Item Asset from Row"),
 			NSLOCTEXT("YOLOInventory", "Dash_Context_CreateAsset_Tip", "Run the transformer on this row and create/update the item asset."),
 			FSlateIcon(),
@@ -1892,6 +2622,8 @@ void SYIItemDashboard::ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntr
 			MappingListView->RequestListRefresh();
 		}
 	}
+	RebuildPreflightForSelection();
+	RebuildDiffForSelection();
 }
 
 void SYIItemDashboard::OpenAsset(UObject* Asset)
