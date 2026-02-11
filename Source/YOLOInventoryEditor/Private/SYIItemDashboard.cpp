@@ -20,6 +20,7 @@
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SSplitter.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Text/STextBlock.h"
@@ -539,12 +540,19 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarPreview", "Preview"))
 										]
 								]
-								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
 								[
 									SNew(SCheckBox)
 										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
 										.IsChecked_Lambda([this]() { return bShowLogPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowLogPanel = (State == ECheckBoxState::Checked); })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+											{
+												bShowLogPanel = (State == ECheckBoxState::Checked);
+												if (bShowLogPanel)
+												{
+													ActiveBottomPanel = EYIDashboardBottomPanel::Logs;
+												}
+											})
 										[
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarLogs", "Logs"))
 										]
@@ -554,7 +562,14 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 									SNew(SCheckBox)
 										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
 										.IsChecked_Lambda([this]() { return bShowPreflightPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowPreflightPanel = (State == ECheckBoxState::Checked); })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+											{
+												bShowPreflightPanel = (State == ECheckBoxState::Checked);
+												if (bShowPreflightPanel)
+												{
+													ActiveBottomPanel = EYIDashboardBottomPanel::Preflight;
+												}
+											})
 										[
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarPreflight", "Preflight"))
 										]
@@ -564,7 +579,14 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 									SNew(SCheckBox)
 										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
 										.IsChecked_Lambda([this]() { return bShowDiffPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowDiffPanel = (State == ECheckBoxState::Checked); })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+											{
+												bShowDiffPanel = (State == ECheckBoxState::Checked);
+												if (bShowDiffPanel)
+												{
+													ActiveBottomPanel = EYIDashboardBottomPanel::Diff;
+												}
+											})
 										[
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarDiff", "Diff"))
 										]
@@ -574,7 +596,14 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 									SNew(SCheckBox)
 										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
 										.IsChecked_Lambda([this]() { return bShowBatchPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-										.OnCheckStateChanged_Lambda([this](ECheckBoxState State) { bShowBatchPanel = (State == ECheckBoxState::Checked); })
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+											{
+												bShowBatchPanel = (State == ECheckBoxState::Checked);
+												if (bShowBatchPanel)
+												{
+													ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
+												}
+											})
 										[
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarBatch", "Batch"))
 										]
@@ -725,7 +754,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 			+ SVerticalBox::Slot().FillHeight(1.f)
 				[
 					SNew(SSplitter)
-						+ SSplitter::Slot().Value(0.45f)
+						+ SSplitter::Slot().Value(0.38f)
 						[
 							SNew(SBorder)
 								.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
@@ -919,10 +948,10 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 										]
 								]
 						]
-					+ SSplitter::Slot().Value(0.55f)
+					+ SSplitter::Slot().Value(0.62f)
 						[
 							SNew(SVerticalBox)
-								+ SVerticalBox::Slot().FillHeight(0.6f).Padding(0, 0, 0, 4)
+								+ SVerticalBox::Slot().FillHeight(0.45f).Padding(0, 0, 0, 4)
 								[
 									SNew(SBorder)
 										.Visibility_Lambda([this]()
@@ -937,7 +966,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_NoDetails", "Details panel unavailable")))
 										]
 								]
-							+ SVerticalBox::Slot().FillHeight(0.4f).Padding(0, 4, 0, 0)
+							+ SVerticalBox::Slot().FillHeight(0.3f).Padding(0, 4, 0, 0)
 								[
 									SNew(SBorder)
 										.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
@@ -1099,14 +1128,14 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												[
 													SNew(SSplitter)
 														.Orientation(Orient_Vertical)
-														+ SSplitter::Slot().Value(0.65f)
+														+ SSplitter::Slot().Value(0.55f)
 														[
 															SAssignNew(MappingListView, SListView<TSharedPtr<FYIFieldMapping>>)
 																.ListItemsSource(&MappingRows)
 																.OnGenerateRow(this, &SYIItemDashboard::MakeMappingRow)
 																.SelectionMode(ESelectionMode::Single)
 														]
-														+ SSplitter::Slot().Value(0.35f)
+														+ SSplitter::Slot().Value(0.45f)
 														[
 															SNew(SBorder)
 																.Visibility_Lambda([this]()
@@ -1186,10 +1215,10 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												]
 										]
 								]
-							+ SVerticalBox::Slot().FillHeight(0.4f).Padding(4)
+							+ SVerticalBox::Slot().FillHeight(0.55f).Padding(4)
 								[
 									SNew(SSplitter)
-										.Orientation(Orient_Vertical)
+										.Orientation(Orient_Horizontal)
 										+ SSplitter::Slot().Value(0.25f)
 										[
 											SNew(SBorder)
@@ -1199,7 +1228,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 													SNew(SVerticalBox)
 														+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
 														[
-															SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_PreflightTitle", "Preflight"))
+															SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_PreflightTitle", "Preflight (blocking checks before update/create)"))
 														]
 														+ SVerticalBox::Slot().FillHeight(1.f)
 														[
@@ -1896,6 +1925,25 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 
 void SYIItemDashboard::Refresh()
 {
+	if (ActiveBottomPanel == EYIDashboardBottomPanel::Preflight && !bShowPreflightPanel)
+	{
+		ActiveBottomPanel = EYIDashboardBottomPanel::Diff;
+	}
+	if (ActiveBottomPanel == EYIDashboardBottomPanel::Diff && !bShowDiffPanel)
+	{
+		ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
+	}
+	if (ActiveBottomPanel == EYIDashboardBottomPanel::Batch && !bShowBatchPanel)
+	{
+		ActiveBottomPanel = EYIDashboardBottomPanel::Logs;
+	}
+	if (ActiveBottomPanel == EYIDashboardBottomPanel::Logs && !bShowLogPanel)
+	{
+		if (bShowPreflightPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Preflight;
+		else if (bShowDiffPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Diff;
+		else if (bShowBatchPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
+	}
+
 	Items.Reset();
 	FilteredItems.Reset();
 	TMap<int64, TSoftObjectPtr<UYIItemDefinition>> ExistingAssets;
@@ -2306,8 +2354,13 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	{
 		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
 		{
-			Registry->BuildIndex(true);
-			Transformed = Registry->GetByCode(Entry.Code);
+			// Use a fresh row transform so "Update Linked Asset" always reflects current inline mapping edits.
+			Transformed = Registry->TransformRowUncached(
+				Entry.RowName,
+				Table,
+				Source->GetEffectiveTransformerClass(),
+				Entry.Code,
+				Source);
 		}
 	}
 	if (!Transformed)
@@ -2351,6 +2404,14 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 			Prop->CopyCompleteValue(DstPtr, SrcPtr);
 		}
 	};
+
+	if (UYIItemDefinition* LinkedExisting = Entry.ItemAsset.LoadSynchronous())
+	{
+		LinkedExisting->Modify();
+		CopyDefinitionProperties(Def, LinkedExisting);
+		LinkedExisting->MarkPackageDirty();
+		return true;
+	}
 
 	const FString AssetLongPath = PackagePath / AssetName;
 	const FString SanitizedPackage = UPackageTools::SanitizePackageName(AssetLongPath);

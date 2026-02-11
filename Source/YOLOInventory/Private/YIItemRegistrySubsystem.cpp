@@ -896,6 +896,16 @@ UYIItemDefinition* UYIItemRegistrySubsystem::GetByCode(int64 Code)
 	return Def;
 }
 
+UYIItemDefinition* UYIItemRegistrySubsystem::TransformRowUncached(
+	FName RowName,
+	const UDataTable* DataTable,
+	TSubclassOf<UCSVDataTransformer> TransformerClass,
+	int64 Code,
+	const UYIDataTableItemSource* Source)
+{
+	return TransformRow(RowName, DataTable, TransformerClass, false, Code, Source);
+}
+
 bool UYIItemRegistrySubsystem::EnsureUniqueCodes(bool bAutoFix)
 {
 	BuildIndex(true);

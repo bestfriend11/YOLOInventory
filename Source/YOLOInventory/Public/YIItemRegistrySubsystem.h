@@ -76,6 +76,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Registry")
 	void GetAllItems(TArray<FYIItemRegistryView>& OutItems, bool bForceRebuild = false);
 
+	// Run a direct row transform without using/generated-cache reuse.
+	// Primarily for editor workflows that must reflect the latest inline mapping edits immediately.
+	UYIItemDefinition* TransformRowUncached(
+		FName RowName,
+		const UDataTable* DataTable,
+		TSubclassOf<UCSVDataTransformer> TransformerClass,
+		int64 Code,
+		const class UYIDataTableItemSource* Source);
+
 private:
 	int64 ExtractCodeFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const;
 	FString ExtractTemplateIdFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const;

@@ -76,6 +76,14 @@ enum class EYIBatchJobStatus : uint8
 	Failed
 };
 
+enum class EYIDashboardBottomPanel : uint8
+{
+	Preflight,
+	Diff,
+	Batch,
+	Logs
+};
+
 struct FYIBatchJobEntry
 {
 	TSharedPtr<FYIItemDashboardEntry> Entry;
@@ -187,4 +195,5 @@ private:
 	bool bShowPreflightPanel = true;
 	bool bShowDiffPanel = true;
 	bool bShowBatchPanel = true;
+	EYIDashboardBottomPanel ActiveBottomPanel = EYIDashboardBottomPanel::Logs;
 };
