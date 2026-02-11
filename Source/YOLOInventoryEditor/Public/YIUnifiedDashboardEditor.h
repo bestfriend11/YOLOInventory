@@ -36,6 +36,13 @@ private:
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnHelpTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemDetailsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemMappingsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemPreviewTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemPreflightTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemDiffTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemBatchTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnItemLogsTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;

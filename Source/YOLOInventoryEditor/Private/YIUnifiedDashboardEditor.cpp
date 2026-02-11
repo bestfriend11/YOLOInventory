@@ -21,18 +21,25 @@ static const FName Tab_Dashboard_Items(TEXT("YOLOInventory_Dashboard_Items"));
 static const FName Tab_Dashboard_Affixes(TEXT("YOLOInventory_Dashboard_Affixes"));
 static const FName Tab_Dashboard_Generators(TEXT("YOLOInventory_Dashboard_Generators"));
 static const FName Tab_Dashboard_Help(TEXT("YOLOInventory_Dashboard_Help"));
+static const FName Tab_Dashboard_ItemDetails(TEXT("YOLOInventory_Dashboard_ItemDetails"));
+static const FName Tab_Dashboard_ItemMappings(TEXT("YOLOInventory_Dashboard_ItemMappings"));
+static const FName Tab_Dashboard_ItemPreview(TEXT("YOLOInventory_Dashboard_ItemPreview"));
+static const FName Tab_Dashboard_ItemPreflight(TEXT("YOLOInventory_Dashboard_ItemPreflight"));
+static const FName Tab_Dashboard_ItemDiff(TEXT("YOLOInventory_Dashboard_ItemDiff"));
+static const FName Tab_Dashboard_ItemBatch(TEXT("YOLOInventory_Dashboard_ItemBatch"));
+static const FName Tab_Dashboard_ItemLogs(TEXT("YOLOInventory_Dashboard_ItemLogs"));
 
 void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, UObject* AssetToFocus)
 {
 	CreateWidgetsIfNeeded();
 
-	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v1")
+	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v2")
 		->AddArea(
 			FTabManager::NewPrimaryArea()
 			->SetOrientation(Orient_Horizontal)
 			->Split(
 				FTabManager::NewStack()
-				->SetSizeCoefficient(0.75f)
+				->SetSizeCoefficient(0.45f)
 				->AddTab(Tab_Dashboard_Items, ETabState::OpenedTab)
 				->AddTab(Tab_Dashboard_Affixes, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Generators, ETabState::ClosedTab)
@@ -40,8 +47,21 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 			)
 			->Split(
 				FTabManager::NewStack()
-				->SetSizeCoefficient(0.25f)
+				->SetSizeCoefficient(0.35f)
+				->AddTab(Tab_Dashboard_ItemDetails, ETabState::OpenedTab)
+				->AddTab(Tab_Dashboard_ItemMappings, ETabState::ClosedTab)
+				->AddTab(Tab_Dashboard_ItemPreview, ETabState::ClosedTab)
+				->SetForegroundTab(Tab_Dashboard_ItemDetails)
+			)
+			->Split(
+				FTabManager::NewStack()
+				->SetSizeCoefficient(0.20f)
+				->AddTab(Tab_Dashboard_ItemPreflight, ETabState::ClosedTab)
+				->AddTab(Tab_Dashboard_ItemDiff, ETabState::ClosedTab)
+				->AddTab(Tab_Dashboard_ItemBatch, ETabState::ClosedTab)
+				->AddTab(Tab_Dashboard_ItemLogs, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Help, ETabState::OpenedTab)
+				->SetForegroundTab(Tab_Dashboard_Help)
 			)
 		);
 
@@ -67,9 +87,31 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 	TabManager->RegisterTabSpawner(Tab_Dashboard_Help, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnHelpTab))
 		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabHelp", "Help"))
 		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemDetails, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemDetailsTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemDetails", "Item Details"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemMappings, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemMappingsTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemMappings", "Item Mappings"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemPreview, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemPreviewTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemPreview", "Item Preview"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemPreflight, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemPreflightTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemPreflight", "Item Preflight"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemDiff, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemDiffTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemDiff", "Item Diff"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemBatch, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemBatchTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemBatch", "Item Batch"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
+	TabManager->RegisterTabSpawner(Tab_Dashboard_ItemLogs, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemLogsTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItemLogs", "Item Logs"))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef());
 
 	TabManager->TryInvokeTab(Tab_Dashboard_Items);
 	TabManager->TryInvokeTab(Tab_Dashboard_Help);
+	TabManager->TryInvokeTab(Tab_Dashboard_ItemDetails);
 
 	if (AssetToFocus)
 	{
@@ -84,13 +126,20 @@ void FYIUnifiedDashboardEditor::UnregisterTabSpawners(const TSharedRef<FTabManag
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Affixes);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Generators);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Help);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemDetails);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemMappings);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemPreview);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemPreflight);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemDiff);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemBatch);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemLogs);
 }
 
 void FYIUnifiedDashboardEditor::CreateWidgetsIfNeeded()
 {
 	if (!ItemDashboard.IsValid())
 	{
-		ItemDashboard = SNew(SYIItemDashboard);
+		ItemDashboard = SNew(SYIItemDashboard).LayoutMode(EYIItemDashboardLayout::ItemListOnly);
 	}
 	if (!AffixDashboard.IsValid())
 	{
@@ -144,6 +193,76 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnHelpTab(const FSpawnTabArgs
 		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabHelpLabel", "Help"))
 		[
 			HelpPanel.ToSharedRef()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemDetailsTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemDetailsLabel", "Item Details"))
+		[
+			ItemDashboard->GetDetailsPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemMappingsTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemMappingsLabel", "Item Mappings"))
+		[
+			ItemDashboard->GetMappingPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemPreviewTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemPreviewLabel", "Item Preview"))
+		[
+			ItemDashboard->GetPreviewPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemPreflightTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemPreflightLabel", "Item Preflight"))
+		[
+			ItemDashboard->GetPreflightPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemDiffTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemDiffLabel", "Item Diff"))
+		[
+			ItemDashboard->GetDiffPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemBatchTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemBatchLabel", "Item Batch"))
+		[
+			ItemDashboard->GetBatchPanelWidget()
+		];
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemLogsTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	return SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabItemLogsLabel", "Item Logs"))
+		[
+			ItemDashboard->GetLogsPanelWidget()
 		];
 }
 

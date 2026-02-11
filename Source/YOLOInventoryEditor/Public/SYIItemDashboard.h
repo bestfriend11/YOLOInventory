@@ -106,17 +106,42 @@ enum class EDashStatusFilter : uint8
 	AssetOnly
 };
 
+enum class EYIItemDashboardLayout : uint8
+{
+	Full,
+	ItemListOnly
+};
+
 class SYIItemDashboard : public SCompoundWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SYIItemDashboard) {}
+	SLATE_BEGIN_ARGS(SYIItemDashboard)
+		: _LayoutMode(EYIItemDashboardLayout::Full)
+	{}
+		SLATE_ARGUMENT(EYIItemDashboardLayout, LayoutMode)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
 	void OpenAsset(UObject* Asset);
 	virtual ~SYIItemDashboard();
+	TSharedRef<SWidget> GetItemsPanelWidget() const;
+	TSharedRef<SWidget> GetDetailsPanelWidget() const;
+	TSharedRef<SWidget> GetMappingPanelWidget() const;
+	TSharedRef<SWidget> GetPreviewPanelWidget() const;
+	TSharedRef<SWidget> GetPreflightPanelWidget() const;
+	TSharedRef<SWidget> GetDiffPanelWidget() const;
+	TSharedRef<SWidget> GetBatchPanelWidget() const;
+	TSharedRef<SWidget> GetLogsPanelWidget() const;
 
 private:
+	TSharedRef<SWidget> BuildItemsPanelWidget();
+	TSharedRef<SWidget> BuildDetailsPanelWidget();
+	TSharedRef<SWidget> BuildMappingPanelWidget();
+	TSharedRef<SWidget> BuildPreviewPanelWidget();
+	TSharedRef<SWidget> BuildPreflightPanelWidget();
+	TSharedRef<SWidget> BuildDiffPanelWidget();
+	TSharedRef<SWidget> BuildBatchPanelWidget();
+	TSharedRef<SWidget> BuildLogsPanelWidget();
 	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 	void Refresh();
 	void OnSearchTextChanged(const FText& NewText);
@@ -152,6 +177,15 @@ private:
 	void ApplySuggestedMappings();
 
 private:
+	EYIItemDashboardLayout LayoutMode = EYIItemDashboardLayout::Full;
+	TSharedPtr<SWidget> ItemsPanelWidget;
+	TSharedPtr<SWidget> DetailsPanelWidget;
+	TSharedPtr<SWidget> MappingPanelWidget;
+	TSharedPtr<SWidget> PreviewPanelWidget;
+	TSharedPtr<SWidget> PreflightPanelWidget;
+	TSharedPtr<SWidget> DiffPanelWidget;
+	TSharedPtr<SWidget> BatchPanelWidget;
+	TSharedPtr<SWidget> LogsPanelWidget;
 	TArray<TSharedPtr<FYIItemDashboardEntry>> Items;
 	TArray<TSharedPtr<FYIItemDashboardEntry>> FilteredItems;
 	TSharedPtr<class SListView<TSharedPtr<FYIItemDashboardEntry>>> ListView;
@@ -164,6 +198,8 @@ private:
 	TArray<TSharedPtr<FString>> SourceFieldOptions;
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	TArray<TSharedPtr<FString>> ConverterOptions;
+	TArray<TSharedPtr<FString>> ListTypeOptions;
+	TArray<TSharedPtr<FString>> ListStatusOptions;
 	TMap<FName, FProperty*> SourceFieldPropCache;
 	TMap<FName, FProperty*> TargetFieldPropCache;
 	TArray<TSharedPtr<FYITransformFunctionInfo>> TransformFunctionOptions;
