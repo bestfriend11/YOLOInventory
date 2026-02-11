@@ -498,11 +498,11 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 	ChildSlot
 		[
 			SNew(SVerticalBox)
-				+ SVerticalBox::Slot().AutoHeight().Padding(6, 4)
+				+ SVerticalBox::Slot().AutoHeight().Padding(8, 6)
 				[
 					SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-						.Padding(6)
+						.Padding(10)
 						[
 							SNew(SHorizontalBox)
 								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
@@ -581,11 +581,11 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 								]
 						]
 				]
-			+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 4)
+			+ SVerticalBox::Slot().AutoHeight().Padding(8, 0, 8, 6)
 				[
 					SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-						.Padding(6)
+						.Padding(10)
 						[
 							SNew(SHorizontalBox)
 								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
@@ -729,9 +729,10 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 						[
 							SNew(SBorder)
 								.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+								.Padding(8)
 								[
 									SNew(SVerticalBox)
-										+ SVerticalBox::Slot().AutoHeight().Padding(8)
+										+ SVerticalBox::Slot().AutoHeight().Padding(12)
 										[
 											SNew(SHorizontalBox)
 												+ SHorizontalBox::Slot().AutoWidth().Padding(FMargin(0, 0, 8, 0))
@@ -889,7 +890,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 														]
 												]
 										]
-									+ SVerticalBox::Slot().FillHeight(1.f).Padding(8)
+									+ SVerticalBox::Slot().FillHeight(1.f).Padding(12, 8, 12, 12)
 										[
 											SAssignNew(ListView, SListView<TSharedPtr<FYIItemDashboardEntry>>)
 												.ListItemsSource(&FilteredItems)
@@ -921,7 +922,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 					+ SSplitter::Slot().Value(0.55f)
 						[
 							SNew(SVerticalBox)
-								+ SVerticalBox::Slot().FillHeight(0.6f)
+								+ SVerticalBox::Slot().FillHeight(0.6f).Padding(0, 0, 0, 4)
 								[
 									SNew(SBorder)
 										.Visibility_Lambda([this]()
@@ -929,23 +930,25 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												return bShowDetailsPanel ? EVisibility::Visible : EVisibility::Collapsed;
 											})
 										.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+										.Padding(8)
 										[
 											DetailsView.IsValid()
 												? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
 												: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_NoDetails", "Details panel unavailable")))
 										]
 								]
-							+ SVerticalBox::Slot().FillHeight(0.4f).Padding(4)
+							+ SVerticalBox::Slot().FillHeight(0.4f).Padding(0, 4, 0, 0)
 								[
 									SNew(SBorder)
 										.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+										.Padding(8)
 										.Visibility_Lambda([this]()
 											{
 												return (CurrentMappingSource.IsValid() && bShowMappingPanel) ? EVisibility::Visible : EVisibility::Collapsed;
 											})
 										[
 											SNew(SVerticalBox)
-												+ SVerticalBox::Slot().AutoHeight().Padding(4)
+												+ SVerticalBox::Slot().AutoHeight().Padding(8)
 												[
 													SNew(SHorizontalBox)
 														+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
@@ -1092,7 +1095,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																	})
 														]
 												]
-											+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
+											+ SVerticalBox::Slot().FillHeight(1.f).Padding(8, 6)
 												[
 													SNew(SSplitter)
 														.Orientation(Orient_Vertical)
@@ -1111,9 +1114,10 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																		return bShowPreviewPanel ? EVisibility::Visible : EVisibility::Collapsed;
 																	})
 																.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+																.Padding(8)
 																[
 																	SNew(SVerticalBox)
-																		+ SVerticalBox::Slot().AutoHeight().Padding(4)
+																		+ SVerticalBox::Slot().AutoHeight().Padding(8)
 																		[
 																			SNew(SHorizontalBox)
 																				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
