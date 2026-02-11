@@ -9,6 +9,7 @@ class SYIAffixDashboard;
 class SYIGeneratorDashboard;
 class SYIUnifiedHelpPanel;
 class FWorkspaceItem;
+class FToolBarBuilder;
 class UYIUnifiedDashboardContext;
 
 class YOLOINVENTORYEDITOR_API FYIUnifiedDashboardEditor : public FWorkflowCentricApplication
@@ -31,6 +32,8 @@ protected:
 
 private:
 	void CreateWidgetsIfNeeded();
+	void ExtendToolbar();
+	void FillDashboardToolbar(FToolBarBuilder& ToolbarBuilder);
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
@@ -49,6 +52,7 @@ private:
 	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;
 	TStrongObjectPtr<UYIUnifiedDashboardContext> EditorContext;
+	TSharedPtr<FExtender> ToolbarExtender;
 
 	EYIUnifiedDashboardTab ActiveTab = EYIUnifiedDashboardTab::Items;
 	TSharedPtr<FWorkspaceItem> WorkspaceMenuCategory;

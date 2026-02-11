@@ -6,6 +6,7 @@
 #include "YIAffixAsset.generated.h"
 
 class UYIAttributeModAsset;
+class UYIDataTableAffixSource;
 
 UENUM(BlueprintType)
 enum class EYIAffixKind : uint8
@@ -39,10 +40,6 @@ class YOLOINVENTORY_API UYIAffixAsset : public UObject
     GENERATED_BODY()
 public:
     // Identity
-    /** Designer-friendly internal id used by tools and lookups. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Identity", meta=(ToolTip="Editor-friendly identifier for internal use"))
-    FName InternalId;
-
     /** Numeric unique id (optional). Editor tools may auto-assign if left 0. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Identity", meta=(ToolTip="Project-unique numeric identifier for tooling"))
     int64 UniqueCode = 0;
@@ -103,6 +100,16 @@ public:
     /** Affixes in the same ConflictGroup will not appear together on a single item. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Constraints", meta=(ToolTip="Affix conflict group used to avoid incompatible affix combinations"))
     FName ConflictGroup;
+
+    // Data source linkage (optional)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Source", meta=(ToolTip="Data source that generated this affix asset (optional)."))
+    TSoftObjectPtr<UYIDataTableAffixSource> SourceDataSource;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Source", meta=(ToolTip="Row name in the data source that generated this affix (optional)."))
+    FName SourceRowName = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix|Source", meta=(ToolTip="True if this affix was generated from a data source."))
+    bool bGeneratedFromDataSource = false;
 
 #if WITH_EDITOR
     /** Debug helper: sample a roll using the configured rules (callable in editor). */

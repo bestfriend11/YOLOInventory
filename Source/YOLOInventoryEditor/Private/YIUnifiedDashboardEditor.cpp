@@ -15,6 +15,7 @@
 #include "YIItemGenerator.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Styling/AppStyle.h"
 
 static const FName Tab_Dashboard_Items(TEXT("YOLOInventory_Dashboard_Items"));
@@ -72,6 +73,7 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 		EditorContext = TStrongObjectPtr<UYIUnifiedDashboardContext>(NewObject<UYIUnifiedDashboardContext>(GetTransientPackage(), NAME_None, RF_Transactional));
 	}
 	InitAssetEditor(Mode, InitToolkitHost, GetToolkitFName(), Layout, bCreateMenu, bCreateToolbar, { EditorContext.Get() });
+	ExtendToolbar();
 
 	WorkspaceMenuCategory = TabManager->AddLocalWorkspaceMenuCategory(NSLOCTEXT("YOLOInventory", "DashboardWorkspace", "YOLO Inventory Dashboard"));
 
@@ -117,6 +119,79 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 	{
 		OpenAsset(AssetToFocus);
 	}
+}
+
+void FYIUnifiedDashboardEditor::ExtendToolbar()
+{
+	if (ToolbarExtender.IsValid())
+	{
+		return;
+	}
+
+	ToolbarExtender = MakeShared<FExtender>();
+	ToolbarExtender->AddToolBarExtension(
+		"Asset",
+		EExtensionHook::After,
+		GetToolkitCommands(),
+		FToolBarExtensionDelegate::CreateSP(this, &FYIUnifiedDashboardEditor::FillDashboardToolbar));
+	AddToolbarExtender(ToolbarExtender);
+	RegenerateMenusAndToolbars();
+}
+
+void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBuilder)
+{
+	auto OpenTab = [this](const FName TabId)
+	{
+		if (TabManager.IsValid())
+		{
+			TabManager->TryInvokeTab(TabId);
+		}
+	};
+
+	ToolbarBuilder.BeginSection("YOLOInventoryPanels");
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemDetails); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Details", "Details"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Details_Tip", "Open Item Details panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemMappings); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Mappings", "Mappings"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Mappings_Tip", "Open Item Mappings panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Link"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemPreview); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Preview", "Preview"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Preview_Tip", "Open Item Preview panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Visibility"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemPreflight); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Preflight", "Preflight"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Preflight_Tip", "Open Item Preflight panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Error"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemDiff); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Diff", "Diff"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Diff_Tip", "Open Item Diff panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Diff"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemBatch); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Batch", "Batch"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Batch_Tip", "Open Batch Queue panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.ListView"));
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemLogs); })),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Logs", "Logs"),
+		NSLOCTEXT("YOLOInventory", "Dash_TB_Logs_Tip", "Open Errors and Notifications panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Warning"));
+	ToolbarBuilder.EndSection();
 }
 
 void FYIUnifiedDashboardEditor::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
