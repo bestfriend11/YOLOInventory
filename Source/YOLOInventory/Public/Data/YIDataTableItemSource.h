@@ -27,7 +27,8 @@ enum class EYITransformMode : uint8
 {
 	InlineOnly              UMETA(DisplayName="Inline Mappings Only"),
 	TransformerOnly         UMETA(DisplayName="Transformer Only"),
-	HybridInlineThenTransformer UMETA(DisplayName="Inline then Transformer")
+	HybridInlineThenTransformer UMETA(DisplayName="Inline then Transformer"),
+	HybridTransformerThenInline UMETA(DisplayName="Transformer then Inline")
 };
 
 USTRUCT(BlueprintType)

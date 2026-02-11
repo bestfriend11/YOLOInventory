@@ -42,7 +42,6 @@
 #include "UObject/UObjectIterator.h"
 #include "UObject/StructOnScope.h"
 #include "Engine/DataAsset.h"
-#include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "Engine/Texture.h"
 #include "Algo/Sort.h"
@@ -60,6 +59,35 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 	{
 		SourceProp->CopyCompleteValue(DestPtr, SourcePtr);
 		return true;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	{
+		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+		{
+			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			{
+				if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
+				{
+					if (!SrcSoftObj->PropertyClass || SrcSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+					{
+						DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
+						return true;
+					}
+				}
+				if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+				{
+					if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
+					{
+						if (Obj->IsA(UTexture::StaticClass()))
+						{
+							DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
+							return true;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
@@ -766,6 +794,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																		TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Inline Only")));
 																		TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Transformer Only")));
 																		TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Inline then Transformer")));
+																		TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Transformer then Inline")));
 																	})
 																.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 																	{
@@ -773,7 +802,8 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																		CurrentMappingSource->Modify();
 																		if (*NewItem == TEXT("Inline Only")) CurrentMappingSource->TransformMode = EYITransformMode::InlineOnly;
 																		else if (*NewItem == TEXT("Transformer Only")) CurrentMappingSource->TransformMode = EYITransformMode::TransformerOnly;
-																		else CurrentMappingSource->TransformMode = EYITransformMode::HybridInlineThenTransformer;
+																		else if (*NewItem == TEXT("Inline then Transformer")) CurrentMappingSource->TransformMode = EYITransformMode::HybridInlineThenTransformer;
+																		else CurrentMappingSource->TransformMode = EYITransformMode::HybridTransformerThenInline;
 																	})
 																.InitiallySelectedItem(nullptr)
 																.Content()
@@ -785,6 +815,8 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																			{
 																			case EYITransformMode::InlineOnly: return FText::FromString(TEXT("Inline Only"));
 																			case EYITransformMode::TransformerOnly: return FText::FromString(TEXT("Transformer Only"));
+																			case EYITransformMode::HybridInlineThenTransformer: return FText::FromString(TEXT("Inline then Transformer"));
+																			case EYITransformMode::HybridTransformerThenInline: return FText::FromString(TEXT("Transformer then Inline"));
 																			default: return FText::FromString(TEXT("Inline then Transformer"));
 																			}
 																		})
@@ -1199,14 +1231,16 @@ void SYIItemDashboard::Refresh()
 				{
 					Entry->ItemAsset = TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath());
 					ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
-					if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(View.Object.LoadSynchronous()))
-					{
-						Entry->Name = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
-					}
-					else
-					{
-						Entry->Name = View.Object.ToSoftObjectPath().GetAssetName();
-					}
+				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(View.Object.LoadSynchronous()))
+				{
+					Entry->Name = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
+					Entry->DataSource = Def->SourceDataSource;
+					Entry->RowName = Def->SourceRowName;
+				}
+				else
+				{
+					Entry->Name = View.Object.ToSoftObjectPath().GetAssetName();
+				}
 				}
 				else
 				{
@@ -1568,18 +1602,22 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	RowWrapper->Struct = Table->RowStruct;
 
 	UObject* Transformed = nullptr;
-	if (TSubclassOf<UCSVDataTransformer> Effective = Source->GetEffectiveTransformerClass())
-	{
-		if (UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Effective))
-		{
-			Transformed = Transformer->TransformObject(RowWrapper);
-		}
-	}
-	else if (GEngine)
+	if (GEngine)
 	{
 		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
 		{
+			Registry->BuildIndex(true);
 			Transformed = Registry->GetByCode(Entry.Code);
+		}
+	}
+	if (!Transformed)
+	{
+		if (TSubclassOf<UCSVDataTransformer> Effective = Source->GetEffectiveTransformerClass())
+		{
+			if (UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Source, Effective))
+			{
+				Transformed = Transformer->TransformObject(RowWrapper);
+			}
 		}
 	}
 	UYIItemDefinition* Def = Cast<UYIItemDefinition>(Transformed);
@@ -1591,22 +1629,40 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 		return false;
 	}
 
+	Def->SourceDataSource = Source;
+	Def->SourceRowName = Entry.RowName;
+	Def->bGeneratedFromDataSource = true;
+
+	auto CopyDefinitionProperties = [](const UYIItemDefinition* SourceDef, UYIItemDefinition* DestDef)
+	{
+		if (!SourceDef || !DestDef)
+		{
+			return;
+		}
+		for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+		{
+			FProperty* Prop = *It;
+			if (!Prop || Prop->HasAnyPropertyFlags(CPF_Transient))
+			{
+				continue;
+			}
+			const uint8* SrcPtr = Prop->ContainerPtrToValuePtr<uint8>(SourceDef);
+			uint8* DstPtr = Prop->ContainerPtrToValuePtr<uint8>(DestDef);
+			Prop->CopyCompleteValue(DstPtr, SrcPtr);
+		}
+	};
+
 	const FString AssetLongPath = PackagePath / AssetName;
 	const FString SanitizedPackage = UPackageTools::SanitizePackageName(AssetLongPath);
 	const FString ObjectPath = SanitizedPackage + TEXT(".") + AssetName;
 
 	if (UYIItemDefinition* Existing = Cast<UYIItemDefinition>(StaticLoadObject(UYIItemDefinition::StaticClass(), nullptr, *ObjectPath)))
 	{
-		// Update existing asset from table row
-		if (UCSVBPFunctionLibrary::AutoAssignProperties(RowWrapper, Existing, {}))
-		{
-			Existing->MarkPackageDirty();
-			return true;
-		}
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory", "Dash_CreateFail_Update", "Create failed: unable to update existing asset from row."),
-			FText::FromString(ObjectPath));
-		return false;
+		// Update existing asset from transformed output so inline/transformer behavior is preserved.
+		Existing->Modify();
+		CopyDefinitionProperties(Def, Existing);
+		Existing->MarkPackageDirty();
+		return true;
 	}
 
 	UPackage* Pkg = CreatePackage(*SanitizedPackage);
@@ -1622,6 +1678,32 @@ bool SYIItemDashboard::CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) 
 	FAssetRegistryModule::AssetCreated(NewAsset);
 	Pkg->MarkPackageDirty();
 	return true;
+}
+
+bool SYIItemDashboard::UpdateAssetFromLinkedSource(UYIItemDefinition* ItemDef) const
+{
+	if (!IsValid(ItemDef))
+	{
+		return false;
+	}
+	UYIDataTableItemSource* Source = ItemDef->SourceDataSource.LoadSynchronous();
+	if (!Source || ItemDef->SourceRowName.IsNone())
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "Dash_UpdateLinked_NoSource", "Update failed: selected item has no linked data source/row."),
+			FText::FromString(ItemDef->GetPathName()));
+		return false;
+	}
+
+	FYIItemDashboardEntry TempEntry;
+	TempEntry.bIsDataTable = true;
+	TempEntry.Code = ItemDef->UniqueCode;
+	TempEntry.RowName = ItemDef->SourceRowName;
+	TempEntry.DataSource = Source;
+	TempEntry.Source = Source->GetPathName();
+	TempEntry.ItemAsset = ItemDef;
+	TempEntry.bHasAsset = true;
+	return CreateAssetFromEntry(TempEntry);
 }
 
 FString SYIItemDashboard::GetRowString(const UScriptStruct* Struct, const uint8* RowData, FName Field) const
@@ -1681,6 +1763,21 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 				})));
 
 		MenuBuilder.AddSeparator();
+
+		if (ItemDef->SourceDataSource.IsValid() && !ItemDef->SourceRowName.IsNone())
+		{
+			MenuBuilder.AddMenuEntry(
+				NSLOCTEXT("YOLOInventory", "Dash_Context_UpdateFromLinkedSource", "Update from Linked Data Source"),
+				NSLOCTEXT("YOLOInventory", "Dash_Context_UpdateFromLinkedSource_Tip", "Re-run generation using this item's linked data source and row."),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([Self, ItemDef]()
+					{
+						if (Self && IsValid(ItemDef) && Self->UpdateAssetFromLinkedSource(ItemDef))
+						{
+							Self->Refresh();
+						}
+					})));
+		}
 	}
 
 	if (!Entry->bIsDataTable)
@@ -1764,6 +1861,19 @@ void SYIItemDashboard::ShowDetailsForEntry(const TSharedPtr<FYIItemDashboardEntr
 		{
 			CurrentMappingSource = Source;
 			RefreshInlineMappingEditor(Source);
+		}
+		else if (UYIItemDefinition* ItemDef = Cast<UYIItemDefinition>(Target))
+		{
+			if (ItemDef->SourceDataSource.IsValid())
+			{
+				CurrentMappingSource = ItemDef->SourceDataSource.LoadSynchronous();
+				RefreshInlineMappingEditor(CurrentMappingSource.Get());
+			}
+			else if (Entry->DataSource.IsValid())
+			{
+				CurrentMappingSource = Entry->DataSource.LoadSynchronous();
+				RefreshInlineMappingEditor(CurrentMappingSource.Get());
+			}
 		}
 		else if (Entry->bIsDataTable)
 		{

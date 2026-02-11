@@ -79,6 +79,7 @@ private:
 	void CreateDataTableSourceAsset() const;
 	void ValidateUniqueCodes() const;
 	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;
+	bool UpdateAssetFromLinkedSource(class UYIItemDefinition* ItemDef) const;
 	FString GetRowString(const UScriptStruct* Struct, const uint8* RowData, FName Field) const;
 	FText BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
 	TSharedPtr<SWidget> BuildContextMenuForEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;

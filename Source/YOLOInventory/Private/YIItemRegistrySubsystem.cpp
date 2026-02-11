@@ -99,6 +99,35 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 		return true;
 	}
 
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	{
+		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+		{
+			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			{
+				if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
+				{
+					if (!SrcSoftObj->PropertyClass || SrcSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+					{
+						DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
+						return true;
+					}
+				}
+				if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+				{
+					if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
+					{
+						if (Obj->IsA(UTexture::StaticClass()))
+						{
+							DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
+							return true;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Simple coercions (string/text/name)
 	if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
 	{
@@ -557,38 +586,11 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 	return true;
 }
 
-UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code, const UYIDataTableItemSource* Source)
+static UYIItemDefinition* RunTransformerForRow(UObject* Outer, const UDataTable* DataTable, FName RowName, TSubclassOf<UCSVDataTransformer> TransformerClass)
 {
-	if (!DataTable)
+	if (!Outer || !DataTable || !TransformerClass)
 	{
 		return nullptr;
-	}
-
-	UYIItemDefinition* CachedResult = nullptr;
-
-	// Inline mapping path (editor-friendly, no blueprint needed)
-	const bool bInlineFirst = Source && Source->TransformMode != EYITransformMode::TransformerOnly;
-	if (bInlineFirst && ApplyInlineMappings(Source, DataTable, RowName, CachedResult))
-	{
-		if (bCacheResult)
-		{
-			CachedGeneratedDefinitions.FindOrAdd(Code) = CachedResult;
-		}
-		return CachedResult;
-	}
-
-	if (!TransformerClass)
-	{
-		UE_LOG(LogYIItemRegistry, Warning, TEXT("TransformRow skipped for code %lld (row %s): TransformerClass is null."), (long long)Code, *RowName.ToString());
-		return nullptr;
-	}
-
-	if (bCacheResult)
-	{
-		if (TObjectPtr<UYIItemDefinition>* Cached = CachedGeneratedDefinitions.Find(Code))
-		{
-			return Cached->Get();
-		}
 	}
 
 	const uint8* const* FoundRow = DataTable->GetRowMap().Find(RowName);
@@ -598,21 +600,144 @@ UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const U
 		return nullptr;
 	}
 
-	URowData* RowWrapper = NewObject<URowData>(this);
+	URowData* RowWrapper = NewObject<URowData>(Outer);
 	RowWrapper->Address = const_cast<uint8*>(RowPtr);
 	RowWrapper->Struct = DataTable->RowStruct;
 
-	UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(this, TransformerClass);
+	UCSVDataTransformer* Transformer = NewObject<UCSVDataTransformer>(Outer, TransformerClass);
 	UObject* Result = Transformer ? Transformer->TransformObject(RowWrapper) : nullptr;
-	UYIItemDefinition* Definition = Cast<UYIItemDefinition>(Result);
+	return Cast<UYIItemDefinition>(Result);
+}
 
-	if (Definition && bCacheResult)
+static void CopyItemDefinitionBaseProperties(const UYIItemDefinition* SourceDef, UYIItemDefinition* DestDef)
+{
+	if (!SourceDef || !DestDef)
 	{
-		CachedGeneratedDefinitions.FindOrAdd(Code) = Definition;
+		return;
 	}
 
-	// Hybrid: transformer may further adjust the definition after inline applied; inline already returned early.
-	return Definition;
+	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+	{
+		FProperty* Prop = *It;
+		if (!Prop || Prop->HasAnyPropertyFlags(CPF_Transient))
+		{
+			continue;
+		}
+
+		const uint8* SrcPtr = Prop->ContainerPtrToValuePtr<uint8>(SourceDef);
+		uint8* DstPtr = Prop->ContainerPtrToValuePtr<uint8>(DestDef);
+		Prop->CopyCompleteValue(DstPtr, SrcPtr);
+	}
+}
+
+UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const UDataTable* DataTable, TSubclassOf<UCSVDataTransformer> TransformerClass, bool bCacheResult, int64 Code, const UYIDataTableItemSource* Source)
+{
+	if (!DataTable)
+	{
+		return nullptr;
+	}
+
+	UYIItemDefinition* CachedResult = nullptr;
+
+	if (bCacheResult)
+	{
+		if (TObjectPtr<UYIItemDefinition>* Cached = CachedGeneratedDefinitions.Find(Code))
+		{
+			return Cached->Get();
+		}
+	}
+
+	const EYITransformMode Mode = Source ? Source->TransformMode : EYITransformMode::TransformerOnly;
+	const bool bCanInline = Source && Source->bUseInlineMappings && Source->InlineMappings.Num() > 0;
+
+	UYIItemDefinition* InlineDef = nullptr;
+	UYIItemDefinition* TransformerDef = nullptr;
+
+	auto CacheAndReturn = [this, bCacheResult, Code](UYIItemDefinition* ResultDef) -> UYIItemDefinition*
+	{
+		if (ResultDef && bCacheResult)
+		{
+			CachedGeneratedDefinitions.FindOrAdd(Code) = ResultDef;
+		}
+		return ResultDef;
+	};
+
+	switch (Mode)
+	{
+	case EYITransformMode::InlineOnly:
+		if (!bCanInline || !ApplyInlineMappings(Source, DataTable, RowName, InlineDef))
+		{
+			return nullptr;
+		}
+		return CacheAndReturn(InlineDef);
+
+	case EYITransformMode::TransformerOnly:
+		if (!TransformerClass)
+		{
+			UE_LOG(LogYIItemRegistry, Warning, TEXT("TransformRow skipped for code %lld (row %s): TransformerClass is null."), (long long)Code, *RowName.ToString());
+			return nullptr;
+		}
+		TransformerDef = RunTransformerForRow(this, DataTable, RowName, TransformerClass);
+		return CacheAndReturn(TransformerDef);
+
+	case EYITransformMode::HybridInlineThenTransformer:
+		if (bCanInline)
+		{
+			ApplyInlineMappings(Source, DataTable, RowName, InlineDef);
+		}
+		if (TransformerClass)
+		{
+			TransformerDef = RunTransformerForRow(this, DataTable, RowName, TransformerClass);
+		}
+		if (!InlineDef && !TransformerDef)
+		{
+			return nullptr;
+		}
+		if (!InlineDef)
+		{
+			return CacheAndReturn(TransformerDef);
+		}
+		if (!TransformerDef)
+		{
+			return CacheAndReturn(InlineDef);
+		}
+		{
+			UYIItemDefinition* Merged = NewObject<UYIItemDefinition>(this, TransformerDef->GetClass());
+			CopyItemDefinitionBaseProperties(InlineDef, Merged);
+			CopyItemDefinitionBaseProperties(TransformerDef, Merged);
+			return CacheAndReturn(Merged);
+		}
+
+	case EYITransformMode::HybridTransformerThenInline:
+		if (TransformerClass)
+		{
+			TransformerDef = RunTransformerForRow(this, DataTable, RowName, TransformerClass);
+		}
+		if (bCanInline)
+		{
+			ApplyInlineMappings(Source, DataTable, RowName, InlineDef);
+		}
+		if (!InlineDef && !TransformerDef)
+		{
+			return nullptr;
+		}
+		if (!InlineDef)
+		{
+			return CacheAndReturn(TransformerDef);
+		}
+		if (!TransformerDef)
+		{
+			return CacheAndReturn(InlineDef);
+		}
+		{
+			UYIItemDefinition* Merged = NewObject<UYIItemDefinition>(this, TransformerDef->GetClass());
+			CopyItemDefinitionBaseProperties(TransformerDef, Merged);
+			CopyItemDefinitionBaseProperties(InlineDef, Merged);
+			return CacheAndReturn(Merged);
+		}
+	default:
+		return nullptr;
+	}
 }
 
 void UYIItemRegistrySubsystem::BuildIndex(bool bForce)

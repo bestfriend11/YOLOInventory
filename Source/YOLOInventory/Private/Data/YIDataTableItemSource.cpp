@@ -65,11 +65,17 @@ TArray<FName> UYIDataTableItemSource::GetRowNames() const
 
 TSubclassOf<UCSVDataTransformer> UYIDataTableItemSource::GetEffectiveTransformerClass() const
 {
-	const bool bInlineActive = (TransformMode != EYITransformMode::TransformerOnly) && bUseInlineMappings && InlineMappings.Num() > 0;
-	if (bInlineActive)
+	switch (TransformMode)
 	{
-		// Inline mappings handled directly by the registry; no transformer class needed.
+	case EYITransformMode::InlineOnly:
 		return nullptr;
+	case EYITransformMode::TransformerOnly:
+		return TransformerClass;
+	case EYITransformMode::HybridInlineThenTransformer:
+	case EYITransformMode::HybridTransformerThenInline:
+		// Hybrid paths always need the transformer class when available.
+		return TransformerClass;
+	default:
+		return TransformerClass;
 	}
-	return TransformerClass;
 }

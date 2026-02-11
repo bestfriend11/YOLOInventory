@@ -12,6 +12,8 @@
 #include "YIItemSFXLibrary.h"
 #include "YIItemDefinition.generated.h"
 
+class UYIDataTableItemSource;
+
 /**
  * Primary item definition. Each definition must have a globally-unique numeric code.
  *
@@ -107,6 +109,16 @@ public:
 	// Optional: Icon shortcut in definition (UI capability may also provide this)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Display", meta=(ToolTip="Optional source icon used for thumbnails and UIs"))
 	TSoftObjectPtr<UTexture2D> Icon;
+
+	// Optional source linkage for dashboard-driven row regeneration.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="If set, this item was generated from this data source and can be re-generated from dashboard"))
+	TSoftObjectPtr<UYIDataTableItemSource> SourceDataSource;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Data table row name used when this item was generated from a source"))
+	FName SourceRowName = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Whether this item is linked to a data source row"))
+	bool bGeneratedFromDataSource = false;
 	// Editor safety: auto-assign unique code if zero on save (and ensure no collision)
 #if WITH_EDITOR
 	virtual void PreSave(FObjectPreSaveContext SaveContext) override;
