@@ -282,7 +282,34 @@ void SYIAffixDashboard::AddAllMappingsFromToolbar()
 
 void SYIAffixDashboard::SaveCurrentAssetFromToolbar()
 {
-	UObject* ObjectToSave = LastSelectedAsset.Get();
+	UObject* ObjectToSave = nullptr;
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
+		if (Selected.Num() > 0 && Selected[0].IsValid())
+		{
+			const TSharedPtr<FYIAffixDashboardEntry> Entry = Selected[0];
+			if (!Entry->bIsDataTable)
+			{
+				ObjectToSave = Entry->Object.LoadSynchronous();
+			}
+			else
+			{
+				if (Entry->AffixAsset.IsValid() || Entry->AffixAsset.ToSoftObjectPath().IsValid())
+				{
+					ObjectToSave = Entry->AffixAsset.LoadSynchronous();
+				}
+				if (!ObjectToSave && (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid()))
+				{
+					ObjectToSave = Entry->DataSource.LoadSynchronous();
+				}
+			}
+		}
+	}
+	if (!ObjectToSave)
+	{
+		ObjectToSave = LastSelectedAsset.Get();
+	}
 	if (!ObjectToSave)
 	{
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,

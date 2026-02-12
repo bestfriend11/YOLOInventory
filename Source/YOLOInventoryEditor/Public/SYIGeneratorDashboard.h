@@ -39,6 +39,9 @@ private:
 	TSharedRef<class SWidget> BuildAssetPicker();
 	TSharedRef<class SWidget> BuildDetailsPanelWidget();
 	TSharedRef<class SWidget> BuildTestPanelWidget();
+	class UYIItemGenerator* GetSelectedGenerator() const;
+	void ApplyGeneratorPreset(int32 PresetId);
+	void MarkGeneratorDirty();
 	void OnAssetSelected(const FAssetData& AssetData);
 	void OnAssetDoubleClicked(const FAssetData& AssetData);
 

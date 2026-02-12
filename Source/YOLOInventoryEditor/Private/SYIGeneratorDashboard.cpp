@@ -11,6 +11,7 @@
 #include "YILootTableFactory.h"
 #include "YIRarityProfileFactory.h"
 #include "YIItemGeneratorFactory.h"
+#include "YIAffixPoolAsset.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
@@ -18,6 +19,7 @@
 #include "IContentBrowserSingleton.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SNumericEntryBox.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SBox.h"
@@ -28,6 +30,7 @@
 #include "Editor.h"
 #include "Misc/PackageName.h"
 #include "FileHelpers.h"
+#include "PropertyCustomizationHelpers.h"
 
 static bool YIGeneratorDash_SaveObjectPackage(UObject* ObjectToSave)
 {
@@ -216,6 +219,80 @@ void SYIGeneratorDashboard::GuidedSetupFromToolbar()
 	}
 }
 
+UYIItemGenerator* SYIGeneratorDashboard::GetSelectedGenerator() const
+{
+	return Cast<UYIItemGenerator>(SelectedAsset.Get());
+}
+
+void SYIGeneratorDashboard::MarkGeneratorDirty()
+{
+	if (UYIItemGenerator* Generator = GetSelectedGenerator())
+	{
+		Generator->Modify();
+		if (UPackage* Package = Generator->GetOutermost())
+		{
+			Package->MarkPackageDirty();
+		}
+	}
+}
+
+void SYIGeneratorDashboard::ApplyGeneratorPreset(int32 PresetId)
+{
+	UYIItemGenerator* Generator = GetSelectedGenerator();
+	if (!Generator)
+	{
+		TestResult = NSLOCTEXT("YOLOInventory","GenDash_Preset_NoGenerator","Select an Item Generator before applying presets.");
+		return;
+	}
+
+	Generator->Modify();
+	if (PresetId == 0) // Casual baseline
+	{
+		Generator->bApplyTemplateAffixes = true;
+		Generator->bGenerateRandomAffixes = true;
+		Generator->bUseDefinitionAffixPools = true;
+		Generator->bClampLevel = true;
+		Generator->MinItemLevel = 1;
+		Generator->MaxItemLevel = 60;
+		Generator->PrefixCriteria.bEnabled = false;
+		Generator->SuffixCriteria.bEnabled = false;
+	}
+	else if (PresetId == 1) // DS-style baseline
+	{
+		Generator->bApplyTemplateAffixes = true;
+		Generator->bGenerateRandomAffixes = true;
+		Generator->bUseDefinitionAffixPools = true;
+		Generator->bClampLevel = true;
+		Generator->MinItemLevel = 1;
+		Generator->MaxItemLevel = 100;
+
+		Generator->PrefixCriteria.bEnabled = true;
+		Generator->PrefixCriteria.bUseItemLevelAsPowerBaseline = true;
+		Generator->PrefixCriteria.MinTier = 1;
+		Generator->PrefixCriteria.MaxTier = 9999;
+		Generator->PrefixCriteria.MinPowerLevelOffset = -2;
+		Generator->PrefixCriteria.MaxPowerLevelOffset = 5;
+
+		Generator->SuffixCriteria.bEnabled = true;
+		Generator->SuffixCriteria.bUseItemLevelAsPowerBaseline = true;
+		Generator->SuffixCriteria.MinTier = 1;
+		Generator->SuffixCriteria.MaxTier = 9999;
+		Generator->SuffixCriteria.MinPowerLevelOffset = -2;
+		Generator->SuffixCriteria.MaxPowerLevelOffset = 5;
+	}
+	else // No random affixes
+	{
+		Generator->bApplyTemplateAffixes = true;
+		Generator->bGenerateRandomAffixes = false;
+		Generator->PrefixCriteria.bEnabled = false;
+		Generator->SuffixCriteria.bEnabled = false;
+	}
+
+	MarkGeneratorDirty();
+	TestResult = NSLOCTEXT("YOLOInventory","GenDash_PresetApplied","Preset applied.");
+	bPendingAutoRefresh = bAutoRefreshTest;
+}
+
 TSharedRef<SWidget> SYIGeneratorDashboard::BuildAssetPicker()
 {
 	FAssetPickerConfig Picker;
@@ -241,6 +318,337 @@ TSharedRef<SWidget> SYIGeneratorDashboard::BuildDetailsPanelWidget()
 TSharedRef<SWidget> SYIGeneratorDashboard::BuildTestPanelWidget()
 {
 	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(6, 2)
+		[
+			SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				.Padding(8)
+				[
+					SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
+						[
+							SNew(STextBlock)
+								.Text(NSLOCTEXT("YOLOInventory","GenDash_DesignerTitle","Designer Quick Setup"))
+								.Font(FAppStyle::Get().GetFontStyle("BoldFont"))
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_Preset_Casual","Preset: Casual"))
+										.OnClicked_Lambda([this]()
+											{
+												ApplyGeneratorPreset(0);
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_Preset_DS","Preset: DS-style"))
+										.OnClicked_Lambda([this]()
+											{
+												ApplyGeneratorPreset(1);
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_Preset_NoAffix","Preset: No Random Affixes"))
+										.OnClicked_Lambda([this]()
+											{
+												ApplyGeneratorPreset(2);
+												return FReply::Handled();
+											})
+								]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_Loot","Loot Table"))
+								]
+								+ SHorizontalBox::Slot().FillWidth(1.f)
+								[
+									SNew(SObjectPropertyEntryBox)
+										.AllowedClass(UYILootTable::StaticClass())
+										.ObjectPath_Lambda([this]()
+											{
+												if (const UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													return Generator->LootTable.ToSoftObjectPath().ToString();
+												}
+												return FString();
+											})
+										.OnObjectChanged_Lambda([this](const FAssetData& AssetData)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->LootTable = TSoftObjectPtr<UYILootTable>(AssetData.ToSoftObjectPath());
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+								]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_Rarity","Rarity Profile"))
+								]
+								+ SHorizontalBox::Slot().FillWidth(1.f)
+								[
+									SNew(SObjectPropertyEntryBox)
+										.AllowedClass(UYIRarityProfile::StaticClass())
+										.ObjectPath_Lambda([this]()
+											{
+												if (const UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													return Generator->RarityProfile.ToSoftObjectPath().ToString();
+												}
+												return FString();
+											})
+										.OnObjectChanged_Lambda([this](const FAssetData& AssetData)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->RarityProfile = TSoftObjectPtr<UYIRarityProfile>(AssetData.ToSoftObjectPath());
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+								]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0).VAlign(VAlign_Center)
+								[
+									SNew(SCheckBox)
+										.IsChecked_Lambda([this]()
+											{
+												const UYIItemGenerator* Generator = GetSelectedGenerator();
+												return (Generator && Generator->bGenerateRandomAffixes) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+											})
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->bGenerateRandomAffixes = (NewState == ECheckBoxState::Checked);
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_RandomAffix","Random Affixes"))
+										]
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0).VAlign(VAlign_Center)
+								[
+									SNew(SCheckBox)
+										.IsChecked_Lambda([this]()
+											{
+												const UYIItemGenerator* Generator = GetSelectedGenerator();
+												return (Generator && Generator->bUseDefinitionAffixPools) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+											})
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->bUseDefinitionAffixPools = (NewState == ECheckBoxState::Checked);
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_DefPools","Use Item Default Pools"))
+										]
+								]
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+								[
+									SNew(SCheckBox)
+										.IsChecked_Lambda([this]()
+											{
+												const UYIItemGenerator* Generator = GetSelectedGenerator();
+												return (Generator && Generator->bClampLevel) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+											})
+										.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->bClampLevel = (NewState == ECheckBoxState::Checked);
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+										[
+											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_Clamp","Clamp Level"))
+										]
+								]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_LevelWindow","Generator Level Window"))
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+								[
+									SNew(SNumericEntryBox<int32>)
+										.MinValue(1)
+										.MaxValue(9999)
+										.Value_Lambda([this]() -> TOptional<int32>
+											{
+												if (const UYIItemGenerator* Generator = GetSelectedGenerator()) { return Generator->MinItemLevel; }
+												return 1;
+											})
+										.OnValueChanged_Lambda([this](int32 V)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->MinItemLevel = FMath::Clamp(V, 1, 9999);
+													if (Generator->MaxItemLevel < Generator->MinItemLevel)
+													{
+														Generator->MaxItemLevel = Generator->MinItemLevel;
+													}
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(4, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_To","to"))
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+								[
+									SNew(SNumericEntryBox<int32>)
+										.MinValue(1)
+										.MaxValue(9999)
+										.Value_Lambda([this]() -> TOptional<int32>
+											{
+												if (const UYIItemGenerator* Generator = GetSelectedGenerator()) { return Generator->MaxItemLevel; }
+												return 100;
+											})
+										.OnValueChanged_Lambda([this](int32 V)
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->MaxItemLevel = FMath::Clamp(V, 1, 9999);
+													if (Generator->MinItemLevel > Generator->MaxItemLevel)
+													{
+														Generator->MinItemLevel = Generator->MaxItemLevel;
+													}
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+											})
+								]
+						]
+						+ SVerticalBox::Slot().AutoHeight()
+						[
+							SNew(SHorizontalBox)
+								+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+								[
+									SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_QS_AffixCriteria","Affix Criteria"))
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_QS_CriteriaRelaxed","Relaxed"))
+										.OnClicked_Lambda([this]()
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->PrefixCriteria.bEnabled = true;
+													Generator->SuffixCriteria.bEnabled = true;
+													Generator->PrefixCriteria.MinPowerLevelOffset = -5;
+													Generator->PrefixCriteria.MaxPowerLevelOffset = 10;
+													Generator->SuffixCriteria.MinPowerLevelOffset = -5;
+													Generator->SuffixCriteria.MaxPowerLevelOffset = 10;
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_QS_CriteriaBalanced","Balanced"))
+										.OnClicked_Lambda([this]()
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->PrefixCriteria.bEnabled = true;
+													Generator->SuffixCriteria.bEnabled = true;
+													Generator->PrefixCriteria.MinPowerLevelOffset = -2;
+													Generator->PrefixCriteria.MaxPowerLevelOffset = 5;
+													Generator->SuffixCriteria.MinPowerLevelOffset = -2;
+													Generator->SuffixCriteria.MaxPowerLevelOffset = 5;
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_QS_CriteriaStrict","Strict"))
+										.OnClicked_Lambda([this]()
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->PrefixCriteria.bEnabled = true;
+													Generator->SuffixCriteria.bEnabled = true;
+													Generator->PrefixCriteria.MinPowerLevelOffset = 0;
+													Generator->PrefixCriteria.MaxPowerLevelOffset = 2;
+													Generator->SuffixCriteria.MinPowerLevelOffset = 0;
+													Generator->SuffixCriteria.MaxPowerLevelOffset = 2;
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+												return FReply::Handled();
+											})
+								]
+								+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
+								[
+									SNew(SButton)
+										.Text(NSLOCTEXT("YOLOInventory","GenDash_QS_CriteriaOff","Disable"))
+										.OnClicked_Lambda([this]()
+											{
+												if (UYIItemGenerator* Generator = GetSelectedGenerator())
+												{
+													Generator->Modify();
+													Generator->PrefixCriteria.bEnabled = false;
+													Generator->SuffixCriteria.bEnabled = false;
+													MarkGeneratorDirty();
+													bPendingAutoRefresh = bAutoRefreshTest;
+												}
+												return FReply::Handled();
+											})
+								]
+						]
+				]
+		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(6)
 		[
 			SNew(SHorizontalBox)

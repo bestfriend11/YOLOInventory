@@ -1699,15 +1699,34 @@ void SYIItemDashboard::RunQueueFromToolbar()
 
 void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 {
-	UObject* ObjectToSave = LastDetailObject.Get();
-
-	if (!ObjectToSave && ListView.IsValid())
+	UObject* ObjectToSave = nullptr;
+	if (ListView.IsValid())
 	{
 		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
 		if (Selected.Num() > 0 && Selected[0].IsValid())
 		{
-			ObjectToSave = ResolveDetailObject(*Selected[0]);
+			const TSharedPtr<FYIItemDashboardEntry> Entry = Selected[0];
+			if (!Entry->bIsDataTable)
+			{
+				ObjectToSave = Entry->Object.LoadSynchronous();
+			}
+			else
+			{
+				// Prefer generated asset for row entries; fallback to source asset.
+				if (Entry->ItemAsset.IsValid() || Entry->ItemAsset.ToSoftObjectPath().IsValid())
+				{
+					ObjectToSave = Entry->ItemAsset.LoadSynchronous();
+				}
+				if (!ObjectToSave && (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid()))
+				{
+					ObjectToSave = Entry->DataSource.LoadSynchronous();
+				}
+			}
 		}
+	}
+	if (!ObjectToSave)
+	{
+		ObjectToSave = LastDetailObject.Get();
 	}
 
 	if (!ObjectToSave)
