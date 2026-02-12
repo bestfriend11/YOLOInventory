@@ -573,7 +573,10 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemsTab(const FSpawnTabArg
 		];
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{
-			SetActiveTab(EYIUnifiedDashboardTab::Items);
+			if (YIUnifiedDashboard_ShouldPanelStealMode(ActiveTab))
+			{
+				SetActiveTab(EYIUnifiedDashboardTab::Items);
+			}
 		}));
 	return Tab;
 }

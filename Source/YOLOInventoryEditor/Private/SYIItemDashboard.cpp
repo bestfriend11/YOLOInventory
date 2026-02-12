@@ -37,6 +37,7 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
+#include "DragAndDrop/AssetDragDropOp.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -3026,6 +3027,35 @@ void SYIItemDashboard::ApplySuggestedMappings()
 
 TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
 {
+	auto ResolveDraggableDefinition = [this, Entry]() -> UYIItemDefinition*
+		{
+			if (!Entry.IsValid())
+			{
+				return nullptr;
+			}
+
+			if (!Entry->bIsDataTable)
+			{
+				return Cast<UYIItemDefinition>(Entry->Object.LoadSynchronous());
+			}
+
+			if (Entry->ItemAsset.ToSoftObjectPath().IsValid())
+			{
+				return Entry->ItemAsset.LoadSynchronous();
+			}
+
+			// Data rows without ItemAsset set can still resolve by matching their generated asset row.
+			for (const TSharedPtr<FYIItemDashboardEntry>& Candidate : Items)
+			{
+				if (Candidate.IsValid() && !Candidate->bIsDataTable && Candidate->Code == Entry->Code)
+				{
+					return Cast<UYIItemDefinition>(Candidate->Object.LoadSynchronous());
+				}
+			}
+
+			return nullptr;
+		};
+
 	auto StatusColor = [Entry]() -> FLinearColor
 		{
 			if (!Entry.IsValid())
@@ -3057,6 +3087,16 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 
 	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
 		.ToolTipText(BuildPreviewText(Entry))
+		.OnDragDetected_Lambda([ResolveDraggableDefinition](const FGeometry&, const FPointerEvent&)
+			{
+				if (UYIItemDefinition* Def = ResolveDraggableDefinition())
+				{
+					TArray<FAssetData> Assets;
+					Assets.Add(FAssetData(Def));
+					return FReply::Handled().BeginDragDrop(FAssetDragDropOp::New(MoveTemp(Assets)));
+				}
+				return FReply::Unhandled();
+			})
 		[
 			SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Fill)
