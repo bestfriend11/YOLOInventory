@@ -270,6 +270,8 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 	switch (ActiveTab)
 	{
 	case EYIUnifiedDashboardTab::Items:
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->GuidedSetupFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedItems", "Guided Setup"), NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedItems_Tip", "Run guided item source setup with readiness checks"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust"));
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->SaveCurrentAssetFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_SaveItem", "Save"), NSLOCTEXT("YOLOInventory", "Dash_TB_SaveItem_Tip", "Save currently selected item/dashboard asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->RefreshFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_Refresh", "Refresh"), NSLOCTEXT("YOLOInventory", "Dash_TB_Refresh_Tip", "Refresh item dashboard list"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Refresh"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->CreateDataSourceFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewItemSource", "New Source"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewItemSource_Tip", "Create item data source asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->CreateOrUpdateSelectedFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_CreateUpdate", "Create/Update"), NSLOCTEXT("YOLOInventory", "Dash_TB_CreateUpdate_Tip", "Create or update selected item rows"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
@@ -279,19 +281,22 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (ItemDashboard.IsValid()) ItemDashboard->RunQueueFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_RunQueue", "Run Queue"), NSLOCTEXT("YOLOInventory", "Dash_TB_RunQueue_Tip", "Run queued item jobs"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Play"));
 		break;
 	case EYIUnifiedDashboardTab::Affixes:
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->GuidedSetupFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedAffix", "Guided Setup"), NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedAffix_Tip", "Run guided affix source setup with readiness checks"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust"));
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->SaveCurrentAssetFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_SaveAffix", "Save"), NSLOCTEXT("YOLOInventory", "Dash_TB_SaveAffix_Tip", "Save currently selected affix/dashboard asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->CreateAffixFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffix", "New Affix"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffix_Tip", "Create affix asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->CreateAffixPoolFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffixPool", "New Pool"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffixPool_Tip", "Create affix pool asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->CreateAffixSourceFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffixSource", "New Source"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewAffixSource_Tip", "Create affix data source asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->CreateOrUpdateSelectedRowsFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_CreateUpdateAffixRows", "Create/Update"), NSLOCTEXT("YOLOInventory", "Dash_TB_CreateUpdateAffixRows_Tip", "Create/update selected affix rows"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->ImportFromSourceFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_ImportAffixRows", "Import"), NSLOCTEXT("YOLOInventory", "Dash_TB_ImportAffixRows_Tip", "Import all rows from current affix source"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Import"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->UpdateSelectedAffixFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_UpdateAffix", "Update Linked"), NSLOCTEXT("YOLOInventory", "Dash_TB_UpdateAffix_Tip", "Update selected affix from linked source"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Refresh"));
-		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->AutoMatchMappingsFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_AffixAutoMatch", "Auto Match"), NSLOCTEXT("YOLOInventory", "Dash_TB_AffixAutoMatch_Tip", "Auto-match affix inline mappings"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Link"));
-		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (AffixDashboard.IsValid()) AffixDashboard->AddAllMappingsFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_AffixAddAll", "Add All Fields"), NSLOCTEXT("YOLOInventory", "Dash_TB_AffixAddAll_Tip", "Add all affix target fields to mappings"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		break;
 	case EYIUnifiedDashboardTab::Generators:
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->GuidedSetupFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedGen", "Guided Setup"), NSLOCTEXT("YOLOInventory", "Dash_TB_GuidedGen_Tip", "Populate datasource items and run generator readiness test"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust"));
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->SaveCurrentAssetFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_SaveGenerator", "Save"), NSLOCTEXT("YOLOInventory", "Dash_TB_SaveGenerator_Tip", "Save currently selected generator/dashboard asset"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->CreateLootTableFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewLoot", "New Loot"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewLoot_Tip", "Create loot table"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->CreateRarityProfileFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewRarity", "New Rarity"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewRarity_Tip", "Create rarity profile"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->CreateItemGeneratorFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_NewGenerator", "New Generator"), NSLOCTEXT("YOLOInventory", "Dash_TB_NewGenerator_Tip", "Create item generator"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
+		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->PopulateLootTableFromDataSourcesFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_PopulateLoot", "Populate Loot"), NSLOCTEXT("YOLOInventory", "Dash_TB_PopulateLoot_Tip", "Populate selected loot table from datasource-backed item assets"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Refresh"));
 		ToolbarBuilder.AddToolBarButton(FUIAction(FExecuteAction::CreateLambda([this]() { if (GeneratorDashboard.IsValid()) GeneratorDashboard->RunGeneratorTestFromToolbar(); })), NAME_None, NSLOCTEXT("YOLOInventory", "Dash_TB_RunGenerator", "Generate"), NSLOCTEXT("YOLOInventory", "Dash_TB_RunGenerator_Tip", "Run generator test"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Play"));
 		break;
 	default:
@@ -660,24 +665,45 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnGeneratorTestTab(const FSpa
 void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 {
 	ActiveTab = NewTab;
+	auto EnsureTabOpen = [this](const FName TabId)
+	{
+		if (TabManager.IsValid())
+		{
+			TabManager->TryInvokeTab(TabId);
+		}
+	};
+
 	switch (ActiveTab)
 	{
 	case EYIUnifiedDashboardTab::Items:
 		CloseAffixPanelTabs();
 		CloseGeneratorPanelTabs();
-		if (TabManager.IsValid()) { TabManager->TryInvokeTab(Tab_Dashboard_Items); }
+		EnsureTabOpen(Tab_Dashboard_Items);
+		EnsureTabOpen(Tab_Dashboard_ItemDetails);
+		EnsureTabOpen(Tab_Dashboard_ItemMappings);
+		EnsureTabOpen(Tab_Dashboard_ItemPreview);
+		EnsureTabOpen(Tab_Dashboard_ItemPreflight);
+		EnsureTabOpen(Tab_Dashboard_ItemDiff);
+		EnsureTabOpen(Tab_Dashboard_ItemBatch);
+		EnsureTabOpen(Tab_Dashboard_ItemLogs);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
 		break;
 	case EYIUnifiedDashboardTab::Affixes:
 		CloseItemPanelTabs();
 		CloseGeneratorPanelTabs();
-		if (TabManager.IsValid()) { TabManager->TryInvokeTab(Tab_Dashboard_Affixes); }
+		EnsureTabOpen(Tab_Dashboard_Affixes);
+		EnsureTabOpen(Tab_Dashboard_AffixDetails);
+		EnsureTabOpen(Tab_Dashboard_AffixSource);
+		EnsureTabOpen(Tab_Dashboard_AffixMappings);
+		EnsureTabOpen(Tab_Dashboard_AffixPreview);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(1);
 		break;
 	case EYIUnifiedDashboardTab::Generators:
 		CloseItemPanelTabs();
 		CloseAffixPanelTabs();
-		if (TabManager.IsValid()) { TabManager->TryInvokeTab(Tab_Dashboard_Generators); }
+		EnsureTabOpen(Tab_Dashboard_Generators);
+		EnsureTabOpen(Tab_Dashboard_GeneratorDetails);
+		EnsureTabOpen(Tab_Dashboard_GeneratorTest);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(2);
 		break;
 	default:

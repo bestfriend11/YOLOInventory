@@ -15,6 +15,21 @@ enum class EYIAffixDashboardLayout : uint8
 	AssetListOnly
 };
 
+enum class EAffixDashTypeFilter : uint8
+{
+	All,
+	DataRows,
+	AssetsOnly
+};
+
+enum class EAffixDashStatusFilter : uint8
+{
+	All,
+	NeedsAsset,
+	HasAsset,
+	AssetOnly
+};
+
 class SYIAffixDashboard : public SCompoundWidget
 {
 public:
@@ -40,6 +55,8 @@ public:
 	void UpdateSelectedAffixFromToolbar();
 	void AutoMatchMappingsFromToolbar();
 	void AddAllMappingsFromToolbar();
+	void SaveCurrentAssetFromToolbar();
+	void GuidedSetupFromToolbar();
 
 private:
 	TSharedRef<class SWidget> BuildAssetPicker();
@@ -51,6 +68,9 @@ private:
 	void OnAssetDoubleClicked(const FAssetData& AssetData);
 	void RefreshList();
 	void OnSearchTextChanged(const FText& NewText);
+	void SelectRowsNeedingAssets();
+	void SelectRowsForCurrentSource();
+	void ClearListSelection();
 	void ShowDetailsForEntry(const TSharedPtr<struct FYIAffixDashboardEntry>& Entry);
 	void OpenEntry(const TSharedPtr<struct FYIAffixDashboardEntry>& Entry);
 	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<struct FYIAffixDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
@@ -89,6 +109,14 @@ private:
 	TArray<TSharedPtr<struct FYIAffixDashboardEntry>> FilteredItems;
 	TSharedPtr<class SListView<TSharedPtr<struct FYIAffixDashboardEntry>>> ListView;
 	FText SearchText;
+	EAffixDashTypeFilter TypeFilter = EAffixDashTypeFilter::All;
+	EAffixDashStatusFilter StatusFilter = EAffixDashStatusFilter::All;
+	bool bOnlyCurrentSource = false;
+	int32 TotalRowCount = 0;
+	int32 TotalAssetCount = 0;
+	int32 TotalNeedsAssetCount = 0;
+	TArray<TSharedPtr<FString>> ListTypeOptions;
+	TArray<TSharedPtr<FString>> ListStatusOptions;
 
 	TArray<TSharedPtr<FYIFieldMapping>> MappingRows;
 	TSharedPtr<class SListView<TSharedPtr<FYIFieldMapping>>> MappingListView;

@@ -37,6 +37,7 @@
 #include "UObject/UnrealType.h"
 #include "UObject/SoftObjectPath.h"
 #include "PackageTools.h"
+#include "FileHelpers.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/SHeaderRow.h"
@@ -44,6 +45,26 @@
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Images/SImage.h"
+
+static bool YIAffixDash_SaveObjectPackage(UObject* ObjectToSave)
+{
+	if (!ObjectToSave)
+	{
+		return false;
+	}
+
+	UPackage* Package = ObjectToSave->GetOutermost();
+	if (!Package)
+	{
+		return false;
+	}
+
+	TArray<UPackage*> PackagesToSave;
+	PackagesToSave.Add(Package);
+	const bool bCheckDirty = false;
+	const bool bPromptToSave = false;
+	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
+}
 
 struct FYIAffixDashboardEntry
 {
@@ -259,13 +280,220 @@ void SYIAffixDashboard::AddAllMappingsFromToolbar()
 	AutoMatchInlineMappings(true);
 }
 
+void SYIAffixDashboard::SaveCurrentAssetFromToolbar()
+{
+	UObject* ObjectToSave = LastSelectedAsset.Get();
+	if (!ObjectToSave)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Save_NoSelection", "Save skipped: no selected affix/source asset."));
+		return;
+	}
+
+	if (YIAffixDash_SaveObjectPackage(ObjectToSave))
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Success", "Saved selected asset."),
+			FText::FromString(ObjectToSave->GetPathName()));
+	}
+	else
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Failed", "Save was canceled or failed."),
+			FText::FromString(ObjectToSave->GetPathName()));
+	}
+}
+
+void SYIAffixDashboard::GuidedSetupFromToolbar()
+{
+	UYIDataTableAffixSource* Source = ResolveCurrentSource();
+	if (!Source)
+	{
+		FYIEditorMessageLog::Add(
+			EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Guided_NoSource", "Guided setup: select an affix data source first."));
+		return;
+	}
+
+	UDataTable* Table = Source->ResolveDataTable();
+	if (!Table || !Table->RowStruct || Table->GetRowMap().Num() == 0)
+	{
+		FYIEditorMessageLog::Add(
+			EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Guided_NoRows", "Guided setup: selected source has no valid rows."));
+		return;
+	}
+
+	if (Source->bUseInlineMappings && Source->InlineMappings.Num() == 0 && !Source->TransformerClass)
+	{
+		FYIEditorMessageLog::Add(
+			EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_Guided_NoMapping", "Guided setup: source has inline mapping enabled but no mappings/transformer."));
+		return;
+	}
+
+	const int32 BeforeCount = TotalAssetCount;
+	CreateOrUpdateSelectedRows();
+	RefreshList();
+
+	FYIEditorMessageLog::Add(
+		EYIEditorLogSeverity::Info,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory", "AffixDash_Guided_Result", "Guided setup complete for source '{0}'. Assets before: {1}, after: {2}."),
+			FText::FromString(Source->GetName()),
+			FText::AsNumber(BeforeCount),
+			FText::AsNumber(TotalAssetCount)));
+}
+
 TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
 {
 	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory", "AffixDash_SelectNeeds", "Select Needs Asset"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_SelectNeeds_TT", "Select visible data rows that do not yet have generated affix assets."))
+				.OnClicked_Lambda([this]()
+					{
+						SelectRowsNeedingAssets();
+						return FReply::Handled();
+					})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory", "AffixDash_SelectSourceRows", "Select Current Source Rows"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_SelectSourceRows_TT", "Select visible data rows linked to the currently selected source."))
+				.OnClicked_Lambda([this]()
+					{
+						SelectRowsForCurrentSource();
+						return FReply::Handled();
+					})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory", "AffixDash_ClearSelection", "Clear Selection"))
+				.OnClicked_Lambda([this]()
+					{
+						ClearListSelection();
+						return FReply::Handled();
+					})
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+					{
+						return FText::Format(
+							NSLOCTEXT("YOLOInventory", "AffixDash_StatsFmt", "Rows: {0}  Assets: {1}  Needs Asset: {2}"),
+							FText::AsNumber(TotalRowCount),
+							FText::AsNumber(TotalAssetCount),
+							FText::AsNumber(TotalNeedsAssetCount));
+					})
+			]
+		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)
 		[
-			SNew(SSearchBox)
-				.OnTextChanged(this, &SYIAffixDashboard::OnSearchTextChanged)
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 6, 0)
+			[
+				SNew(SSearchBox)
+					.OnTextChanged(this, &SYIAffixDashboard::OnSearchTextChanged)
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(&ListTypeOptions)
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+						})
+					.OnComboBoxOpening_Lambda([this]()
+						{
+							ListTypeOptions.Reset();
+							ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: All")));
+							ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: Data Rows")));
+							ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: Assets Only")));
+						})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						{
+							if (!NewItem.IsValid()) return;
+							if (*NewItem == TEXT("Type: Data Rows")) TypeFilter = EAffixDashTypeFilter::DataRows;
+							else if (*NewItem == TEXT("Type: Assets Only")) TypeFilter = EAffixDashTypeFilter::AssetsOnly;
+							else TypeFilter = EAffixDashTypeFilter::All;
+							RefreshList();
+						})
+					.Content()
+					[
+						SNew(STextBlock).Text_Lambda([this]()
+							{
+								switch (TypeFilter)
+								{
+								case EAffixDashTypeFilter::DataRows: return FText::FromString(TEXT("Type: Data Rows"));
+								case EAffixDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("Type: Assets Only"));
+								default: return FText::FromString(TEXT("Type: All"));
+								}
+							})
+					]
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 6, 0)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(&ListStatusOptions)
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+						})
+					.OnComboBoxOpening_Lambda([this]()
+						{
+							ListStatusOptions.Reset();
+							ListStatusOptions.Add(MakeShared<FString>(TEXT("Status: All")));
+							ListStatusOptions.Add(MakeShared<FString>(TEXT("Status: Needs Asset")));
+							ListStatusOptions.Add(MakeShared<FString>(TEXT("Status: Has Asset")));
+							ListStatusOptions.Add(MakeShared<FString>(TEXT("Status: Asset Only")));
+						})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						{
+							if (!NewItem.IsValid()) return;
+							if (*NewItem == TEXT("Status: Needs Asset")) StatusFilter = EAffixDashStatusFilter::NeedsAsset;
+							else if (*NewItem == TEXT("Status: Has Asset")) StatusFilter = EAffixDashStatusFilter::HasAsset;
+							else if (*NewItem == TEXT("Status: Asset Only")) StatusFilter = EAffixDashStatusFilter::AssetOnly;
+							else StatusFilter = EAffixDashStatusFilter::All;
+							RefreshList();
+						})
+					.Content()
+					[
+						SNew(STextBlock).Text_Lambda([this]()
+							{
+								switch (StatusFilter)
+								{
+								case EAffixDashStatusFilter::NeedsAsset: return FText::FromString(TEXT("Status: Needs Asset"));
+								case EAffixDashStatusFilter::HasAsset: return FText::FromString(TEXT("Status: Has Asset"));
+								case EAffixDashStatusFilter::AssetOnly: return FText::FromString(TEXT("Status: Asset Only"));
+								default: return FText::FromString(TEXT("Status: All"));
+								}
+							})
+					]
+			]
+			+ SHorizontalBox::Slot().AutoWidth()
+			[
+				SNew(SCheckBox)
+				.Style(&FAppStyle::Get().GetWidgetStyle<FCheckBoxStyle>("ToggleButtonCheckBox"))
+				.Padding(FMargin(6, 2))
+				.IsChecked_Lambda([this]() { return bOnlyCurrentSource ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+					{
+						bOnlyCurrentSource = (State == ECheckBoxState::Checked);
+						RefreshList();
+					})
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "AffixDash_OnlyCurrentSource", "Only Current Source"))
+				]
+			]
 		]
 		+ SVerticalBox::Slot().FillHeight(1.f).Padding(6, 0)
 		[
@@ -387,6 +615,9 @@ void SYIAffixDashboard::RefreshList()
 {
 	Items.Reset();
 	FilteredItems.Reset();
+	TotalRowCount = 0;
+	TotalAssetCount = 0;
+	TotalNeedsAssetCount = 0;
 
 	TMap<int64, TSoftObjectPtr<UYIAffixAsset>> ExistingAssets;
 	TSet<FString> ExistingRowKeys;
@@ -478,12 +709,70 @@ void SYIAffixDashboard::RefreshList()
 	}
 
 	const FString SearchFilter = SearchText.ToString();
+	UYIDataTableAffixSource* CurrentSourceObj = ResolveCurrentSource();
+	const FString CurrentSourcePath = CurrentSourceObj ? CurrentSourceObj->GetPathName() : FString();
 	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Items)
 	{
 		if (!Entry.IsValid())
 		{
 			continue;
 		}
+
+		if (Entry->bIsDataTable)
+		{
+			++TotalRowCount;
+			if (!Entry->bHasAsset)
+			{
+				++TotalNeedsAssetCount;
+			}
+		}
+		else
+		{
+			++TotalAssetCount;
+		}
+
+		// Type filter
+		if (TypeFilter == EAffixDashTypeFilter::DataRows && !Entry->bIsDataTable)
+		{
+			continue;
+		}
+		if (TypeFilter == EAffixDashTypeFilter::AssetsOnly && Entry->bIsDataTable)
+		{
+			continue;
+		}
+
+		// Status filter
+		if (StatusFilter == EAffixDashStatusFilter::NeedsAsset && !(Entry->bIsDataTable && !Entry->bHasAsset))
+		{
+			continue;
+		}
+		if (StatusFilter == EAffixDashStatusFilter::HasAsset && !(Entry->bIsDataTable && Entry->bHasAsset))
+		{
+			continue;
+		}
+		if (StatusFilter == EAffixDashStatusFilter::AssetOnly && Entry->bIsDataTable)
+		{
+			continue;
+		}
+
+		// Source filter
+		if (bOnlyCurrentSource && !CurrentSourcePath.IsEmpty())
+		{
+			bool bMatches = false;
+			if (Entry->bIsDataTable)
+			{
+				bMatches = Entry->DataSource.IsValid() && Entry->DataSource.ToSoftObjectPath().ToString() == CurrentSourcePath;
+			}
+			else if (Entry->DataSource.IsValid())
+			{
+				bMatches = Entry->DataSource.ToSoftObjectPath().ToString() == CurrentSourcePath;
+			}
+			if (!bMatches)
+			{
+				continue;
+			}
+		}
+
 		const bool bPass = SearchFilter.IsEmpty() ||
 			Entry->Name.Contains(SearchFilter) ||
 			Entry->Source.Contains(SearchFilter) ||
@@ -504,6 +793,55 @@ void SYIAffixDashboard::OnSearchTextChanged(const FText& NewText)
 {
 	SearchText = NewText;
 	RefreshList();
+}
+
+void SYIAffixDashboard::SelectRowsNeedingAssets()
+{
+	if (!ListView.IsValid())
+	{
+		return;
+	}
+	ListView->ClearSelection();
+	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : FilteredItems)
+	{
+		if (Entry.IsValid() && Entry->bIsDataTable && !Entry->bHasAsset)
+		{
+			ListView->SetItemSelection(Entry, true, ESelectInfo::Direct);
+		}
+	}
+}
+
+void SYIAffixDashboard::SelectRowsForCurrentSource()
+{
+	if (!ListView.IsValid())
+	{
+		return;
+	}
+	UYIDataTableAffixSource* Source = ResolveCurrentSource();
+	if (!Source)
+	{
+		return;
+	}
+	const FString SourcePath = Source->GetPathName();
+	ListView->ClearSelection();
+	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : FilteredItems)
+	{
+		if (Entry.IsValid() && Entry->bIsDataTable && Entry->DataSource.IsValid())
+		{
+			if (Entry->DataSource.ToSoftObjectPath().ToString() == SourcePath)
+			{
+				ListView->SetItemSelection(Entry, true, ESelectInfo::Direct);
+			}
+		}
+	}
+}
+
+void SYIAffixDashboard::ClearListSelection()
+{
+	if (ListView.IsValid())
+	{
+		ListView->ClearSelection();
+	}
 }
 
 void SYIAffixDashboard::ShowDetailsForEntry(const TSharedPtr<FYIAffixDashboardEntry>& Entry)
@@ -747,19 +1085,6 @@ bool SYIAffixDashboard::CreateOrUpdateEntryFromDataRow(const TSharedPtr<FYIAffix
 
 FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
 {
-	if (!ListView.IsValid())
-	{
-		return FReply::Handled();
-	}
-
-	const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
-	if (Selected.Num() == 0)
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory", "AffixDash_NoSelectionRows", "Create/update failed: no rows selected."));
-		return FReply::Handled();
-	}
-
 	TMap<int64, TSoftObjectPtr<UYIAffixAsset>> ExistingByCode;
 	CacheExistingAffixesByCode(ExistingByCode);
 
@@ -767,7 +1092,57 @@ FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
 	int32 Failed = 0;
 	TSet<UYIDataTableAffixSource*> SourcesTouched;
 
-	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
+	TArray<TSharedPtr<FYIAffixDashboardEntry>> CandidateRows;
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
+		{
+			if (Entry.IsValid() && Entry->bIsDataTable)
+			{
+				CandidateRows.Add(Entry);
+			}
+		}
+	}
+
+	// UX fallback: if no data rows are selected, process all rows from current source.
+	if (CandidateRows.Num() == 0)
+	{
+		if (UYIDataTableAffixSource* Source = ResolveCurrentSource())
+		{
+			UDataTable* Table = Source->ResolveDataTable();
+			if (Table && Table->RowStruct)
+			{
+				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+				const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+				for (const TPair<FName, uint8*>& RowPair : Table->GetRowMap())
+				{
+					TSharedPtr<FYIAffixDashboardEntry> Entry = MakeShared<FYIAffixDashboardEntry>();
+					Entry->bIsDataTable = true;
+					Entry->DataSource = Source;
+					Entry->DataTable = Table;
+					Entry->RowName = RowPair.Key;
+					Entry->Code = ExtractCodeFromRow(Table->RowStruct, RowPair.Value, CodeField);
+					Entry->Name = Entry->RowName.ToString();
+					const FString PreviewName = GetRowString(Table->RowStruct, RowPair.Value, PreviewField);
+					if (!PreviewName.IsEmpty())
+					{
+						Entry->Name = PreviewName;
+					}
+					CandidateRows.Add(Entry);
+				}
+			}
+		}
+	}
+
+	if (CandidateRows.Num() == 0)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_NoSelectionRows", "Create/update failed: select one or more data rows, or select an affix data source first."));
+		return FReply::Handled();
+	}
+
+	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : CandidateRows)
 	{
 		UYIDataTableAffixSource* SourceUsed = nullptr;
 		if (CreateOrUpdateEntryFromDataRow(Entry, &ExistingByCode, &SourceUsed))
@@ -792,7 +1167,7 @@ FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
 	FYIEditorMessageLog::Add(
 		Failed > 0 ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
 		FText::Format(
-			NSLOCTEXT("YOLOInventory", "AffixDash_CreateSelectedDone", "Create/update selected rows complete. Success: {0}, Failed: {1}"),
+			NSLOCTEXT("YOLOInventory", "AffixDash_CreateSelectedDone", "Create/update affix rows complete. Success: {0}, Failed: {1}"),
 			FText::AsNumber(Succeeded),
 			FText::AsNumber(Failed)));
 
@@ -822,18 +1197,34 @@ int64 SYIAffixDashboard::ExtractCodeFromRow(const UScriptStruct* Struct, const u
 	{
 		return 0;
 	}
+
+	const FString RequestedField = FieldName.ToString();
+	const FString RequestedFieldLower = RequestedField.ToLower();
+
 	for (TFieldIterator<FProperty> It(Struct); It; ++It)
 	{
 		const FProperty* Prop = *It;
-		if (!Prop || Prop->GetFName() != FieldName)
+		if (!Prop)
 		{
 			continue;
 		}
+
+		// Accept both internal property name and authored/displayed field name, case-insensitive.
+		const bool bNameMatch =
+			Prop->GetFName() == FieldName ||
+			Prop->GetName().Equals(RequestedField, ESearchCase::IgnoreCase) ||
+			Prop->GetAuthoredName().Equals(RequestedFieldLower, ESearchCase::IgnoreCase);
+		if (!bNameMatch)
+		{
+			continue;
+		}
+
 		if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
 		{
 			if (Num->IsInteger())
 			{
-				return Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+				const uint8* ValuePtr = Prop->ContainerPtrToValuePtr<uint8>(RowData);
+				return Num->GetSignedIntPropertyValue(ValuePtr);
 			}
 		}
 	}

@@ -30,6 +30,10 @@ public:
 	void CreateRarityProfileFromToolbar();
 	void CreateItemGeneratorFromToolbar();
 	void RunGeneratorTestFromToolbar();
+	void PopulateLootTableFromDataSourcesFromToolbar();
+	void SaveCurrentAssetFromToolbar();
+	void GuidedSetupFromToolbar();
+	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 private:
 	TSharedRef<class SWidget> BuildAssetPicker();
@@ -42,6 +46,9 @@ private:
 	FReply CreateRarityProfile();
 	FReply CreateItemGenerator();
 	FReply RunGeneratorTest();
+	FReply PopulateLootTableFromDataSources();
+	void HandleDetailsChanged(const struct FPropertyChangedEvent& PropertyChangedEvent);
+	bool RunGeneratorTestInternal(bool bUserInitiated);
 
 	TSharedPtr<IDetailsView> DetailsView;
 	TWeakObjectPtr<UObject> SelectedAsset;
@@ -53,4 +60,7 @@ private:
 	int32 TestSeed = 1;
 	int32 TestRuns = 1;
 	FText TestResult;
+	bool bAutoRefreshTest = false;
+	bool bPendingAutoRefresh = false;
+	double NextAutoRefreshTime = 0.0;
 };

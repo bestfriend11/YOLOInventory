@@ -141,6 +141,8 @@ public:
 	void ApplySuggestedMappingsFromToolbar();
 	void QueueSelectedFromToolbar();
 	void RunQueueFromToolbar();
+	void SaveCurrentAssetFromToolbar();
+	void GuidedSetupFromToolbar();
 
 private:
 	TSharedRef<SWidget> BuildItemsPanelWidget();

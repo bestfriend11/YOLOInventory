@@ -29,6 +29,7 @@
 #include "Styling/AppStyle.h"
 #include "Misc/PackageName.h"
 #include "PackageTools.h"
+#include "FileHelpers.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Misc/MessageDialog.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -50,6 +51,26 @@
 #include "Algo/Sort.h"
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
+
+static bool YIItemDash_SaveObjectPackage(UObject* ObjectToSave)
+{
+	if (!ObjectToSave)
+	{
+		return false;
+	}
+
+	UPackage* Package = ObjectToSave->GetOutermost();
+	if (!Package)
+	{
+		return false;
+	}
+
+	TArray<UPackage*> PackagesToSave;
+	PackagesToSave.Add(Package);
+	const bool bCheckDirty = false;
+	const bool bPromptToSave = false;
+	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
+}
 
 static bool TryGetEnumValueFromStringEditor(const UEnum* Enum, const FString& Value, int64& OutValue)
 {
@@ -1674,6 +1695,109 @@ void SYIItemDashboard::QueueSelectedFromToolbar()
 void SYIItemDashboard::RunQueueFromToolbar()
 {
 	ProcessBatchQueue();
+}
+
+void SYIItemDashboard::SaveCurrentAssetFromToolbar()
+{
+	UObject* ObjectToSave = LastDetailObject.Get();
+
+	if (!ObjectToSave && ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+		if (Selected.Num() > 0 && Selected[0].IsValid())
+		{
+			ObjectToSave = ResolveDetailObject(*Selected[0]);
+		}
+	}
+
+	if (!ObjectToSave)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "Dash_Save_NoSelection", "Save skipped: no selected item/data source asset."));
+		return;
+	}
+
+	if (YIItemDash_SaveObjectPackage(ObjectToSave))
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
+			NSLOCTEXT("YOLOInventory", "Dash_Save_Success", "Saved selected asset."),
+			FText::FromString(ObjectToSave->GetPathName()));
+	}
+	else
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "Dash_Save_Failed", "Save was canceled or failed."),
+			FText::FromString(ObjectToSave->GetPathName()));
+	}
+}
+
+void SYIItemDashboard::GuidedSetupFromToolbar()
+{
+	TArray<TSharedPtr<FYIItemDashboardEntry>> CandidateRows;
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Selected)
+		{
+			if (Entry.IsValid() && Entry->bIsDataTable)
+			{
+				CandidateRows.Add(Entry);
+			}
+		}
+	}
+
+	// Guided fallback: run on visible data rows when no row is selected.
+	if (CandidateRows.Num() == 0)
+	{
+		for (const TSharedPtr<FYIItemDashboardEntry>& Entry : FilteredItems)
+		{
+			if (Entry.IsValid() && Entry->bIsDataTable)
+			{
+				CandidateRows.Add(Entry);
+			}
+		}
+	}
+
+	if (CandidateRows.Num() == 0)
+	{
+		FYIEditorMessageLog::Add(
+			EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "Dash_Guided_NoRows", "Guided setup: no item datasource rows found in selection/view."));
+		return;
+	}
+
+	int32 ReadyRows = 0;
+	int32 BlockedRows = 0;
+	int32 UpdatedRows = 0;
+	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : CandidateRows)
+	{
+		if (!Entry.IsValid())
+		{
+			continue;
+		}
+
+		TArray<FYIPreflightIssue> LocalIssues;
+		if (!RunPreflightForEntry(*Entry, LocalIssues, false))
+		{
+			++BlockedRows;
+			continue;
+		}
+
+		++ReadyRows;
+		if (CreateAssetFromEntry(*Entry))
+		{
+			++UpdatedRows;
+		}
+	}
+
+	Refresh();
+	FYIEditorMessageLog::Add(
+		BlockedRows > 0 ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory", "Dash_Guided_Result", "Guided setup finished. Ready: {0}, Updated: {1}, Blocked: {2}"),
+			FText::AsNumber(ReadyRows),
+			FText::AsNumber(UpdatedRows),
+			FText::AsNumber(BlockedRows)));
 }
 
 TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
