@@ -16,6 +16,7 @@ public:
 
 	void Construct(const FArguments& InArgs);
 	void OpenAsset(UObject* Asset);
+	TSharedRef<class SWidget> GetDetailsPanelWidget() const;
 
 	void SaveCurrentBagFromToolbar();
 	void CreateBagFromToolbar();

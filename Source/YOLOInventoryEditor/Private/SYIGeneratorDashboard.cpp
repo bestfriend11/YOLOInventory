@@ -24,6 +24,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
@@ -815,21 +816,27 @@ TSharedRef<SWidget> SYIGeneratorDashboard::BuildTestPanelWidget()
 		+ SVerticalBox::Slot().AutoHeight().Padding(6)
 		[
 			SNew(STextBlock)
+				.AutoWrapText(true)
 				.Text_Lambda([this](){ return TestResult.IsEmpty() ? NSLOCTEXT("YOLOInventory","GenDash_NoResult","Select a generator and click Generate.") : TestResult; })
 		]
-		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)
+		+ SVerticalBox::Slot().FillHeight(1.f).Padding(6, 0, 6, 6)
 		[
 			SNew(SBorder)
 				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 				.Padding(6)
 				[
-					SNew(STextBlock)
-						.Text_Lambda([this]()
-							{
-								return StatsResult.IsEmpty()
-									? NSLOCTEXT("YOLOInventory","GenDash_NoStats","Press Analyze to view loot/generator statistics.")
-									: StatsResult;
-							})
+					SNew(SScrollBox)
+					+ SScrollBox::Slot()
+					[
+						SNew(STextBlock)
+							.AutoWrapText(true)
+							.Text_Lambda([this]()
+								{
+									return StatsResult.IsEmpty()
+										? NSLOCTEXT("YOLOInventory","GenDash_NoStats","Press Analyze to view loot/generator statistics.")
+										: StatsResult;
+								})
+					]
 				]
 		];
 }
@@ -1166,8 +1173,44 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 		TotalWeight += Entry ? Entry->Weight : 0.f;
 	}
 
-	TMap<FString, int32> ItemNameToCountChoices;
+	int32 InvalidDefinitionCount = 0;
+	int32 NonPositiveWeightCount = 0;
+	int32 LevelFilteredCount = 0;
+	for (const FYILootTableEntry& Entry : LootTable->Entries)
+	{
+		if (!Entry.Definition.ToSoftObjectPath().IsValid())
+		{
+			++InvalidDefinitionCount;
+			continue;
+		}
+		if (Entry.Weight <= 0.f)
+		{
+			++NonPositiveWeightCount;
+			continue;
+		}
+		if (TestLevel < Entry.MinLevel || TestLevel > Entry.MaxLevel)
+		{
+			++LevelFilteredCount;
+		}
+	}
+
 	int64 StackChoiceCount = 0;
+	int64 WeightedStackChoiceCount = 0;
+
+	struct FYILootChanceLine
+	{
+		FString Name;
+		FString Path;
+		float Weight = 0.f;
+		float ChancePct = 0.f;
+		int32 MinCount = 1;
+		int32 MaxCount = 1;
+		int32 MinLevel = 0;
+		int32 MaxLevel = 9999;
+		bool bGeneratedFromDataSource = false;
+	};
+	TArray<FYILootChanceLine> ChanceLines;
+
 	for (const FYILootTableEntry* Entry : Eligible)
 	{
 		if (!Entry)
@@ -1179,9 +1222,29 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 		const int32 MinCount = FMath::Max(1, Entry->MinCount);
 		const int32 MaxCount = FMath::Max(MinCount, Entry->MaxCount);
 		const int32 CountChoices = MaxCount - MinCount + 1;
-		ItemNameToCountChoices.FindOrAdd(Name) += CountChoices;
 		StackChoiceCount += CountChoices;
+		WeightedStackChoiceCount += (int64)CountChoices * (int64)FMath::RoundToInt(FMath::Max(0.f, Entry->Weight));
+
+		FYILootChanceLine Line;
+		Line.Name = Name;
+		Line.Path = Entry->Definition.ToSoftObjectPath().ToString();
+		Line.Weight = Entry->Weight;
+		Line.ChancePct = (TotalWeight > 0.f) ? ((Entry->Weight / TotalWeight) * 100.f) : 0.f;
+		Line.MinCount = MinCount;
+		Line.MaxCount = MaxCount;
+		Line.MinLevel = Entry->MinLevel;
+		Line.MaxLevel = Entry->MaxLevel;
+		Line.bGeneratedFromDataSource = (Def && Def->bGeneratedFromDataSource);
+		ChanceLines.Add(MoveTemp(Line));
 	}
+	ChanceLines.Sort([](const FYILootChanceLine& A, const FYILootChanceLine& B)
+		{
+			if (A.ChancePct == B.ChancePct)
+			{
+				return A.Name < B.Name;
+			}
+			return A.ChancePct > B.ChancePct;
+		});
 
 	int32 TotalAffixAssets = 0;
 	{
@@ -1193,6 +1256,8 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 
 	int32 PrefixCandidates = 0;
 	int32 SuffixCandidates = 0;
+	int32 PrefixOverrideCandidates = 0;
+	int32 SuffixOverrideCandidates = 0;
 	if (Generator)
 	{
 		auto CountPoolEntries = [this](const TSoftObjectPtr<UYIAffixPoolAsset>& PoolSoft) -> int32
@@ -1213,8 +1278,10 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 			return Count;
 		};
 
-		PrefixCandidates = CountPoolEntries(Generator->PrefixPoolOverride);
-		SuffixCandidates = CountPoolEntries(Generator->SuffixPoolOverride);
+		PrefixOverrideCandidates = CountPoolEntries(Generator->PrefixPoolOverride);
+		SuffixOverrideCandidates = CountPoolEntries(Generator->SuffixPoolOverride);
+		PrefixCandidates = PrefixOverrideCandidates;
+		SuffixCandidates = SuffixOverrideCandidates;
 
 		if (Generator->bUseDefinitionAffixPools && (PrefixCandidates == 0 || SuffixCandidates == 0))
 		{
@@ -1260,6 +1327,8 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 	}
 
 	int32 MinPrefixes = 0, MaxPrefixes = 0, MinSuffixes = 0, MaxSuffixes = 0;
+	TArray<FString> RarityRuleLines;
+	float TotalRarityWeightAtLevel = 0.f;
 	if (Generator && Generator->RarityProfile.ToSoftObjectPath().IsValid())
 	{
 		if (UYIRarityProfile* Profile = Generator->RarityProfile.IsValid() ? Generator->RarityProfile.Get() : Generator->RarityProfile.LoadSynchronous())
@@ -1271,6 +1340,11 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 				{
 					continue;
 				}
+				if (TestLevel < Rule.MinLevel || TestLevel > Rule.MaxLevel)
+				{
+					continue;
+				}
+				TotalRarityWeightAtLevel += Rule.Weight;
 				if (bFirst)
 				{
 					MinPrefixes = Rule.MinPrefixes; MaxPrefixes = Rule.MaxPrefixes;
@@ -1284,6 +1358,21 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 					MinSuffixes = FMath::Min(MinSuffixes, Rule.MinSuffixes);
 					MaxSuffixes = FMath::Max(MaxSuffixes, Rule.MaxSuffixes);
 				}
+				const FString TagText = Rule.RarityTag.IsValid() ? Rule.RarityTag.ToString() : TEXT("None");
+				const FString PrefixOverrideText = Rule.PrefixPoolOverride.ToSoftObjectPath().IsValid() ? Rule.PrefixPoolOverride.ToSoftObjectPath().GetAssetName() : TEXT("-");
+				const FString SuffixOverrideText = Rule.SuffixPoolOverride.ToSoftObjectPath().IsValid() ? Rule.SuffixPoolOverride.ToSoftObjectPath().GetAssetName() : TEXT("-");
+				RarityRuleLines.Add(FString::Printf(
+					TEXT("- %s | Weight=%.2f | Level[%d..%d] | Prefix[%d..%d] | Suffix[%d..%d] | RulePools(P:%s, S:%s)"),
+					*TagText,
+					Rule.Weight,
+					Rule.MinLevel,
+					Rule.MaxLevel,
+					Rule.MinPrefixes,
+					Rule.MaxPrefixes,
+					Rule.MinSuffixes,
+					Rule.MaxSuffixes,
+					*PrefixOverrideText,
+					*SuffixOverrideText));
 			}
 		}
 	}
@@ -1309,29 +1398,105 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 	const double PermutationsEstimate = (double)FMath::Max<int64>(1, StackChoiceCount) * PrefixCombos * SuffixCombos;
 
 	FString Out;
-	Out += FString::Printf(TEXT("Loot entries: %d total | %d eligible at level %d"), TotalEntries, EligibleEntries, TestLevel);
+	Out += TEXT("=== Context ===");
 	Out += LINE_TERMINATOR;
-	Out += FString::Printf(TEXT("Estimated base outcomes (count variants): %lld"), FMath::Max<int64>(1, StackChoiceCount));
+	Out += FString::Printf(TEXT("Selected Asset: %s"),
+		SelectedAsset.IsValid() ? *SelectedAsset->GetPathName() : TEXT("<none>"));
 	Out += LINE_TERMINATOR;
-	Out += FString::Printf(TEXT("Affix assets in project: %d | Prefix candidates: %d | Suffix candidates: %d"), TotalAffixAssets, PrefixCandidates, SuffixCandidates);
-	Out += LINE_TERMINATOR;
-	Out += FString::Printf(TEXT("Estimated permutations: %.0f"), PermutationsEstimate);
-
-	if (EligibleEntries > 0 && TotalWeight > 0.f)
+	Out += FString::Printf(TEXT("Loot Table: %s"), *LootTable->GetPathName());
+	if (Generator)
 	{
 		Out += LINE_TERMINATOR;
-		Out += TEXT("Item chances:");
-		for (const FYILootTableEntry* Entry : Eligible)
+		Out += FString::Printf(TEXT("Generator: %s"), *Generator->GetPathName());
+		Out += LINE_TERMINATOR;
+		Out += FString::Printf(TEXT("Generator Flags: RandomAffixes=%s, UseDefinitionPools=%s, ClampLevel=%s, TemplateAffixes=%s"),
+			Generator->bGenerateRandomAffixes ? TEXT("ON") : TEXT("OFF"),
+			Generator->bUseDefinitionAffixPools ? TEXT("ON") : TEXT("OFF"),
+			Generator->bClampLevel ? TEXT("ON") : TEXT("OFF"),
+			Generator->bApplyTemplateAffixes ? TEXT("ON") : TEXT("OFF"));
+		Out += LINE_TERMINATOR;
+		Out += FString::Printf(TEXT("Generator Level Window: [%d..%d]"), Generator->MinItemLevel, Generator->MaxItemLevel);
+	}
+
+	Out += LINE_TERMINATOR;
+	Out += LINE_TERMINATOR;
+	Out += TEXT("=== Loot Coverage ===");
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Test Level: %d"), TestLevel);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Entries: total=%d, eligible=%d, blocked=%d"),
+		TotalEntries, EligibleEntries, FMath::Max(0, TotalEntries - EligibleEntries));
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Blocked Breakdown: invalid definition=%d, non-positive weight=%d, level mismatch=%d"),
+		InvalidDefinitionCount, NonPositiveWeightCount, LevelFilteredCount);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Eligible Total Weight: %.2f"), TotalWeight);
+
+	Out += LINE_TERMINATOR;
+	Out += LINE_TERMINATOR;
+	Out += TEXT("=== Outcome Space ===");
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Base outcomes (stack count variants): %lld"), FMath::Max<int64>(1, StackChoiceCount));
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Weighted stack score (diagnostic): %lld"), FMath::Max<int64>(0, WeightedStackChoiceCount));
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Affix Assets in Project: %d"), TotalAffixAssets);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Affix Candidates @Level %d: Prefix=%d (override=%d), Suffix=%d (override=%d)"),
+		TestLevel, PrefixCandidates, PrefixOverrideCandidates, SuffixCandidates, SuffixOverrideCandidates);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Rarity Range (eligible rules): Prefix[%d..%d], Suffix[%d..%d]"),
+		MinPrefixes, MaxPrefixes, MinSuffixes, MaxSuffixes);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Estimated permutations: %.0f (= BaseOutcomes * PrefixCombos * SuffixCombos)"), PermutationsEstimate);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("PrefixCombos=%.0f, SuffixCombos=%.0f"), PrefixCombos, SuffixCombos);
+
+	Out += LINE_TERMINATOR;
+	Out += LINE_TERMINATOR;
+	Out += TEXT("=== Rarity Rules @ Test Level ===");
+	if (RarityRuleLines.Num() == 0)
+	{
+		Out += LINE_TERMINATOR;
+		Out += TEXT("No eligible rarity rules at this level, or no rarity profile assigned.");
+	}
+	else
+	{
+		Out += LINE_TERMINATOR;
+		Out += FString::Printf(TEXT("Eligible Rules: %d | Combined Weight: %.2f"), RarityRuleLines.Num(), TotalRarityWeightAtLevel);
+		for (const FString& Line : RarityRuleLines)
 		{
-			if (!Entry)
-			{
-				continue;
-			}
-			UYIItemDefinition* Def = Entry->Definition.IsValid() ? Entry->Definition.Get() : Entry->Definition.LoadSynchronous();
-			const FString Name = Def ? (Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString()) : Entry->Definition.ToSoftObjectPath().GetAssetName();
-			const float Chance = Entry->Weight / TotalWeight;
 			Out += LINE_TERMINATOR;
-			Out += FString::Printf(TEXT("- %s: %.2f%%"), *Name, Chance * 100.f);
+			Out += Line;
+		}
+	}
+
+	Out += LINE_TERMINATOR;
+	Out += LINE_TERMINATOR;
+	Out += TEXT("=== Item Chances (Eligible Entries) ===");
+	if (ChanceLines.Num() == 0)
+	{
+		Out += LINE_TERMINATOR;
+		Out += TEXT("No eligible entries.");
+	}
+	else
+	{
+		int32 RowIndex = 0;
+		for (const FYILootChanceLine& Line : ChanceLines)
+		{
+			++RowIndex;
+			Out += LINE_TERMINATOR;
+			Out += FString::Printf(
+				TEXT("%2d) %s | %.2f%% | Weight=%.2f | Count[%d..%d] | Level[%d..%d] | SourceBacked=%s"),
+				RowIndex,
+				*Line.Name,
+				Line.ChancePct,
+				Line.Weight,
+				Line.MinCount,
+				Line.MaxCount,
+				Line.MinLevel,
+				Line.MaxLevel,
+				Line.bGeneratedFromDataSource ? TEXT("Yes") : TEXT("No"));
 		}
 	}
 

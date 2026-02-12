@@ -129,22 +129,11 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 		]
 		+ SSplitter::Slot().Value(0.72f)
 		[
-			SNew(SSplitter)
-			.Orientation(Orient_Vertical)
-			+ SSplitter::Slot().Value(0.65f)
+			SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			.Padding(4)
 			[
 				SAssignNew(GridHost, SBox)
-			]
-			+ SSplitter::Slot().Value(0.35f)
-			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-				.Padding(4)
-				[
-					DetailsView.IsValid()
-						? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
-						: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_NoDetails", "Details unavailable")))
-				]
 			]
 		]
 	];
@@ -168,6 +157,24 @@ void SYIBagDashboard::OpenAsset(UObject* Asset)
 			DetailsView->SetObject(ItemDef);
 		}
 	}
+}
+
+TSharedRef<SWidget> SYIBagDashboard::GetDetailsPanelWidget() const
+{
+	SYIBagDashboard* Self = const_cast<SYIBagDashboard*>(this);
+	if (!Self->DetailsView.IsValid())
+	{
+		FPropertyEditorModule& PropModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		FDetailsViewArgs DetailArgs;
+		DetailArgs.bAllowSearch = true;
+		DetailArgs.bHideSelectionTip = true;
+		Self->DetailsView = PropModule.CreateDetailView(DetailArgs);
+		if (Self->SelectedBag.IsValid())
+		{
+			Self->DetailsView->SetObject(Self->SelectedBag.Get());
+		}
+	}
+	return Self->DetailsView.ToSharedRef();
 }
 
 void SYIBagDashboard::SaveCurrentBagFromToolbar()
