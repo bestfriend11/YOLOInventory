@@ -34,6 +34,7 @@ private:
 	void CreateWidgetsIfNeeded();
 	void ExtendToolbar();
 	void FillDashboardToolbar(FToolBarBuilder& ToolbarBuilder);
+	void CloseItemPanelTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
