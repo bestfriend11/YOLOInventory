@@ -3,6 +3,7 @@
 #include "YIRarityProfile.h"
 #include "YIItemDefinition.h"
 #include "YIAffixPoolAsset.h"
+#include "YIAffixAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
 
 static int32 ClampLevel(int32 Level, int32 MinLevel, int32 MaxLevel)
@@ -29,9 +30,134 @@ TSoftObjectPtr<UYIAffixPoolAsset> UYIItemGenerator::ResolvePoolOverride(
 	return bUseDefinitionPools ? DefinitionPool : nullptr;
 }
 
-int32 UYIItemGenerator::RollAffixesFromPool(UYIAffixPoolAsset* Pool, FYIBagItem& Item, int32 Count, int32 Level, FRandomStream& RNG)
+static bool YIArrayContainsStringIgnoreCase(const TArray<FString>& InArray, const FString& Value)
+{
+	for (const FString& Entry : InArray)
+	{
+		if (Entry.Equals(Value, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const UYIItemDefinition* ItemDef, int32 ItemLevel, const FYIAffixRollCriteria& Criteria, EYIAffixKind ExpectedKind)
+{
+	if (!Affix)
+	{
+		return false;
+	}
+
+	if (Affix->Kind != ExpectedKind)
+	{
+		return false;
+	}
+
+	if (Criteria.bEnabled)
+	{
+		const int32 MinTier = FMath::Min(Criteria.MinTier, Criteria.MaxTier);
+		const int32 MaxTier = FMath::Max(Criteria.MinTier, Criteria.MaxTier);
+		if (Affix->Tier < MinTier || Affix->Tier > MaxTier)
+		{
+			return false;
+		}
+
+		int32 MinPower = Criteria.MinPowerLevel;
+		int32 MaxPower = Criteria.MaxPowerLevel;
+		if (Criteria.bUseItemLevelAsPowerBaseline)
+		{
+			const int32 LowOffset = FMath::Min(Criteria.MinPowerLevelOffset, Criteria.MaxPowerLevelOffset);
+			const int32 HighOffset = FMath::Max(Criteria.MinPowerLevelOffset, Criteria.MaxPowerLevelOffset);
+			MinPower = FMath::Max(0, ItemLevel + LowOffset);
+			MaxPower = FMath::Max(0, ItemLevel + HighOffset);
+		}
+		else
+		{
+			MinPower = FMath::Max(0, FMath::Min(Criteria.MinPowerLevel, Criteria.MaxPowerLevel));
+			MaxPower = FMath::Max(0, FMath::Max(Criteria.MinPowerLevel, Criteria.MaxPowerLevel));
+		}
+
+		if (Affix->PowerLevel < MinPower || Affix->PowerLevel > MaxPower)
+		{
+			return false;
+		}
+
+		const uint8 AffixQuality = static_cast<uint8>(Affix->Quality);
+		const uint8 MinQuality = static_cast<uint8>(Criteria.MinQuality);
+		const uint8 MaxQuality = static_cast<uint8>(Criteria.MaxQuality);
+		const uint8 QualityLow = FMath::Min(MinQuality, MaxQuality);
+		const uint8 QualityHigh = FMath::Max(MinQuality, MaxQuality);
+		if (AffixQuality < QualityLow || AffixQuality > QualityHigh)
+		{
+			return false;
+		}
+
+		if (!Criteria.AllowedTemplateIds.IsEmpty() && !YIArrayContainsStringIgnoreCase(Criteria.AllowedTemplateIds, Affix->TemplateId))
+		{
+			return false;
+		}
+
+		if (!Criteria.BlockedTemplateIds.IsEmpty() && YIArrayContainsStringIgnoreCase(Criteria.BlockedTemplateIds, Affix->TemplateId))
+		{
+			return false;
+		}
+
+		if (!Affix->ConflictGroup.IsNone() && Criteria.BlockedConflictGroups.Contains(Affix->ConflictGroup))
+		{
+			return false;
+		}
+	}
+
+	// Respect item compatibility tags before trying to add.
+	if (ItemDef && !Affix->AllowedItemTags.IsEmpty() && !ItemDef->Tags.HasAny(Affix->AllowedItemTags))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+int32 UYIItemGenerator::RollAffixesFromPool(UYIAffixPoolAsset* Pool, const UYIItemDefinition* ItemDef, FYIBagItem& Item, int32 Count, int32 Level, FRandomStream& RNG, const FYIAffixRollCriteria& Criteria, EYIAffixKind ExpectedKind)
 {
 	if (!Pool || Count <= 0)
+	{
+		return 0;
+	}
+
+	TArray<FYIAffixPoolEntry> Candidates;
+	Candidates.Reserve(Pool->Entries.Num());
+	float TotalWeight = 0.f;
+	for (const FYIAffixPoolEntry& Entry : Pool->Entries)
+	{
+		if (Entry.Weight <= 0.f)
+		{
+			continue;
+		}
+		if (Level < Entry.MinLevel || Level > Entry.MaxLevel)
+		{
+			continue;
+		}
+
+		UYIAffixAsset* Affix = Entry.Affix.IsValid() ? Entry.Affix.Get() : Entry.Affix.LoadSynchronous();
+		if (!Affix)
+		{
+			continue;
+		}
+		if (static_cast<uint8>(Affix->Quality) < static_cast<uint8>(Entry.MinQuality))
+		{
+			continue;
+		}
+		if (!DoesAffixPassCriteria(Affix, ItemDef, Level, Criteria, ExpectedKind))
+		{
+			continue;
+		}
+
+		Candidates.Add(Entry);
+		TotalWeight += Entry.Weight;
+	}
+
+	if (Candidates.Num() == 0 || TotalWeight <= 0.f)
 	{
 		return 0;
 	}
@@ -41,7 +167,18 @@ int32 UYIItemGenerator::RollAffixesFromPool(UYIAffixPoolAsset* Pool, FYIBagItem&
 	const int32 MaxAttempts = FMath::Max(8, Count * 6);
 	while (Added < Count && Attempts < MaxAttempts)
 	{
-		UYIAffixAsset* Affix = Pool->SampleAffix(RNG, Level);
+		const float Pick = RNG.FRandRange(0.f, TotalWeight);
+		float Accum = 0.f;
+		UYIAffixAsset* Affix = nullptr;
+		for (const FYIAffixPoolEntry& Entry : Candidates)
+		{
+			Accum += Entry.Weight;
+			if (Pick <= Accum)
+			{
+				Affix = Entry.Affix.IsValid() ? Entry.Affix.Get() : Entry.Affix.LoadSynchronous();
+				break;
+			}
+		}
 		if (!Affix)
 		{
 			++Attempts;
@@ -121,8 +258,8 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 		UYIAffixPoolAsset* PrefixPool = PrefixPoolSoft.IsValid() ? PrefixPoolSoft.Get() : PrefixPoolSoft.LoadSynchronous();
 		UYIAffixPoolAsset* SuffixPool = SuffixPoolSoft.IsValid() ? SuffixPoolSoft.Get() : SuffixPoolSoft.LoadSynchronous();
 
-		OutPrefixes = RollAffixesFromPool(PrefixPool, OutItem, OutPrefixes, UseLevel, RNG);
-		OutSuffixes = RollAffixesFromPool(SuffixPool, OutItem, OutSuffixes, UseLevel, RNG);
+		OutPrefixes = RollAffixesFromPool(PrefixPool, Def, OutItem, OutPrefixes, UseLevel, RNG, PrefixCriteria, EYIAffixKind::Prefix);
+		OutSuffixes = RollAffixesFromPool(SuffixPool, Def, OutItem, OutSuffixes, UseLevel, RNG, SuffixCriteria, EYIAffixKind::Suffix);
 	}
 
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(OutItem.Item);

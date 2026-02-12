@@ -38,6 +38,7 @@
 #include "IDetailsView.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "InputCoreTypes.h"
 #include "ObjectTools.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
@@ -50,6 +51,198 @@
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
 
+static bool TryGetEnumValueFromStringEditor(const UEnum* Enum, const FString& Value, int64& OutValue)
+{
+	if (!Enum)
+	{
+		return false;
+	}
+
+	if (Value.IsEmpty())
+	{
+		return false;
+	}
+
+	// Numeric strings map directly.
+	if (Value.IsNumeric())
+	{
+		OutValue = FCString::Atoi64(*Value);
+		return true;
+	}
+
+	const int64 NameValue = Enum->GetValueByNameString(Value);
+	if (NameValue != INDEX_NONE)
+	{
+		OutValue = NameValue;
+		return true;
+	}
+
+	const FName Name(*Value);
+	const int64 ExactValue = Enum->GetValueByName(Name);
+	if (ExactValue != INDEX_NONE)
+	{
+		OutValue = ExactValue;
+		return true;
+	}
+
+	// Case-insensitive fallback.
+	const FString Lower = Value.ToLower();
+	for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+	{
+		const FString EnumName = Enum->GetNameStringByIndex(Index);
+		if (EnumName.ToLower() == Lower)
+		{
+			OutValue = Enum->GetValueByIndex(Index);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool SetEnumPropertyValueEditor(FProperty* DestProp, uint8* DestPtr, int64 Value)
+{
+	if (FEnumProperty* EnumProp = CastField<FEnumProperty>(DestProp))
+	{
+		if (FNumericProperty* Underlying = EnumProp->GetUnderlyingProperty())
+		{
+			Underlying->SetIntPropertyValue(DestPtr, Value);
+			return true;
+		}
+	}
+	if (FByteProperty* ByteProp = CastField<FByteProperty>(DestProp))
+	{
+		if (ByteProp->Enum)
+		{
+			ByteProp->SetPropertyValue(DestPtr, (uint8)Value);
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool SetEnumPropertyValueEditor(FProperty* DestProp, uint8* DestPtr, const FString& Value)
+{
+	if (FEnumProperty* EnumProp = CastField<FEnumProperty>(DestProp))
+	{
+		if (UEnum* Enum = EnumProp->GetEnum())
+		{
+			int64 EnumValue = 0;
+			if (TryGetEnumValueFromStringEditor(Enum, Value, EnumValue))
+			{
+				if (FNumericProperty* Underlying = EnumProp->GetUnderlyingProperty())
+				{
+					Underlying->SetIntPropertyValue(DestPtr, EnumValue);
+					return true;
+				}
+			}
+		}
+	}
+	if (FByteProperty* ByteProp = CastField<FByteProperty>(DestProp))
+	{
+		if (ByteProp->Enum)
+		{
+			int64 EnumValue = 0;
+			if (TryGetEnumValueFromStringEditor(ByteProp->Enum, Value, EnumValue))
+			{
+				ByteProp->SetPropertyValue(DestPtr, (uint8)EnumValue);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool SetPropertyValueFromStringEditor(const FString& Value, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToEnum)
+	{
+		return SetEnumPropertyValueEditor(DestProp, DestPtr, Value);
+	}
+	if (Conversion == EYIFieldMappingConversion::None)
+	{
+		if (CastField<FEnumProperty>(DestProp) || (CastField<FByteProperty>(DestProp) && CastField<FByteProperty>(DestProp)->Enum))
+		{
+			return SetEnumPropertyValueEditor(DestProp, DestPtr, Value);
+		}
+	}
+
+	if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+	{
+		if (Conversion == EYIFieldMappingConversion::BoolFromText)
+		{
+			DestBool->SetPropertyValue(DestPtr, !Value.IsEmpty());
+			return true;
+		}
+		const FString Lower = Value.ToLower();
+		const bool bVal = (Lower == TEXT("true") || Lower == TEXT("1") || Lower == TEXT("yes") || Lower == TEXT("on"));
+		DestBool->SetPropertyValue(DestPtr, bVal);
+		return true;
+	}
+
+	if (FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+	{
+		if (Conversion == EYIFieldMappingConversion::ToInt || DestNum->IsInteger())
+		{
+			const int64 IntVal = FCString::Atoi64(*Value);
+			DestNum->SetIntPropertyValue(DestPtr, IntVal);
+			return true;
+		}
+		const double FloatVal = FCString::Atod(*Value);
+		DestNum->SetFloatingPointPropertyValue(DestPtr, FloatVal);
+		return true;
+	}
+
+	if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+	{
+		DestName->SetPropertyValue(DestPtr, FName(*Value));
+		return true;
+	}
+	if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+	{
+		DestStr->SetPropertyValue(DestPtr, Value);
+		return true;
+	}
+	if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+	{
+		DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+		return true;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+	{
+		if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+		{
+			if (DestStruct->Struct == FGameplayTag::StaticStruct())
+			{
+				FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+				*TagPtr = FGameplayTag::RequestGameplayTag(FName(*Value), false);
+				return true;
+			}
+		}
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	{
+		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+		{
+			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			{
+				const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
+				DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
 {
 	if (!SourceProp || !DestProp || !SourcePtr || !DestPtr)
@@ -61,6 +254,43 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 	{
 		SourceProp->CopyCompleteValue(DestPtr, SourcePtr);
 		return true;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToEnum)
+	{
+		if (const FEnumProperty* SrcEnum = CastField<FEnumProperty>(SourceProp))
+		{
+			if (UEnum* Enum = SrcEnum->GetEnum())
+			{
+				const int64 Val = SrcEnum->GetUnderlyingProperty()->GetSignedIntPropertyValue(SourcePtr);
+				return SetEnumPropertyValueEditor(DestProp, DestPtr, Enum->GetNameStringByValue(Val));
+			}
+		}
+		if (const FByteProperty* SrcByte = CastField<FByteProperty>(SourceProp))
+		{
+			if (SrcByte->Enum)
+			{
+				const int64 Val = SrcByte->GetPropertyValue(SourcePtr);
+				return SetEnumPropertyValueEditor(DestProp, DestPtr, SrcByte->Enum->GetNameStringByValue(Val));
+			}
+		}
+		if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+		{
+			const int64 Val = SrcNum->GetSignedIntPropertyValue(SourcePtr);
+			return SetEnumPropertyValueEditor(DestProp, DestPtr, Val);
+		}
+		if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueEditor(DestProp, DestPtr, SrcName->GetPropertyValue(SourcePtr).ToString());
+		}
+		if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueEditor(DestProp, DestPtr, SrcStr->GetPropertyValue(SourcePtr));
+		}
+		if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueEditor(DestProp, DestPtr, SrcText->GetPropertyValue(SourcePtr).ToString());
+		}
 	}
 
 	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
@@ -462,6 +692,14 @@ static EYIFieldMappingConversion GuessConversionForProps(const FProperty* Source
 	}
 	if (CastField<FNameProperty>(TargetProp)) return EYIFieldMappingConversion::ToName;
 	if (CastField<FTextProperty>(TargetProp)) return EYIFieldMappingConversion::ToText;
+	if (CastField<FEnumProperty>(TargetProp)) return EYIFieldMappingConversion::ToEnum;
+	if (const FByteProperty* ByteProp = CastField<FByteProperty>(TargetProp))
+	{
+		if (ByteProp->Enum)
+		{
+			return EYIFieldMappingConversion::ToEnum;
+		}
+	}
 	if (const FStructProperty* DestStruct = CastField<FStructProperty>(TargetProp))
 	{
 		if (DestStruct->Struct == FGameplayTag::StaticStruct())
@@ -3890,7 +4128,7 @@ void SYIItemDashboard::RefreshMappingPreview()
 		const FProperty* SourceProp = Mapping.SourceField.IsNone() ? nullptr : SourceFieldPropCache.FindRef(Mapping.SourceField);
 		FProperty* TargetProp = Mapping.TargetProperty.IsNone() ? nullptr : TargetFieldPropCache.FindRef(Mapping.TargetProperty);
 
-		if (!SourceProp || !TargetProp)
+		if (!TargetProp || (!SourceProp && !Mapping.bUseStaticValue))
 		{
 			Row->Status = NSLOCTEXT("YOLOInventory", "Dash_PreviewMissing", "Missing field.");
 			Row->StatusColor = FLinearColor(1.f, 0.25f, 0.2f);
@@ -3898,8 +4136,10 @@ void SYIItemDashboard::RefreshMappingPreview()
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
-		Row->SourceValue = ExportPropertyValueToString(SourceProp, SrcPtr);
+		const uint8* SrcPtr = SourceProp ? SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr) : nullptr;
+		Row->SourceValue = Mapping.bUseStaticValue
+			? Mapping.StaticValue
+			: ExportPropertyValueToString(SourceProp, SrcPtr);
 
 		TArray<uint8> Temp;
 		Temp.SetNumZeroed(TargetProp->GetSize());
@@ -3908,7 +4148,19 @@ void SYIItemDashboard::RefreshMappingPreview()
 		bool bWarn = false;
 		bool bConverted = false;
 
-		if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+		if (Mapping.bUseStaticValue)
+		{
+			if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+			{
+				Row->ConvertedValue = TEXT("<static value does not support Vector2D conversion>");
+				bWarn = true;
+			}
+			else
+			{
+				bConverted = SetPropertyValueFromStringEditor(Mapping.StaticValue, TargetProp, Temp.GetData(), Mapping.Conversion);
+			}
+		}
+		else if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 		{
 			if (Mapping.SourceFieldB.IsNone())
 			{
@@ -4164,7 +4416,7 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 	// First, patch existing mappings that have missing source fields
 	for (FYIFieldMapping& M : Source->InlineMappings)
 	{
-		if (M.TargetProperty.IsNone() || !M.SourceField.IsNone())
+		if (M.bUseStaticValue || M.TargetProperty.IsNone() || !M.SourceField.IsNone())
 		{
 			continue;
 		}
@@ -4253,17 +4505,28 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			if (CastField<FSetProperty>(Prop)) { OutLabel = TEXT("Set"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
 		};
 
-	auto MakeTypeBadge = [&](const FProperty* Prop)->TSharedRef<SWidget>
+	auto MakeTypeBadgeDynamic = [&](TFunction<FProperty*()> PropGetter)->TSharedRef<SWidget>
 		{
-			FString Label;
-			FLinearColor Color;
-			GetTypeInfo(Prop, Label, Color);
 			return SNew(SBorder)
 				.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
 				.Padding(FMargin(4, 1))
-				.BorderBackgroundColor(Color)
+				.BorderBackgroundColor_Lambda([PropGetter, GetTypeInfo]()
+					{
+						FString Label;
+						FLinearColor Color;
+						GetTypeInfo(PropGetter(), Label, Color);
+						return Color;
+					})
 				[
-					SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+					SNew(STextBlock)
+						.Text_Lambda([PropGetter, GetTypeInfo]()
+							{
+								FString Label;
+								FLinearColor Color;
+								GetTypeInfo(PropGetter(), Label, Color);
+								return FText::FromString(Label);
+							})
+						.ColorAndOpacity(FSlateColor(FLinearColor::Black))
 				];
 		};
 
@@ -4280,6 +4543,27 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty)) return *Found;
 			return nullptr;
 		};
+
+	auto IsStaticMapping = [Mapping]() -> bool
+		{
+			return Mapping.IsValid() && Mapping->bUseStaticValue;
+		};
+
+	auto GetTargetEnum = [GetTargetProp]() -> UEnum*
+		{
+			const FProperty* TargetProp = GetTargetProp();
+			if (const FEnumProperty* EnumProp = CastField<FEnumProperty>(TargetProp))
+			{
+				return EnumProp->GetEnum();
+			}
+			if (const FByteProperty* ByteProp = CastField<FByteProperty>(TargetProp))
+			{
+				return ByteProp->Enum;
+			}
+			return nullptr;
+		};
+
+	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 
 	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
 		{
@@ -4305,11 +4589,18 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			}
 			const FProperty* SourceProp = GetSourceProp();
 			const FProperty* TargetProp = GetTargetProp();
-			if (!SourceProp || !TargetProp)
+			const bool bStatic = Mapping->bUseStaticValue;
+			if (!TargetProp || (!SourceProp && !bStatic))
 			{
 				return SNew(SImage)
 					.Image(FAppStyle::Get().GetBrush("Icons.Error"))
 					.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_MappingMissing", "Missing source or target field."));
+			}
+			if (bStatic && Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+			{
+				return SNew(SImage)
+					.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+					.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_MappingStaticVector", "Static value does not support Vector2D conversion."));
 			}
 			if (Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 			{
@@ -4349,17 +4640,27 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 					.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
 					.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_MappingVectorTarget", "Vector2D conversion target must be FVector2D or FIntPoint."));
 			}
-			const bool bTypesMatch = SourceProp->GetClass() == TargetProp->GetClass();
-			const bool bBothNumeric = CastField<FNumericProperty>(SourceProp) && CastField<FNumericProperty>(TargetProp);
+			const FProperty* CompatSource = bStatic ? TargetProp : SourceProp;
+			const bool bTypesMatch = CompatSource->GetClass() == TargetProp->GetClass();
+			const bool bBothNumeric = CastField<FNumericProperty>(CompatSource) && CastField<FNumericProperty>(TargetProp);
 			const bool bBothTextish =
-				(CastField<FStrProperty>(SourceProp) || CastField<FNameProperty>(SourceProp) || CastField<FTextProperty>(SourceProp)) &&
+				(CastField<FStrProperty>(CompatSource) || CastField<FNameProperty>(CompatSource) || CastField<FTextProperty>(CompatSource)) &&
 				(CastField<FStrProperty>(TargetProp) || CastField<FNameProperty>(TargetProp) || CastField<FTextProperty>(TargetProp));
 			const bool bCompatible = bTypesMatch || bBothNumeric || bBothTextish;
-			if (!bCompatible && Mapping->Conversion == EYIFieldMappingConversion::None)
+			if (!bCompatible && Mapping->Conversion == EYIFieldMappingConversion::None && !bStatic)
 			{
 				return SNew(SImage)
 					.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
 					.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_MappingTypeMismatch", "Type mismatch. Add a conversion."));
+			}
+			if (Mapping->Conversion == EYIFieldMappingConversion::ToEnum)
+			{
+				if (!(CastField<FEnumProperty>(TargetProp) || (CastField<FByteProperty>(TargetProp) && CastField<FByteProperty>(TargetProp)->Enum)))
+				{
+					return SNew(SImage)
+						.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+						.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_MappingEnumTarget", "Enum conversion requires an enum target."));
+				}
 			}
 
 			if (Mapping->TransformFunction.IsNone())
@@ -4419,9 +4720,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				[
 					BuildStatusWidget()
 				]
-				+ SHorizontalBox::Slot().FillWidth(0.26f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.22f).Padding(2)
 				[
 					SNew(SComboBox<TSharedPtr<FString>>)
+						.IsEnabled_Lambda([IsStaticMapping]() { return !IsStaticMapping(); })
 						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->SourceFieldOptions)
 						.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
 							{
@@ -4492,7 +4794,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							SNew(SHorizontalBox)
 								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
 								[
-									MakeTypeBadge(GetSourceProp())
+									MakeTypeBadgeDynamic(GetSourceProp)
 								]
 								+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 								[
@@ -4507,9 +4809,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								]
 						]
 				]
-			+ SHorizontalBox::Slot().FillWidth(0.10f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.08f).Padding(2)
 				[
 					SNew(SComboBox<TSharedPtr<FString>>)
+						.IsEnabled_Lambda([IsStaticMapping]() { return !IsStaticMapping(); })
 						.Visibility_Lambda([Mapping]()
 							{
 								return (Mapping.IsValid() && Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY) ? EVisibility::Visible : EVisibility::Collapsed;
@@ -4555,7 +4858,154 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								})
 						]
 				]
-			+ SHorizontalBox::Slot().FillWidth(0.26f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.16f).Padding(2)
+				[
+					SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+						[
+							SNew(SCheckBox)
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_StaticValue_TT", "Use a static value instead of a source field."))
+								.IsChecked_Lambda([IsStaticMapping]() { return IsStaticMapping() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+								.OnCheckStateChanged_Lambda([this, Mapping](ECheckBoxState State)
+									{
+										if (CurrentMappingSource.IsValid() && Mapping.IsValid())
+										{
+											CurrentMappingSource->Modify();
+											Mapping->bUseStaticValue = (State == ECheckBoxState::Checked);
+											const int32 Index = MappingRows.Find(Mapping);
+											if (Index != INDEX_NONE)
+											{
+												CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+											}
+											RefreshMappingPreview();
+										}
+									})
+						]
+						+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
+						[
+							SNew(SWidgetSwitcher)
+								.WidgetIndex_Lambda([IsStaticMapping, GetTargetEnum]()
+									{
+										return (IsStaticMapping() && GetTargetEnum() != nullptr) ? 1 : 0;
+									})
+								+ SWidgetSwitcher::Slot()
+								[
+									SNew(SEditableTextBox)
+										.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum]()
+											{
+												return IsStaticMapping() && GetTargetEnum() == nullptr;
+											})
+										.Text_Lambda([Mapping]()
+											{
+												return Mapping.IsValid() ? FText::FromString(Mapping->StaticValue) : FText::GetEmpty();
+											})
+										.HintText(NSLOCTEXT("YOLOInventory", "Dash_StaticValueHint", "Static value"))
+										.OnTextCommitted_Lambda([this, Mapping](const FText& NewText, ETextCommit::Type)
+											{
+												if (CurrentMappingSource.IsValid() && Mapping.IsValid())
+												{
+													CurrentMappingSource->Modify();
+													Mapping->StaticValue = NewText.ToString();
+													const int32 Index = MappingRows.Find(Mapping);
+													if (Index != INDEX_NONE)
+													{
+														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+													}
+													RefreshMappingPreview();
+												}
+											})
+								]
+								+ SWidgetSwitcher::Slot()
+								[
+								SNew(SComboBox<TSharedPtr<FString>>)
+										.OptionsSource(StaticEnumOptions.Get())
+										.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum]()
+											{
+												return IsStaticMapping() && GetTargetEnum() != nullptr;
+											})
+										.OnGenerateWidget_Lambda([GetTargetEnum](TSharedPtr<FString> InItem)
+											{
+												if (UEnum* Enum = GetTargetEnum())
+												{
+													if (InItem.IsValid())
+													{
+														int32 Index = Enum->GetIndexByNameString(*InItem);
+														if (Index == INDEX_NONE)
+														{
+															Index = Enum->GetIndexByName(FName(**InItem));
+														}
+														if (Index != INDEX_NONE)
+														{
+															return SNew(STextBlock).Text(Enum->GetDisplayNameTextByIndex(Index));
+														}
+													}
+												}
+												return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+											})
+										.OnComboBoxOpening_Lambda([StaticEnumOptions, GetTargetEnum]()
+											{
+												StaticEnumOptions->Reset();
+												if (UEnum* Enum = GetTargetEnum())
+												{
+													const int32 Count = Enum->NumEnums();
+													for (int32 Index = 0; Index < Count; ++Index)
+													{
+														if (Enum->HasMetaData(TEXT("Hidden"), Index))
+														{
+															continue;
+														}
+														const FString Name = Enum->GetNameStringByIndex(Index);
+														if (Name.EndsWith(TEXT("_MAX")))
+														{
+															continue;
+														}
+														StaticEnumOptions->Add(MakeShared<FString>(Name));
+													}
+												}
+											})
+										.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+											{
+												if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+												{
+													CurrentMappingSource->Modify();
+													Mapping->StaticValue = *NewItem;
+													Mapping->bUseStaticValue = true;
+													const int32 Index = MappingRows.Find(Mapping);
+													if (Index != INDEX_NONE)
+													{
+														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+														CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+													}
+													RefreshMappingPreview();
+												}
+											})
+										.Content()
+										[
+											SNew(STextBlock).Text_Lambda([Mapping, GetTargetEnum]()
+												{
+													if (!Mapping.IsValid() || Mapping->StaticValue.IsEmpty())
+													{
+														return NSLOCTEXT("YOLOInventory", "Dash_StaticEnumHint", "Select enum");
+													}
+													if (UEnum* Enum = GetTargetEnum())
+													{
+														int32 Index = Enum->GetIndexByNameString(Mapping->StaticValue);
+														if (Index == INDEX_NONE)
+														{
+															Index = Enum->GetIndexByName(FName(*Mapping->StaticValue));
+														}
+														if (Index != INDEX_NONE)
+														{
+															return Enum->GetDisplayNameTextByIndex(Index);
+														}
+													}
+													return FText::FromString(Mapping->StaticValue);
+												})
+										]
+								]
+						]
+				]
+			+ SHorizontalBox::Slot().FillWidth(0.22f).Padding(2)
 				[
 					SNew(SComboBox<TSharedPtr<FString>>)
 						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions)
@@ -4628,7 +5078,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							SNew(SHorizontalBox)
 								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
 								[
-									MakeTypeBadge(GetTargetProp())
+									MakeTypeBadgeDynamic(GetTargetProp)
 								]
 								+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 								[
@@ -4643,7 +5093,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								]
 						]
 				]
-			+ SHorizontalBox::Slot().FillWidth(0.12f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.10f).Padding(2)
 				[
 					SNew(SComboBox<TSharedPtr<FString>>)
 						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->ConverterOptions)
@@ -4663,6 +5113,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 									else if (*NewItem == TEXT("To Float")) NewConv = EYIFieldMappingConversion::ToFloat;
 									else if (*NewItem == TEXT("Bool from Int>0")) NewConv = EYIFieldMappingConversion::BoolFromInt;
 									else if (*NewItem == TEXT("Bool from Text (non-empty)")) NewConv = EYIFieldMappingConversion::BoolFromText;
+									else if (*NewItem == TEXT("To Enum")) NewConv = EYIFieldMappingConversion::ToEnum;
 									else if (*NewItem == TEXT("To Gameplay Tag")) NewConv = EYIFieldMappingConversion::ToGameplayTag;
 									else if (*NewItem == TEXT("To Texture (Soft)")) NewConv = EYIFieldMappingConversion::ToSoftTexture;
 									else if (*NewItem == TEXT("Vector2D from XY Fields")) NewConv = EYIFieldMappingConversion::Vector2DFromXY;
@@ -4685,6 +5136,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Float")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Int>0")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Text (non-empty)")));
+								ConverterOptions.Add(MakeShared<FString>(TEXT("To Enum")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Gameplay Tag")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Texture (Soft)")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("Vector2D from XY Fields")));
@@ -4701,6 +5153,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
 								case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
 								case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+								case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 								case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
 								case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 								case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
@@ -4730,6 +5183,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
 										case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
 										case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+										case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 										case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
 										case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 										case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
@@ -4740,7 +5194,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								})
 						]
 				]
-			+ SHorizontalBox::Slot().FillWidth(0.20f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.17f).Padding(2)
 				[
 					SNew(SComboBox<TSharedPtr<FYITransformFunctionInfo>>)
 						.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TransformFunctionOptions)

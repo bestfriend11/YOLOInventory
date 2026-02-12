@@ -35,6 +35,174 @@ static bool MatchesFieldName(const FProperty* Prop, FName FieldName)
 	return Authored.Equals(Target, ESearchCase::IgnoreCase);
 }
 
+static bool TryGetEnumValueFromString(const UEnum* Enum, const FString& Value, int64& OutValue)
+{
+	if (!Enum)
+	{
+		return false;
+	}
+
+	int64 NumericValue = 0;
+	if (LexTryParseString(NumericValue, *Value))
+	{
+		OutValue = NumericValue;
+		return true;
+	}
+
+	// Try direct lookup (case sensitive)
+	int64 Found = Enum->GetValueByNameString(Value);
+	if (Found != INDEX_NONE)
+	{
+		OutValue = Found;
+		return true;
+	}
+
+	// Case-insensitive fallback
+	for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+	{
+		const FString Name = Enum->GetNameStringByIndex(Index);
+		if (Name.Equals(Value, ESearchCase::IgnoreCase))
+		{
+			OutValue = Enum->GetValueByIndex(Index);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool SetEnumPropertyValue(FProperty* DestProp, uint8* DestPtr, const FString& Value)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (FEnumProperty* DestEnum = CastField<FEnumProperty>(DestProp))
+	{
+		const UEnum* Enum = DestEnum->GetEnum();
+		int64 EnumValue = 0;
+		if (!TryGetEnumValueFromString(Enum, Value, EnumValue))
+		{
+			return false;
+		}
+		if (FNumericProperty* Underlying = DestEnum->GetUnderlyingProperty())
+		{
+			Underlying->SetIntPropertyValue(DestPtr, EnumValue);
+			return true;
+		}
+		return false;
+	}
+
+	if (FByteProperty* DestByte = CastField<FByteProperty>(DestProp))
+	{
+		if (const UEnum* Enum = DestByte->Enum)
+		{
+			int64 EnumValue = 0;
+			if (!TryGetEnumValueFromString(Enum, Value, EnumValue))
+			{
+				return false;
+			}
+			DestByte->SetPropertyValue(DestPtr, (uint8)EnumValue);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool SetPropertyValueFromString(const FString& Value, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (SetEnumPropertyValue(DestProp, DestPtr, Value))
+	{
+		return true;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::BoolFromText)
+	{
+		if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+		{
+			DestBool->SetPropertyValue(DestPtr, !Value.IsEmpty());
+			return true;
+		}
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToName)
+	{
+		if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+		{
+			DestName->SetPropertyValue(DestPtr, FName(*Value));
+			return true;
+		}
+	}
+	if (Conversion == EYIFieldMappingConversion::ToText)
+	{
+		if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+		{
+			DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+			return true;
+		}
+	}
+
+	if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+	{
+		DestStr->SetPropertyValue(DestPtr, Value);
+		return true;
+	}
+	if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+	{
+		DestName->SetPropertyValue(DestPtr, FName(*Value));
+		return true;
+	}
+	if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+	{
+		DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+		return true;
+	}
+	if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+	{
+		bool bParsed = false;
+		const bool bVal = LexTryParseString(bParsed, *Value) ? bParsed : !Value.IsEmpty();
+		DestBool->SetPropertyValue(DestPtr, bVal);
+		return true;
+	}
+	if (FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+	{
+		double NumVal = 0.0;
+		if (LexTryParseString(NumVal, *Value))
+		{
+			if (DestNum->IsInteger())
+			{
+				DestNum->SetIntPropertyValue(DestPtr, (int64)NumVal);
+			}
+			else
+			{
+				DestNum->SetFloatingPointPropertyValue(DestPtr, NumVal);
+			}
+			return true;
+		}
+	}
+	if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+	{
+		if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+		{
+			if (DestStruct->Struct == FGameplayTag::StaticStruct())
+			{
+				FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+				*TagPtr = FGameplayTag::RequestGameplayTag(FName(*Value), false);
+				return true;
+			}
+		}
+	}
+
+	return DestProp->ImportText_Direct(*Value, DestPtr, nullptr, PPF_None) != nullptr;
+}
+
 int64 UYIItemRegistrySubsystem::ExtractCodeFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const
 {
 	if (!Struct || !RowData || FieldName.IsNone())
@@ -99,6 +267,68 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 		return true;
 	}
 
+	// Enum conversions
+	if (FEnumProperty* DestEnum = CastField<FEnumProperty>(DestProp))
+	{
+		if (const FEnumProperty* SrcEnum = CastField<FEnumProperty>(SourceProp))
+		{
+			if (SrcEnum->GetEnum() == DestEnum->GetEnum())
+			{
+				if (FNumericProperty* Underlying = DestEnum->GetUnderlyingProperty())
+				{
+					const int64 Val = SrcEnum->GetUnderlyingProperty()->GetSignedIntPropertyValue(SourcePtr);
+					Underlying->SetIntPropertyValue(DestPtr, Val);
+					return true;
+				}
+			}
+		}
+		if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+		{
+			const int64 Val = SrcNum->GetSignedIntPropertyValue(SourcePtr);
+			if (FNumericProperty* Underlying = DestEnum->GetUnderlyingProperty())
+			{
+				Underlying->SetIntPropertyValue(DestPtr, Val);
+				return true;
+			}
+		}
+		if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, SrcName->GetPropertyValue(SourcePtr).ToString());
+		}
+		if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, SrcStr->GetPropertyValue(SourcePtr));
+		}
+		if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, SrcText->GetPropertyValue(SourcePtr).ToString());
+		}
+	}
+	if (FByteProperty* DestByte = CastField<FByteProperty>(DestProp))
+	{
+		if (DestByte->Enum)
+		{
+			if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+			{
+				const int64 Val = SrcNum->GetSignedIntPropertyValue(SourcePtr);
+				DestByte->SetPropertyValue(DestPtr, (uint8)Val);
+				return true;
+			}
+			if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+			{
+				return SetEnumPropertyValue(DestProp, DestPtr, SrcName->GetPropertyValue(SourcePtr).ToString());
+			}
+			if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+			{
+				return SetEnumPropertyValue(DestProp, DestPtr, SrcStr->GetPropertyValue(SourcePtr));
+			}
+			if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+			{
+				return SetEnumPropertyValue(DestProp, DestPtr, SrcText->GetPropertyValue(SourcePtr).ToString());
+			}
+		}
+	}
+
 	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
 	{
 		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
@@ -156,6 +386,10 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				return true;
 			}
 		}
+		if (Conversion == EYIFieldMappingConversion::ToEnum)
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, Value);
+		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
 			DestStr->SetPropertyValue(DestPtr, Value);
@@ -207,6 +441,10 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				return true;
 			}
 		}
+		if (Conversion == EYIFieldMappingConversion::ToEnum)
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, Value.ToString());
+		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
 			DestStr->SetPropertyValue(DestPtr, Value.ToString());
@@ -252,6 +490,10 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				DestName->SetPropertyValue(DestPtr, FName(*Value.ToString()));
 				return true;
 			}
+		}
+		if (Conversion == EYIFieldMappingConversion::ToEnum)
+		{
+			return SetEnumPropertyValue(DestProp, DestPtr, Value.ToString());
 		}
 		if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
 		{
@@ -489,23 +731,26 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
 	{
-		if (Mapping.SourceField.IsNone() || Mapping.TargetProperty.IsNone())
+		if (Mapping.TargetProperty.IsNone())
 		{
 			continue;
 		}
 
 		FProperty* SourceProp = nullptr;
-		for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
+		if (!Mapping.bUseStaticValue)
 		{
-			if (It->GetAuthoredName().Equals(Mapping.SourceField.ToString(), ESearchCase::IgnoreCase))
+			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
 			{
-				SourceProp = *It;
-				break;
+				if (It->GetAuthoredName().Equals(Mapping.SourceField.ToString(), ESearchCase::IgnoreCase))
+				{
+					SourceProp = *It;
+					break;
+				}
 			}
-		}
-		if (!SourceProp)
-		{
-			continue;
+			if (!SourceProp)
+			{
+				continue;
+			}
 		}
 
 		FProperty* DestProp = nullptr;
@@ -522,9 +767,18 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
 
+		if (Mapping.bUseStaticValue)
+		{
+			if (SetPropertyValueFromString(Mapping.StaticValue, DestProp, DestPtr, Mapping.Conversion))
+			{
+				ApplyTransformFunction(Mapping, DestProp, DestPtr);
+			}
+			continue;
+		}
+
+		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 		{
 			if (Mapping.SourceFieldB.IsNone())

@@ -17,6 +17,7 @@ enum class EYIFieldMappingConversion : uint8
 	ToFloat     UMETA(DisplayName="To Float"),
 	BoolFromInt UMETA(DisplayName="Bool from Int>0"),
 	BoolFromText UMETA(DisplayName="Bool from Text (non-empty)"),
+	ToEnum UMETA(DisplayName="To Enum"),
 	ToGameplayTag UMETA(DisplayName="To Gameplay Tag"),
 	ToSoftTexture UMETA(DisplayName="To Texture (Soft)"),
 	Vector2DFromXY UMETA(DisplayName="Vector2D from XY Fields")
@@ -39,6 +40,14 @@ struct FYIFieldMapping
 	/** Column name in the data table row (authored name). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
 	FName SourceField;
+
+	/** If true, use a static value instead of a source field. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	bool bUseStaticValue = false;
+
+	/** Static value used when bUseStaticValue is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
+	FString StaticValue;
 
 	/** Property name on the target item definition to write into. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")

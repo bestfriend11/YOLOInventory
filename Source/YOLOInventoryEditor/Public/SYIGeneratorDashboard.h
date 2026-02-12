@@ -28,5 +28,6 @@ private:
 	TWeakObjectPtr<UObject> SelectedAsset;
 	int32 TestLevel = 1;
 	int32 TestSeed = 1;
+	int32 TestRuns = 1;
 	FText TestResult;
 };

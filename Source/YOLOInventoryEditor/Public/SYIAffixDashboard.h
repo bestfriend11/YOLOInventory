@@ -25,12 +25,18 @@ private:
 	TSharedRef<class SWidget> BuildPreviewPanelWidget();
 	void OnAssetSelected(const FAssetData& AssetData);
 	void OnAssetDoubleClicked(const FAssetData& AssetData);
+	void RefreshList();
+	void OnSearchTextChanged(const FText& NewText);
+	void ShowDetailsForEntry(const TSharedPtr<struct FYIAffixDashboardEntry>& Entry);
+	void OpenEntry(const TSharedPtr<struct FYIAffixDashboardEntry>& Entry);
+	TSharedRef<ITableRow> MakeRowWidget(TSharedPtr<struct FYIAffixDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
 
 	FReply CreateAffix();
 	FReply CreateAffixPool();
 	FReply CreateAffixSource();
 	FReply ImportFromSource();
 	FReply UpdateSelectedAffix();
+	bool SyncTargetPoolsForSource(const UYIDataTableAffixSource* Source);
 
 	bool CreateOrUpdateAffixFromRow(const UYIDataTableAffixSource* Source, const UDataTable* Table, FName RowName, const uint8* RowPtr, int64 Code, TMap<int64, TSoftObjectPtr<UYIAffixAsset>>* ExistingByCode);
 	void CacheExistingAffixesByCode(TMap<int64, TSoftObjectPtr<UYIAffixAsset>>& OutMap) const;
@@ -47,6 +53,10 @@ private:
 	TSharedPtr<IDetailsView> DetailsView;
 	TWeakObjectPtr<UObject> LastSelectedAsset;
 	TWeakObjectPtr<UYIDataTableAffixSource> CurrentSource;
+	TArray<TSharedPtr<struct FYIAffixDashboardEntry>> Items;
+	TArray<TSharedPtr<struct FYIAffixDashboardEntry>> FilteredItems;
+	TSharedPtr<class SListView<TSharedPtr<struct FYIAffixDashboardEntry>>> ListView;
+	FText SearchText;
 
 	TArray<TSharedPtr<FYIFieldMapping>> MappingRows;
 	TSharedPtr<class SListView<TSharedPtr<FYIFieldMapping>>> MappingListView;

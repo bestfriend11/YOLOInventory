@@ -9,6 +9,57 @@ class UYILootTable;
 class UYIRarityProfile;
 class UYIAffixPoolAsset;
 class UYIItemDefinition;
+class UYIAffixAsset;
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIAffixRollCriteria
+{
+	GENERATED_BODY()
+
+	/** Master switch for this criteria block. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria")
+	bool bEnabled = false;
+
+	/** Use item level as baseline for power window (Dungeon Siege-like modifier power window). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	bool bUseItemLevelAsPowerBaseline = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", ClampMin="0", EditConditionHides))
+	int32 MinTier = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", ClampMin="0", EditConditionHides))
+	int32 MaxTier = 9999;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled && !bUseItemLevelAsPowerBaseline", ClampMin="0", EditConditionHides))
+	int32 MinPowerLevel = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled && !bUseItemLevelAsPowerBaseline", ClampMin="0", EditConditionHides))
+	int32 MaxPowerLevel = 9999;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled && bUseItemLevelAsPowerBaseline", EditConditionHides))
+	int32 MinPowerLevelOffset = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled && bUseItemLevelAsPowerBaseline", EditConditionHides))
+	int32 MaxPowerLevelOffset = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	EYIAffixQuality MinQuality = EYIAffixQuality::Common;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	EYIAffixQuality MaxQuality = EYIAffixQuality::Unique;
+
+	/** If set, only these template ids are accepted (case-insensitive exact match). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	TArray<FString> AllowedTemplateIds;
+
+	/** These template ids are always rejected (case-insensitive exact match). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	TArray<FString> BlockedTemplateIds;
+
+	/** Reject affixes whose conflict group appears here. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Criteria", meta=(EditCondition="bEnabled", EditConditionHides))
+	TArray<FName> BlockedConflictGroups;
+};
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIItemGenerationResult
@@ -69,6 +120,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator", meta=(ToolTip="Fallback rarity tag when no profile is used"))
 	FGameplayTag DefaultRarityTag;
 
+	/** Prefix roll filter (Dungeon Siege-style criteria on affix tier/power/etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix Criteria")
+	FYIAffixRollCriteria PrefixCriteria;
+
+	/** Suffix roll filter (Dungeon Siege-style criteria on affix tier/power/etc). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affix Criteria")
+	FYIAffixRollCriteria SuffixCriteria;
+
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Generator")
 	bool GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem, FGameplayTag& OutRarity, int32& OutPrefixes, int32& OutSuffixes) const;
 
@@ -76,6 +135,7 @@ public:
 	FYIItemGenerationResult GenerateItemResult(int32 Level, int32 Seed) const;
 
 private:
-	static int32 RollAffixesFromPool(UYIAffixPoolAsset* Pool, FYIBagItem& Item, int32 Count, int32 Level, FRandomStream& RNG);
+	static int32 RollAffixesFromPool(UYIAffixPoolAsset* Pool, const UYIItemDefinition* ItemDef, FYIBagItem& Item, int32 Count, int32 Level, FRandomStream& RNG, const FYIAffixRollCriteria& Criteria, EYIAffixKind ExpectedKind);
 	static TSoftObjectPtr<UYIAffixPoolAsset> ResolvePoolOverride(const TSoftObjectPtr<UYIAffixPoolAsset>& RuleOverride, const TSoftObjectPtr<UYIAffixPoolAsset>& GeneratorOverride, const TSoftObjectPtr<UYIAffixPoolAsset>& DefinitionPool, bool bUseDefinitionPools);
+	static bool DoesAffixPassCriteria(const UYIAffixAsset* Affix, const UYIItemDefinition* ItemDef, int32 ItemLevel, const FYIAffixRollCriteria& Criteria, EYIAffixKind ExpectedKind);
 };

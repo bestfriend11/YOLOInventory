@@ -39,9 +39,25 @@
 #include "PackageTools.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Views/SListView.h"
+#include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Input/SComboBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Images/SImage.h"
+
+struct FYIAffixDashboardEntry
+{
+	int64 Code = 0;
+	FString Name;
+	FString Source;
+	bool bIsDataTable = false;
+	FName RowName = NAME_None;
+	TSoftObjectPtr<UObject> Object;
+	bool bHasAsset = false;
+	TSoftObjectPtr<UYIAffixAsset> AffixAsset;
+	TSoftObjectPtr<UDataTable> DataTable;
+	TSoftObjectPtr<UYIDataTableAffixSource> DataSource;
+};
 
 void SYIAffixDashboard::Construct(const FArguments& InArgs)
 {
@@ -125,20 +141,41 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 			]
 		]
 	];
+
+	RefreshList();
 }
 
 TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
 {
-	FAssetPickerConfig Picker;
-	Picker.InitialAssetViewType = EAssetViewType::Tile;
-	Picker.Filter.ClassPaths.Add(UYIAffixAsset::StaticClass()->GetClassPathName());
-	Picker.Filter.ClassPaths.Add(UYIAffixPoolAsset::StaticClass()->GetClassPathName());
-	Picker.bAllowNullSelection = false;
-	Picker.OnAssetSelected = FOnAssetSelected::CreateSP(this, &SYIAffixDashboard::OnAssetSelected);
-	Picker.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateSP(this, &SYIAffixDashboard::OnAssetDoubleClicked);
-
-	FContentBrowserModule& CB = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
-	return CB.Get().CreateAssetPicker(Picker);
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)
+		[
+			SNew(SSearchBox)
+				.OnTextChanged(this, &SYIAffixDashboard::OnSearchTextChanged)
+		]
+		+ SVerticalBox::Slot().FillHeight(1.f).Padding(6, 0)
+		[
+			SAssignNew(ListView, SListView<TSharedPtr<FYIAffixDashboardEntry>>)
+				.ListItemsSource(&FilteredItems)
+				.SelectionMode(ESelectionMode::Multi)
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FYIAffixDashboardEntry> Entry, ESelectInfo::Type)
+					{
+						ShowDetailsForEntry(Entry);
+					})
+				.OnGenerateRow(this, &SYIAffixDashboard::MakeRowWidget)
+				.OnMouseButtonDoubleClick_Lambda([this](TSharedPtr<FYIAffixDashboardEntry> Entry)
+					{
+						OpenEntry(Entry);
+					})
+				.HeaderRow
+				(
+					SNew(SHeaderRow)
+					+ SHeaderRow::Column("Code").DefaultLabel(NSLOCTEXT("YOLOInventory", "AffixDash_Code", "Code")).FillWidth(0.2f)
+					+ SHeaderRow::Column("Name").DefaultLabel(NSLOCTEXT("YOLOInventory", "AffixDash_Name", "Name")).FillWidth(0.35f)
+					+ SHeaderRow::Column("Type").DefaultLabel(NSLOCTEXT("YOLOInventory", "AffixDash_Type", "Type")).FillWidth(0.15f)
+					+ SHeaderRow::Column("Source").DefaultLabel(NSLOCTEXT("YOLOInventory", "AffixDash_Source", "Source")).FillWidth(0.3f)
+				)
+		];
 }
 
 TSharedRef<SWidget> SYIAffixDashboard::BuildSourcePicker()
@@ -225,6 +262,256 @@ void SYIAffixDashboard::OpenAsset(UObject* Asset)
 	}
 }
 
+void SYIAffixDashboard::RefreshList()
+{
+	Items.Reset();
+	FilteredItems.Reset();
+
+	TMap<int64, TSoftObjectPtr<UYIAffixAsset>> ExistingAssets;
+	TSet<FString> ExistingRowKeys;
+
+	FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+
+	TArray<FAssetData> AffixAssets;
+	AssetRegistry.Get().GetAssetsByClass(UYIAffixAsset::StaticClass()->GetClassPathName(), AffixAssets, true);
+	for (const FAssetData& AD : AffixAssets)
+	{
+		UYIAffixAsset* Affix = Cast<UYIAffixAsset>(AD.GetAsset());
+		if (!Affix)
+		{
+			continue;
+		}
+		TSharedPtr<FYIAffixDashboardEntry> Entry = MakeShared<FYIAffixDashboardEntry>();
+		Entry->bIsDataTable = false;
+		Entry->Object = AD.ToSoftObjectPath();
+		Entry->AffixAsset = TSoftObjectPtr<UYIAffixAsset>(AD.ToSoftObjectPath());
+		Entry->Code = Affix->UniqueCode;
+		Entry->Name = Affix->DisplayName.IsEmpty() ? AD.AssetName.ToString() : Affix->DisplayName.ToString();
+		Entry->Source = AD.GetSoftObjectPath().ToString();
+		Entry->DataSource = Affix->SourceDataSource;
+		Entry->RowName = Affix->SourceRowName;
+
+		if (Entry->Code != 0)
+		{
+			ExistingAssets.FindOrAdd(Entry->Code) = Entry->AffixAsset;
+		}
+
+		Items.Add(Entry);
+	}
+
+	TArray<FAssetData> Sources;
+	AssetRegistry.Get().GetAssetsByClass(UYIDataTableAffixSource::StaticClass()->GetClassPathName(), Sources, true);
+	for (const FAssetData& SourceData : Sources)
+	{
+		UYIDataTableAffixSource* Source = Cast<UYIDataTableAffixSource>(SourceData.GetAsset());
+		if (!Source)
+		{
+			continue;
+		}
+
+		UDataTable* Table = Source->ResolveDataTable();
+		if (!Table || !Table->RowStruct)
+		{
+			continue;
+		}
+
+		const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+		const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+
+		for (const auto& RowPair : Table->GetRowMap())
+		{
+			const FName RowName = RowPair.Key;
+			const uint8* RowPtr = RowPair.Value;
+
+			const int64 CodeValue = ExtractCodeFromRow(Table->RowStruct, RowPtr, CodeField);
+			const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
+			if (ExistingRowKeys.Contains(RowKey))
+			{
+				continue;
+			}
+
+			TSharedPtr<FYIAffixDashboardEntry> Entry = MakeShared<FYIAffixDashboardEntry>();
+			Entry->bIsDataTable = true;
+			Entry->Code = CodeValue;
+			Entry->RowName = RowName;
+			Entry->DataSource = Source;
+			Entry->DataTable = Table;
+			Entry->Source = SourceData.GetSoftObjectPath().ToString();
+			Entry->Name = RowName.ToString();
+
+			const FString PreviewName = GetRowString(Table->RowStruct, RowPtr, PreviewField);
+			if (!PreviewName.IsEmpty())
+			{
+				Entry->Name = PreviewName;
+			}
+
+			if (TSoftObjectPtr<UYIAffixAsset>* Found = ExistingAssets.Find(CodeValue))
+			{
+				Entry->bHasAsset = true;
+				Entry->AffixAsset = *Found;
+			}
+
+			Items.Add(Entry);
+			ExistingRowKeys.Add(RowKey);
+		}
+	}
+
+	const FString SearchFilter = SearchText.ToString();
+	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Items)
+	{
+		if (!Entry.IsValid())
+		{
+			continue;
+		}
+		const bool bPass = SearchFilter.IsEmpty() ||
+			Entry->Name.Contains(SearchFilter) ||
+			Entry->Source.Contains(SearchFilter) ||
+			(FString::FromInt((int32)Entry->Code).Contains(SearchFilter));
+		if (bPass)
+		{
+			FilteredItems.Add(Entry);
+		}
+	}
+
+	if (ListView.IsValid())
+	{
+		ListView->RequestListRefresh();
+	}
+}
+
+void SYIAffixDashboard::OnSearchTextChanged(const FText& NewText)
+{
+	SearchText = NewText;
+	RefreshList();
+}
+
+void SYIAffixDashboard::ShowDetailsForEntry(const TSharedPtr<FYIAffixDashboardEntry>& Entry)
+{
+	if (!DetailsView.IsValid())
+	{
+		return;
+	}
+
+	if (!Entry.IsValid())
+	{
+		DetailsView->SetObject(nullptr);
+		return;
+	}
+
+	if (!Entry->bIsDataTable)
+	{
+		if (UObject* Obj = Entry->Object.LoadSynchronous())
+		{
+			LastSelectedAsset = Obj;
+			DetailsView->SetObject(Obj);
+			if (UYIAffixAsset* Affix = Cast<UYIAffixAsset>(Obj))
+			{
+				if (Affix->SourceDataSource.IsValid())
+				{
+					CurrentSource = Affix->SourceDataSource.LoadSynchronous();
+					RefreshInlineMappingEditor(CurrentSource.Get());
+				}
+			}
+		}
+		return;
+	}
+
+	if (Entry->DataSource.IsValid())
+	{
+		if (UObject* Obj = Entry->DataSource.LoadSynchronous())
+		{
+			LastSelectedAsset = Obj;
+			DetailsView->SetObject(Obj);
+			if (UYIDataTableAffixSource* Source = Cast<UYIDataTableAffixSource>(Obj))
+			{
+				CurrentSource = Source;
+				RefreshInlineMappingEditor(Source);
+			}
+		}
+	}
+}
+
+void SYIAffixDashboard::OpenEntry(const TSharedPtr<FYIAffixDashboardEntry>& Entry)
+{
+	if (!Entry.IsValid())
+	{
+		return;
+	}
+	if (Entry->bIsDataTable)
+	{
+		if (Entry->AffixAsset.IsValid())
+		{
+			if (UObject* Obj = Entry->AffixAsset.LoadSynchronous())
+			{
+				OpenAsset(Obj);
+			}
+		}
+		else
+		{
+			ShowDetailsForEntry(Entry);
+		}
+		return;
+	}
+	if (Entry->Object.IsValid())
+	{
+		if (UObject* Obj = Entry->Object.LoadSynchronous())
+		{
+			OpenAsset(Obj);
+		}
+	}
+}
+
+TSharedRef<ITableRow> SYIAffixDashboard::MakeRowWidget(TSharedPtr<FYIAffixDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
+{
+	auto StatusColor = [Entry]() -> FLinearColor
+	{
+		if (!Entry.IsValid())
+		{
+			return FLinearColor::Gray;
+		}
+		if (Entry->bIsDataTable)
+		{
+			return Entry->bHasAsset
+				? FLinearColor(0.18f, 0.65f, 0.32f, 0.9f)
+				: FLinearColor(0.95f, 0.55f, 0.20f, 0.9f);
+		}
+		return FLinearColor(0.20f, 0.45f, 0.90f, 0.9f);
+	};
+
+	return SNew(STableRow<TSharedPtr<FYIAffixDashboardEntry>>, Owner)
+	[
+		SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Fill)
+			[
+				SNew(SBorder)
+					.Padding(FMargin(2, 0))
+					.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+					.BorderBackgroundColor(StatusColor())
+			]
+			+ SHorizontalBox::Slot().FillWidth(0.2f)
+			[
+				SNew(STextBlock)
+					.Text(FText::AsNumber(Entry.IsValid() ? Entry->Code : 0))
+					.ColorAndOpacity(StatusColor())
+			]
+			+ SHorizontalBox::Slot().FillWidth(0.35f)
+			[
+				SNew(STextBlock).Text(FText::FromString(Entry.IsValid() ? Entry->Name : TEXT("")))
+			]
+			+ SHorizontalBox::Slot().FillWidth(0.15f)
+			[
+				SNew(STextBlock).Text(Entry->bIsDataTable
+					? NSLOCTEXT("YOLOInventory", "AffixDash_Type_DataRow", "Data Row")
+					: NSLOCTEXT("YOLOInventory", "AffixDash_Type_Asset", "Asset"))
+					.ColorAndOpacity(StatusColor())
+			]
+			+ SHorizontalBox::Slot().FillWidth(0.3f)
+			[
+				SNew(STextBlock).Text(FText::FromString(Entry.IsValid() ? Entry->Source : TEXT("")))
+			]
+	];
+}
+
 FReply SYIAffixDashboard::CreateAffix()
 {
 	IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
@@ -307,6 +594,190 @@ FString SYIAffixDashboard::GetRowString(const UScriptStruct* Struct, const uint8
 	return YIEditor_GetRowStringFromStruct(Struct, RowData, Field);
 }
 
+static bool TryGetEnumValueFromStringAffix(const UEnum* Enum, const FString& Value, int64& OutValue)
+{
+	if (!Enum)
+	{
+		return false;
+	}
+	if (Value.IsEmpty())
+	{
+		return false;
+	}
+	if (Value.IsNumeric())
+	{
+		OutValue = FCString::Atoi64(*Value);
+		return true;
+	}
+	const int64 NameValue = Enum->GetValueByNameString(Value);
+	if (NameValue != INDEX_NONE)
+	{
+		OutValue = NameValue;
+		return true;
+	}
+	const FName Name(*Value);
+	const int64 ExactValue = Enum->GetValueByName(Name);
+	if (ExactValue != INDEX_NONE)
+	{
+		OutValue = ExactValue;
+		return true;
+	}
+	const FString Lower = Value.ToLower();
+	for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+	{
+		const FString EnumName = Enum->GetNameStringByIndex(Index);
+		if (EnumName.ToLower() == Lower)
+		{
+			OutValue = Enum->GetValueByIndex(Index);
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool SetEnumPropertyValueAffix(FProperty* DestProp, uint8* DestPtr, int64 Value)
+{
+	if (FEnumProperty* EnumProp = CastField<FEnumProperty>(DestProp))
+	{
+		if (FNumericProperty* Underlying = EnumProp->GetUnderlyingProperty())
+		{
+			Underlying->SetIntPropertyValue(DestPtr, Value);
+			return true;
+		}
+	}
+	if (FByteProperty* ByteProp = CastField<FByteProperty>(DestProp))
+	{
+		if (ByteProp->Enum)
+		{
+			ByteProp->SetPropertyValue(DestPtr, (uint8)Value);
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool SetEnumPropertyValueAffix(FProperty* DestProp, uint8* DestPtr, const FString& Value)
+{
+	if (FEnumProperty* EnumProp = CastField<FEnumProperty>(DestProp))
+	{
+		if (UEnum* Enum = EnumProp->GetEnum())
+		{
+			int64 EnumValue = 0;
+			if (TryGetEnumValueFromStringAffix(Enum, Value, EnumValue))
+			{
+				if (FNumericProperty* Underlying = EnumProp->GetUnderlyingProperty())
+				{
+					Underlying->SetIntPropertyValue(DestPtr, EnumValue);
+					return true;
+				}
+			}
+		}
+	}
+	if (FByteProperty* ByteProp = CastField<FByteProperty>(DestProp))
+	{
+		if (ByteProp->Enum)
+		{
+			int64 EnumValue = 0;
+			if (TryGetEnumValueFromStringAffix(ByteProp->Enum, Value, EnumValue))
+			{
+				ByteProp->SetPropertyValue(DestPtr, (uint8)EnumValue);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool SetPropertyValueFromStringAffix(const FString& Value, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!DestProp || !DestPtr)
+	{
+		return false;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToEnum)
+	{
+		return SetEnumPropertyValueAffix(DestProp, DestPtr, Value);
+	}
+	if (Conversion == EYIFieldMappingConversion::None)
+	{
+		if (CastField<FEnumProperty>(DestProp) || (CastField<FByteProperty>(DestProp) && CastField<FByteProperty>(DestProp)->Enum))
+		{
+			return SetEnumPropertyValueAffix(DestProp, DestPtr, Value);
+		}
+	}
+
+	if (FBoolProperty* DestBool = CastField<FBoolProperty>(DestProp))
+	{
+		if (Conversion == EYIFieldMappingConversion::BoolFromText)
+		{
+			DestBool->SetPropertyValue(DestPtr, !Value.IsEmpty());
+			return true;
+		}
+		const FString Lower = Value.ToLower();
+		const bool bVal = (Lower == TEXT("true") || Lower == TEXT("1") || Lower == TEXT("yes") || Lower == TEXT("on"));
+		DestBool->SetPropertyValue(DestPtr, bVal);
+		return true;
+	}
+
+	if (FNumericProperty* DestNum = CastField<FNumericProperty>(DestProp))
+	{
+		if (Conversion == EYIFieldMappingConversion::ToInt || DestNum->IsInteger())
+		{
+			const int64 IntVal = FCString::Atoi64(*Value);
+			DestNum->SetIntPropertyValue(DestPtr, IntVal);
+			return true;
+		}
+		const double FloatVal = FCString::Atod(*Value);
+		DestNum->SetFloatingPointPropertyValue(DestPtr, FloatVal);
+		return true;
+	}
+
+	if (FNameProperty* DestName = CastField<FNameProperty>(DestProp))
+	{
+		DestName->SetPropertyValue(DestPtr, FName(*Value));
+		return true;
+	}
+	if (FStrProperty* DestStr = CastField<FStrProperty>(DestProp))
+	{
+		DestStr->SetPropertyValue(DestPtr, Value);
+		return true;
+	}
+	if (FTextProperty* DestText = CastField<FTextProperty>(DestProp))
+	{
+		DestText->SetPropertyValue(DestPtr, FText::FromString(Value));
+		return true;
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToGameplayTag)
+	{
+		if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))
+		{
+			if (DestStruct->Struct == FGameplayTag::StaticStruct())
+			{
+				FGameplayTag* TagPtr = reinterpret_cast<FGameplayTag*>(DestPtr);
+				*TagPtr = FGameplayTag::RequestGameplayTag(FName(*Value), false);
+				return true;
+			}
+		}
+	}
+
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	{
+		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+		{
+			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			{
+				const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
+				DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 static bool CopyValueBetweenPropertiesAffix(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
 {
 	if (!SourceProp || !DestProp || !SourcePtr || !DestPtr)
@@ -318,6 +789,44 @@ static bool CopyValueBetweenPropertiesAffix(const FProperty* SourceProp, const u
 		SourceProp->CopyCompleteValue(DestPtr, SourcePtr);
 		return true;
 	}
+
+	if (Conversion == EYIFieldMappingConversion::ToEnum)
+	{
+		if (const FEnumProperty* SrcEnum = CastField<FEnumProperty>(SourceProp))
+		{
+			if (UEnum* Enum = SrcEnum->GetEnum())
+			{
+				const int64 Val = SrcEnum->GetUnderlyingProperty()->GetSignedIntPropertyValue(SourcePtr);
+				return SetEnumPropertyValueAffix(DestProp, DestPtr, Enum->GetNameStringByValue(Val));
+			}
+		}
+		if (const FByteProperty* SrcByte = CastField<FByteProperty>(SourceProp))
+		{
+			if (SrcByte->Enum)
+			{
+				const int64 Val = SrcByte->GetPropertyValue(SourcePtr);
+				return SetEnumPropertyValueAffix(DestProp, DestPtr, SrcByte->Enum->GetNameStringByValue(Val));
+			}
+		}
+		if (const FNumericProperty* SrcNum = CastField<FNumericProperty>(SourceProp))
+		{
+			const int64 Val = SrcNum->GetSignedIntPropertyValue(SourcePtr);
+			return SetEnumPropertyValueAffix(DestProp, DestPtr, Val);
+		}
+		if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueAffix(DestProp, DestPtr, SrcName->GetPropertyValue(SourcePtr).ToString());
+		}
+		if (const FStrProperty* SrcStr = CastField<FStrProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueAffix(DestProp, DestPtr, SrcStr->GetPropertyValue(SourcePtr));
+		}
+		if (const FTextProperty* SrcText = CastField<FTextProperty>(SourceProp))
+		{
+			return SetEnumPropertyValueAffix(DestProp, DestPtr, SrcText->GetPropertyValue(SourcePtr).ToString());
+		}
+	}
+
 	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
 	{
 		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
@@ -599,6 +1108,14 @@ static EYIFieldMappingConversion GuessConversionForPropsAffix(const FProperty* S
 	}
 	if (CastField<FNameProperty>(TargetProp)) return EYIFieldMappingConversion::ToName;
 	if (CastField<FTextProperty>(TargetProp)) return EYIFieldMappingConversion::ToText;
+	if (CastField<FEnumProperty>(TargetProp)) return EYIFieldMappingConversion::ToEnum;
+	if (const FByteProperty* ByteProp = CastField<FByteProperty>(TargetProp))
+	{
+		if (ByteProp->Enum)
+		{
+			return EYIFieldMappingConversion::ToEnum;
+		}
+	}
 	if (const FStructProperty* DestStruct = CastField<FStructProperty>(TargetProp))
 	{
 		if (DestStruct->Struct == FGameplayTag::StaticStruct())
@@ -757,31 +1274,43 @@ static bool ApplyInlineMappingsAffix(const UYIDataTableAffixSource* Source, cons
 
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
 	{
-		if (Mapping.SourceField.IsNone() || Mapping.TargetProperty.IsNone())
+		if (Mapping.TargetProperty.IsNone())
 		{
 			continue;
 		}
 
 		const FProperty* SourceProp = nullptr;
-		for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
+		if (!Mapping.bUseStaticValue)
 		{
-			if ((*It)->GetAuthoredName() == Mapping.SourceField)
+			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
 			{
-				SourceProp = *It;
-				break;
+				if ((*It)->GetAuthoredName() == Mapping.SourceField)
+				{
+					SourceProp = *It;
+					break;
+				}
 			}
 		}
 
 		FProperty* TargetProp = FindFProperty<FProperty>(UYIAffixAsset::StaticClass(), Mapping.TargetProperty);
 
-		if (!SourceProp || !TargetProp)
+		if (!TargetProp || (!SourceProp && !Mapping.bUseStaticValue))
 		{
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		uint8* DstPtr = TargetProp->ContainerPtrToValuePtr<uint8>(Affix);
 
+		if (Mapping.bUseStaticValue)
+		{
+			if (SetPropertyValueFromStringAffix(Mapping.StaticValue, TargetProp, DstPtr, Mapping.Conversion))
+			{
+				ApplyTransformFunctionAffix(Mapping, TargetProp, DstPtr, nullptr);
+			}
+			continue;
+		}
+
+		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		bool bConverted = CopyValueBetweenPropertiesAffix(SourceProp, SrcPtr, TargetProp, DstPtr, Mapping.Conversion);
 		if (bConverted && !Mapping.TransformFunction.IsNone())
 		{
@@ -810,6 +1339,40 @@ static void CopyAffixProperties(const UYIAffixAsset* SourceAffix, UYIAffixAsset*
 		const uint8* SrcPtr = Prop->ContainerPtrToValuePtr<uint8>(SourceAffix);
 		uint8* DstPtr = Prop->ContainerPtrToValuePtr<uint8>(DestAffix);
 		Prop->CopyCompleteValue(DstPtr, SrcPtr);
+	}
+}
+
+static bool YIAffixDash_IsAffixFromSource(const UYIAffixAsset* Affix, const UYIDataTableAffixSource* Source)
+{
+	if (!Affix || !Source)
+	{
+		return false;
+	}
+	return Affix->SourceDataSource.ToSoftObjectPath() == FSoftObjectPath(Source->GetPathName());
+}
+
+static void YIAffixDash_CollectAffixesForSource(const UYIDataTableAffixSource* Source, TArray<UYIAffixAsset*>& OutAffixes)
+{
+	OutAffixes.Reset();
+	if (!Source)
+	{
+		return;
+	}
+
+	FAssetRegistryModule& ARM = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> Assets;
+	ARM.Get().GetAssetsByClass(UYIAffixAsset::StaticClass()->GetClassPathName(), Assets, true);
+	for (const FAssetData& AD : Assets)
+	{
+		UYIAffixAsset* Affix = Cast<UYIAffixAsset>(AD.GetAsset());
+		if (!Affix)
+		{
+			continue;
+		}
+		if (YIAffixDash_IsAffixFromSource(Affix, Source))
+		{
+			OutAffixes.Add(Affix);
+		}
 	}
 }
 
@@ -961,6 +1524,10 @@ bool SYIAffixDashboard::CreateOrUpdateAffixFromRow(const UYIDataTableAffixSource
 		Existing->SourceRowName = RowName;
 		Existing->bGeneratedFromDataSource = true;
 		Existing->MarkPackageDirty();
+		if (ExistingByCode)
+		{
+			ExistingByCode->FindOrAdd(Code) = TSoftObjectPtr<UYIAffixAsset>(Existing);
+		}
 		return true;
 	}
 
@@ -978,11 +1545,146 @@ bool SYIAffixDashboard::CreateOrUpdateAffixFromRow(const UYIDataTableAffixSource
 		NewAffix->SourceDataSource = Source;
 		NewAffix->SourceRowName = RowName;
 		NewAffix->bGeneratedFromDataSource = true;
+		if (ExistingByCode)
+		{
+			ExistingByCode->FindOrAdd(Code) = TSoftObjectPtr<UYIAffixAsset>(NewAffix);
+		}
 	}
 
 	FAssetRegistryModule::AssetCreated(NewAsset);
 	Pkg->MarkPackageDirty();
 	return true;
+}
+
+bool SYIAffixDashboard::SyncTargetPoolsForSource(const UYIDataTableAffixSource* Source)
+{
+	if (!Source || !Source->bAutoSyncTargetPools)
+	{
+		return false;
+	}
+
+	UYIAffixPoolAsset* PrefixPool = Source->PrefixTargetPool.IsValid() ? Source->PrefixTargetPool.Get() : Source->PrefixTargetPool.LoadSynchronous();
+	UYIAffixPoolAsset* SuffixPool = Source->SuffixTargetPool.IsValid() ? Source->SuffixTargetPool.Get() : Source->SuffixTargetPool.LoadSynchronous();
+	UYIAffixPoolAsset* ImplicitPool = Source->ImplicitTargetPool.IsValid() ? Source->ImplicitTargetPool.Get() : Source->ImplicitTargetPool.LoadSynchronous();
+	if (!PrefixPool && !SuffixPool && !ImplicitPool)
+	{
+		return false;
+	}
+
+	TArray<UYIAffixAsset*> SourceAffixes;
+	YIAffixDash_CollectAffixesForSource(Source, SourceAffixes);
+
+	TMap<FSoftObjectPath, UYIAffixAsset*> AffixByPath;
+	TSet<FSoftObjectPath> PrefixPaths;
+	TSet<FSoftObjectPath> SuffixPaths;
+	TSet<FSoftObjectPath> ImplicitPaths;
+	for (UYIAffixAsset* Affix : SourceAffixes)
+	{
+		if (!Affix)
+		{
+			continue;
+		}
+		const FSoftObjectPath AffixPath(Affix);
+		AffixByPath.FindOrAdd(AffixPath) = Affix;
+		switch (Affix->Kind)
+		{
+		case EYIAffixKind::Prefix:
+			PrefixPaths.Add(AffixPath);
+			break;
+		case EYIAffixKind::Suffix:
+			SuffixPaths.Add(AffixPath);
+			break;
+		case EYIAffixKind::Implicit:
+			ImplicitPaths.Add(AffixPath);
+			break;
+		default:
+			break;
+		}
+	}
+
+	bool bAnyChanged = false;
+	auto SyncPool = [&](UYIAffixPoolAsset* Pool, const TSet<FSoftObjectPath>& WantedPaths, const TCHAR* PoolLabel)
+	{
+		if (!Pool)
+		{
+			return;
+		}
+
+		bool bPoolChanged = false;
+		int32 AddedCount = 0;
+		int32 RemovedCount = 0;
+		Pool->Modify();
+
+		TSet<FSoftObjectPath> ExistingPaths;
+		for (const FYIAffixPoolEntry& Entry : Pool->Entries)
+		{
+			if (Entry.Affix.ToSoftObjectPath().IsValid())
+			{
+				ExistingPaths.Add(Entry.Affix.ToSoftObjectPath());
+			}
+		}
+
+		for (const FSoftObjectPath& WantedPath : WantedPaths)
+		{
+			if (ExistingPaths.Contains(WantedPath))
+			{
+				continue;
+			}
+
+			FYIAffixPoolEntry NewEntry;
+			NewEntry.Affix = TSoftObjectPtr<UYIAffixAsset>(WantedPath);
+			if (UYIAffixAsset* const* FoundAffix = AffixByPath.Find(WantedPath))
+			{
+				if (const UYIAffixAsset* Affix = *FoundAffix)
+				{
+					NewEntry.Weight = FMath::Max(0.001f, Affix->Weight);
+					NewEntry.MinQuality = EYIAffixQuality::Common;
+				}
+			}
+
+			Pool->Entries.Add(NewEntry);
+			++AddedCount;
+			bPoolChanged = true;
+		}
+
+		if (Source->bPruneMissingRowsFromTargetPools)
+		{
+			RemovedCount = Pool->Entries.RemoveAll([&](const FYIAffixPoolEntry& Entry)
+			{
+				UYIAffixAsset* EntryAffix = Entry.Affix.IsValid() ? Entry.Affix.Get() : Entry.Affix.LoadSynchronous();
+				if (!EntryAffix)
+				{
+					return false;
+				}
+				if (!YIAffixDash_IsAffixFromSource(EntryAffix, Source))
+				{
+					return false;
+				}
+				return !WantedPaths.Contains(Entry.Affix.ToSoftObjectPath());
+			});
+			bPoolChanged |= (RemovedCount > 0);
+		}
+
+		if (bPoolChanged)
+		{
+			Pool->MarkPackageDirty();
+			bAnyChanged = true;
+			FYIEditorMessageLog::Add(
+				EYIEditorLogSeverity::Info,
+				FText::Format(
+					NSLOCTEXT("YOLOInventory", "AffixDash_PoolSyncResult", "{0} synced. Added: {1}, Removed: {2}"),
+					FText::FromString(PoolLabel),
+					FText::AsNumber(AddedCount),
+					FText::AsNumber(RemovedCount)),
+				FText::FromString(Pool->GetPathName()));
+		}
+	};
+
+	SyncPool(PrefixPool, PrefixPaths, TEXT("Prefix pool"));
+	SyncPool(SuffixPool, SuffixPaths, TEXT("Suffix pool"));
+	SyncPool(ImplicitPool, ImplicitPaths, TEXT("Implicit pool"));
+
+	return bAnyChanged;
 }
 
 FReply SYIAffixDashboard::ImportFromSource()
@@ -1031,6 +1733,9 @@ FReply SYIAffixDashboard::ImportFromSource()
 		FText::Format(NSLOCTEXT("YOLOInventory","AffixDash_ImportDone","Affix import complete. Success: {0}, Failed: {1}"),
 			FText::AsNumber(Succeeded), FText::AsNumber(Failed)));
 
+	SyncTargetPoolsForSource(Source);
+
+	RefreshList();
 	return FReply::Handled();
 }
 
@@ -1080,8 +1785,10 @@ FReply SYIAffixDashboard::UpdateSelectedAffix()
 	const bool bOk = CreateOrUpdateAffixFromRow(Source, Table, Affix->SourceRowName, *Found, Code, nullptr);
 	if (bOk)
 	{
+		SyncTargetPoolsForSource(Source);
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
 			NSLOCTEXT("YOLOInventory","AffixDash_UpdateOk","Affix updated from data source."));
+		RefreshList();
 	}
 	else
 	{
@@ -1487,7 +2194,7 @@ void SYIAffixDashboard::RefreshMappingPreview()
 		const FProperty* SourceProp = Mapping.SourceField.IsNone() ? nullptr : SourceFieldPropCache.FindRef(Mapping.SourceField);
 		FProperty* TargetProp = Mapping.TargetProperty.IsNone() ? nullptr : TargetFieldPropCache.FindRef(Mapping.TargetProperty);
 
-		if (!SourceProp || !TargetProp)
+		if (!TargetProp || (!SourceProp && !Mapping.bUseStaticValue))
 		{
 			Row->Status = NSLOCTEXT("YOLOInventory", "AffixDash_PreviewMissing", "Missing field.");
 			Row->StatusColor = FLinearColor(1.f, 0.25f, 0.2f);
@@ -1495,8 +2202,10 @@ void SYIAffixDashboard::RefreshMappingPreview()
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
-		Row->SourceValue = ExportPropertyValueToStringAffix(SourceProp, SrcPtr);
+		const uint8* SrcPtr = SourceProp ? SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr) : nullptr;
+		Row->SourceValue = Mapping.bUseStaticValue
+			? Mapping.StaticValue
+			: ExportPropertyValueToStringAffix(SourceProp, SrcPtr);
 
 		TArray<uint8> Temp;
 		Temp.SetNumZeroed(TargetProp->GetSize());
@@ -1505,7 +2214,19 @@ void SYIAffixDashboard::RefreshMappingPreview()
 		bool bWarn = false;
 		bool bConverted = false;
 
-		if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+		if (Mapping.bUseStaticValue)
+		{
+			if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+			{
+				Row->ConvertedValue = TEXT("<static value does not support Vector2D conversion>");
+				bWarn = true;
+			}
+			else
+			{
+				bConverted = SetPropertyValueFromStringAffix(Mapping.StaticValue, TargetProp, Temp.GetData(), Mapping.Conversion);
+			}
+		}
+		else if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 		{
 			if (Mapping.SourceFieldB.IsNone())
 			{
@@ -1758,7 +2479,7 @@ void SYIAffixDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 
 	for (FYIFieldMapping& M : Source->InlineMappings)
 	{
-		if (M.TargetProperty.IsNone() || !M.SourceField.IsNone())
+		if (M.bUseStaticValue || M.TargetProperty.IsNone() || !M.SourceField.IsNone())
 		{
 			continue;
 		}
@@ -1846,17 +2567,28 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 		if (CastField<FSetProperty>(Prop)) { OutLabel = TEXT("Set"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
 	};
 
-	auto MakeTypeBadge = [&](const FProperty* Prop)->TSharedRef<SWidget>
+	auto MakeTypeBadgeDynamic = [&](TFunction<FProperty*()> PropGetter)->TSharedRef<SWidget>
 	{
-		FString Label;
-		FLinearColor Color;
-		GetTypeInfo(Prop, Label, Color);
 		return SNew(SBorder)
 			.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
 			.Padding(FMargin(4, 1))
-			.BorderBackgroundColor(Color)
+			.BorderBackgroundColor_Lambda([PropGetter, GetTypeInfo]()
+				{
+					FString Label;
+					FLinearColor Color;
+					GetTypeInfo(PropGetter(), Label, Color);
+					return Color;
+				})
 			[
-				SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+				SNew(STextBlock)
+					.Text_Lambda([PropGetter, GetTypeInfo]()
+						{
+							FString Label;
+							FLinearColor Color;
+							GetTypeInfo(PropGetter(), Label, Color);
+							return FText::FromString(Label);
+						})
+					.ColorAndOpacity(FSlateColor(FLinearColor::Black))
 			];
 	};
 
@@ -1873,6 +2605,27 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 		if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty)) return *Found;
 		return nullptr;
 	};
+
+	auto IsStaticMapping = [Mapping]() -> bool
+	{
+		return Mapping.IsValid() && Mapping->bUseStaticValue;
+	};
+
+	auto GetTargetEnum = [GetTargetProp]() -> UEnum*
+	{
+		const FProperty* TargetProp = GetTargetProp();
+		if (const FEnumProperty* EnumProp = CastField<FEnumProperty>(TargetProp))
+		{
+			return EnumProp->GetEnum();
+		}
+		if (const FByteProperty* ByteProp = CastField<FByteProperty>(TargetProp))
+		{
+			return ByteProp->Enum;
+		}
+		return nullptr;
+	};
+
+	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 
 	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
 	{
@@ -1898,11 +2651,18 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 		}
 		const FProperty* SourceProp = GetSourceProp();
 		const FProperty* TargetProp = GetTargetProp();
-		if (!SourceProp || !TargetProp)
+		const bool bStatic = Mapping->bUseStaticValue;
+		if (!TargetProp || (!SourceProp && !bStatic))
 		{
 			return SNew(SImage)
 				.Image(FAppStyle::Get().GetBrush("Icons.Error"))
 				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_MappingMissing", "Missing source or target field."));
+		}
+		if (bStatic && Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY)
+		{
+			return SNew(SImage)
+				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_MappingStaticVector", "Static value does not support Vector2D conversion."));
 		}
 		if (Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 		{
@@ -1942,17 +2702,27 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
 				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_MappingVectorTarget", "Vector2D conversion target must be FVector2D or FIntPoint."));
 		}
-		const bool bTypesMatch = SourceProp->GetClass() == TargetProp->GetClass();
-		const bool bBothNumeric = CastField<FNumericProperty>(SourceProp) && CastField<FNumericProperty>(TargetProp);
+		const FProperty* CompatSource = bStatic ? TargetProp : SourceProp;
+		const bool bTypesMatch = CompatSource->GetClass() == TargetProp->GetClass();
+		const bool bBothNumeric = CastField<FNumericProperty>(CompatSource) && CastField<FNumericProperty>(TargetProp);
 		const bool bBothTextish =
-			(CastField<FStrProperty>(SourceProp) || CastField<FNameProperty>(SourceProp) || CastField<FTextProperty>(SourceProp)) &&
+			(CastField<FStrProperty>(CompatSource) || CastField<FNameProperty>(CompatSource) || CastField<FTextProperty>(CompatSource)) &&
 			(CastField<FStrProperty>(TargetProp) || CastField<FNameProperty>(TargetProp) || CastField<FTextProperty>(TargetProp));
 		const bool bCompatible = bTypesMatch || bBothNumeric || bBothTextish;
-		if (!bCompatible && Mapping->Conversion == EYIFieldMappingConversion::None)
+		if (!bCompatible && Mapping->Conversion == EYIFieldMappingConversion::None && !bStatic)
 		{
 			return SNew(SImage)
 				.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
 				.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_MappingTypeMismatch", "Type mismatch. Add a conversion."));
+		}
+		if (Mapping->Conversion == EYIFieldMappingConversion::ToEnum)
+		{
+			if (!(CastField<FEnumProperty>(TargetProp) || (CastField<FByteProperty>(TargetProp) && CastField<FByteProperty>(TargetProp)->Enum)))
+			{
+				return SNew(SImage)
+					.Image(FAppStyle::Get().GetBrush("Icons.Warning"))
+					.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_MappingEnumTarget", "Enum conversion requires an enum target."));
+			}
 		}
 
 		if (Mapping->TransformFunction.IsNone())
@@ -2012,9 +2782,10 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 			[
 				BuildStatusWidget()
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.24f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.22f).Padding(2)
 			[
 				SNew(SComboBox<TSharedPtr<FString>>)
+					.IsEnabled_Lambda([IsStaticMapping]() { return !IsStaticMapping(); })
 					.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->SourceFieldOptions)
 					.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
 						{
@@ -2085,7 +2856,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						SNew(SHorizontalBox)
 							+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
 							[
-								MakeTypeBadge(GetSourceProp())
+								MakeTypeBadgeDynamic(GetSourceProp)
 							]
 							+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 							[
@@ -2100,9 +2871,10 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							]
 					]
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.12f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.08f).Padding(2)
 			[
 				SNew(SComboBox<TSharedPtr<FString>>)
+					.IsEnabled_Lambda([IsStaticMapping]() { return !IsStaticMapping(); })
 					.Visibility_Lambda([Mapping]()
 						{
 							return (Mapping.IsValid() && Mapping->Conversion == EYIFieldMappingConversion::Vector2DFromXY) ? EVisibility::Visible : EVisibility::Collapsed;
@@ -2148,7 +2920,154 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							})
 					]
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.24f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.16f).Padding(2)
+			[
+				SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+					[
+						SNew(SCheckBox)
+							.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_StaticValue_TT", "Use a static value instead of a source field."))
+							.IsChecked_Lambda([IsStaticMapping]() { return IsStaticMapping() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+							.OnCheckStateChanged_Lambda([this, Mapping](ECheckBoxState State)
+								{
+									if (CurrentSource.IsValid() && Mapping.IsValid())
+									{
+										CurrentSource->Modify();
+										Mapping->bUseStaticValue = (State == ECheckBoxState::Checked);
+										const int32 Index = MappingRows.Find(Mapping);
+										if (Index != INDEX_NONE)
+										{
+											CurrentSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+										}
+										RefreshMappingPreview();
+									}
+								})
+					]
+					+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
+					[
+						SNew(SWidgetSwitcher)
+							.WidgetIndex_Lambda([IsStaticMapping, GetTargetEnum]()
+								{
+									return (IsStaticMapping() && GetTargetEnum() != nullptr) ? 1 : 0;
+								})
+							+ SWidgetSwitcher::Slot()
+							[
+								SNew(SEditableTextBox)
+									.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum]()
+										{
+											return IsStaticMapping() && GetTargetEnum() == nullptr;
+										})
+									.Text_Lambda([Mapping]()
+										{
+											return Mapping.IsValid() ? FText::FromString(Mapping->StaticValue) : FText::GetEmpty();
+										})
+									.HintText(NSLOCTEXT("YOLOInventory", "AffixDash_StaticValueHint", "Static value"))
+									.OnTextCommitted_Lambda([this, Mapping](const FText& NewText, ETextCommit::Type)
+										{
+											if (CurrentSource.IsValid() && Mapping.IsValid())
+											{
+												CurrentSource->Modify();
+												Mapping->StaticValue = NewText.ToString();
+												const int32 Index = MappingRows.Find(Mapping);
+												if (Index != INDEX_NONE)
+												{
+													CurrentSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+												}
+												RefreshMappingPreview();
+											}
+										})
+							]
+							+ SWidgetSwitcher::Slot()
+							[
+								SNew(SComboBox<TSharedPtr<FString>>)
+									.OptionsSource(StaticEnumOptions.Get())
+									.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum]()
+										{
+											return IsStaticMapping() && GetTargetEnum() != nullptr;
+										})
+									.OnGenerateWidget_Lambda([GetTargetEnum](TSharedPtr<FString> InItem)
+										{
+											if (UEnum* Enum = GetTargetEnum())
+											{
+												if (InItem.IsValid())
+												{
+													int32 Index = Enum->GetIndexByNameString(*InItem);
+													if (Index == INDEX_NONE)
+													{
+														Index = Enum->GetIndexByName(FName(**InItem));
+													}
+													if (Index != INDEX_NONE)
+													{
+														return SNew(STextBlock).Text(Enum->GetDisplayNameTextByIndex(Index));
+													}
+												}
+											}
+											return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+										})
+									.OnComboBoxOpening_Lambda([StaticEnumOptions, GetTargetEnum]()
+										{
+											StaticEnumOptions->Reset();
+											if (UEnum* Enum = GetTargetEnum())
+											{
+												const int32 Count = Enum->NumEnums();
+												for (int32 Index = 0; Index < Count; ++Index)
+												{
+													if (Enum->HasMetaData(TEXT("Hidden"), Index))
+													{
+														continue;
+													}
+													const FString Name = Enum->GetNameStringByIndex(Index);
+													if (Name.EndsWith(TEXT("_MAX")))
+													{
+														continue;
+													}
+													StaticEnumOptions->Add(MakeShared<FString>(Name));
+												}
+											}
+										})
+									.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+										{
+											if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+											{
+												CurrentSource->Modify();
+												Mapping->StaticValue = *NewItem;
+												Mapping->bUseStaticValue = true;
+												const int32 Index = MappingRows.Find(Mapping);
+												if (Index != INDEX_NONE)
+												{
+													CurrentSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+													CurrentSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+												}
+												RefreshMappingPreview();
+											}
+										})
+									.Content()
+									[
+										SNew(STextBlock).Text_Lambda([Mapping, GetTargetEnum]()
+											{
+												if (!Mapping.IsValid() || Mapping->StaticValue.IsEmpty())
+												{
+													return NSLOCTEXT("YOLOInventory", "AffixDash_StaticEnumHint", "Select enum");
+												}
+												if (UEnum* Enum = GetTargetEnum())
+												{
+													int32 Index = Enum->GetIndexByNameString(Mapping->StaticValue);
+													if (Index == INDEX_NONE)
+													{
+														Index = Enum->GetIndexByName(FName(*Mapping->StaticValue));
+													}
+													if (Index != INDEX_NONE)
+													{
+														return Enum->GetDisplayNameTextByIndex(Index);
+													}
+												}
+												return FText::FromString(Mapping->StaticValue);
+											})
+									]
+							]
+					]
+			]
+			+ SHorizontalBox::Slot().FillWidth(0.22f).Padding(2)
 			[
 				SNew(SComboBox<TSharedPtr<FString>>)
 					.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->TargetPropertyOptions)
@@ -2221,7 +3140,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						SNew(SHorizontalBox)
 							+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
 							[
-								MakeTypeBadge(GetTargetProp())
+								MakeTypeBadgeDynamic(GetTargetProp)
 							]
 							+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 							[
@@ -2236,7 +3155,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							]
 					]
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.14f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.10f).Padding(2)
 			[
 				SNew(SComboBox<TSharedPtr<FString>>)
 					.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->ConverterOptions)
@@ -2256,6 +3175,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 								else if (*NewItem == TEXT("To Float")) NewConv = EYIFieldMappingConversion::ToFloat;
 								else if (*NewItem == TEXT("Bool from Int>0")) NewConv = EYIFieldMappingConversion::BoolFromInt;
 								else if (*NewItem == TEXT("Bool from Text (non-empty)")) NewConv = EYIFieldMappingConversion::BoolFromText;
+								else if (*NewItem == TEXT("To Enum")) NewConv = EYIFieldMappingConversion::ToEnum;
 								else if (*NewItem == TEXT("To Gameplay Tag")) NewConv = EYIFieldMappingConversion::ToGameplayTag;
 								else if (*NewItem == TEXT("To Texture (Soft)")) NewConv = EYIFieldMappingConversion::ToSoftTexture;
 								else if (*NewItem == TEXT("Vector2D from XY Fields")) NewConv = EYIFieldMappingConversion::Vector2DFromXY;
@@ -2278,6 +3198,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							ConverterOptions.Add(MakeShared<FString>(TEXT("To Float")));
 							ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Int>0")));
 							ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Text (non-empty)")));
+							ConverterOptions.Add(MakeShared<FString>(TEXT("To Enum")));
 							ConverterOptions.Add(MakeShared<FString>(TEXT("To Gameplay Tag")));
 							ConverterOptions.Add(MakeShared<FString>(TEXT("To Texture (Soft)")));
 							ConverterOptions.Add(MakeShared<FString>(TEXT("Vector2D from XY Fields")));
@@ -2294,6 +3215,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
 							case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
 							case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+							case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 							case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
 							case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 							case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
@@ -2323,6 +3245,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									case EYIFieldMappingConversion::ToFloat: Label = TEXT("To Float"); break;
 									case EYIFieldMappingConversion::BoolFromInt: Label = TEXT("Bool from Int>0"); break;
 									case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
+									case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 									case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
 									case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 									case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
@@ -2333,7 +3256,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							})
 					]
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.18f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.17f).Padding(2)
 			[
 				SNew(SComboBox<TSharedPtr<FYITransformFunctionInfo>>)
 					.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->TransformFunctionOptions)

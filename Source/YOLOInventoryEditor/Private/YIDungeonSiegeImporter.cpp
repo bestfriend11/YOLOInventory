@@ -229,6 +229,24 @@ int32 UYIDungeonSiegeImporter::ImportTemplatesFromGas(const FYIDungeonSiegeImpor
 		{
 			Generator->LootTable = LootTable;
 			Generator->RarityProfile = RarityProfile;
+			Generator->bApplyTemplateAffixes = true;
+			Generator->bGenerateRandomAffixes = true;
+			Generator->bUseDefinitionAffixPools = true;
+
+			// Dungeon Siege style baseline: item-level driven modifier power windows.
+			Generator->PrefixCriteria.bEnabled = true;
+			Generator->PrefixCriteria.bUseItemLevelAsPowerBaseline = true;
+			Generator->PrefixCriteria.MinPowerLevelOffset = -2;
+			Generator->PrefixCriteria.MaxPowerLevelOffset = 5;
+			Generator->PrefixCriteria.MinTier = 1;
+			Generator->PrefixCriteria.MaxTier = 9999;
+
+			Generator->SuffixCriteria.bEnabled = true;
+			Generator->SuffixCriteria.bUseItemLevelAsPowerBaseline = true;
+			Generator->SuffixCriteria.MinPowerLevelOffset = -2;
+			Generator->SuffixCriteria.MaxPowerLevelOffset = 5;
+			Generator->SuffixCriteria.MinTier = 1;
+			Generator->SuffixCriteria.MaxTier = 9999;
 			Generator->Modify();
 		}
 	}

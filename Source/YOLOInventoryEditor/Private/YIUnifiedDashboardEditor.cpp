@@ -34,13 +34,13 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 {
 	CreateWidgetsIfNeeded();
 
-	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v2")
+	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v3")
 		->AddArea(
 			FTabManager::NewPrimaryArea()
 			->SetOrientation(Orient_Horizontal)
 			->Split(
 				FTabManager::NewStack()
-				->SetSizeCoefficient(0.40f)
+				->SetSizeCoefficient(0.75f)
 				->AddTab(Tab_Dashboard_Items, ETabState::OpenedTab)
 				->AddTab(Tab_Dashboard_Affixes, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Generators, ETabState::ClosedTab)
@@ -48,19 +48,7 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 			)
 			->Split(
 				FTabManager::NewStack()
-				->SetSizeCoefficient(0.35f)
-				->AddTab(Tab_Dashboard_ItemDetails, ETabState::OpenedTab)
-				->AddTab(Tab_Dashboard_ItemMappings, ETabState::ClosedTab)
-				->AddTab(Tab_Dashboard_ItemPreview, ETabState::ClosedTab)
-				->SetForegroundTab(Tab_Dashboard_ItemDetails)
-			)
-			->Split(
-				FTabManager::NewStack()
 				->SetSizeCoefficient(0.25f)
-				->AddTab(Tab_Dashboard_ItemPreflight, ETabState::ClosedTab)
-				->AddTab(Tab_Dashboard_ItemDiff, ETabState::ClosedTab)
-				->AddTab(Tab_Dashboard_ItemBatch, ETabState::ClosedTab)
-				->AddTab(Tab_Dashboard_ItemLogs, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Help, ETabState::OpenedTab)
 				->SetForegroundTab(Tab_Dashboard_Help)
 			)
@@ -113,7 +101,6 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 
 	TabManager->TryInvokeTab(Tab_Dashboard_Items);
 	TabManager->TryInvokeTab(Tab_Dashboard_Help);
-	TabManager->TryInvokeTab(Tab_Dashboard_ItemDetails);
 
 	if (AssetToFocus)
 	{
@@ -436,7 +423,6 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 	{
 	case EYIUnifiedDashboardTab::Items:
 		if (TabManager.IsValid()) { TabManager->TryInvokeTab(Tab_Dashboard_Items); }
-		if (TabManager.IsValid()) { TabManager->TryInvokeTab(Tab_Dashboard_ItemDetails); }
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
 		break;
 	case EYIUnifiedDashboardTab::Affixes:
