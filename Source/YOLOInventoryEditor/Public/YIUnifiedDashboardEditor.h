@@ -35,6 +35,8 @@ private:
 	void ExtendToolbar();
 	void FillDashboardToolbar(FToolBarBuilder& ToolbarBuilder);
 	void CloseItemPanelTabs();
+	void CloseAffixPanelTabs();
+	void CloseGeneratorPanelTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
@@ -47,6 +49,12 @@ private:
 	TSharedRef<SDockTab> SpawnItemDiffTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemBatchTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemLogsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnAffixDetailsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnAffixSourceTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnAffixMappingsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnAffixPreviewTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnGeneratorDetailsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnGeneratorTestTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;

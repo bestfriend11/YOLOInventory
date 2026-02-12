@@ -1596,6 +1596,86 @@ TSharedRef<SWidget> SYIItemDashboard::GetLogsPanelWidget() const
 	return Self->LogsPanelWidget.ToSharedRef();
 }
 
+void SYIItemDashboard::RefreshFromToolbar()
+{
+	Refresh();
+}
+
+void SYIItemDashboard::CreateDataSourceFromToolbar()
+{
+	CreateDataTableSourceAsset();
+}
+
+void SYIItemDashboard::ValidateUniqueCodesFromToolbar()
+{
+	ValidateUniqueCodes();
+}
+
+void SYIItemDashboard::CreateOrUpdateSelectedFromToolbar()
+{
+	bool bChanged = false;
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+		{
+			if (E.IsValid() && E->bIsDataTable)
+			{
+				bChanged |= CreateAssetFromEntry(*E);
+			}
+		}
+	}
+	if (bChanged)
+	{
+		Refresh();
+	}
+}
+
+void SYIItemDashboard::UpdateLinkedSelectedFromToolbar()
+{
+	bool bChanged = false;
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+		{
+			if (!E.IsValid())
+			{
+				continue;
+			}
+			UObject* Obj = E->Object.LoadSynchronous();
+			if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Obj))
+			{
+				bChanged |= UpdateAssetFromLinkedSource(Def);
+			}
+		}
+	}
+	if (bChanged)
+	{
+		Refresh();
+	}
+}
+
+void SYIItemDashboard::PreflightSelectedFromToolbar()
+{
+	RebuildPreflightForSelection();
+}
+
+void SYIItemDashboard::ApplySuggestedMappingsFromToolbar()
+{
+	ApplySuggestedMappings();
+}
+
+void SYIItemDashboard::QueueSelectedFromToolbar()
+{
+	EnqueueSelectedRows();
+}
+
+void SYIItemDashboard::RunQueueFromToolbar()
+{
+	ProcessBatchQueue();
+}
+
 TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 {
 	return SNew(SVerticalBox)
@@ -1603,6 +1683,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 		[
 			SNew(SBorder)
 				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				.Visibility_Lambda([this]() { return LayoutMode == EYIItemDashboardLayout::Full ? EVisibility::Visible : EVisibility::Collapsed; })
 				.Padding(10)
 				[
 					SNew(SHorizontalBox)
@@ -1754,6 +1835,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 						[
 							SNew(SButton)
 								.Text(NSLOCTEXT("YOLOInventory", "DashboardRefresh", "Refresh"))
+								.Visibility_Lambda([this]() { return LayoutMode == EYIItemDashboardLayout::Full ? EVisibility::Visible : EVisibility::Collapsed; })
 								.OnClicked_Lambda([this]()
 									{
 										Refresh();
@@ -1764,6 +1846,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 						[
 							SNew(SButton)
 								.Text(NSLOCTEXT("YOLOInventory", "DashboardCreateSource", "New Data Table Source"))
+								.Visibility_Lambda([this]() { return LayoutMode == EYIItemDashboardLayout::Full ? EVisibility::Visible : EVisibility::Collapsed; })
 								.OnClicked_Lambda([this]()
 									{
 										CreateDataTableSourceAsset();
@@ -1774,6 +1857,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 						[
 							SNew(SButton)
 								.Text(NSLOCTEXT("YOLOInventory", "DashboardValidateCodes", "Validate Unique Codes"))
+								.Visibility_Lambda([this]() { return LayoutMode == EYIItemDashboardLayout::Full ? EVisibility::Visible : EVisibility::Collapsed; })
 								.OnClicked_Lambda([this]()
 									{
 										ValidateUniqueCodes();
@@ -1784,6 +1868,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 						[
 							SNew(SButton)
 								.Text(NSLOCTEXT("YOLOInventory", "DashboardBulkCreate", "Create Assets (Selected)"))
+								.Visibility_Lambda([this]() { return LayoutMode == EYIItemDashboardLayout::Full ? EVisibility::Visible : EVisibility::Collapsed; })
 								.ToolTipText(NSLOCTEXT("YOLOInventory", "DashboardBulkCreate_Tip", "Generate assets for all selected data-table rows"))
 								.OnClicked_Lambda([this]()
 									{
@@ -4564,6 +4649,14 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		};
 
 	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	auto RefreshMappingUi = [this]()
+		{
+			RefreshMappingPreview();
+			if (MappingListView.IsValid())
+			{
+				MappingListView->RequestListRefresh();
+			}
+		};
 
 	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
 		{
@@ -4755,7 +4848,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										SNew(STextBlock).Text(DropdownText(InItem))
 									];
 							})
-						.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 								{
@@ -4774,7 +4867,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										CurrentMappingSource->InlineMappings[Index].SourceField = Mapping->SourceField;
 										CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							})
 						.InitiallySelectedItem([this, Mapping]()
@@ -4822,7 +4915,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							{
 								return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
 							})
-						.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 								{
@@ -4833,7 +4926,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 									{
 										CurrentMappingSource->InlineMappings[Index].SourceFieldB = Mapping->SourceFieldB;
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							})
 						.InitiallySelectedItem([this, Mapping]()
@@ -4866,7 +4959,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							SNew(SCheckBox)
 								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_StaticValue_TT", "Use a static value instead of a source field."))
 								.IsChecked_Lambda([IsStaticMapping]() { return IsStaticMapping() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-								.OnCheckStateChanged_Lambda([this, Mapping](ECheckBoxState State)
+								.OnCheckStateChanged_Lambda([this, Mapping, RefreshMappingUi](ECheckBoxState State)
 									{
 										if (CurrentMappingSource.IsValid() && Mapping.IsValid())
 										{
@@ -4877,7 +4970,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 											{
 												CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
 											}
-											RefreshMappingPreview();
+											RefreshMappingUi();
 										}
 									})
 						]
@@ -4900,7 +4993,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 												return Mapping.IsValid() ? FText::FromString(Mapping->StaticValue) : FText::GetEmpty();
 											})
 										.HintText(NSLOCTEXT("YOLOInventory", "Dash_StaticValueHint", "Static value"))
-										.OnTextCommitted_Lambda([this, Mapping](const FText& NewText, ETextCommit::Type)
+										.OnTextCommitted_Lambda([this, Mapping, RefreshMappingUi](const FText& NewText, ETextCommit::Type)
 											{
 												if (CurrentMappingSource.IsValid() && Mapping.IsValid())
 												{
@@ -4911,7 +5004,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 													{
 														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
 													}
-													RefreshMappingPreview();
+													RefreshMappingUi();
 												}
 											})
 								]
@@ -4963,7 +5056,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 													}
 												}
 											})
-										.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+										.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 											{
 												if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 												{
@@ -4976,7 +5069,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
 														CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
 													}
-													RefreshMappingPreview();
+													RefreshMappingUi();
 												}
 											})
 										.Content()
@@ -5039,7 +5132,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										SNew(STextBlock).Text(DropdownText(InItem))
 									];
 							})
-						.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 								{
@@ -5058,7 +5151,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										CurrentMappingSource->InlineMappings[Index].TargetProperty = Mapping->TargetProperty;
 										CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							})
 						.InitiallySelectedItem([this, Mapping]()
@@ -5101,7 +5194,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							{
 								return SNew(STextBlock).Text(DropdownText(InItem));
 							})
-						.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+						.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 								{
@@ -5123,7 +5216,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 									{
 										CurrentMappingSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							})
 						.OnComboBoxOpening_Lambda([this]()
@@ -5206,7 +5299,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 							{
 								BuildTransformFunctionOptions();
 							})
-						.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
+						.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 								{
@@ -5219,7 +5312,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										CurrentMappingSource->InlineMappings[Index].TransformFunction = Mapping->TransformFunction;
 										CurrentMappingSource->InlineMappings[Index].TransformLibrary = Mapping->TransformLibrary;
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							})
 						.InitiallySelectedItem([this, Mapping]()
@@ -5262,7 +5355,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				[
 					SNew(SButton)
 						.Text(NSLOCTEXT("YOLOInventory", "Dash_RemoveMapping", "X"))
-						.OnClicked_Lambda([this, Mapping]()
+						.OnClicked_Lambda([this, Mapping, RefreshMappingUi]()
 							{
 								if (CurrentMappingSource.IsValid() && Mapping.IsValid())
 								{
@@ -5276,7 +5369,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										{
 											MappingListView->RequestListRefresh();
 										}
-										RefreshMappingPreview();
+										RefreshMappingUi();
 									}
 								}
 								return FReply::Handled();

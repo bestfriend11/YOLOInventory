@@ -32,6 +32,20 @@ void SYIGeneratorDashboard::Construct(const FArguments& InArgs)
 	DetailArgs.bAllowSearch = true;
 	DetailArgs.bHideSelectionTip = true;
 	DetailsView = PropModule.CreateDetailView(DetailArgs);
+	LayoutMode = InArgs._LayoutMode;
+
+	AssetPanelWidget = BuildAssetPicker();
+	DetailsPanelWidget = BuildDetailsPanelWidget();
+	TestPanelWidget = BuildTestPanelWidget();
+
+	if (LayoutMode == EYIGeneratorDashboardLayout::AssetListOnly)
+	{
+		ChildSlot
+		[
+			AssetPanelWidget.ToSharedRef()
+		];
+		return;
+	}
 
 	ChildSlot
 	[
@@ -39,90 +53,9 @@ void SYIGeneratorDashboard::Construct(const FArguments& InArgs)
 		+ SSplitter::Slot().Value(0.42f)
 		[
 			SNew(SVerticalBox)
-			+ SVerticalBox::Slot().AutoHeight().Padding(6)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","GenDash_NewLoot","New Loot Table"))
-					.OnClicked(this, &SYIGeneratorDashboard::CreateLootTable)
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","GenDash_NewRarity","New Rarity Profile"))
-					.OnClicked(this, &SYIGeneratorDashboard::CreateRarityProfile)
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","GenDash_NewGenerator","New Item Generator"))
-					.OnClicked(this, &SYIGeneratorDashboard::CreateItemGenerator)
-				]
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0,2)
-			[
-				SNew(SSeparator)
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(6)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Level","Level"))
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SNumericEntryBox<int32>)
-					.MinValue(1)
-					.MaxValue(9999)
-					.Value_Lambda([this]()->TOptional<int32>{ return TestLevel; })
-					.OnValueChanged_Lambda([this](int32 V){ TestLevel = V; })
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
-				[
-					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Seed","Seed"))
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SNumericEntryBox<int32>)
-					.MinValue(1)
-					.MaxValue(2147483647)
-					.Value_Lambda([this]()->TOptional<int32>{ return TestSeed; })
-					.OnValueChanged_Lambda([this](int32 V){ TestSeed = V; })
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
-				[
-					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Runs","Runs"))
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
-				[
-					SNew(SNumericEntryBox<int32>)
-					.MinValue(1)
-					.MaxValue(200)
-					.Value_Lambda([this]()->TOptional<int32>{ return TestRuns; })
-					.OnValueChanged_Lambda([this](int32 V){ TestRuns = FMath::Clamp(V, 1, 200); })
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory","GenDash_Test","Generate"))
-					.OnClicked(this, &SYIGeneratorDashboard::RunGeneratorTest)
-				]
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(6)
-			[
-				SNew(STextBlock)
-				.Text_Lambda([this](){ return TestResult.IsEmpty() ? NSLOCTEXT("YOLOInventory","GenDash_NoResult","Select a generator and click Generate.") : TestResult; })
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0,4)
-			[
-				SNew(SSeparator)
-			]
 			+ SVerticalBox::Slot().FillHeight(1.f)
 			[
-				BuildAssetPicker()
+				AssetPanelWidget.ToSharedRef()
 			]
 		]
 		+ SSplitter::Slot().Value(0.58f)
@@ -130,10 +63,60 @@ void SYIGeneratorDashboard::Construct(const FArguments& InArgs)
 			SNew(SBorder)
 			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 			[
-				DetailsView.ToSharedRef()
+				DetailsPanelWidget.ToSharedRef()
 			]
 		]
 	];
+}
+
+TSharedRef<SWidget> SYIGeneratorDashboard::GetAssetPanelWidget() const
+{
+	SYIGeneratorDashboard* Self = const_cast<SYIGeneratorDashboard*>(this);
+	if (!Self->AssetPanelWidget.IsValid())
+	{
+		Self->AssetPanelWidget = Self->BuildAssetPicker();
+	}
+	return Self->AssetPanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIGeneratorDashboard::GetDetailsPanelWidget() const
+{
+	SYIGeneratorDashboard* Self = const_cast<SYIGeneratorDashboard*>(this);
+	if (!Self->DetailsPanelWidget.IsValid())
+	{
+		Self->DetailsPanelWidget = Self->BuildDetailsPanelWidget();
+	}
+	return Self->DetailsPanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIGeneratorDashboard::GetTestPanelWidget() const
+{
+	SYIGeneratorDashboard* Self = const_cast<SYIGeneratorDashboard*>(this);
+	if (!Self->TestPanelWidget.IsValid())
+	{
+		Self->TestPanelWidget = Self->BuildTestPanelWidget();
+	}
+	return Self->TestPanelWidget.ToSharedRef();
+}
+
+void SYIGeneratorDashboard::CreateLootTableFromToolbar()
+{
+	CreateLootTable();
+}
+
+void SYIGeneratorDashboard::CreateRarityProfileFromToolbar()
+{
+	CreateRarityProfile();
+}
+
+void SYIGeneratorDashboard::CreateItemGeneratorFromToolbar()
+{
+	CreateItemGenerator();
+}
+
+void SYIGeneratorDashboard::RunGeneratorTestFromToolbar()
+{
+	RunGeneratorTest();
 }
 
 TSharedRef<SWidget> SYIGeneratorDashboard::BuildAssetPicker()
@@ -149,6 +132,69 @@ TSharedRef<SWidget> SYIGeneratorDashboard::BuildAssetPicker()
 
 	FContentBrowserModule& CB = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
 	return CB.Get().CreateAssetPicker(Picker);
+}
+
+TSharedRef<SWidget> SYIGeneratorDashboard::BuildDetailsPanelWidget()
+{
+	return DetailsView.IsValid()
+		? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
+		: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "GenDash_NoDetails", "Details panel unavailable")));
+}
+
+TSharedRef<SWidget> SYIGeneratorDashboard::BuildTestPanelWidget()
+{
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(6)
+		[
+			SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Level","Level"))
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SNumericEntryBox<int32>)
+						.MinValue(1)
+						.MaxValue(9999)
+						.Value_Lambda([this]()->TOptional<int32>{ return TestLevel; })
+						.OnValueChanged_Lambda([this](int32 V){ TestLevel = V; })
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Seed","Seed"))
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SNumericEntryBox<int32>)
+						.MinValue(1)
+						.MaxValue(2147483647)
+						.Value_Lambda([this]()->TOptional<int32>{ return TestSeed; })
+						.OnValueChanged_Lambda([this](int32 V){ TestSeed = V; })
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_Runs","Runs"))
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SNumericEntryBox<int32>)
+						.MinValue(1)
+						.MaxValue(200)
+						.Value_Lambda([this]()->TOptional<int32>{ return TestRuns; })
+						.OnValueChanged_Lambda([this](int32 V){ TestRuns = FMath::Clamp(V, 1, 200); })
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","GenDash_Test","Generate"))
+						.OnClicked(this, &SYIGeneratorDashboard::RunGeneratorTest)
+				]
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(6)
+		[
+			SNew(STextBlock)
+				.Text_Lambda([this](){ return TestResult.IsEmpty() ? NSLOCTEXT("YOLOInventory","GenDash_NoResult","Select a generator and click Generate.") : TestResult; })
+		];
 }
 
 void SYIGeneratorDashboard::OnAssetSelected(const FAssetData& AssetData)

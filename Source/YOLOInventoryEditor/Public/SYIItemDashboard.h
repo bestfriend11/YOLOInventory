@@ -132,6 +132,15 @@ public:
 	TSharedRef<SWidget> GetDiffPanelWidget() const;
 	TSharedRef<SWidget> GetBatchPanelWidget() const;
 	TSharedRef<SWidget> GetLogsPanelWidget() const;
+	void RefreshFromToolbar();
+	void CreateDataSourceFromToolbar();
+	void ValidateUniqueCodesFromToolbar();
+	void CreateOrUpdateSelectedFromToolbar();
+	void UpdateLinkedSelectedFromToolbar();
+	void PreflightSelectedFromToolbar();
+	void ApplySuggestedMappingsFromToolbar();
+	void QueueSelectedFromToolbar();
+	void RunQueueFromToolbar();
 
 private:
 	TSharedRef<SWidget> BuildItemsPanelWidget();

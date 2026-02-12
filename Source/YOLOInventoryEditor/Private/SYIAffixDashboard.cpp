@@ -66,6 +66,24 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 	DetailArgs.bAllowSearch = true;
 	DetailArgs.bHideSelectionTip = true;
 	DetailsView = PropModule.CreateDetailView(DetailArgs);
+	LayoutMode = InArgs._LayoutMode;
+
+	AssetPanelWidget = BuildAssetPicker();
+	SourcePanelWidget = BuildSourcePicker();
+	DetailsPanelWidget = BuildDetailsPanelWidget();
+	MappingPanelWidget = BuildMappingPanelWidget();
+	PreviewPanelWidget = BuildPreviewPanelWidget();
+
+	if (LayoutMode == EYIAffixDashboardLayout::AssetListOnly)
+	{
+		ChildSlot
+		[
+			AssetPanelWidget.ToSharedRef()
+		];
+
+		RefreshList();
+		return;
+	}
 
 	ChildSlot
 	[
@@ -97,11 +115,17 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(6, 2)
 			[
-				BuildSourcePicker()
+				SourcePanelWidget.ToSharedRef()
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(6, 2)
 			[
 				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory","AffixDash_CreateSelected","Create/Update Selected Rows"))
+					.OnClicked(this, &SYIAffixDashboard::CreateOrUpdateSelectedRows)
+				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
 				[
 					SNew(SButton)
@@ -121,7 +145,7 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 			]
 			+ SVerticalBox::Slot().FillHeight(1.f)
 			[
-				BuildAssetPicker()
+				AssetPanelWidget.ToSharedRef()
 			]
 		]
 		+ SSplitter::Slot().Value(0.60f)
@@ -132,17 +156,107 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 				SNew(SBorder)
 				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 				[
-					DetailsView.ToSharedRef()
+					DetailsPanelWidget.ToSharedRef()
 				]
 			]
 			+ SVerticalBox::Slot().FillHeight(0.45f).Padding(0, 4, 0, 0)
 			[
-				BuildMappingPanelWidget()
+				MappingPanelWidget.ToSharedRef()
 			]
 		]
 	];
 
 	RefreshList();
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::GetAssetPanelWidget() const
+{
+	SYIAffixDashboard* Self = const_cast<SYIAffixDashboard*>(this);
+	if (!Self->AssetPanelWidget.IsValid())
+	{
+		Self->AssetPanelWidget = Self->BuildAssetPicker();
+	}
+	return Self->AssetPanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::GetSourcePanelWidget() const
+{
+	SYIAffixDashboard* Self = const_cast<SYIAffixDashboard*>(this);
+	if (!Self->SourcePanelWidget.IsValid())
+	{
+		Self->SourcePanelWidget = Self->BuildSourcePicker();
+	}
+	return Self->SourcePanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::GetDetailsPanelWidget() const
+{
+	SYIAffixDashboard* Self = const_cast<SYIAffixDashboard*>(this);
+	if (!Self->DetailsPanelWidget.IsValid())
+	{
+		Self->DetailsPanelWidget = Self->BuildDetailsPanelWidget();
+	}
+	return Self->DetailsPanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::GetMappingPanelWidget() const
+{
+	SYIAffixDashboard* Self = const_cast<SYIAffixDashboard*>(this);
+	if (!Self->MappingPanelWidget.IsValid())
+	{
+		Self->MappingPanelWidget = Self->BuildMappingPanelWidget();
+	}
+	return Self->MappingPanelWidget.ToSharedRef();
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::GetPreviewPanelWidget() const
+{
+	SYIAffixDashboard* Self = const_cast<SYIAffixDashboard*>(this);
+	if (!Self->PreviewPanelWidget.IsValid())
+	{
+		Self->PreviewPanelWidget = Self->BuildPreviewPanelWidget();
+	}
+	return Self->PreviewPanelWidget.ToSharedRef();
+}
+
+void SYIAffixDashboard::CreateAffixFromToolbar()
+{
+	CreateAffix();
+}
+
+void SYIAffixDashboard::CreateAffixPoolFromToolbar()
+{
+	CreateAffixPool();
+}
+
+void SYIAffixDashboard::CreateAffixSourceFromToolbar()
+{
+	CreateAffixSource();
+}
+
+void SYIAffixDashboard::CreateOrUpdateSelectedRowsFromToolbar()
+{
+	CreateOrUpdateSelectedRows();
+}
+
+void SYIAffixDashboard::ImportFromSourceFromToolbar()
+{
+	ImportFromSource();
+}
+
+void SYIAffixDashboard::UpdateSelectedAffixFromToolbar()
+{
+	UpdateSelectedAffix();
+}
+
+void SYIAffixDashboard::AutoMatchMappingsFromToolbar()
+{
+	AutoMatchInlineMappings(false);
+}
+
+void SYIAffixDashboard::AddAllMappingsFromToolbar()
+{
+	AutoMatchInlineMappings(true);
 }
 
 TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
@@ -207,6 +321,13 @@ TSharedRef<SWidget> SYIAffixDashboard::BuildSourcePicker()
 						}
 					})
 		];
+}
+
+TSharedRef<SWidget> SYIAffixDashboard::BuildDetailsPanelWidget()
+{
+	return DetailsView.IsValid()
+		? StaticCastSharedRef<SWidget>(DetailsView.ToSharedRef())
+		: StaticCastSharedRef<SWidget>(SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "AffixDash_NoDetails", "Details panel unavailable")));
 }
 
 void SYIAffixDashboard::OnAssetSelected(const FAssetData& AssetData)
@@ -448,7 +569,21 @@ void SYIAffixDashboard::OpenEntry(const TSharedPtr<FYIAffixDashboardEntry>& Entr
 		}
 		else
 		{
-			ShowDetailsForEntry(Entry);
+			TMap<int64, TSoftObjectPtr<UYIAffixAsset>> ExistingByCode;
+			CacheExistingAffixesByCode(ExistingByCode);
+			UYIDataTableAffixSource* SourceUsed = nullptr;
+			if (CreateOrUpdateEntryFromDataRow(Entry, &ExistingByCode, &SourceUsed))
+			{
+				if (SourceUsed)
+				{
+					SyncTargetPoolsForSource(SourceUsed);
+				}
+				RefreshList();
+			}
+			else
+			{
+				ShowDetailsForEntry(Entry);
+			}
 		}
 		return;
 	}
@@ -546,6 +681,122 @@ FReply SYIAffixDashboard::CreateAffixSource()
 	FString PackageName, AssetName;
 	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
 	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->DataAssetClass, Factory);
+	return FReply::Handled();
+}
+
+bool SYIAffixDashboard::CreateOrUpdateEntryFromDataRow(const TSharedPtr<FYIAffixDashboardEntry>& Entry, TMap<int64, TSoftObjectPtr<UYIAffixAsset>>* ExistingByCode, UYIDataTableAffixSource** OutSourceUsed)
+{
+	if (OutSourceUsed)
+	{
+		*OutSourceUsed = nullptr;
+	}
+	if (!Entry.IsValid() || !Entry->bIsDataTable)
+	{
+		return false;
+	}
+
+	UYIDataTableAffixSource* Source = Entry->DataSource.IsValid() ? Entry->DataSource.Get() : Entry->DataSource.LoadSynchronous();
+	if (!Source)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_RowNoSource", "Skipped row: data source could not be loaded."),
+			FText::FromString(Entry->Source));
+		return false;
+	}
+
+	UDataTable* Table = Source->ResolveDataTable();
+	if (!Table || !Table->RowStruct)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_RowNoTable", "Skipped row: data table is missing or invalid."),
+			FText::FromString(Source->GetPathName()));
+		return false;
+	}
+
+	const uint8* const* Found = Table->GetRowMap().Find(Entry->RowName);
+	const uint8* RowPtr = Found ? *Found : nullptr;
+	if (!RowPtr)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_RowNotFound", "Skipped row: row not found in data table."),
+			FText::FromName(Entry->RowName));
+		return false;
+	}
+
+	int64 Code = Entry->Code;
+	if (Code == 0)
+	{
+		const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+		Code = ExtractCodeFromRow(Table->RowStruct, RowPtr, CodeField);
+	}
+	if (Code == 0)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_RowNoCode_Selected", "Skipped row: UniqueCode is 0."),
+			FText::FromName(Entry->RowName));
+		return false;
+	}
+
+	const bool bOk = CreateOrUpdateAffixFromRow(Source, Table, Entry->RowName, RowPtr, Code, ExistingByCode);
+	if (bOk && OutSourceUsed)
+	{
+		*OutSourceUsed = Source;
+	}
+	return bOk;
+}
+
+FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
+{
+	if (!ListView.IsValid())
+	{
+		return FReply::Handled();
+	}
+
+	const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
+	if (Selected.Num() == 0)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+			NSLOCTEXT("YOLOInventory", "AffixDash_NoSelectionRows", "Create/update failed: no rows selected."));
+		return FReply::Handled();
+	}
+
+	TMap<int64, TSoftObjectPtr<UYIAffixAsset>> ExistingByCode;
+	CacheExistingAffixesByCode(ExistingByCode);
+
+	int32 Succeeded = 0;
+	int32 Failed = 0;
+	TSet<UYIDataTableAffixSource*> SourcesTouched;
+
+	for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
+	{
+		UYIDataTableAffixSource* SourceUsed = nullptr;
+		if (CreateOrUpdateEntryFromDataRow(Entry, &ExistingByCode, &SourceUsed))
+		{
+			++Succeeded;
+			if (SourceUsed)
+			{
+				SourcesTouched.Add(SourceUsed);
+			}
+		}
+		else
+		{
+			++Failed;
+		}
+	}
+
+	for (UYIDataTableAffixSource* Source : SourcesTouched)
+	{
+		SyncTargetPoolsForSource(Source);
+	}
+
+	FYIEditorMessageLog::Add(
+		Failed > 0 ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory", "AffixDash_CreateSelectedDone", "Create/update selected rows complete. Success: {0}, Failed: {1}"),
+			FText::AsNumber(Succeeded),
+			FText::AsNumber(Failed)));
+
+	RefreshList();
 	return FReply::Handled();
 }
 
@@ -1949,18 +2200,30 @@ TSharedRef<SWidget> SYIAffixDashboard::BuildMappingPanelWidget()
 				]
 				+ SVerticalBox::Slot().FillHeight(1.f).Padding(8, 6)
 				[
-					SNew(SSplitter)
-						.Orientation(Orient_Vertical)
-						+ SSplitter::Slot().Value(0.62f)
+					SNew(SWidgetSwitcher)
+						.WidgetIndex(LayoutMode == EYIAffixDashboardLayout::Full ? 0 : 1)
+						+ SWidgetSwitcher::Slot()
+						[
+							SNew(SSplitter)
+								.Orientation(Orient_Vertical)
+								+ SSplitter::Slot().Value(0.62f)
+								[
+									SAssignNew(MappingListView, SListView<TSharedPtr<FYIFieldMapping>>)
+										.ListItemsSource(&MappingRows)
+										.OnGenerateRow(this, &SYIAffixDashboard::MakeMappingRow)
+										.SelectionMode(ESelectionMode::Single)
+								]
+								+ SSplitter::Slot().Value(0.38f)
+								[
+									BuildPreviewPanelWidget()
+								]
+						]
+						+ SWidgetSwitcher::Slot()
 						[
 							SAssignNew(MappingListView, SListView<TSharedPtr<FYIFieldMapping>>)
 								.ListItemsSource(&MappingRows)
 								.OnGenerateRow(this, &SYIAffixDashboard::MakeMappingRow)
 								.SelectionMode(ESelectionMode::Single)
-						]
-						+ SSplitter::Slot().Value(0.38f)
-						[
-							BuildPreviewPanelWidget()
 						]
 				]
 		];
@@ -2626,6 +2889,14 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 	};
 
 	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	auto RefreshMappingUi = [this]()
+	{
+		RefreshMappingPreview();
+		if (MappingListView.IsValid())
+		{
+			MappingListView->RequestListRefresh();
+		}
+	};
 
 	auto BuildStatusWidget = [this, Mapping, GetSourceProp, GetTargetProp]() -> TSharedRef<SWidget>
 	{
@@ -2817,7 +3088,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									SNew(STextBlock).Text(DropdownText(InItem))
 								];
 						})
-					.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 							{
@@ -2836,7 +3107,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									CurrentSource->InlineMappings[Index].SourceField = Mapping->SourceField;
 									CurrentSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 								}
-								RefreshMappingPreview();
+								RefreshMappingUi();
 							}
 						})
 					.InitiallySelectedItem([this, Mapping]()
@@ -2884,7 +3155,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						{
 							return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
 						})
-					.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 							{
@@ -2895,7 +3166,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 								{
 									CurrentSource->InlineMappings[Index].SourceFieldB = Mapping->SourceFieldB;
 								}
-								RefreshMappingPreview();
+								RefreshMappingUi();
 							}
 						})
 					.InitiallySelectedItem([this, Mapping]()
@@ -2928,7 +3199,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						SNew(SCheckBox)
 							.ToolTipText(NSLOCTEXT("YOLOInventory", "AffixDash_StaticValue_TT", "Use a static value instead of a source field."))
 							.IsChecked_Lambda([IsStaticMapping]() { return IsStaticMapping() ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-							.OnCheckStateChanged_Lambda([this, Mapping](ECheckBoxState State)
+							.OnCheckStateChanged_Lambda([this, Mapping, RefreshMappingUi](ECheckBoxState State)
 								{
 									if (CurrentSource.IsValid() && Mapping.IsValid())
 									{
@@ -2939,7 +3210,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 										{
 											CurrentSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
 										}
-										RefreshMappingPreview();
+										RefreshMappingUi();
 									}
 								})
 					]
@@ -2962,7 +3233,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 											return Mapping.IsValid() ? FText::FromString(Mapping->StaticValue) : FText::GetEmpty();
 										})
 									.HintText(NSLOCTEXT("YOLOInventory", "AffixDash_StaticValueHint", "Static value"))
-									.OnTextCommitted_Lambda([this, Mapping](const FText& NewText, ETextCommit::Type)
+									.OnTextCommitted_Lambda([this, Mapping, RefreshMappingUi](const FText& NewText, ETextCommit::Type)
 										{
 											if (CurrentSource.IsValid() && Mapping.IsValid())
 											{
@@ -2973,7 +3244,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 												{
 													CurrentSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
 												}
-												RefreshMappingPreview();
+												RefreshMappingUi();
 											}
 										})
 							]
@@ -3025,7 +3296,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 												}
 											}
 										})
-									.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+									.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 										{
 											if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 											{
@@ -3038,7 +3309,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 													CurrentSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
 													CurrentSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
 												}
-												RefreshMappingPreview();
+												RefreshMappingUi();
 											}
 										})
 									.Content()
@@ -3101,7 +3372,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									SNew(STextBlock).Text(DropdownText(InItem))
 								];
 						})
-					.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 							{
@@ -3120,7 +3391,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									CurrentSource->InlineMappings[Index].TargetProperty = Mapping->TargetProperty;
 									CurrentSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 								}
-								RefreshMappingPreview();
+								RefreshMappingUi();
 							}
 						})
 					.InitiallySelectedItem([this, Mapping]()
@@ -3163,7 +3434,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						{
 							return SNew(STextBlock).Text(DropdownText(InItem));
 						})
-					.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 							{
@@ -3185,7 +3456,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 								{
 									CurrentSource->InlineMappings[Index].Conversion = Mapping->Conversion;
 								}
-								RefreshMappingPreview();
+								RefreshMappingUi();
 							}
 						})
 					.OnComboBoxOpening_Lambda([this]()
@@ -3268,7 +3539,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 						{
 							BuildTransformFunctionOptions();
 						})
-					.OnSelectionChanged_Lambda([this, Mapping](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
+					.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 							{
@@ -3281,7 +3552,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									CurrentSource->InlineMappings[Index].TransformFunction = Mapping->TransformFunction;
 									CurrentSource->InlineMappings[Index].TransformLibrary = Mapping->TransformLibrary;
 								}
-								RefreshMappingPreview();
+								RefreshMappingUi();
 							}
 						})
 					.InitiallySelectedItem([this, Mapping]()
@@ -3324,7 +3595,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 			[
 				SNew(SButton)
 					.Text(NSLOCTEXT("YOLOInventory", "AffixDash_RemoveMapping", "X"))
-					.OnClicked_Lambda([this, Mapping]()
+					.OnClicked_Lambda([this, Mapping, RefreshMappingUi]()
 						{
 							if (CurrentSource.IsValid() && Mapping.IsValid())
 							{
@@ -3338,7 +3609,7 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 									{
 										MappingListView->RequestListRefresh();
 									}
-									RefreshMappingPreview();
+									RefreshMappingUi();
 								}
 							}
 							return FReply::Handled();

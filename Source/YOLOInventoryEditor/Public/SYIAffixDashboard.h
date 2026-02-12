@@ -9,18 +9,42 @@ struct FYIFieldMapping;
 struct FYITransformFunctionInfo;
 struct FYIMappingPreviewRow;
 
+enum class EYIAffixDashboardLayout : uint8
+{
+	Full,
+	AssetListOnly
+};
+
 class SYIAffixDashboard : public SCompoundWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SYIAffixDashboard) {}
+	SLATE_BEGIN_ARGS(SYIAffixDashboard)
+		: _LayoutMode(EYIAffixDashboardLayout::Full)
+	{}
+		SLATE_ARGUMENT(EYIAffixDashboardLayout, LayoutMode)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
 	void OpenAsset(UObject* Asset);
+	TSharedRef<class SWidget> GetAssetPanelWidget() const;
+	TSharedRef<class SWidget> GetSourcePanelWidget() const;
+	TSharedRef<class SWidget> GetDetailsPanelWidget() const;
+	TSharedRef<class SWidget> GetMappingPanelWidget() const;
+	TSharedRef<class SWidget> GetPreviewPanelWidget() const;
+
+	void CreateAffixFromToolbar();
+	void CreateAffixPoolFromToolbar();
+	void CreateAffixSourceFromToolbar();
+	void CreateOrUpdateSelectedRowsFromToolbar();
+	void ImportFromSourceFromToolbar();
+	void UpdateSelectedAffixFromToolbar();
+	void AutoMatchMappingsFromToolbar();
+	void AddAllMappingsFromToolbar();
 
 private:
 	TSharedRef<class SWidget> BuildAssetPicker();
 	TSharedRef<class SWidget> BuildSourcePicker();
+	TSharedRef<class SWidget> BuildDetailsPanelWidget();
 	TSharedRef<class SWidget> BuildMappingPanelWidget();
 	TSharedRef<class SWidget> BuildPreviewPanelWidget();
 	void OnAssetSelected(const FAssetData& AssetData);
@@ -34,9 +58,11 @@ private:
 	FReply CreateAffix();
 	FReply CreateAffixPool();
 	FReply CreateAffixSource();
+	FReply CreateOrUpdateSelectedRows();
 	FReply ImportFromSource();
 	FReply UpdateSelectedAffix();
 	bool SyncTargetPoolsForSource(const UYIDataTableAffixSource* Source);
+	bool CreateOrUpdateEntryFromDataRow(const TSharedPtr<struct FYIAffixDashboardEntry>& Entry, TMap<int64, TSoftObjectPtr<UYIAffixAsset>>* ExistingByCode, UYIDataTableAffixSource** OutSourceUsed = nullptr);
 
 	bool CreateOrUpdateAffixFromRow(const UYIDataTableAffixSource* Source, const UDataTable* Table, FName RowName, const uint8* RowPtr, int64 Code, TMap<int64, TSoftObjectPtr<UYIAffixAsset>>* ExistingByCode);
 	void CacheExistingAffixesByCode(TMap<int64, TSoftObjectPtr<UYIAffixAsset>>& OutMap) const;
@@ -53,6 +79,12 @@ private:
 	TSharedPtr<IDetailsView> DetailsView;
 	TWeakObjectPtr<UObject> LastSelectedAsset;
 	TWeakObjectPtr<UYIDataTableAffixSource> CurrentSource;
+	EYIAffixDashboardLayout LayoutMode = EYIAffixDashboardLayout::Full;
+	TSharedPtr<class SWidget> AssetPanelWidget;
+	TSharedPtr<class SWidget> SourcePanelWidget;
+	TSharedPtr<class SWidget> DetailsPanelWidget;
+	TSharedPtr<class SWidget> MappingPanelWidget;
+	TSharedPtr<class SWidget> PreviewPanelWidget;
 	TArray<TSharedPtr<struct FYIAffixDashboardEntry>> Items;
 	TArray<TSharedPtr<struct FYIAffixDashboardEntry>> FilteredItems;
 	TSharedPtr<class SListView<TSharedPtr<struct FYIAffixDashboardEntry>>> ListView;
