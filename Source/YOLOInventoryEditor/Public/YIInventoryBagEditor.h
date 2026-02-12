@@ -9,13 +9,17 @@ class SDockTab;
 class SBagEditor;
 class ITableRow;
 class STableViewBase;
+class UTexture2D;
+struct FSlateBrush;
 template<typename ItemType> class SListView;
+template<typename ItemType> class STileView;
 struct FYIItemDashboardEntry;
 
 enum class EYIBagPaletteMode : uint8
 {
 	Assets,
-	DataRows
+	DataRows,
+	Runtime
 };
 
 class YOLOINVENTORYEDITOR_API FYIInventoryBagEditor : public FAssetEditorToolkit
@@ -48,8 +52,12 @@ private:
 	virtual void UnregisterTabSpawners(const TSharedRef<class FTabManager>& InTabManager) override;
 	void HandleGridSelectionChanged(int32 Index);
 	void RefreshDataRowEntries();
+	void RefreshRuntimeEntries();
 	TSharedRef<ITableRow> MakeDataRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner);
+	TSharedRef<ITableRow> MakeRuntimeItemTile(TSharedPtr<int32> ItemIndex, const TSharedRef<STableViewBase>& Owner);
 	TSharedPtr<SWidget> BuildDataRowContextMenu(const TSharedPtr<FYIItemDashboardEntry>& Entry) const;
+	FText BuildRuntimeItemTooltip(const UYIItemDefinition* Def, int32 Count) const;
+	const FSlateBrush* ResolveRuntimeItemIcon(UYIItemDefinition* Def);
 	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;
 	bool AddEntryToBag(const FYIItemDashboardEntry& Entry);
 
@@ -59,7 +67,10 @@ private:
 	TArray<TSharedPtr<FString>> SortOptionsCache;
 	TSharedPtr<class SComboBox<TSharedPtr<FString>>> SortCombo;
 	TSharedPtr<SListView<TSharedPtr<FYIItemDashboardEntry>>> DataRowListView;
+	TSharedPtr<STileView<TSharedPtr<int32>>> RuntimeItemTileView;
 	TArray<TSharedPtr<FYIItemDashboardEntry>> DataRowEntries;
+	TArray<TSharedPtr<int32>> RuntimeEntries;
+	TMap<UTexture2D*, TSharedPtr<struct FSlateDynamicImageBrush>> RuntimeIconBrushCache;
 	EYIBagPaletteMode PaletteMode = EYIBagPaletteMode::Assets;
 	UYIInventoryBag* Bag = nullptr;
 };

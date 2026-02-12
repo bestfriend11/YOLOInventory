@@ -8,6 +8,7 @@
 #include "YIItemDefinition.h"
 #include "YIItemRegistrySubsystem.h"
 #include "YIAffixAsset.h"
+#include "Data/YIDataTableAffixSource.h"
 #include "YILootTableFactory.h"
 #include "YIRarityProfileFactory.h"
 #include "YIItemGeneratorFactory.h"
@@ -50,6 +51,56 @@ static bool YIGeneratorDash_SaveObjectPackage(UObject* ObjectToSave)
 	const bool bCheckDirty = false;
 	const bool bPromptToSave = false;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
+}
+
+static bool YIGeneratorDash_IsAffixFromSource(const UYIAffixAsset* Affix, const UYIDataTableAffixSource* Source)
+{
+	return Affix && Source && Affix->SourceDataSource.ToSoftObjectPath() == FSoftObjectPath(Source->GetPathName());
+}
+
+static void YIGeneratorDash_CollectAffixesForSource(const UYIDataTableAffixSource* Source, TArray<UYIAffixAsset*>& OutAffixes)
+{
+	OutAffixes.Reset();
+	if (!Source)
+	{
+		return;
+	}
+
+	FAssetRegistryModule& ARM = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> Assets;
+	ARM.Get().GetAssetsByClass(UYIAffixAsset::StaticClass()->GetClassPathName(), Assets, true);
+	for (const FAssetData& AD : Assets)
+	{
+		UYIAffixAsset* Affix = Cast<UYIAffixAsset>(AD.GetAsset());
+		if (!Affix)
+		{
+			continue;
+		}
+		if (YIGeneratorDash_IsAffixFromSource(Affix, Source))
+		{
+			OutAffixes.Add(Affix);
+		}
+	}
+}
+
+static double YIGeneratorDash_Combinations(int32 N, int32 K)
+{
+	if (N < 0 || K < 0 || K > N)
+	{
+		return 0.0;
+	}
+	if (K == 0 || K == N)
+	{
+		return 1.0;
+	}
+	K = FMath::Min(K, N - K);
+	double Result = 1.0;
+	for (int32 I = 1; I <= K; ++I)
+	{
+		Result *= (double)(N - (K - I));
+		Result /= (double)I;
+	}
+	return Result;
 }
 
 void SYIGeneratorDashboard::Construct(const FArguments& InArgs)
@@ -152,9 +203,30 @@ void SYIGeneratorDashboard::PopulateLootTableFromDataSourcesFromToolbar()
 	PopulateLootTableFromDataSources();
 }
 
+void SYIGeneratorDashboard::SyncAffixPoolsFromDataSourcesFromToolbar()
+{
+	SyncAffixPoolsFromDataSources();
+}
+
 void SYIGeneratorDashboard::SaveCurrentAssetFromToolbar()
 {
-	UObject* ObjectToSave = SelectedAsset.Get();
+	UObject* ObjectToSave = nullptr;
+
+	// Prefer whatever is currently shown/edited in details.
+	if (DetailsView.IsValid())
+	{
+		const TArray<TWeakObjectPtr<UObject>>& DetailObjects = DetailsView->GetSelectedObjects();
+		if (DetailObjects.Num() > 0)
+		{
+			ObjectToSave = DetailObjects[0].Get();
+		}
+	}
+
+	// Fallback to tracked selection.
+	if (!ObjectToSave)
+	{
+		ObjectToSave = SelectedAsset.Get();
+	}
 	if (!ObjectToSave)
 	{
 		TestResult = NSLOCTEXT("YOLOInventory","GenDash_Save_NoSelection","Save skipped: no selected generator/loot/rarity asset.");
@@ -209,6 +281,7 @@ void SYIGeneratorDashboard::GuidedSetupFromToolbar()
 	}
 
 	PopulateLootTableFromDataSources();
+	SyncAffixPoolsFromDataSources();
 	const bool bTestRan = RunGeneratorTestInternal(false);
 	if (!bTestRan)
 	{
@@ -711,14 +784,53 @@ TSharedRef<SWidget> SYIGeneratorDashboard::BuildTestPanelWidget()
 				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
 				[
 					SNew(SButton)
-						.Text(NSLOCTEXT("YOLOInventory","GenDash_Test","Generate"))
+						.Text(NSLOCTEXT("YOLOInventory","GenDash_SyncAffixPools","Sync Affix Pools From Sources"))
+						.OnClicked(this, &SYIGeneratorDashboard::SyncAffixPoolsFromDataSources)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(SCheckBox)
+						.IsChecked_Lambda([this]() { return bRandomizeSeedOnGenerate ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+						.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+							{
+								bRandomizeSeedOnGenerate = (NewState == ECheckBoxState::Checked);
+							})
+						[
+							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","GenDash_RandomizeSeed","Randomize Seed"))
+						]
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","GenDash_Test","Generate Rolls"))
 						.OnClicked(this, &SYIGeneratorDashboard::RunGeneratorTest)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8,2,2,2)
+				[
+					SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory","GenDash_Analyze","Analyze"))
+						.OnClicked(this, &SYIGeneratorDashboard::AnalyzeGeneratorStats)
 				]
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(6)
 		[
 			SNew(STextBlock)
 				.Text_Lambda([this](){ return TestResult.IsEmpty() ? NSLOCTEXT("YOLOInventory","GenDash_NoResult","Select a generator and click Generate.") : TestResult; })
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)
+		[
+			SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				.Padding(6)
+				[
+					SNew(STextBlock)
+						.Text_Lambda([this]()
+							{
+								return StatsResult.IsEmpty()
+									? NSLOCTEXT("YOLOInventory","GenDash_NoStats","Press Analyze to view loot/generator statistics.")
+									: StatsResult;
+							})
+				]
 		];
 }
 
@@ -759,7 +871,14 @@ FReply SYIGeneratorDashboard::CreateLootTable()
 	const FString BaseName = TEXT("LootTable");
 	FString PackageName, AssetName;
 	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
-	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
+	if (UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory))
+	{
+		SelectedAsset = NewAsset;
+		if (DetailsView.IsValid())
+		{
+			DetailsView->SetObject(NewAsset, true);
+		}
+	}
 	return FReply::Handled();
 }
 
@@ -771,7 +890,14 @@ FReply SYIGeneratorDashboard::CreateRarityProfile()
 	const FString BaseName = TEXT("RarityProfile");
 	FString PackageName, AssetName;
 	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
-	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
+	if (UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory))
+	{
+		SelectedAsset = NewAsset;
+		if (DetailsView.IsValid())
+		{
+			DetailsView->SetObject(NewAsset, true);
+		}
+	}
 	return FReply::Handled();
 }
 
@@ -783,12 +909,23 @@ FReply SYIGeneratorDashboard::CreateItemGenerator()
 	const FString BaseName = TEXT("ItemGenerator");
 	FString PackageName, AssetName;
 	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
-	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
+	if (UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory))
+	{
+		SelectedAsset = NewAsset;
+		if (DetailsView.IsValid())
+		{
+			DetailsView->SetObject(NewAsset, true);
+		}
+	}
 	return FReply::Handled();
 }
 
 FReply SYIGeneratorDashboard::RunGeneratorTest()
 {
+	if (bRandomizeSeedOnGenerate)
+	{
+		TestSeed = FMath::RandRange(1, 2147483647);
+	}
 	RunGeneratorTestInternal(true);
 	return FReply::Handled();
 }
@@ -815,6 +952,7 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 	int32 SuccessCount = 0;
 	int32 FailureCount = 0;
 	TMap<FString, int32> RarityHistogram;
+	TMap<FString, int32> ItemHistogram;
 	int64 PrefixTotal = 0;
 	int64 SuffixTotal = 0;
 
@@ -833,6 +971,11 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 		SuffixTotal = Suffixes;
 		const FString RarityName = Rarity.IsValid() ? Rarity.ToString() : TEXT("None");
 		RarityHistogram.FindOrAdd(RarityName)++;
+		if (UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous())
+		{
+			const FString Name = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
+			ItemHistogram.FindOrAdd(Name)++;
+		}
 	}
 	else
 	{
@@ -850,6 +993,11 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 				SuffixTotal += TmpSuffixes;
 				const FString RarityName = TmpRarity.IsValid() ? TmpRarity.ToString() : TEXT("None");
 				RarityHistogram.FindOrAdd(RarityName)++;
+				if (UYIItemDefinition* Def = TmpItem.Item.Definition.IsValid() ? TmpItem.Item.Definition.Get() : TmpItem.Item.Definition.LoadSynchronous())
+				{
+					const FString Name = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
+					ItemHistogram.FindOrAdd(Name)++;
+				}
 				if (RunIndex == 0)
 				{
 					Item = TmpItem;
@@ -902,6 +1050,11 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 		NumRuns, SuccessCount, FailureCount,
 		SuccessCount > 0 ? (double)PrefixTotal / (double)SuccessCount : 0.0,
 		SuccessCount > 0 ? (double)SuffixTotal / (double)SuccessCount : 0.0);
+	if (NumRuns > 1)
+	{
+		Detail += LINE_TERMINATOR;
+		Detail += FString::Printf(TEXT("Unique rolled items: %d"), ItemHistogram.Num());
+	}
 	if (RarityHistogram.Num() > 0)
 	{
 		Detail += LINE_TERMINATOR;
@@ -910,6 +1063,54 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 		{
 			Detail += LINE_TERMINATOR;
 			Detail += FString::Printf(TEXT("- %s: %d"), *Pair.Key, Pair.Value);
+		}
+	}
+	if (NumRuns > 1 && ItemHistogram.Num() > 0)
+	{
+		TArray<TPair<FString, int32>> ItemPairs;
+		ItemPairs.Reserve(ItemHistogram.Num());
+		for (const TPair<FString, int32>& Pair : ItemHistogram)
+		{
+			ItemPairs.Add(Pair);
+		}
+		ItemPairs.Sort([](const TPair<FString, int32>& A, const TPair<FString, int32>& B)
+			{
+				if (A.Value == B.Value)
+				{
+					return A.Key < B.Key;
+				}
+				return A.Value > B.Value;
+			});
+
+		Detail += LINE_TERMINATOR;
+		Detail += TEXT("Rolled Item Distribution:");
+		const int32 MaxRows = FMath::Min(12, ItemPairs.Num());
+		for (int32 Index = 0; Index < MaxRows; ++Index)
+		{
+			const TPair<FString, int32>& Pair = ItemPairs[Index];
+			const double Pct = SuccessCount > 0 ? ((double)Pair.Value * 100.0 / (double)SuccessCount) : 0.0;
+			Detail += LINE_TERMINATOR;
+			Detail += FString::Printf(TEXT("- %s: %d (%.2f%%)"), *Pair.Key, Pair.Value, Pct);
+		}
+	}
+
+	if (NumRuns > 1 && ItemHistogram.Num() <= 1)
+	{
+		int32 EligibleEntries = 0;
+		if (UYILootTable* LootTable = Generator->LootTable.IsValid() ? Generator->LootTable.Get() : Generator->LootTable.LoadSynchronous())
+		{
+			TArray<const FYILootTableEntry*> Eligible;
+			LootTable->GetEligibleEntries(TestLevel, Eligible);
+			EligibleEntries = Eligible.Num();
+		}
+		Detail += LINE_TERMINATOR;
+		if (EligibleEntries <= 1)
+		{
+			Detail += TEXT("Note: only one eligible loot entry at this level, so item variation is not expected.");
+		}
+		else
+		{
+			Detail += TEXT("Note: multiple entries are eligible, but rolls still converge to one item. Check entry weights/criteria.");
 		}
 	}
 	Detail += LINE_TERMINATOR;
@@ -938,6 +1139,204 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 
 	TestResult = FText::FromString(Detail);
 	return true;
+}
+
+FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
+{
+	UYIItemGenerator* Generator = Cast<UYIItemGenerator>(SelectedAsset.Get());
+	UYILootTable* LootTable = Cast<UYILootTable>(SelectedAsset.Get());
+	if (!LootTable && Generator)
+	{
+		LootTable = Generator->LootTable.IsValid() ? Generator->LootTable.Get() : Generator->LootTable.LoadSynchronous();
+	}
+	if (!LootTable)
+	{
+		StatsResult = NSLOCTEXT("YOLOInventory","GenDash_Stats_NoLoot","Stats: select LootTable or ItemGenerator with LootTable assigned.");
+		return FReply::Handled();
+	}
+
+	TArray<const FYILootTableEntry*> Eligible;
+	LootTable->GetEligibleEntries(TestLevel, Eligible);
+	const int32 TotalEntries = LootTable->Entries.Num();
+	const int32 EligibleEntries = Eligible.Num();
+
+	float TotalWeight = 0.f;
+	for (const FYILootTableEntry* Entry : Eligible)
+	{
+		TotalWeight += Entry ? Entry->Weight : 0.f;
+	}
+
+	TMap<FString, int32> ItemNameToCountChoices;
+	int64 StackChoiceCount = 0;
+	for (const FYILootTableEntry* Entry : Eligible)
+	{
+		if (!Entry)
+		{
+			continue;
+		}
+		UYIItemDefinition* Def = Entry->Definition.IsValid() ? Entry->Definition.Get() : Entry->Definition.LoadSynchronous();
+		const FString Name = Def ? (Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString()) : Entry->Definition.ToSoftObjectPath().GetAssetName();
+		const int32 MinCount = FMath::Max(1, Entry->MinCount);
+		const int32 MaxCount = FMath::Max(MinCount, Entry->MaxCount);
+		const int32 CountChoices = MaxCount - MinCount + 1;
+		ItemNameToCountChoices.FindOrAdd(Name) += CountChoices;
+		StackChoiceCount += CountChoices;
+	}
+
+	int32 TotalAffixAssets = 0;
+	{
+		FAssetRegistryModule& ARM = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+		TArray<FAssetData> AffixAssets;
+		ARM.Get().GetAssetsByClass(UYIAffixAsset::StaticClass()->GetClassPathName(), AffixAssets, true);
+		TotalAffixAssets = AffixAssets.Num();
+	}
+
+	int32 PrefixCandidates = 0;
+	int32 SuffixCandidates = 0;
+	if (Generator)
+	{
+		auto CountPoolEntries = [this](const TSoftObjectPtr<UYIAffixPoolAsset>& PoolSoft) -> int32
+		{
+			UYIAffixPoolAsset* Pool = PoolSoft.IsValid() ? PoolSoft.Get() : PoolSoft.LoadSynchronous();
+			if (!Pool)
+			{
+				return 0;
+			}
+			int32 Count = 0;
+			for (const FYIAffixPoolEntry& Entry : Pool->Entries)
+			{
+				if (Entry.Affix.ToSoftObjectPath().IsValid() && TestLevel >= Entry.MinLevel && TestLevel <= Entry.MaxLevel && Entry.Weight > 0.f)
+				{
+					++Count;
+				}
+			}
+			return Count;
+		};
+
+		PrefixCandidates = CountPoolEntries(Generator->PrefixPoolOverride);
+		SuffixCandidates = CountPoolEntries(Generator->SuffixPoolOverride);
+
+		if (Generator->bUseDefinitionAffixPools && (PrefixCandidates == 0 || SuffixCandidates == 0))
+		{
+			TSet<FSoftObjectPath> PrefixUnique;
+			TSet<FSoftObjectPath> SuffixUnique;
+			for (const FYILootTableEntry* Entry : Eligible)
+			{
+				if (!Entry)
+				{
+					continue;
+				}
+				UYIItemDefinition* Def = Entry->Definition.IsValid() ? Entry->Definition.Get() : Entry->Definition.LoadSynchronous();
+				if (!Def)
+				{
+					continue;
+				}
+				UYIAffixPoolAsset* PrefixPool = Def->PrefixPool.IsValid() ? Def->PrefixPool.Get() : Def->PrefixPool.LoadSynchronous();
+				UYIAffixPoolAsset* SuffixPool = Def->SuffixPool.IsValid() ? Def->SuffixPool.Get() : Def->SuffixPool.LoadSynchronous();
+				if (PrefixPool)
+				{
+					for (const FYIAffixPoolEntry& E : PrefixPool->Entries)
+					{
+						if (E.Affix.ToSoftObjectPath().IsValid() && E.Weight > 0.f && TestLevel >= E.MinLevel && TestLevel <= E.MaxLevel)
+						{
+							PrefixUnique.Add(E.Affix.ToSoftObjectPath());
+						}
+					}
+				}
+				if (SuffixPool)
+				{
+					for (const FYIAffixPoolEntry& E : SuffixPool->Entries)
+					{
+						if (E.Affix.ToSoftObjectPath().IsValid() && E.Weight > 0.f && TestLevel >= E.MinLevel && TestLevel <= E.MaxLevel)
+						{
+							SuffixUnique.Add(E.Affix.ToSoftObjectPath());
+						}
+					}
+				}
+			}
+			if (PrefixCandidates == 0) PrefixCandidates = PrefixUnique.Num();
+			if (SuffixCandidates == 0) SuffixCandidates = SuffixUnique.Num();
+		}
+	}
+
+	int32 MinPrefixes = 0, MaxPrefixes = 0, MinSuffixes = 0, MaxSuffixes = 0;
+	if (Generator && Generator->RarityProfile.ToSoftObjectPath().IsValid())
+	{
+		if (UYIRarityProfile* Profile = Generator->RarityProfile.IsValid() ? Generator->RarityProfile.Get() : Generator->RarityProfile.LoadSynchronous())
+		{
+			bool bFirst = true;
+			for (const FYIRarityRule& Rule : Profile->Rules)
+			{
+				if (Rule.Weight <= 0.f)
+				{
+					continue;
+				}
+				if (bFirst)
+				{
+					MinPrefixes = Rule.MinPrefixes; MaxPrefixes = Rule.MaxPrefixes;
+					MinSuffixes = Rule.MinSuffixes; MaxSuffixes = Rule.MaxSuffixes;
+					bFirst = false;
+				}
+				else
+				{
+					MinPrefixes = FMath::Min(MinPrefixes, Rule.MinPrefixes);
+					MaxPrefixes = FMath::Max(MaxPrefixes, Rule.MaxPrefixes);
+					MinSuffixes = FMath::Min(MinSuffixes, Rule.MinSuffixes);
+					MaxSuffixes = FMath::Max(MaxSuffixes, Rule.MaxSuffixes);
+				}
+			}
+		}
+	}
+
+	double PrefixCombos = 1.0;
+	double SuffixCombos = 1.0;
+	if (Generator && Generator->bGenerateRandomAffixes)
+	{
+		PrefixCombos = 0.0;
+		SuffixCombos = 0.0;
+		for (int32 P = FMath::Max(0, MinPrefixes); P <= FMath::Max(MinPrefixes, MaxPrefixes); ++P)
+		{
+			PrefixCombos += YIGeneratorDash_Combinations(PrefixCandidates, P);
+		}
+		for (int32 S = FMath::Max(0, MinSuffixes); S <= FMath::Max(MinSuffixes, MaxSuffixes); ++S)
+		{
+			SuffixCombos += YIGeneratorDash_Combinations(SuffixCandidates, S);
+		}
+		if (PrefixCombos <= 0.0) PrefixCombos = 1.0;
+		if (SuffixCombos <= 0.0) SuffixCombos = 1.0;
+	}
+
+	const double PermutationsEstimate = (double)FMath::Max<int64>(1, StackChoiceCount) * PrefixCombos * SuffixCombos;
+
+	FString Out;
+	Out += FString::Printf(TEXT("Loot entries: %d total | %d eligible at level %d"), TotalEntries, EligibleEntries, TestLevel);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Estimated base outcomes (count variants): %lld"), FMath::Max<int64>(1, StackChoiceCount));
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Affix assets in project: %d | Prefix candidates: %d | Suffix candidates: %d"), TotalAffixAssets, PrefixCandidates, SuffixCandidates);
+	Out += LINE_TERMINATOR;
+	Out += FString::Printf(TEXT("Estimated permutations: %.0f"), PermutationsEstimate);
+
+	if (EligibleEntries > 0 && TotalWeight > 0.f)
+	{
+		Out += LINE_TERMINATOR;
+		Out += TEXT("Item chances:");
+		for (const FYILootTableEntry* Entry : Eligible)
+		{
+			if (!Entry)
+			{
+				continue;
+			}
+			UYIItemDefinition* Def = Entry->Definition.IsValid() ? Entry->Definition.Get() : Entry->Definition.LoadSynchronous();
+			const FString Name = Def ? (Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString()) : Entry->Definition.ToSoftObjectPath().GetAssetName();
+			const float Chance = Entry->Weight / TotalWeight;
+			Out += LINE_TERMINATOR;
+			Out += FString::Printf(TEXT("- %s: %.2f%%"), *Name, Chance * 100.f);
+		}
+	}
+
+	StatsResult = FText::FromString(Out);
+	return FReply::Handled();
 }
 
 FReply SYIGeneratorDashboard::PopulateLootTableFromDataSources()
@@ -1062,6 +1461,122 @@ FReply SYIGeneratorDashboard::PopulateLootTableFromDataSources()
 	TestResult = FText::Format(
 		NSLOCTEXT("YOLOInventory","GenDash_PopulateLootResult","Loot table synced from datasource-backed items. Entries: {0}"),
 		FText::AsNumber(LootTable->Entries.Num()));
+	return FReply::Handled();
+}
+
+FReply SYIGeneratorDashboard::SyncAffixPoolsFromDataSources()
+{
+	FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+	TArray<FAssetData> SourceAssets;
+	AssetRegistry.Get().GetAssetsByClass(UYIDataTableAffixSource::StaticClass()->GetClassPathName(), SourceAssets, true);
+
+	int32 SourcesProcessed = 0;
+	int32 PoolsChanged = 0;
+	int32 EntriesAdded = 0;
+	int32 EntriesRemoved = 0;
+
+	for (const FAssetData& SourceAsset : SourceAssets)
+	{
+		const UYIDataTableAffixSource* Source = Cast<UYIDataTableAffixSource>(SourceAsset.GetAsset());
+		if (!Source || !Source->bAutoSyncTargetPools)
+		{
+			continue;
+		}
+
+		TArray<UYIAffixAsset*> SourceAffixes;
+		YIGeneratorDash_CollectAffixesForSource(Source, SourceAffixes);
+		if (SourceAffixes.Num() == 0)
+		{
+			continue;
+		}
+
+		TSet<FSoftObjectPath> PrefixPaths;
+		TSet<FSoftObjectPath> SuffixPaths;
+		TSet<FSoftObjectPath> ImplicitPaths;
+		for (UYIAffixAsset* Affix : SourceAffixes)
+		{
+			if (!Affix)
+			{
+				continue;
+			}
+			const FSoftObjectPath Path(Affix);
+			switch (Affix->Kind)
+			{
+			case EYIAffixKind::Prefix: PrefixPaths.Add(Path); break;
+			case EYIAffixKind::Suffix: SuffixPaths.Add(Path); break;
+			case EYIAffixKind::Implicit: ImplicitPaths.Add(Path); break;
+			default: break;
+			}
+		}
+
+		auto SyncPool = [&](UYIAffixPoolAsset* Pool, const TSet<FSoftObjectPath>& WantedPaths)
+		{
+			if (!Pool)
+			{
+				return;
+			}
+
+			TSet<FSoftObjectPath> ExistingPaths;
+			for (const FYIAffixPoolEntry& Entry : Pool->Entries)
+			{
+				if (Entry.Affix.ToSoftObjectPath().IsValid())
+				{
+					ExistingPaths.Add(Entry.Affix.ToSoftObjectPath());
+				}
+			}
+
+			int32 AddedLocal = 0;
+			int32 RemovedLocal = 0;
+			Pool->Modify();
+
+			for (const FSoftObjectPath& Wanted : WantedPaths)
+			{
+				if (ExistingPaths.Contains(Wanted))
+				{
+					continue;
+				}
+				FYIAffixPoolEntry NewEntry;
+				NewEntry.Affix = TSoftObjectPtr<UYIAffixAsset>(Wanted);
+				NewEntry.Weight = 1.f;
+				Pool->Entries.Add(NewEntry);
+				++AddedLocal;
+			}
+
+			if (Source->bPruneMissingRowsFromTargetPools)
+			{
+				RemovedLocal = Pool->Entries.RemoveAll([&](const FYIAffixPoolEntry& Entry)
+				{
+					UYIAffixAsset* EntryAffix = Entry.Affix.IsValid() ? Entry.Affix.Get() : Entry.Affix.LoadSynchronous();
+					if (!EntryAffix || !YIGeneratorDash_IsAffixFromSource(EntryAffix, Source))
+					{
+						return false;
+					}
+					return !WantedPaths.Contains(Entry.Affix.ToSoftObjectPath());
+				});
+			}
+
+			if (AddedLocal > 0 || RemovedLocal > 0)
+			{
+				Pool->MarkPackageDirty();
+				++PoolsChanged;
+				EntriesAdded += AddedLocal;
+				EntriesRemoved += RemovedLocal;
+			}
+		};
+
+		SyncPool(Source->PrefixTargetPool.IsValid() ? Source->PrefixTargetPool.Get() : Source->PrefixTargetPool.LoadSynchronous(), PrefixPaths);
+		SyncPool(Source->SuffixTargetPool.IsValid() ? Source->SuffixTargetPool.Get() : Source->SuffixTargetPool.LoadSynchronous(), SuffixPaths);
+		SyncPool(Source->ImplicitTargetPool.IsValid() ? Source->ImplicitTargetPool.Get() : Source->ImplicitTargetPool.LoadSynchronous(), ImplicitPaths);
+
+		++SourcesProcessed;
+	}
+
+	TestResult = FText::Format(
+		NSLOCTEXT("YOLOInventory","GenDash_SyncAffixPoolsResult","Affix pool sync complete. Sources: {0}, Pools changed: {1}, Added: {2}, Removed: {3}"),
+		FText::AsNumber(SourcesProcessed),
+		FText::AsNumber(PoolsChanged),
+		FText::AsNumber(EntriesAdded),
+		FText::AsNumber(EntriesRemoved));
 	return FReply::Handled();
 }
 

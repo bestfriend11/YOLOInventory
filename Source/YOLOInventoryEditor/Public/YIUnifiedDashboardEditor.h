@@ -7,6 +7,8 @@
 class SYIItemDashboard;
 class SYIAffixDashboard;
 class SYIGeneratorDashboard;
+class SYICraftingDashboard;
+class SYIBagDashboard;
 class SYIUnifiedHelpPanel;
 class FWorkspaceItem;
 class FToolBarBuilder;
@@ -26,6 +28,7 @@ public:
 	virtual FText GetBaseToolkitName() const override { return NSLOCTEXT("YOLOInventory", "DashboardToolkit", "YOLO Inventory Dashboard"); }
 	virtual FString GetWorldCentricTabPrefix() const override { return TEXT("YOLOInventory"); }
 	virtual FLinearColor GetWorldCentricTabColorScale() const override { return FLinearColor(0.15f, 0.55f, 0.95f, 1.f); }
+	virtual void SaveAsset_Execute() override;
 
 protected:
 	virtual void UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager) override;
@@ -37,10 +40,14 @@ private:
 	void CloseItemPanelTabs();
 	void CloseAffixPanelTabs();
 	void CloseGeneratorPanelTabs();
+	void CloseCraftingPanelTabs();
+	void CloseBagPanelTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnCraftingTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnBagsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnHelpTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemMappingsTab(const FSpawnTabArgs& Args);
@@ -55,10 +62,14 @@ private:
 	TSharedRef<SDockTab> SpawnAffixPreviewTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorTestTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnCraftingDetailsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnBagsDetailsTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
 	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
+	TSharedPtr<SYICraftingDashboard> CraftingDashboard;
+	TSharedPtr<SYIBagDashboard> BagDashboard;
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;
 	TStrongObjectPtr<UYIUnifiedDashboardContext> EditorContext;
 	TSharedPtr<FExtender> ToolbarExtender;

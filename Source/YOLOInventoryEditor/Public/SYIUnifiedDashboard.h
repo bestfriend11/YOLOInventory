@@ -12,7 +12,9 @@ enum class EYIUnifiedDashboardTab : uint8
 {
 	Items,
 	Affixes,
-	Generators
+	Generators,
+	Crafting,
+	Bags
 };
 
 class SYIUnifiedDashboard : public SCompoundWidget

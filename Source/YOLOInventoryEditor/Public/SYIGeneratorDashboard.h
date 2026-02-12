@@ -31,6 +31,7 @@ public:
 	void CreateItemGeneratorFromToolbar();
 	void RunGeneratorTestFromToolbar();
 	void PopulateLootTableFromDataSourcesFromToolbar();
+	void SyncAffixPoolsFromDataSourcesFromToolbar();
 	void SaveCurrentAssetFromToolbar();
 	void GuidedSetupFromToolbar();
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
@@ -49,7 +50,9 @@ private:
 	FReply CreateRarityProfile();
 	FReply CreateItemGenerator();
 	FReply RunGeneratorTest();
+	FReply AnalyzeGeneratorStats();
 	FReply PopulateLootTableFromDataSources();
+	FReply SyncAffixPoolsFromDataSources();
 	void HandleDetailsChanged(const struct FPropertyChangedEvent& PropertyChangedEvent);
 	bool RunGeneratorTestInternal(bool bUserInitiated);
 
@@ -61,8 +64,10 @@ private:
 	TSharedPtr<class SWidget> TestPanelWidget;
 	int32 TestLevel = 1;
 	int32 TestSeed = 1;
-	int32 TestRuns = 1;
+	int32 TestRuns = 25;
 	FText TestResult;
+	FText StatsResult;
+	bool bRandomizeSeedOnGenerate = true;
 	bool bAutoRefreshTest = false;
 	bool bPendingAutoRefresh = false;
 	double NextAutoRefreshTime = 0.0;

@@ -155,7 +155,24 @@ int32 SBagEditor::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeome
 			}
 			if (!Icon) { Icon = FSlateIconFinder::FindIconBrushForClass(UYIItemDefinition::StaticClass()); }
 
-			FVector2D IconSize = FVector2D(FMath::Min(S.X - 4, 24.f), FMath::Min(S.Y - 4, 24.f));
+			const float Pad = 2.f;
+			FVector2D MaxIconSize = S - FVector2D(Pad * 2.f, Pad * 2.f);
+			MaxIconSize.X = FMath::Max(1.f, MaxIconSize.X);
+			MaxIconSize.Y = FMath::Max(1.f, MaxIconSize.Y);
+			FVector2D IconSize = MaxIconSize;
+			if (Icon && Icon->ImageSize.X > KINDA_SMALL_NUMBER && Icon->ImageSize.Y > KINDA_SMALL_NUMBER)
+			{
+				const float TexAspect = Icon->ImageSize.X / Icon->ImageSize.Y;
+				const float SlotAspect = MaxIconSize.X / MaxIconSize.Y;
+				if (TexAspect > SlotAspect)
+				{
+					IconSize = FVector2D(MaxIconSize.X, MaxIconSize.X / FMath::Max(TexAspect, KINDA_SMALL_NUMBER));
+				}
+				else
+				{
+					IconSize = FVector2D(MaxIconSize.Y * TexAspect, MaxIconSize.Y);
+				}
+			}
 			FVector2D IconPos = P + (S - IconSize) * 0.5f;
 			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(IconSize), FSlateLayoutTransform(FVector2f(IconPos))), Icon, ESlateDrawEffect::None, FLinearColor::White);
 		}

@@ -19,9 +19,13 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Styling/AppStyle.h"
+#include "Styling/SlateIconFinder.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/Views/SListView.h"
+#include "Widgets/Views/STileView.h"
+#include "Widgets/Images/SImage.h"
+#include "Brushes/SlateDynamicImageBrush.h"
 #include "SYIItemDashboard.h"
 #include "YIItemRegistrySubsystem.h"
 #include "Data/YIDataTableItemSource.h"
@@ -155,6 +159,7 @@ void FYIInventoryBagEditor::HandleGridSelectionChanged(int32 Index)
 TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs& Args)
 {
 	RefreshDataRowEntries();
+	RefreshRuntimeEntries();
 
 	FAssetPickerConfig Picker;
 	Picker.InitialAssetViewType = EAssetViewType::Tile;
@@ -296,6 +301,44 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs&
 			})
 		];
 
+	TSharedRef<SWidget> RuntimeWidget =
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot().AutoHeight().Padding(4)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory","BagPaletteRuntimeRefresh","Refresh Runtime View"))
+				.OnClicked_Lambda([this]()
+				{
+					RefreshRuntimeEntries();
+					if (RuntimeItemTileView.IsValid())
+					{
+						RuntimeItemTileView->RequestListRefresh();
+					}
+					return FReply::Handled();
+				})
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f).HAlign(HAlign_Right).VAlign(VAlign_Center).Padding(4, 0)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+				{
+					const int32 Count = Bag ? Bag->Items.Num() : 0;
+					return FText::Format(NSLOCTEXT("YOLOInventory","BagPaletteRuntimeCount","Items in bag: {0}"), FText::AsNumber(Count));
+				})
+			]
+		]
+		+ SVerticalBox::Slot().FillHeight(1.f).Padding(4)
+		[
+			SAssignNew(RuntimeItemTileView, STileView<TSharedPtr<int32>>)
+			.ListItemsSource(&RuntimeEntries)
+			.ItemWidth(220.f)
+			.ItemHeight(64.f)
+			.OnGenerateTile(this, &FYIInventoryBagEditor::MakeRuntimeItemTile)
+		];
+
 	return SNew(SDockTab)
 	[
 		SNew(SVerticalBox)
@@ -336,13 +379,41 @@ TSharedRef<SDockTab> FYIInventoryBagEditor::SpawnPaletteTab(const FSpawnTabArgs&
 					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteRows","Data Rows"))
 				]
 			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+			[
+				SNew(SCheckBox)
+				.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
+				.IsChecked_Lambda([this](){ return PaletteMode == EYIBagPaletteMode::Runtime ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+				{
+					if (State == ECheckBoxState::Checked)
+					{
+						PaletteMode = EYIBagPaletteMode::Runtime;
+						RefreshRuntimeEntries();
+						if (RuntimeItemTileView.IsValid())
+						{
+							RuntimeItemTileView->RequestListRefresh();
+						}
+					}
+				})
+				.Content()
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory","BagPaletteRuntime","Runtime"))
+				]
+			]
 		]
 		+ SVerticalBox::Slot().FillHeight(1.f)
 		[
 			SNew(SWidgetSwitcher)
-			.WidgetIndex_Lambda([this]() { return PaletteMode == EYIBagPaletteMode::Assets ? 0 : 1; })
+			.WidgetIndex_Lambda([this]()
+			{
+				if (PaletteMode == EYIBagPaletteMode::Assets) return 0;
+				if (PaletteMode == EYIBagPaletteMode::DataRows) return 1;
+				return 2;
+			})
 			+ SWidgetSwitcher::Slot()[ AssetPickerWidget ]
 			+ SWidgetSwitcher::Slot()[ DataRowWidget ]
+			+ SWidgetSwitcher::Slot()[ RuntimeWidget ]
 		]
 	];
 }
@@ -648,6 +719,123 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 	}
 }
 
+void FYIInventoryBagEditor::RefreshRuntimeEntries()
+{
+	RuntimeEntries.Reset();
+	if (!Bag)
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
+	{
+		RuntimeEntries.Add(MakeShared<int32>(Index));
+	}
+}
+
+const FSlateBrush* FYIInventoryBagEditor::ResolveRuntimeItemIcon(UYIItemDefinition* Def)
+{
+	if (Def && Def->Icon.IsValid())
+	{
+		UTexture2D* IconTex = Def->Icon.Get();
+		if (!IconTex)
+		{
+			IconTex = Def->Icon.LoadSynchronous();
+		}
+		if (IconTex)
+		{
+			TSharedPtr<FSlateDynamicImageBrush>& Brush = RuntimeIconBrushCache.FindOrAdd(IconTex);
+			if (!Brush.IsValid())
+			{
+				Brush = MakeShared<FSlateDynamicImageBrush>(IconTex->GetFName(), FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY()));
+				Brush->SetResourceObject(IconTex);
+			}
+			return Brush.Get();
+		}
+	}
+	return FSlateIconFinder::FindIconBrushForClass(UYIItemDefinition::StaticClass());
+}
+
+FText FYIInventoryBagEditor::BuildRuntimeItemTooltip(const UYIItemDefinition* Def, int32 Count) const
+{
+	if (!Def)
+	{
+		return NSLOCTEXT("YOLOInventory","BagRuntimeTooltipMissing","Missing item definition.");
+	}
+
+	const FString DisplayName = Def->DisplayName.IsEmpty() ? Def->GetName() : Def->DisplayName.ToString();
+	const FString Description = Def->Description.IsEmpty() ? TEXT("-") : Def->Description.ToString();
+	const FString Type = Def->ItemType.IsValid() ? Def->ItemType.ToString() : TEXT("-");
+	const FString Rarity = Def->RarityTag.IsValid() ? Def->RarityTag.ToString() : TEXT("-");
+
+	const FString Tooltip = FString::Printf(
+		TEXT("%s\nCount: %d\nType: %s\nRarity: %s\nCode: %lld\nTemplate: %s\n\n%s"),
+		*DisplayName,
+		Count,
+		*Type,
+		*Rarity,
+		(long long)Def->UniqueCode,
+		*Def->TemplateId,
+		*Description);
+	return FText::FromString(Tooltip);
+}
+
+TSharedRef<ITableRow> FYIInventoryBagEditor::MakeRuntimeItemTile(TSharedPtr<int32> ItemIndex, const TSharedRef<STableViewBase>& Owner)
+{
+	const FYIBagItem* BagItem = nullptr;
+	UYIItemDefinition* Def = nullptr;
+	int32 Count = 0;
+
+	if (Bag && ItemIndex.IsValid() && Bag->Items.IsValidIndex(*ItemIndex))
+	{
+		BagItem = &Bag->Items[*ItemIndex];
+		Def = BagItem->Item.Definition.IsValid() ? BagItem->Item.Definition.Get() : BagItem->Item.Definition.LoadSynchronous();
+		Count = BagItem->Item.Count;
+	}
+
+	const FText NameText = Def
+		? (Def->DisplayName.IsEmpty() ? FText::FromString(Def->GetName()) : Def->DisplayName)
+		: NSLOCTEXT("YOLOInventory","BagRuntimeUnknown","Unknown");
+	const FText MetaText = Def
+		? FText::FromString(FString::Printf(TEXT("x%d  |  %s"), Count, Def->RarityTag.IsValid() ? *Def->RarityTag.ToString() : TEXT("No Rarity")))
+		: FText::FromString(TEXT("x0"));
+	const FSlateBrush* IconBrush = ResolveRuntimeItemIcon(Def);
+
+	return SNew(STableRow<TSharedPtr<int32>>, Owner)
+	[
+		SNew(SBorder)
+		.Padding(6)
+		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+		.ToolTipText(BuildRuntimeItemTooltip(Def, Count))
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+			[
+				SNew(SBox)
+				.WidthOverride(44.f)
+				.HeightOverride(44.f)
+				[
+					SNew(SImage).Image(IconBrush)
+				]
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock).Text(NameText)
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock)
+					.Text(MetaText)
+					.ColorAndOpacity(FLinearColor(0.75f, 0.75f, 0.75f))
+				]
+			]
+		]
+	];
+}
+
 TSharedRef<ITableRow> FYIInventoryBagEditor::MakeDataRowWidget(TSharedPtr<FYIItemDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
 {
 	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
@@ -899,5 +1087,10 @@ bool FYIInventoryBagEditor::AddEntryToBag(const FYIItemDashboardEntry& Entry)
 	NewItem.Size = Def->DefaultSize;
 	NewItem.Pos = FIntPoint::ZeroValue;
 	Bag->AddBagItem(NewItem);
+	RefreshRuntimeEntries();
+	if (RuntimeItemTileView.IsValid())
+	{
+		RuntimeItemTileView->RequestListRefresh();
+	}
 	return true;
 }
