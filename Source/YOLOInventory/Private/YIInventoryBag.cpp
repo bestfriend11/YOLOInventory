@@ -4,6 +4,78 @@
 #include "InventoryUtils.h"
 #include "UObject/Package.h"
 
+bool UYIInventoryBag::CanAcceptItemDefinition(const UYIItemDefinition* Definition) const
+{
+	if (!Definition)
+	{
+		return false;
+	}
+
+	if (!bEnforceAcceptanceRules)
+	{
+		return true;
+	}
+
+	// Optional class-level filter.
+	if (AllowedDefinitionClasses.Num() > 0)
+	{
+		bool bAllowedClass = false;
+		for (const TSoftClassPtr<UYIItemDefinition>& AllowedClassPtr : AllowedDefinitionClasses)
+		{
+			UClass* AllowedClass = AllowedClassPtr.IsValid() ? AllowedClassPtr.Get() : AllowedClassPtr.LoadSynchronous();
+			if (AllowedClass && Definition->IsA(AllowedClass))
+			{
+				bAllowedClass = true;
+				break;
+			}
+		}
+		if (!bAllowedClass)
+		{
+			return false;
+		}
+	}
+
+	// ItemType allow-list with hierarchical match (e.g. Item.Spell accepts Item.Spell.Fire).
+	if (AllowedItemTypes.Num() > 0)
+	{
+		const FGameplayTag ItemType = Definition->ItemType;
+		bool bTypeAllowed = false;
+		if (ItemType.IsValid())
+		{
+			for (const FGameplayTag& AllowedType : AllowedItemTypes)
+			{
+				if (ItemType.MatchesTag(AllowedType))
+				{
+					bTypeAllowed = true;
+					break;
+				}
+			}
+		}
+		if (!bTypeAllowed)
+		{
+			return false;
+		}
+	}
+
+	FGameplayTagContainer EffectiveTags = Definition->Tags;
+	if (Definition->ItemType.IsValid())
+	{
+		EffectiveTags.AddTag(Definition->ItemType);
+	}
+
+	if (RequiredItemTags.Num() > 0 && !EffectiveTags.HasAll(RequiredItemTags))
+	{
+		return false;
+	}
+
+	if (BlockedItemTags.Num() > 0 && EffectiveTags.HasAny(BlockedItemTags))
+	{
+		return false;
+	}
+
+	return true;
+}
+
 FIntPoint UYIInventoryBag::GetEffectiveSize(const FIntPoint InSize) const
 {
 	FVector2D S = FVector2D(InSize) * FMath::Clamp(MinifyScale, 0.1f, 1.0f);
@@ -83,6 +155,11 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 {
 	UYIItemDefinition* Def = NewItem.Item.Definition.IsValid() ? NewItem.Item.Definition.Get() : NewItem.Item.Definition.LoadSynchronous();
 	if (!Def)
+	{
+		return INDEX_NONE;
+	}
+
+	if (!CanAcceptItemDefinition(Def))
 	{
 		return INDEX_NONE;
 	}
@@ -375,8 +452,3 @@ void UYIInventoryBag::AutoPack()
 	MarkPackageDirty();
 	OnChanged.Broadcast();
 }
-#include "YIInventoryBag.h"
-#include "YIItemDefinition.h"
-#include "YIInventoryBlueprintLibrary.h"
-#include "InventoryUtils.h"
-#include "UObject/Package.h"

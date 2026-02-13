@@ -3,6 +3,7 @@
 #include "UObject/Object.h"
 #include "Delegates/DelegateCombinations.h"
 #include "StructUtils/InstancedStruct.h"
+#include "GameplayTagContainer.h"
 #include "YIItemInstance.h" // for FYIItemInstance
 // #include "YIContainerInterface.h"
 #include "YIInventoryBag.generated.h"
@@ -152,6 +153,30 @@ public:
 	/** If true, AddBagItem will attempt to merge into existing compatible stacks. Turn off to force new stacks (useful for designer testing). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules", meta=(ToolTip="Auto-merge incoming items into existing stacks when compatible"))
 	bool bAutoMergeOnAdd = true;
+
+	/** Enables hard acceptance rules so this bag can act like an equipment/spellbook slot set. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(ToolTip="If enabled, incoming items must pass acceptance filters below"))
+	bool bEnforceAcceptanceRules = false;
+
+	/** Allowed primary item types (uses ItemDefinition.ItemType). Empty means any type. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(EditCondition="bEnforceAcceptanceRules", ToolTip="Allowed ItemType tags; child tags are accepted"))
+	FGameplayTagContainer AllowedItemTypes;
+
+	/** Required tags that must exist on the item (checks ItemDefinition.Tags + ItemType). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(EditCondition="bEnforceAcceptanceRules", ToolTip="All of these tags must exist on the item"))
+	FGameplayTagContainer RequiredItemTags;
+
+	/** Tags that disqualify the item (checks ItemDefinition.Tags + ItemType). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(EditCondition="bEnforceAcceptanceRules", ToolTip="Any of these tags will block the item"))
+	FGameplayTagContainer BlockedItemTags;
+
+	/** Optional class filter for advanced setups; if set, item definition must be one of these classes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(EditCondition="bEnforceAcceptanceRules", ToolTip="Optional allowed item definition classes"))
+	TArray<TSoftClassPtr<UYIItemDefinition>> AllowedDefinitionClasses;
+
+	/** Returns true if this definition passes acceptance rules configured on the bag. */
+	UFUNCTION(BlueprintCallable, Category="Bag|Rules")
+	bool CanAcceptItemDefinition(const UYIItemDefinition* Definition) const;
 
 	// Returns true if rectangle [Pos, Pos+Size) is free (no overlap) and inside grid
 	UFUNCTION(BlueprintCallable, Category="Bag")
