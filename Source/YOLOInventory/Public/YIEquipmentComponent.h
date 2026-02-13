@@ -87,6 +87,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment", BlueprintAuthorityOnly)
 	void LoadPersistedEquipment(const TArray<FYIEquippedItemEntry>& InEntries);
 
+	/** Validate equipped entries and slot configuration. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Diagnostics")
+	bool ValidateEquipmentSetup(TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

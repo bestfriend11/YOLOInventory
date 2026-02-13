@@ -46,7 +46,17 @@ void UYIActionBarComponent::BeginPlay()
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
 		EnsureSlotArraySize();
+		if (bAutoBindFromEquipment)
+		{
+			RebuildAutoBindingsFromEquipment();
+		}
 	}
+}
+
+void UYIActionBarComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindEquipmentEvents();
+	Super::EndPlay(EndPlayReason);
 }
 
 void UYIActionBarComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -130,6 +140,229 @@ void UYIActionBarComponent::LoadInvocationLog(const TArray<FYIActionInvocationRe
 	if (ServerInvocationLog.Num() > MaxLogEntries)
 	{
 		ServerInvocationLog.RemoveAt(0, ServerInvocationLog.Num() - MaxLogEntries);
+	}
+}
+
+bool UYIActionBarComponent::ValidateActionBindings(TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const
+{
+	OutBlockingIssues.Reset();
+	OutWarnings.Reset();
+
+	if (ActionBindings.Num() != NumActionSlots)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("ActionBindings count (%d) differs from NumActionSlots (%d)."), ActionBindings.Num(), NumActionSlots));
+	}
+
+	for (int32 SlotIndex = 0; SlotIndex < ActionBindings.Num(); ++SlotIndex)
+	{
+		const FYIActionBarBinding& Binding = ActionBindings[SlotIndex];
+		if (!Binding.bEnabled)
+		{
+			continue;
+		}
+
+		const bool bHasTag = Binding.ActionTag.IsValid();
+		const bool bHasAbilityClass = !Binding.AbilityClass.ToSoftObjectPath().IsNull();
+		if (!bHasTag && !bHasAbilityClass)
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("Slot %d is enabled but has no ActionTag and no AbilityClass."), SlotIndex));
+		}
+
+		if (bHasTag && !Binding.ActionTag.ToString().StartsWith(ActionTagPrefix))
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Slot %d action tag '%s' does not match prefix '%s'."), SlotIndex, *Binding.ActionTag.ToString(), *ActionTagPrefix));
+		}
+
+		if (Binding.SourceEquipSlotTag.IsValid() && Binding.SourceItem.Definition.ToSoftObjectPath().IsNull())
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Slot %d references equip slot '%s' but has no cached source item."), SlotIndex, *Binding.SourceEquipSlotTag.ToString()));
+		}
+	}
+
+	if (bAutoBindFromEquipment)
+	{
+		if (AutoBindRules.Num() == 0)
+		{
+			OutWarnings.Add(TEXT("Auto-bind from equipment is enabled but AutoBindRules is empty."));
+		}
+		TSet<int32> SeenActionSlots;
+		for (const FYIEquipmentActionAutoBindRule& Rule : AutoBindRules)
+		{
+			if (!Rule.bEnabled)
+			{
+				continue;
+			}
+			if (!Rule.EquipSlotTag.IsValid())
+			{
+				OutBlockingIssues.Add(TEXT("Auto-bind rule has invalid EquipSlotTag."));
+				continue;
+			}
+			if (Rule.ActionSlotIndex < 0 || Rule.ActionSlotIndex >= NumActionSlots)
+			{
+				OutBlockingIssues.Add(FString::Printf(
+					TEXT("Auto-bind rule for slot '%s' targets invalid action slot index %d."),
+					*Rule.EquipSlotTag.ToString(),
+					Rule.ActionSlotIndex));
+			}
+			if (SeenActionSlots.Contains(Rule.ActionSlotIndex))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Multiple auto-bind rules target action slot %d."), Rule.ActionSlotIndex));
+			}
+			SeenActionSlots.Add(Rule.ActionSlotIndex);
+			if (Rule.ActionTagOverride.IsValid() && !Rule.ActionTagOverride.ToString().StartsWith(ActionTagPrefix))
+			{
+				OutWarnings.Add(FString::Printf(
+					TEXT("Auto-bind action tag '%s' does not match ActionTagPrefix '%s'."),
+					*Rule.ActionTagOverride.ToString(),
+					*ActionTagPrefix));
+			}
+		}
+	}
+
+	return OutBlockingIssues.Num() == 0;
+}
+
+void UYIActionBarComponent::BindEquipmentEvents(UYIEquipmentComponent* Equipment)
+{
+	if (ObservedEquipment.Get() == Equipment)
+	{
+		return;
+	}
+
+	UnbindEquipmentEvents();
+	ObservedEquipment = Equipment;
+	if (ObservedEquipment.IsValid())
+	{
+		ObservedEquipment->OnEquipmentChanged.AddDynamic(this, &UYIActionBarComponent::HandleEquipmentChanged);
+	}
+}
+
+void UYIActionBarComponent::UnbindEquipmentEvents()
+{
+	if (ObservedEquipment.IsValid())
+	{
+		ObservedEquipment->OnEquipmentChanged.RemoveDynamic(this, &UYIActionBarComponent::HandleEquipmentChanged);
+	}
+	ObservedEquipment.Reset();
+}
+
+void UYIActionBarComponent::RebuildAutoBindingsFromEquipment(UYIEquipmentComponent* Equipment)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	if (!bAutoBindFromEquipment)
+	{
+		return;
+	}
+
+	if (!Equipment && GetOwner())
+	{
+		Equipment = GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
+	}
+	if (!Equipment)
+	{
+		EmitActionMessage(TEXT("Auto-bind skipped: no equipment component found on owner."), FColor::Yellow);
+		UnbindEquipmentEvents();
+		return;
+	}
+
+	BindEquipmentEvents(Equipment);
+	EnsureSlotArraySize();
+	for (const FYIEquipmentActionAutoBindRule& Rule : AutoBindRules)
+	{
+		ApplyAutoBindRule(Rule, Equipment);
+	}
+}
+
+void UYIActionBarComponent::ApplyAutoBindRule(const FYIEquipmentActionAutoBindRule& Rule, UYIEquipmentComponent* Equipment)
+{
+	if (!Rule.bEnabled || !Equipment)
+	{
+		return;
+	}
+	if (!Rule.EquipSlotTag.IsValid())
+	{
+		return;
+	}
+
+	EnsureSlotArraySize();
+	if (!ActionBindings.IsValidIndex(Rule.ActionSlotIndex))
+	{
+		EmitActionMessage(FString::Printf(
+			TEXT("Auto-bind ignored: action slot %d is out of range for equip slot '%s'."),
+			Rule.ActionSlotIndex,
+			*Rule.EquipSlotTag.ToString()), FColor::Yellow);
+		return;
+	}
+
+	const FYIActionBarBinding& ExistingBinding = ActionBindings[Rule.ActionSlotIndex];
+	const bool bHasManualBinding = ExistingBinding.bEnabled && !ExistingBinding.SourceEquipSlotTag.IsValid();
+	const bool bHasBindingFromDifferentSlot =
+		ExistingBinding.bEnabled &&
+		ExistingBinding.SourceEquipSlotTag.IsValid() &&
+		ExistingBinding.SourceEquipSlotTag != Rule.EquipSlotTag;
+	if (!Rule.bAllowOverrideExistingBinding && (bHasManualBinding || bHasBindingFromDifferentSlot))
+	{
+		return;
+	}
+
+	FYIItemInstanceNet EquippedItem;
+	const bool bHasEquippedItem = Equipment->GetEquippedItem(Rule.EquipSlotTag, EquippedItem);
+	if (bHasEquippedItem)
+	{
+		TSubclassOf<UGameplayAbility> AbilityClass = nullptr;
+		if (!Rule.AbilityClassOverride.IsNull())
+		{
+			AbilityClass = Rule.AbilityClassOverride.IsValid() ? Rule.AbilityClassOverride.Get() : Rule.AbilityClassOverride.LoadSynchronous();
+		}
+		BindActionFromEquippedSlot(
+			Equipment,
+			Rule.EquipSlotTag,
+			Rule.ActionSlotIndex,
+			Rule.ActionTagOverride,
+			AbilityClass,
+			FMath::Max(1, Rule.AbilityLevel));
+	}
+	else if (Rule.bClearWhenUnequipped)
+	{
+		if (ExistingBinding.bEnabled && ExistingBinding.SourceEquipSlotTag == Rule.EquipSlotTag)
+		{
+			ClearActionSlot(Rule.ActionSlotIndex);
+		}
+	}
+}
+
+void UYIActionBarComponent::HandleEquipmentChanged(FGameplayTag SlotTag, FYIItemInstanceNet Item)
+{
+	(void)Item;
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	if (!bAutoBindFromEquipment || !SlotTag.IsValid())
+	{
+		return;
+	}
+
+	UYIEquipmentComponent* Equipment = ObservedEquipment.Get();
+	if (!Equipment && GetOwner())
+	{
+		Equipment = GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
+		BindEquipmentEvents(Equipment);
+	}
+	if (!Equipment)
+	{
+		return;
+	}
+
+	for (const FYIEquipmentActionAutoBindRule& Rule : AutoBindRules)
+	{
+		if (Rule.bEnabled && Rule.EquipSlotTag == SlotTag)
+		{
+			ApplyAutoBindRule(Rule, Equipment);
+		}
 	}
 }
 

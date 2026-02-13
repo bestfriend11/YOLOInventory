@@ -162,6 +162,40 @@ void UYIEquipmentComponent::LoadPersistedEquipment(const TArray<FYIEquippedItemE
 	EmitEquipmentMessage(FString::Printf(TEXT("Loaded %d persisted equipped entries."), EquippedItems.Num()), FColor::Cyan);
 }
 
+bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const
+{
+	OutBlockingIssues.Reset();
+	OutWarnings.Reset();
+
+	TSet<FGameplayTag> SeenSlots;
+	for (const FYIEquippedItemEntry& Entry : EquippedItems)
+	{
+		if (!Entry.SlotTag.IsValid())
+		{
+			OutBlockingIssues.Add(TEXT("Equipment entry has invalid SlotTag."));
+			continue;
+		}
+
+		if (SeenSlots.Contains(Entry.SlotTag))
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("Duplicate equipped slot '%s'."), *Entry.SlotTag.ToString()));
+		}
+		SeenSlots.Add(Entry.SlotTag);
+
+		if (AllowedEquipSlots.Num() > 0 && !AllowedEquipSlots.HasTagExact(Entry.SlotTag))
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' is outside AllowedEquipSlots."), *Entry.SlotTag.ToString()));
+		}
+
+		if (Entry.Item.Definition.ToSoftObjectPath().IsNull())
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' has no item definition."), *Entry.SlotTag.ToString()));
+		}
+	}
+
+	return OutBlockingIssues.Num() == 0;
+}
+
 bool UYIEquipmentComponent::EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
 {
 	if (!GetOwner())

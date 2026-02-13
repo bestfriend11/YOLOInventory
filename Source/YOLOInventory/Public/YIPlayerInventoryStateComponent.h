@@ -285,6 +285,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
 	bool DiagnoseSaveSetup(FString& OutMessage) const;
 
+	/** Runtime preflight for inventory/equipment/action-bar wiring on a pawn. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
+	bool RunRuntimePreflight(APawn* Pawn, TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;

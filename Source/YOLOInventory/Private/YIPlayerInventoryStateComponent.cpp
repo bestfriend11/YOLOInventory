@@ -66,6 +66,168 @@ bool UYIPlayerInventoryStateComponent::DiagnoseSaveSetup(FString& OutMessage) co
 	return true;
 }
 
+bool UYIPlayerInventoryStateComponent::RunRuntimePreflight(APawn* Pawn, TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const
+{
+	OutBlockingIssues.Reset();
+	OutWarnings.Reset();
+	auto AddUniqueIssue = [](TArray<FString>& Target, const FString& Message)
+	{
+		if (!Target.Contains(Message))
+		{
+			Target.Add(Message);
+		}
+	};
+
+	if (!Pawn)
+	{
+		OutBlockingIssues.Add(TEXT("Pawn is null."));
+		return false;
+	}
+
+	UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
+	if (!InventoryComp)
+	{
+		OutBlockingIssues.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIInventoryComponent."), *Pawn->GetName()));
+		return false;
+	}
+
+	UYIInventoryBag* ActiveBag = InventoryComp->GetBag();
+	if (!ActiveBag)
+	{
+		ActiveBag = InventoryComp->EquippedBag;
+	}
+	if (!ActiveBag && InventoryComp->Bags.Num() == 0)
+	{
+		OutBlockingIssues.Add(FString::Printf(TEXT("Pawn '%s' has no active bag and Bags array is empty."), *Pawn->GetName()));
+	}
+	else if (!ActiveBag)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' has Bags entries but no active equipped bag."), *Pawn->GetName()));
+	}
+
+	UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+	if (!EquipmentComp)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIEquipmentComponent (equip actions disabled)."), *Pawn->GetName()));
+	}
+	else
+	{
+		TSet<FGameplayTag> SeenSlots;
+		for (const FYIEquippedItemEntry& Entry : EquipmentComp->EquippedItems)
+		{
+			if (!Entry.SlotTag.IsValid())
+			{
+				OutBlockingIssues.Add(TEXT("Equipment contains an entry with invalid SlotTag."));
+				continue;
+			}
+			if (SeenSlots.Contains(Entry.SlotTag))
+			{
+				OutBlockingIssues.Add(FString::Printf(TEXT("Equipment slot '%s' is duplicated."), *Entry.SlotTag.ToString()));
+			}
+			SeenSlots.Add(Entry.SlotTag);
+
+			if (EquipmentComp->AllowedEquipSlots.Num() > 0 && !EquipmentComp->AllowedEquipSlots.HasTagExact(Entry.SlotTag))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' is not in AllowedEquipSlots."), *Entry.SlotTag.ToString()));
+			}
+
+			if (Entry.Item.Definition.ToSoftObjectPath().IsNull())
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' has no item definition reference."), *Entry.SlotTag.ToString()));
+			}
+		}
+
+		TArray<FString> EquipmentBlockingIssues;
+		TArray<FString> EquipmentWarnings;
+		EquipmentComp->ValidateEquipmentSetup(EquipmentBlockingIssues, EquipmentWarnings);
+		for (const FString& Issue : EquipmentBlockingIssues)
+		{
+			AddUniqueIssue(OutBlockingIssues, FString::Printf(TEXT("Equipment setup: %s"), *Issue));
+		}
+		for (const FString& Warning : EquipmentWarnings)
+		{
+			AddUniqueIssue(OutWarnings, FString::Printf(TEXT("Equipment setup: %s"), *Warning));
+		}
+	}
+
+	UYIActionBarComponent* ActionBarComp = Pawn->FindComponentByClass<UYIActionBarComponent>();
+	if (!ActionBarComp)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIActionBarComponent (action bindings disabled)."), *Pawn->GetName()));
+	}
+	else
+	{
+		if (ActionBarComp->ActionBindings.Num() != ActionBarComp->NumActionSlots)
+		{
+			OutWarnings.Add(FString::Printf(
+				TEXT("ActionBindings count (%d) does not match NumActionSlots (%d)."),
+				ActionBarComp->ActionBindings.Num(),
+				ActionBarComp->NumActionSlots));
+		}
+
+		for (int32 SlotIndex = 0; SlotIndex < ActionBarComp->ActionBindings.Num(); ++SlotIndex)
+		{
+			const FYIActionBarBinding& Binding = ActionBarComp->ActionBindings[SlotIndex];
+			if (!Binding.bEnabled)
+			{
+				continue;
+			}
+
+			const bool bHasActionTag = Binding.ActionTag.IsValid();
+			const bool bHasAbilityClass = !Binding.AbilityClass.ToSoftObjectPath().IsNull();
+			if (!bHasActionTag && !bHasAbilityClass)
+			{
+				OutBlockingIssues.Add(FString::Printf(TEXT("Action slot %d is enabled but has no ActionTag and no AbilityClass."), SlotIndex));
+			}
+
+			if (bHasActionTag && !Binding.ActionTag.ToString().StartsWith(ActionBarComp->ActionTagPrefix))
+			{
+				OutWarnings.Add(FString::Printf(
+					TEXT("Action slot %d tag '%s' does not start with expected prefix '%s'."),
+					SlotIndex,
+					*Binding.ActionTag.ToString(),
+					*ActionBarComp->ActionTagPrefix));
+			}
+
+			if (Binding.SourceEquipSlotTag.IsValid())
+			{
+				if (!EquipmentComp)
+				{
+					OutBlockingIssues.Add(FString::Printf(
+						TEXT("Action slot %d references equip slot '%s' but pawn has no equipment component."),
+						SlotIndex,
+						*Binding.SourceEquipSlotTag.ToString()));
+				}
+				else
+				{
+					FYIItemInstanceNet TempItem;
+					if (!EquipmentComp->GetEquippedItem(Binding.SourceEquipSlotTag, TempItem))
+					{
+						OutWarnings.Add(FString::Printf(
+							TEXT("Action slot %d references equip slot '%s' which has no equipped item."),
+							SlotIndex,
+							*Binding.SourceEquipSlotTag.ToString()));
+					}
+				}
+			}
+		}
+
+		TArray<FString> ActionBlockingIssues;
+		TArray<FString> ActionWarnings;
+		ActionBarComp->ValidateActionBindings(ActionBlockingIssues, ActionWarnings);
+		for (const FString& Issue : ActionBlockingIssues)
+		{
+			AddUniqueIssue(OutBlockingIssues, FString::Printf(TEXT("Action bar setup: %s"), *Issue));
+		}
+		for (const FString& Warning : ActionWarnings)
+		{
+			AddUniqueIssue(OutWarnings, FString::Printf(TEXT("Action bar setup: %s"), *Warning));
+		}
+	}
+
+	return OutBlockingIssues.Num() == 0;
+}
+
 void UYIPlayerInventoryStateComponent::SaveNow()
 {
 	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
@@ -211,6 +373,23 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 		SaveCurrentPawnInventory(Pawn);
 	}
 	ApplySavedRuntimeStateToPawn(Pawn);
+
+	TArray<FString> BlockingIssues;
+	TArray<FString> Warnings;
+	const bool bPreflightOk = RunRuntimePreflight(Pawn, BlockingIssues, Warnings);
+	for (const FString& Issue : BlockingIssues)
+	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("Runtime Preflight BLOCK: %s"), *Issue), FColor::Red, true);
+	}
+	for (const FString& Warning : Warnings)
+	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("Runtime Preflight WARN: %s"), *Warning), FColor::Yellow, true);
+	}
+	if (bPreflightOk)
+	{
+		EmitSaveDiagnostic(TEXT("Runtime preflight passed."), FColor::Green);
+	}
+
 	SaveToDisk();
 	return true;
 }
@@ -732,6 +911,21 @@ void UYIPlayerInventoryStateComponent::TryAutoRegisterPawn()
 			RestoreInventoryToPawn(Pawn);
 		}
 		ApplySavedRuntimeStateToPawn(Pawn);
+		TArray<FString> BlockingIssues;
+		TArray<FString> Warnings;
+		const bool bPreflightOk = RunRuntimePreflight(Pawn, BlockingIssues, Warnings);
+		for (const FString& Issue : BlockingIssues)
+		{
+			EmitSaveDiagnostic(FString::Printf(TEXT("Runtime Preflight BLOCK: %s"), *Issue), FColor::Red, true);
+		}
+		for (const FString& Warning : Warnings)
+		{
+			EmitSaveDiagnostic(FString::Printf(TEXT("Runtime Preflight WARN: %s"), *Warning), FColor::Yellow, true);
+		}
+		if (bPreflightOk)
+		{
+			EmitSaveDiagnostic(TEXT("Runtime preflight passed."), FColor::Green);
+		}
 	}
 	else if (Pawn)
 	{

@@ -12,6 +12,44 @@ class UYIEquipmentComponent;
 class UYIItemDefinition;
 
 USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIEquipmentActionAutoBindRule
+{
+	GENERATED_BODY()
+
+	/** Disable rule without removing setup. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	bool bEnabled = true;
+
+	/** Equipped slot watched by this rule (for example Equip.Slot.Spellbook.Primary). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	FGameplayTag EquipSlotTag;
+
+	/** Action bar slot to write when this equipment slot changes. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind", meta=(ClampMin="0"))
+	int32 ActionSlotIndex = 0;
+
+	/** If false, a pre-existing manual binding in this action slot is preserved. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	bool bAllowOverrideExistingBinding = true;
+
+	/** Clear action slot when item is unequipped (only if slot was bound from this equip slot). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	bool bClearWhenUnequipped = true;
+
+	/** Optional explicit action tag. If empty, action tag is resolved from item definition tags. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	FGameplayTag ActionTagOverride;
+
+	/** Optional explicit ability class. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	TSoftClassPtr<UGameplayAbility> AbilityClassOverride;
+
+	/** Level for AbilityClassOverride. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind", meta=(ClampMin="1"))
+	int32 AbilityLevel = 1;
+};
+
+USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIActionBarBinding
 {
 	GENERATED_BODY()
@@ -90,6 +128,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|Debug", meta=(ClampMin="1", ClampMax="1024"))
 	int32 MaxInvocationLog = 128;
 
+	/** Auto-bind selected equipment slots into action slots to simplify spellbook/action workflows. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind")
+	bool bAutoBindFromEquipment = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="ActionBar|AutoBind", meta=(EditCondition="bAutoBindFromEquipment", EditConditionHides))
+	TArray<FYIEquipmentActionAutoBindRule> AutoBindRules;
+
 	/** Replicated action slot bindings (owner-only; this is player UI state). */
 	UPROPERTY(ReplicatedUsing=OnRep_ActionBindings, BlueprintReadOnly, Category="ActionBar")
 	TArray<FYIActionBarBinding> ActionBindings;
@@ -121,6 +166,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|ActionBar", BlueprintAuthorityOnly)
 	void LoadInvocationLog(const TArray<FYIActionInvocationRecord>& InLog);
+
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|ActionBar|Diagnostics")
+	bool ValidateActionBindings(TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
+
+	/** Re-evaluate auto-bind rules against current equipment state (authority only). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|ActionBar|AutoBind")
+	void RebuildAutoBindingsFromEquipment(UYIEquipmentComponent* Equipment = nullptr);
 
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|ActionBar|Net")
 	bool BindActionFromInventoryItem(UYIInventoryComponent* SourceInventory, int32 SourceIndex, int32 ActionSlotIndex, FGameplayTag ActionTag, TSubclassOf<UGameplayAbility> AbilityClass, int32 AbilityLevel);
@@ -154,10 +206,14 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION()
 	void OnRep_ActionBindings();
+
+	UFUNCTION()
+	void HandleEquipmentChanged(FGameplayTag SlotTag, FYIItemInstanceNet Item);
 
 private:
 	void EnsureSlotArraySize();
@@ -165,4 +221,9 @@ private:
 	bool ExecuteBindingInternal(int32 ActionSlotIndex, FString& OutMessage);
 	void RecordInvocation(int32 SlotIndex, FGameplayTag ActionTag, bool bSuccess, const FString& Message);
 	void EmitActionMessage(const FString& Message, const FColor& Color) const;
+	void BindEquipmentEvents(UYIEquipmentComponent* Equipment);
+	void UnbindEquipmentEvents();
+	void ApplyAutoBindRule(const FYIEquipmentActionAutoBindRule& Rule, UYIEquipmentComponent* Equipment);
+
+	TWeakObjectPtr<UYIEquipmentComponent> ObservedEquipment;
 };
