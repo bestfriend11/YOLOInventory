@@ -11,6 +11,9 @@
 
 #include "YIInventoryBag.h"
 #include "InventoryActionMenuWidget.h"
+#include "YIInventoryComponent.h"
+#include "YIEquipmentComponent.h"
+#include "GameFramework/Pawn.h"
 
 
 void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
@@ -41,6 +44,29 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 		OnItemSold(ItemIdx);
 		OnItemSoldEvent.Broadcast(ItemIdx);
 		break;
+	case 7: // Equip
+	{
+		bool bSuccess = false;
+		if (Grid && Grid->Bag)
+		{
+			if (APlayerController* PC = GetOwningPlayer())
+			{
+				if (APawn* Pawn = PC->GetPawn())
+				{
+					if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+					{
+						if (UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>())
+						{
+							bSuccess = EquipmentComp->EquipFromInventory(InventoryComp, ItemIdx, FGameplayTag());
+						}
+					}
+				}
+			}
+		}
+		OnItemEquip(ItemIdx, bSuccess);
+		OnItemEquippedEvent.Broadcast(ItemIdx, bSuccess);
+		break;
+	}
 	}
 	// Refresh tooltip after action
 	if (Grid) Grid->RefreshBoundTooltip();

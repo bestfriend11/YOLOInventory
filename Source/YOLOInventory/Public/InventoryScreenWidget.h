@@ -119,11 +119,16 @@ protected:
 	void OnItemCombined(int32 SourceIndex, int32 TargetIndex);
 	UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
 	void OnItemSold(int32 BagIndex);
+	UFUNCTION(BlueprintImplementableEvent, Category = "Inventory")
+	void OnItemEquip(int32 BagIndex, bool bSuccess);
 
 	// Multicast delegate alternative to the implementable event
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnInventoryItemSold, int32, BagIndex);
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemEquipped, int32, BagIndex, bool, bSuccess);
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FOnInventoryItemSold OnItemSoldEvent;
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FOnInventoryItemEquipped OnItemEquippedEvent;
 
 	/** Transfer the currently selected item in the Grid to Dest's grid (BP-friendly helper). */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")

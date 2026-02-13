@@ -93,6 +93,7 @@ void UYIPlayerInventoryStateComponent::LoadNow()
 	if (ObservedPawn.IsValid())
 	{
 		RestoreInventoryToPawn(ObservedPawn.Get());
+		ApplySavedRuntimeStateToPawn(ObservedPawn.Get());
 	}
 }
 
@@ -209,6 +210,7 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 	{
 		SaveCurrentPawnInventory(Pawn);
 	}
+	ApplySavedRuntimeStateToPawn(Pawn);
 	SaveToDisk();
 	return true;
 }
@@ -463,6 +465,22 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 	Save->SavedBags = SavedBags;
 	Save->SavedResources = Resources;
 	Save->SavedObservedPartyIndex = ObservedPartyIndex;
+	Save->SavedEquippedItems.Reset();
+	Save->SavedActionBindings.Reset();
+	Save->SavedActionInvocationLog.Reset();
+
+	APawn* RuntimePawn = ObservedPawn.Get();
+	if (!RuntimePawn)
+	{
+		if (APlayerState* PS = Cast<APlayerState>(GetOwner()))
+		{
+			RuntimePawn = PS->GetPawn();
+		}
+	}
+	if (RuntimePawn)
+	{
+		CapturePawnRuntimeState(RuntimePawn, Save->SavedEquippedItems, Save->SavedActionBindings, Save->SavedActionInvocationLog);
+	}
 
 	Save->SavedSharedBags.Reset(SharedBags.Num());
 	for (const TSoftObjectPtr<UYIInventoryBag>& SharedBag : SharedBags)
@@ -557,6 +575,12 @@ void UYIPlayerInventoryStateComponent::LoadFromDisk()
 			SavedBags = Save->SavedBags;
 			Resources = Save->SavedResources;
 			ObservedPartyIndex = FMath::Max(0, Save->SavedObservedPartyIndex);
+			LoadedEquippedItems = Save->SavedEquippedItems;
+			LoadedActionBindings = Save->SavedActionBindings;
+			LoadedActionInvocationLog = Save->SavedActionInvocationLog;
+			bHasLoadedEquipmentState = true;
+			bHasLoadedActionBindings = true;
+			bHasLoadedInvocationLog = true;
 
 			SharedBags.Reset();
 			SharedBags.Reserve(Save->SavedSharedBags.Num());
@@ -706,6 +730,80 @@ void UYIPlayerInventoryStateComponent::TryAutoRegisterPawn()
 		if (SavedBags.Num() > 0)
 		{
 			RestoreInventoryToPawn(Pawn);
+		}
+		ApplySavedRuntimeStateToPawn(Pawn);
+	}
+	else if (Pawn)
+	{
+		ApplySavedRuntimeStateToPawn(Pawn);
+	}
+}
+
+void UYIPlayerInventoryStateComponent::CapturePawnRuntimeState(
+	APawn* Pawn,
+	TArray<FYIEquippedItemEntry>& OutEquippedItems,
+	TArray<FYIActionBarBinding>& OutActionBindings,
+	TArray<FYIActionInvocationRecord>& OutInvocationLog) const
+{
+	OutEquippedItems.Reset();
+	OutActionBindings.Reset();
+	OutInvocationLog.Reset();
+
+	if (!Pawn)
+	{
+		return;
+	}
+
+	if (UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>())
+	{
+		EquipmentComp->GetPersistedEquipment(OutEquippedItems);
+	}
+
+	if (UYIActionBarComponent* ActionBarComp = Pawn->FindComponentByClass<UYIActionBarComponent>())
+	{
+		ActionBarComp->GetPersistedBindings(OutActionBindings);
+		ActionBarComp->GetInvocationLog(OutInvocationLog);
+	}
+}
+
+void UYIPlayerInventoryStateComponent::ApplySavedRuntimeStateToPawn(APawn* Pawn)
+{
+	if (!Pawn || Pawn->GetLocalRole() != ROLE_Authority)
+	{
+		return;
+	}
+
+	if (bHasLoadedEquipmentState)
+	{
+		if (UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>())
+		{
+			EquipmentComp->LoadPersistedEquipment(LoadedEquippedItems);
+			bHasLoadedEquipmentState = false;
+		}
+		else
+		{
+			EmitSaveDiagnostic(FString::Printf(TEXT("Loaded equipment state pending: pawn '%s' has no UYIEquipmentComponent."), *Pawn->GetName()), FColor::Yellow);
+		}
+	}
+
+	if (bHasLoadedActionBindings || bHasLoadedInvocationLog)
+	{
+		if (UYIActionBarComponent* ActionBarComp = Pawn->FindComponentByClass<UYIActionBarComponent>())
+		{
+			if (bHasLoadedActionBindings)
+			{
+				ActionBarComp->LoadPersistedBindings(LoadedActionBindings);
+				bHasLoadedActionBindings = false;
+			}
+			if (bHasLoadedInvocationLog)
+			{
+				ActionBarComp->LoadInvocationLog(LoadedActionInvocationLog);
+				bHasLoadedInvocationLog = false;
+			}
+		}
+		else
+		{
+			EmitSaveDiagnostic(FString::Printf(TEXT("Loaded action bar state pending: pawn '%s' has no UYIActionBarComponent."), *Pawn->GetName()), FColor::Yellow);
 		}
 	}
 }

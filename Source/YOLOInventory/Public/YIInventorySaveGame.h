@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "YIEquipmentComponent.h"
+#include "YIActionBarComponent.h"
 #include "YIPlayerInventoryStateComponent.h" // for snapshots/resources
 #include "YIInventorySaveGame.generated.h"
 
@@ -62,4 +64,16 @@ public:
 	// Last observed/active party index.
 	UPROPERTY()
 	int32 SavedObservedPartyIndex = 0;
+
+	// Persisted equipped items (slot-tag keyed).
+	UPROPERTY()
+	TArray<FYIEquippedItemEntry> SavedEquippedItems;
+
+	// Persisted action bar bindings.
+	UPROPERTY()
+	TArray<FYIActionBarBinding> SavedActionBindings;
+
+	// Persisted action invocation log (server diagnostics/history).
+	UPROPERTY()
+	TArray<FYIActionInvocationRecord> SavedActionInvocationLog;
 };

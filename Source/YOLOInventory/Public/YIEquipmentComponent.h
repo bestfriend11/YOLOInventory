@@ -1,0 +1,106 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
+#include "YIItemPickup.h"
+#include "YIEquipmentComponent.generated.h"
+
+class UYIInventoryComponent;
+class UYIItemDefinition;
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIEquippedItemEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	FGameplayTag SlotTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	FYIItemInstanceNet Item;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIEquipmentChangedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FYIEquipmentResultEvent, bool, bSuccess, FGameplayTag, SlotTag, FString, Message);
+
+/**
+ * Server-authoritative equipment container keyed by slot gameplay tags.
+ * Designed to keep equip/unequip flow deterministic and simple for designers.
+ */
+UCLASS(ClassGroup=(Inventory), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
+class YOLOINVENTORY_API UYIEquipmentComponent : public UActorComponent
+{
+	GENERATED_BODY()
+public:
+	UYIEquipmentComponent();
+
+	/** Optional allow-list of equip slot tags (e.g. Equip.Slot.WeaponMain, Equip.Slot.Spellbook.Primary). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")
+	FGameplayTagContainer AllowedEquipSlots;
+
+	/** Auto-resolve item equip slot from item tags that start with this prefix. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")
+	FString EquipSlotTagPrefix = TEXT("Equip.Slot.");
+
+	/** Prints equipment operation messages on screen/log. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Debug")
+	bool bDebugEquipment = true;
+
+	/** Keep debug messages pinned long enough for debugging sessions. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Debug")
+	bool bPinDebugMessages = true;
+
+	/** Replicated equipped entries keyed by SlotTag. */
+	UPROPERTY(ReplicatedUsing=OnRep_EquippedItems, BlueprintReadOnly, Category="Equipment")
+	TArray<FYIEquippedItemEntry> EquippedItems;
+
+	UPROPERTY(BlueprintAssignable, Category="Equipment|Events")
+	FYIEquipmentChangedEvent OnEquipmentChanged;
+
+	UPROPERTY(BlueprintAssignable, Category="Equipment|Events")
+	FYIEquipmentResultEvent OnEquipmentOperationResult;
+
+	/** Equip item from inventory's active bag index into the requested slot (or auto slot if empty). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net")
+	bool EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
+
+	UFUNCTION(Server, Reliable)
+	void ServerEquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
+
+	/** Unequip slot back into destination inventory active bag. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net")
+	bool UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
+
+	UFUNCTION(Server, Reliable)
+	void ServerUnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
+
+	/** Get equipped item for a slot. */
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Equipment")
+	bool GetEquippedItem(FGameplayTag SlotTag, FYIItemInstanceNet& OutItem) const;
+
+	/** Persistence helper: snapshot all equipped entries. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment")
+	void GetPersistedEquipment(TArray<FYIEquippedItemEntry>& OutEntries) const;
+
+	/** Persistence helper: replace equipped entries on authority and broadcast changes. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment", BlueprintAuthorityOnly)
+	void LoadPersistedEquipment(const TArray<FYIEquippedItemEntry>& InEntries);
+
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_EquippedItems();
+
+private:
+	bool EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage);
+	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage);
+
+	int32 FindEntryIndex(FGameplayTag SlotTag) const;
+	bool IsAllowedSlot(FGameplayTag SlotTag) const;
+	FGameplayTag ResolveSlotTagFromDefinition(const UYIItemDefinition* Definition) const;
+
+	void EmitEquipmentMessage(const FString& Message, const FColor& Color) const;
+	void BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message);
+};

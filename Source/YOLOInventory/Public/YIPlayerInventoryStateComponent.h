@@ -5,6 +5,8 @@
 #include "Engine/EngineTypes.h" // for FDirectoryPath
 #include "TimerManager.h"
 #include "YIInventoryBag.h"
+#include "YIEquipmentComponent.h"
+#include "YIActionBarComponent.h"
 #include "YIPlayerInventoryStateComponent.generated.h"
 
 class UYIInventoryBag;
@@ -314,6 +316,8 @@ private:
 	void LoadFromDisk();
 	FString BuildEffectiveSaveSlotName() const;
 	void EmitSaveDiagnostic(const FString& Message, const FColor& Color, bool bForceOnScreen = false) const;
+	void CapturePawnRuntimeState(APawn* Pawn, TArray<FYIEquippedItemEntry>& OutEquippedItems, TArray<FYIActionBarBinding>& OutActionBindings, TArray<FYIActionInvocationRecord>& OutInvocationLog) const;
+	void ApplySavedRuntimeStateToPawn(APawn* Pawn);
 	void TryAutoRegisterPawn();
 	FTimerHandle AutoSavePollHandle;
 	FTimerHandle DebounceHandle;
@@ -323,6 +327,9 @@ private:
 	bool bReportedNoPawnYet = false;
 	bool bReportedMissingInventoryComp = false;
 	bool bReportedMissingBag = false;
+	bool bHasLoadedEquipmentState = false;
+	bool bHasLoadedActionBindings = false;
+	bool bHasLoadedInvocationLog = false;
 
 	UPROPERTY(EditAnywhere, Category="YOLOInventory|Save", meta=(ClampMin="0.05"))
 	float AutoSaveDebounceSeconds = 0.35f;
@@ -330,4 +337,7 @@ private:
 	// Observed pawn/bag for autosave
 	TWeakObjectPtr<APawn> ObservedPawn;
 	TWeakObjectPtr<UYIInventoryBag> ObservedBag;
+	TArray<FYIEquippedItemEntry> LoadedEquippedItems;
+	TArray<FYIActionBarBinding> LoadedActionBindings;
+	TArray<FYIActionInvocationRecord> LoadedActionInvocationLog;
 };
