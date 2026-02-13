@@ -2,8 +2,10 @@
 #include "SBagEditor.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIEquipmentLayoutAsset.h"
 #include "YIInventoryGameplaySetupLibrary.h"
 #include "YIInventoryBagFactory.h"
+#include "YIEquipmentLayoutAssetFactory.h"
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
 #include "Modules/ModuleManager.h"
@@ -14,6 +16,8 @@
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SGridPanel.h"
+#include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
@@ -26,6 +30,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
+#include "Algo/Sort.h"
 
 namespace
 {
@@ -87,6 +92,14 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 	DetailArgs.bAllowSearch = true;
 	DetailArgs.bHideSelectionTip = true;
 	DetailsView = PropModule.CreateDetailView(DetailArgs);
+	EquipmentLayoutDetailsView = PropModule.CreateDetailView(DetailArgs);
+	if (EquipmentLayoutDetailsView.IsValid())
+	{
+		EquipmentLayoutDetailsView->OnFinishedChangingProperties().AddLambda([this](const FPropertyChangedEvent&)
+		{
+			RebuildEquipmentLayoutPreview();
+		});
+	}
 
 	ChildSlot
 	[
@@ -112,6 +125,18 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 						SNew(SButton)
 						.Text(NSLOCTEXT("YOLOInventory", "BagDash_Save", "Save Bag"))
 						.OnClicked(this, &SYIBagDashboard::SaveCurrentBag)
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory", "BagDash_NewLayout", "New Equip Layout"))
+						.OnClicked(this, &SYIBagDashboard::CreateNewEquipmentLayout)
+					]
+					+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+					[
+						SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory", "BagDash_SaveLayout", "Save Equip Layout"))
+						.OnClicked(this, &SYIBagDashboard::SaveCurrentEquipmentLayout)
 					]
 				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(2)
@@ -210,7 +235,7 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 				[
 					SNew(SSplitter)
 					.Orientation(Orient_Vertical)
-					+ SSplitter::Slot().Value(0.50f)
+					+ SSplitter::Slot().Value(0.34f)
 					[
 						SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
@@ -227,7 +252,7 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							]
 						]
 					]
-					+ SSplitter::Slot().Value(0.50f)
+					+ SSplitter::Slot().Value(0.33f)
 					[
 						SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
@@ -244,21 +269,53 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							]
 						]
 					]
+					+ SSplitter::Slot().Value(0.33f)
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+						.Padding(2)
+						[
+							SNew(SVerticalBox)
+							+ SVerticalBox::Slot().AutoHeight().Padding(2)
+							[
+								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_EquipLayoutPicker", "Equipment Layouts"))
+							]
+							+ SVerticalBox::Slot().FillHeight(1.f)
+							[
+								BuildEquipmentLayoutPicker()
+							]
+						]
+					]
 				]
 			]
 		]
 		+ SSplitter::Slot().Value(0.72f)
 		[
-			SNew(SBorder)
-			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-			.Padding(4)
+			SNew(SSplitter)
+			.Orientation(Orient_Vertical)
+			+ SSplitter::Slot().Value(0.72f)
 			[
-				SAssignNew(GridHost, SBox)
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+				.Padding(4)
+				[
+					SAssignNew(GridHost, SBox)
+				]
+			]
+			+ SSplitter::Slot().Value(0.28f)
+			[
+				SNew(SBorder)
+				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+				.Padding(6)
+				[
+					SAssignNew(EquipmentLayoutPreviewHost, SBox)
+				]
 			]
 		]
 	];
 
 	RebuildBagView();
+	RebuildEquipmentLayoutPreview();
 }
 
 void SYIBagDashboard::OpenAsset(UObject* Asset)
@@ -266,6 +323,12 @@ void SYIBagDashboard::OpenAsset(UObject* Asset)
 	if (UYIInventoryBag* Bag = Cast<UYIInventoryBag>(Asset))
 	{
 		SetSelectedBag(Bag);
+		return;
+	}
+
+	if (UYIEquipmentLayoutAsset* Layout = Cast<UYIEquipmentLayoutAsset>(Asset))
+	{
+		SetSelectedEquipmentLayout(Layout);
 		return;
 	}
 
@@ -297,6 +360,90 @@ TSharedRef<SWidget> SYIBagDashboard::GetDetailsPanelWidget() const
 	return Self->DetailsView.ToSharedRef();
 }
 
+TSharedRef<SWidget> SYIBagDashboard::GetEquipmentLayoutPanelWidget() const
+{
+	SYIBagDashboard* Self = const_cast<SYIBagDashboard*>(this);
+	if (!Self->EquipmentLayoutDetailsView.IsValid())
+	{
+		FPropertyEditorModule& PropModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		FDetailsViewArgs DetailArgs;
+		DetailArgs.bAllowSearch = true;
+		DetailArgs.bHideSelectionTip = true;
+		Self->EquipmentLayoutDetailsView = PropModule.CreateDetailView(DetailArgs);
+		if (Self->SelectedEquipmentLayout.IsValid())
+		{
+			Self->EquipmentLayoutDetailsView->SetObject(Self->SelectedEquipmentLayout.Get());
+		}
+	}
+
+	if (!Self->EquipmentLayoutPanelWidget.IsValid())
+	{
+		Self->EquipmentLayoutPanelWidget =
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().Padding(2)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPanel_New", "New Layout"))
+					.OnClicked(Self, &SYIBagDashboard::CreateNewEquipmentLayout)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPanel_Save", "Save Layout"))
+					.OnClicked(Self, &SYIBagDashboard::SaveCurrentEquipmentLayout)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPanel_Refresh", "Refresh Preview"))
+					.OnClicked_Lambda([Self]()
+					{
+						Self->RebuildEquipmentLayoutPreview();
+						return FReply::Handled();
+					})
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(2, 2, 2, 4)
+			[
+				SNew(STextBlock)
+				.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPanel_ListTitle", "Equipment Layout Assets"))
+			]
+			+ SVerticalBox::Slot().FillHeight(0.35f).Padding(2, 0, 2, 6)
+			[
+				Self->BuildEquipmentLayoutPicker()
+			]
+			+ SVerticalBox::Slot().FillHeight(0.65f).Padding(2, 0, 2, 0)
+			[
+				SNew(SSplitter)
+				.Orientation(Orient_Horizontal)
+				+ SSplitter::Slot().Value(0.52f)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+					.Padding(4)
+					[
+						Self->EquipmentLayoutDetailsView.ToSharedRef()
+					]
+				]
+				+ SSplitter::Slot().Value(0.48f)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+					.Padding(4)
+					[
+						SAssignNew(Self->EquipmentLayoutDockPreviewHost, SBox)
+					]
+				]
+			];
+	}
+
+	Self->RebuildEquipmentLayoutPreview();
+	return Self->EquipmentLayoutPanelWidget.ToSharedRef();
+}
+
 void SYIBagDashboard::SaveCurrentBagFromToolbar()
 {
 	SaveCurrentBag();
@@ -305,6 +452,21 @@ void SYIBagDashboard::SaveCurrentBagFromToolbar()
 void SYIBagDashboard::CreateBagFromToolbar()
 {
 	CreateNewBag();
+}
+
+void SYIBagDashboard::SaveCurrentEquipmentLayoutFromToolbar()
+{
+	SaveCurrentEquipmentLayout();
+}
+
+void SYIBagDashboard::CreateEquipmentLayoutFromToolbar()
+{
+	CreateNewEquipmentLayout();
+}
+
+void SYIBagDashboard::RefreshEquipmentLayoutPreviewFromToolbar()
+{
+	RebuildEquipmentLayoutPreview();
 }
 
 void SYIBagDashboard::ApplyRuntimeSpellbookPresetFromToolbar()
@@ -405,6 +567,25 @@ TSharedRef<SWidget> SYIBagDashboard::BuildItemAssetPicker()
 	return CB.Get().CreateAssetPicker(Picker);
 }
 
+TSharedRef<SWidget> SYIBagDashboard::BuildEquipmentLayoutPicker()
+{
+	FAssetPickerConfig Picker;
+	Picker.InitialAssetViewType = EAssetViewType::Tile;
+	Picker.Filter.ClassPaths.Add(UYIEquipmentLayoutAsset::StaticClass()->GetClassPathName());
+	Picker.bAllowNullSelection = false;
+	Picker.OnAssetSelected = FOnAssetSelected::CreateLambda([this](const FAssetData& AssetData)
+	{
+		SetSelectedEquipmentLayout(Cast<UYIEquipmentLayoutAsset>(AssetData.GetAsset()));
+	});
+	Picker.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateLambda([this](const FAssetData& AssetData)
+	{
+		SetSelectedEquipmentLayout(Cast<UYIEquipmentLayoutAsset>(AssetData.GetAsset()));
+	});
+
+	FContentBrowserModule& CB = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	return CB.Get().CreateAssetPicker(Picker);
+}
+
 void SYIBagDashboard::RebuildBagView()
 {
 	if (!GridHost.IsValid())
@@ -447,11 +628,127 @@ void SYIBagDashboard::RebuildBagView()
 	}
 }
 
+void SYIBagDashboard::RebuildEquipmentLayoutPreview()
+{
+	if (!EquipmentLayoutPreviewHost.IsValid() && !EquipmentLayoutDockPreviewHost.IsValid())
+	{
+		return;
+	}
+
+	auto BuildEmptyWidget = []() -> TSharedRef<SWidget>
+	{
+		return SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			.Padding(8)
+			[
+				SNew(STextBlock)
+				.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewEmpty", "Select an Equipment Layout to preview generated slot pane."))
+			];
+	};
+
+	UYIEquipmentLayoutAsset* Layout = SelectedEquipmentLayout.Get();
+	if (!Layout)
+	{
+		if (EquipmentLayoutPreviewHost.IsValid())
+		{
+			EquipmentLayoutPreviewHost->SetContent(BuildEmptyWidget());
+		}
+		if (EquipmentLayoutDockPreviewHost.IsValid())
+		{
+			EquipmentLayoutDockPreviewHost->SetContent(BuildEmptyWidget());
+		}
+		return;
+	}
+
+	TArray<FYIEquipmentSlotLayoutEntry> SortedSlots;
+	Layout->GetSortedSlots(SortedSlots);
+	auto BuildPreviewContainer = [&SortedSlots, Layout]() -> TSharedRef<SWidget>
+	{
+		const int32 AutoColumns = FMath::Max(1, Layout->AutoColumnCount);
+		int32 AutoPlacementIndex = 0;
+
+		TSharedRef<SGridPanel> PreviewGrid = SNew(SGridPanel);
+		for (const FYIEquipmentSlotLayoutEntry& Entry : SortedSlots)
+		{
+			if (!Entry.SlotTag.IsValid())
+			{
+				continue;
+			}
+
+			int32 Row = Entry.Row;
+			int32 Column = Entry.Column;
+			if (Row < 0 || Column < 0)
+			{
+				Row = AutoPlacementIndex / AutoColumns;
+				Column = AutoPlacementIndex % AutoColumns;
+				++AutoPlacementIndex;
+			}
+
+			const FText SlotTitle = Entry.DisplayName.IsEmpty() ? FText::FromString(Entry.SlotTag.ToString()) : Entry.DisplayName;
+			PreviewGrid->AddSlot(Column, Row)
+				.ColumnSpan(FMath::Max(1, Entry.ColumnSpan))
+				.RowSpan(FMath::Max(1, Entry.RowSpan))
+				.Padding(FMargin(Layout->SlotPadding))
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+					.Padding(4)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()
+						[
+							SNew(STextBlock)
+							.Text(SlotTitle)
+						]
+						+ SVerticalBox::Slot().AutoHeight()
+						[
+							SNew(STextBlock)
+							.Text(FText::FromString(Entry.SlotTag.ToString()))
+							.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f)))
+						]
+					]
+				];
+		}
+
+		return SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			.Padding(4)
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().Padding(2, 0, 2, 4)
+				[
+					SNew(STextBlock)
+					.Text(FText::Format(
+						NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewTitle", "Equipment Slot Pane Preview ({0} slots)"),
+						FText::AsNumber(SortedSlots.Num())))
+				]
+				+ SVerticalBox::Slot().FillHeight(1.f)
+				[
+					PreviewGrid
+				]
+			];
+	};
+
+	if (EquipmentLayoutPreviewHost.IsValid())
+	{
+		EquipmentLayoutPreviewHost->SetContent(BuildPreviewContainer());
+	}
+	if (EquipmentLayoutDockPreviewHost.IsValid())
+	{
+		EquipmentLayoutDockPreviewHost->SetContent(BuildPreviewContainer());
+	}
+}
+
 FReply SYIBagDashboard::SaveCurrentBag()
 {
 	UYIInventoryBag* Bag = SelectedBag.Get();
 	if (!Bag)
 	{
+		if (SelectedEquipmentLayout.IsValid())
+		{
+			return SaveCurrentEquipmentLayout();
+		}
+
 		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusNoBag", "No bag selected.");
 		return FReply::Handled();
 	}
@@ -482,4 +779,58 @@ FReply SYIBagDashboard::CreateNewBag()
 		? NSLOCTEXT("YOLOInventory", "BagDash_StatusCreated", "New bag created.")
 		: NSLOCTEXT("YOLOInventory", "BagDash_StatusCreateFail", "Failed to create bag.");
 	return FReply::Handled();
+}
+
+FReply SYIBagDashboard::SaveCurrentEquipmentLayout()
+{
+	UYIEquipmentLayoutAsset* Layout = SelectedEquipmentLayout.Get();
+	if (!Layout)
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusNoLayout", "No equipment layout selected.");
+		return FReply::Handled();
+	}
+
+	if (YIBagDash_SaveObjectPackage(Layout))
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusLayoutSaved", "Equipment layout saved.");
+	}
+	else
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusLayoutSaveFail", "Equipment layout save canceled or failed.");
+	}
+	return FReply::Handled();
+}
+
+FReply SYIBagDashboard::CreateNewEquipmentLayout()
+{
+	IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	UYIEquipmentLayoutAssetFactory* Factory = NewObject<UYIEquipmentLayoutAssetFactory>();
+	const FString TargetPath = TEXT("/Game/YOLOInventory/Layouts");
+	const FString BaseName = TEXT("EquipmentLayout");
+	FString PackageName;
+	FString AssetName;
+	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
+	UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
+	SetSelectedEquipmentLayout(Cast<UYIEquipmentLayoutAsset>(NewAsset));
+	StatusText = NewAsset
+		? NSLOCTEXT("YOLOInventory", "BagDash_StatusLayoutCreated", "New equipment layout created.")
+		: NSLOCTEXT("YOLOInventory", "BagDash_StatusLayoutCreateFail", "Failed to create equipment layout.");
+	return FReply::Handled();
+}
+
+void SYIBagDashboard::SetSelectedEquipmentLayout(UYIEquipmentLayoutAsset* InLayout)
+{
+	SelectedEquipmentLayout = InLayout;
+
+	if (EquipmentLayoutDetailsView.IsValid())
+	{
+		EquipmentLayoutDetailsView->SetObject(InLayout);
+	}
+
+	RebuildEquipmentLayoutPreview();
+}
+
+UYIEquipmentLayoutAsset* SYIBagDashboard::GetSelectedEquipmentLayout() const
+{
+	return SelectedEquipmentLayout.Get();
 }

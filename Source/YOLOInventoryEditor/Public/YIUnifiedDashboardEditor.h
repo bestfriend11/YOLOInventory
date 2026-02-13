@@ -64,6 +64,7 @@ private:
 	TSharedRef<SDockTab> SpawnGeneratorTestTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnCraftingDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnBagsDetailsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnBagsEquipmentLayoutTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;

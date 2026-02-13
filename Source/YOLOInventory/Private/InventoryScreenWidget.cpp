@@ -14,6 +14,9 @@
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
 #include "InventoryEquipmentSlotWidget.h"
+#include "YIEquipmentLayoutAsset.h"
+#include "Components/GridPanel.h"
+#include "Components/GridSlot.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetTree.h"
 
@@ -110,6 +113,11 @@ void UInventoryScreenWidget::NativeConstruct()
 		Grid->RefreshBoundTooltip();
 	}
 
+	if (bAutoGenerateEquipmentSlotPane)
+	{
+		RebuildEquipmentSlotPaneFromLayout();
+	}
+
 	if (bAutoBindEquipmentSlots)
 	{
 		BindEquipmentSlotWidgets();
@@ -178,6 +186,96 @@ void UInventoryScreenWidget::BindEquipmentSlotWidgets()
 			SlotWidget->SetInventoryComponent(InventoryComp);
 		}
 		SlotWidget->RefreshSlot();
+	}
+}
+
+void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
+{
+	if (!WidgetTree || !EquipmentSlotsPanel)
+	{
+		return;
+	}
+
+	UYIEquipmentLayoutAsset* Layout = EquipmentLayoutAsset.IsValid()
+		? EquipmentLayoutAsset.Get()
+		: EquipmentLayoutAsset.LoadSynchronous();
+
+	EquipmentSlotsPanel->ClearChildren();
+	if (!Layout)
+	{
+		return;
+	}
+
+	TArray<FYIEquipmentSlotLayoutEntry> SortedSlots;
+	Layout->GetSortedSlots(SortedSlots);
+	if (SortedSlots.Num() == 0)
+	{
+		return;
+	}
+
+	UYIInventoryComponent* InventoryComp = nullptr;
+	UYIEquipmentComponent* EquipmentComp = nullptr;
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
+			EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+	if (!InventoryComp && Grid && Grid->Bag)
+	{
+		InventoryComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>();
+		if (InventoryComp && InventoryComp->GetOwner())
+		{
+			EquipmentComp = InventoryComp->GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+
+	const int32 AutoColumns = FMath::Max(1, Layout->AutoColumnCount);
+	int32 AutoPlacementIndex = 0;
+
+	for (const FYIEquipmentSlotLayoutEntry& SlotEntry : SortedSlots)
+	{
+		if (!SlotEntry.SlotTag.IsValid())
+		{
+			continue;
+		}
+
+		int32 Row = SlotEntry.Row;
+		int32 Column = SlotEntry.Column;
+		if (Row < 0 || Column < 0)
+		{
+			Row = AutoPlacementIndex / AutoColumns;
+			Column = AutoPlacementIndex % AutoColumns;
+			++AutoPlacementIndex;
+		}
+
+		const FString SafeTagName = SlotEntry.SlotTag.ToString().Replace(TEXT("."), TEXT("_"));
+		const FName WidgetName(*FString::Printf(TEXT("EquipSlot_%s"), *SafeTagName));
+		UInventoryEquipmentSlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventoryEquipmentSlotWidget>(
+			UInventoryEquipmentSlotWidget::StaticClass(),
+			WidgetName);
+		if (!SlotWidget)
+		{
+			continue;
+		}
+
+		SlotWidget->SlotTag = SlotEntry.SlotTag;
+		SlotWidget->SlotDisplayName = SlotEntry.DisplayName;
+		SlotWidget->IconSize = SlotEntry.IconSize;
+		SlotWidget->SetInventoryComponent(InventoryComp);
+		SlotWidget->SetEquipmentComponent(EquipmentComp);
+
+		UGridSlot* GridSlot = EquipmentSlotsPanel->AddChildToGrid(SlotWidget, Row, Column);
+		if (GridSlot)
+		{
+			GridSlot->SetHorizontalAlignment(HAlign_Fill);
+			GridSlot->SetVerticalAlignment(VAlign_Fill);
+			GridSlot->SetRowSpan(FMath::Max(1, SlotEntry.RowSpan));
+			GridSlot->SetColumnSpan(FMath::Max(1, SlotEntry.ColumnSpan));
+			GridSlot->SetPadding(FMargin(Layout->SlotPadding));
+		}
 	}
 }
 

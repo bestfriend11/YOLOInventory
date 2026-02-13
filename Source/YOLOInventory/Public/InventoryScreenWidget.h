@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
 	void BindEquipmentSlotWidgets();
 
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	void RebuildEquipmentSlotPaneFromLayout();
+
 protected:
 	// Bind these to matching named widgets in your UMG widget blueprint
 	/** The runtime grid widget that shows items and selection. */
@@ -75,6 +78,18 @@ protected:
 	/** Auto-bind any UInventoryEquipmentSlotWidget children to the owning pawn's inventory/equipment components. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	bool bAutoBindEquipmentSlots = true;
+
+	/** Optional layout asset used to auto-generate equipment slot widgets into EquipmentSlotsPanel. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
+	TSoftObjectPtr<class UYIEquipmentLayoutAsset> EquipmentLayoutAsset;
+
+	/** If true and EquipmentSlotsPanel + EquipmentLayoutAsset are set, slot widgets are generated on construct. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
+	bool bAutoGenerateEquipmentSlotPane = true;
+
+	/** UMG panel where auto-generated equipment slots will be inserted. */
+	UPROPERTY(BlueprintReadOnly, Category="Inventory|Equipment", meta=(BindWidgetOptional))
+	class UGridPanel* EquipmentSlotsPanel;
 
 	/** Debounce window (seconds) to ignore duplicate confirm/open events fired in quick succession (prevents immediate open+confirm when same key is bound for both). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input", meta=(ToolTip="Seconds to ignore duplicate Confirm/Open events fired quickly"))
