@@ -113,6 +113,37 @@ FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDe
 	return FGameplayTag();
 }
 
+bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* Definition, FGameplayTag SlotTag) const
+{
+	if (!Definition || !SlotTag.IsValid())
+	{
+		return false;
+	}
+
+	const FGameplayTag ResolvedSlot = ResolveSlotTagFromDefinition(Definition);
+	if (ResolvedSlot == SlotTag)
+	{
+		return true;
+	}
+
+	TArray<FGameplayTag> ItemTags;
+	Definition->Tags.GetGameplayTagArray(ItemTags);
+	if (Definition->ItemType.IsValid())
+	{
+		ItemTags.Add(Definition->ItemType);
+	}
+
+	for (const FGameplayTag& Tag : ItemTags)
+	{
+		if (Tag == SlotTag)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void UYIEquipmentComponent::EmitEquipmentMessage(const FString& Message, const FColor& Color) const
 {
 	UE_LOG(LogYIEquipment, Log, TEXT("%s"), *Message);
@@ -288,6 +319,14 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	if (!IsAllowedSlot(SlotTag))
 	{
 		OutMessage = FString::Printf(TEXT("Equip failed: Slot tag '%s' is invalid or not allowed."), *SlotTag.ToString());
+		return false;
+	}
+	if (!DoesDefinitionSupportSlot(Definition, SlotTag))
+	{
+		OutMessage = FString::Printf(
+			TEXT("Equip failed: Item '%s' does not support slot '%s'. Add a matching Equip.Slot.* gameplay tag on item definition."),
+			*Definition->GetName(),
+			*SlotTag.ToString());
 		return false;
 	}
 

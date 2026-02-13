@@ -13,7 +13,9 @@
 #include "InventoryActionMenuWidget.h"
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
+#include "InventoryEquipmentSlotWidget.h"
 #include "GameFramework/Pawn.h"
+#include "Blueprint/WidgetTree.h"
 
 
 void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
@@ -108,6 +110,11 @@ void UInventoryScreenWidget::NativeConstruct()
 		Grid->RefreshBoundTooltip();
 	}
 
+	if (bAutoBindEquipmentSlots)
+	{
+		BindEquipmentSlotWidgets();
+	}
+
 	if (ActionMenu)
 	{
 		ActionMenu->HideActions();
@@ -122,6 +129,56 @@ void UInventoryScreenWidget::NativeConstruct()
 
 	// Auto push to the UI stack so the inventory receives focus when shown
 	RequestPush(true);
+}
+
+void UInventoryScreenWidget::BindEquipmentSlotWidgets()
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	UYIInventoryComponent* InventoryComp = nullptr;
+	UYIEquipmentComponent* EquipmentComp = nullptr;
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
+			EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+
+	// Fallback to grid owner component if screen wasn't opened through a pawn context.
+	if (!InventoryComp && Grid && Grid->Bag)
+	{
+		InventoryComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>();
+		if (InventoryComp && InventoryComp->GetOwner())
+		{
+			EquipmentComp = InventoryComp->GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+
+	TArray<UWidget*> Widgets;
+	WidgetTree->GetAllWidgets(Widgets);
+	for (UWidget* Widget : Widgets)
+	{
+		UInventoryEquipmentSlotWidget* SlotWidget = Cast<UInventoryEquipmentSlotWidget>(Widget);
+		if (!SlotWidget)
+		{
+			continue;
+		}
+
+		if (!SlotWidget->GetEquipmentComponent())
+		{
+			SlotWidget->SetEquipmentComponent(EquipmentComp);
+		}
+		if (!SlotWidget->GetInventoryComponent())
+		{
+			SlotWidget->SetInventoryComponent(InventoryComp);
+		}
+		SlotWidget->RefreshSlot();
+	}
 }
 
 void UInventoryScreenWidget::NativeDestruct()

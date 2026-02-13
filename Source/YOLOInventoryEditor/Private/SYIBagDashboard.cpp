@@ -2,6 +2,7 @@
 #include "SBagEditor.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIInventoryGameplaySetupLibrary.h"
 #include "YIInventoryBagFactory.h"
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
@@ -15,9 +16,16 @@
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SNumericEntryBox.h"
 #include "Styling/AppStyle.h"
 #include "Misc/PackageName.h"
 #include "FileHelpers.h"
+#include "Editor.h"
+#include "Editor/EditorEngine.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -40,10 +48,40 @@ static bool YIBagDash_SaveObjectPackage(UObject* ObjectToSave)
 	const bool bPromptToSave = false;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
 }
+
+static APawn* YIBagDash_ResolveRuntimePawn()
+{
+	if (!GEditor || !GEditor->PlayWorld)
+	{
+		return nullptr;
+	}
+
+	UWorld* PlayWorld = GEditor->PlayWorld;
+	if (!PlayWorld)
+	{
+		return nullptr;
+	}
+
+	for (FConstPlayerControllerIterator It = PlayWorld->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APlayerController* PC = It->Get())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				return Pawn;
+			}
+		}
+	}
+
+	return nullptr;
+}
 }
 
 void SYIBagDashboard::Construct(const FArguments& InArgs)
 {
+	RuntimeSpellbookSlotTag = FGameplayTag::RequestGameplayTag(FName(TEXT("Equip.Slot.Spellbook.Primary")), false);
+	RuntimeSpellbookActionSlotIndex = 0;
+
 	FPropertyEditorModule& PropModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FDetailsViewArgs DetailArgs;
 	DetailArgs.bAllowSearch = true;
@@ -85,6 +123,88 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							? NSLOCTEXT("YOLOInventory", "BagDash_StatusDefault", "Select a bag asset to edit its runtime grid.")
 							: StatusText;
 					})
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(2, 6, 2, 2)
+				[
+					SNew(SBorder)
+					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+					.Padding(6)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(STextBlock)
+							.Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeSetupTitle", "Runtime Gameplay Setup (PIE Pawn)"))
+							.Font(FAppStyle::Get().GetFontStyle("BoldFont"))
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+							+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+							[
+								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeSlotTag", "Spellbook Slot Tag"))
+							]
+							+ SHorizontalBox::Slot().FillWidth(1.f)
+							[
+								SNew(SEditableTextBox)
+								.Text_Lambda([this]()
+								{
+									return RuntimeSpellbookSlotTag.IsValid()
+										? FText::FromString(RuntimeSpellbookSlotTag.ToString())
+										: FText::GetEmpty();
+								})
+								.OnTextCommitted_Lambda([this](const FText& NewText, ETextCommit::Type)
+								{
+									RuntimeSpellbookSlotTag = FGameplayTag::RequestGameplayTag(FName(*NewText.ToString()), false);
+								})
+							]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
+						[
+							SNew(SHorizontalBox)
+							+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
+							[
+								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeSlotIndex", "Action Slot Index"))
+							]
+							+ SHorizontalBox::Slot().AutoWidth()
+							[
+								SNew(SNumericEntryBox<int32>)
+								.MinValue(0)
+								.MaxValue(63)
+								.Value_Lambda([this]() -> TOptional<int32> { return RuntimeSpellbookActionSlotIndex; })
+								.OnValueChanged_Lambda([this](int32 NewValue)
+								{
+									RuntimeSpellbookActionSlotIndex = FMath::Clamp(NewValue, 0, 63);
+								})
+							]
+						]
+						+ SVerticalBox::Slot().AutoHeight()
+						[
+							SNew(SHorizontalBox)
+							+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+							[
+								SNew(SButton)
+								.Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset", "Apply Spellbook Preset"))
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset_TT", "Runs on the current PIE player pawn and ensures inventory/equipment/actionbar setup + spellbook autobind."))
+								.OnClicked_Lambda([this]()
+								{
+									ApplyRuntimeSpellbookPresetFromToolbar();
+									return FReply::Handled();
+								})
+							]
+							+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+							[
+								SNew(SButton)
+								.Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeValidate", "Validate Runtime Setup"))
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeValidate_TT", "Validates current PIE pawn inventory gameplay setup without changing components."))
+								.OnClicked_Lambda([this]()
+								{
+									ValidateRuntimeSetupFromToolbar();
+									return FReply::Handled();
+								})
+							]
+						]
+					]
 				]
 				+ SVerticalBox::Slot().FillHeight(1.f).Padding(0, 6, 0, 0)
 				[
@@ -185,6 +305,47 @@ void SYIBagDashboard::SaveCurrentBagFromToolbar()
 void SYIBagDashboard::CreateBagFromToolbar()
 {
 	CreateNewBag();
+}
+
+void SYIBagDashboard::ApplyRuntimeSpellbookPresetFromToolbar()
+{
+	APawn* Pawn = YIBagDash_ResolveRuntimePawn();
+	if (!Pawn)
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_Runtime_NoPawn", "Runtime preset failed: run PIE and possess a pawn first.");
+		return;
+	}
+
+	FYIInventoryGameplaySetupResult SetupResult;
+	const bool bOk = UYIInventoryGameplaySetupLibrary::ApplySpellbookActionPreset(
+		Pawn,
+		RuntimeSpellbookSlotTag,
+		RuntimeSpellbookActionSlotIndex,
+		SetupResult);
+
+	StatusText = FText::FromString(SetupResult.Summary);
+	if (!bOk && SetupResult.BlockingIssues.Num() > 0)
+	{
+		StatusText = FText::FromString(SetupResult.BlockingIssues[0]);
+	}
+}
+
+void SYIBagDashboard::ValidateRuntimeSetupFromToolbar()
+{
+	APawn* Pawn = YIBagDash_ResolveRuntimePawn();
+	if (!Pawn)
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_RuntimeValidate_NoPawn", "Runtime validation failed: run PIE and possess a pawn first.");
+		return;
+	}
+
+	FYIInventoryGameplaySetupResult ValidateResult;
+	const bool bOk = UYIInventoryGameplaySetupLibrary::ValidatePawnInventoryGameplaySetup(Pawn, ValidateResult);
+	StatusText = FText::FromString(ValidateResult.Summary);
+	if (!bOk && ValidateResult.BlockingIssues.Num() > 0)
+	{
+		StatusText = FText::FromString(ValidateResult.BlockingIssues[0]);
+	}
 }
 
 void SYIBagDashboard::SetSelectedBag(UYIInventoryBag* InBag)

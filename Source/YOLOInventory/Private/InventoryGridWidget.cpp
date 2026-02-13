@@ -12,6 +12,7 @@
 #include "YITradeSessionActor.h"
 #include "YITradeInteractionComponent.h"
 #include "YIShopComponent.h"
+#include "YIEquipmentComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "YIItemPickup.h"
 #include "YIItemSFXLibrary.h"
@@ -1151,6 +1152,42 @@ bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventor
 	OutItem = GInventoryDrag.Item;
 	OutSourceBag = GInventoryDrag.SourceGrid ? GInventoryDrag.SourceGrid->Bag : nullptr;
 	return true;
+}
+
+bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag)
+{
+	if (!EquipmentComponent || !GInventoryDrag.bActive)
+	{
+		return false;
+	}
+
+	if (UWorld* World = EquipmentComponent->GetWorld())
+	{
+		if (GInventoryDrag.DragGI.IsValid() && GInventoryDrag.DragGI.Get() != World->GetGameInstance())
+		{
+			return false;
+		}
+	}
+
+	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+	if (!SourceGrid || !SourceGrid->Bag || GInventoryDrag.SourceIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	UYIInventoryComponent* SourceInventory = SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>();
+	if (!SourceInventory)
+	{
+		return false;
+	}
+
+	const bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, GInventoryDrag.SourceIndex, RequestedSlotTag);
+	if (bEquipped)
+	{
+		SourceGrid->RefreshBoundTooltip();
+		GInventoryDrag.Reset();
+	}
+	return bEquipped;
 }
 
 void UInventoryGridWidget::SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide)

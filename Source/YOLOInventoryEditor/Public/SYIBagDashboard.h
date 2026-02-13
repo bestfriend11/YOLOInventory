@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Widgets/SCompoundWidget.h"
 
 class UYIInventoryBag;
@@ -20,6 +21,8 @@ public:
 
 	void SaveCurrentBagFromToolbar();
 	void CreateBagFromToolbar();
+	void ApplyRuntimeSpellbookPresetFromToolbar();
+	void ValidateRuntimeSetupFromToolbar();
 
 	void SetSelectedBag(UYIInventoryBag* InBag);
 	UYIInventoryBag* GetSelectedBag() const;
@@ -38,4 +41,6 @@ private:
 	TSharedPtr<class SBox> GridHost;
 	TSharedPtr<class STextBlock> StatusTextWidget;
 	FText StatusText;
+	FGameplayTag RuntimeSpellbookSlotTag;
+	int32 RuntimeSpellbookActionSlotIndex = 0;
 };

@@ -29,6 +29,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	class UInventoryActionMenuWidget* GetActionMenu() const { return ActionMenu; }
 
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	void BindEquipmentSlotWidgets();
+
 protected:
 	// Bind these to matching named widgets in your UMG widget blueprint
 	/** The runtime grid widget that shows items and selection. */
@@ -68,6 +71,10 @@ protected:
 	/** If set to true, Enhanced Input will be used instead of NativeOnKeyDown for navigation. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input", meta=(ToolTip="Use Enhanced Input actions instead of hard-coded keys"))
 	bool bUseEnhancedInput = true;
+
+	/** Auto-bind any UInventoryEquipmentSlotWidget children to the owning pawn's inventory/equipment components. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
+	bool bAutoBindEquipmentSlots = true;
 
 	/** Debounce window (seconds) to ignore duplicate confirm/open events fired in quick succession (prevents immediate open+confirm when same key is bound for both). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input", meta=(ToolTip="Seconds to ignore duplicate Confirm/Open events fired quickly"))

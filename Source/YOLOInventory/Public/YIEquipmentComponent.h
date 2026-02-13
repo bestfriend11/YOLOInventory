@@ -104,6 +104,7 @@ private:
 	int32 FindEntryIndex(FGameplayTag SlotTag) const;
 	bool IsAllowedSlot(FGameplayTag SlotTag) const;
 	FGameplayTag ResolveSlotTagFromDefinition(const UYIItemDefinition* Definition) const;
+	bool DoesDefinitionSupportSlot(const UYIItemDefinition* Definition, FGameplayTag SlotTag) const;
 
 	void EmitEquipmentMessage(const FString& Message, const FColor& Color) const;
 	void BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message);

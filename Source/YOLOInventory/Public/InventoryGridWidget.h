@@ -12,6 +12,7 @@ struct FYIRequirementContext;
 class AYITradeSessionActor;
 class USoundBase;
 class UYIItemSFXLibrary;
+class UYIEquipmentComponent;
 enum class ETradeSide : uint8;
 class UYIShopComponent;
 
@@ -286,6 +287,9 @@ public:
 	static bool IsItemDragActive(const UWorld* ContextWorld = nullptr);
 	/** Get the currently dragged item (if any) and the source bag for context; returns false if no drag active. */
 	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld = nullptr);
+	/** Equip the currently dragged inventory item into the requested equipment slot. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
+	static bool TryEquipActiveDraggedItem(class UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag);
 
 	/** Optional: route cross-owner transfers through a trade session (server-authoritative). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
