@@ -50,7 +50,8 @@ int32 UYIPlayerInventoryStateComponent::AddSharedBag(UYIInventoryBag* Bag)
 	{
 		return INDEX_NONE;
 	}
-	const int32 Index = SharedBags.Add(Bag);
+	const int32 Index = SharedBags.Add(TSoftObjectPtr<UYIInventoryBag>(Bag));
+	SaveToDisk();
 	return Index;
 }
 
@@ -60,7 +61,9 @@ int32 UYIPlayerInventoryStateComponent::AddPartyMember(const FYIPartyMemberEntry
 	{
 		return INDEX_NONE;
 	}
-	return PartyMembers.Add(Entry);
+	const int32 NewIndex = PartyMembers.Add(Entry);
+	SaveToDisk();
+	return NewIndex;
 }
 
 bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 PartyIndex)
@@ -110,8 +113,8 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 	if (!RestoreInventoryToPawn(Pawn))
 	{
 		SaveCurrentPawnInventory(Pawn);
-		SaveToDisk();
 	}
+	SaveToDisk();
 	return true;
 }
 
@@ -131,6 +134,7 @@ void UYIPlayerInventoryStateComponent::AddResource(FName ResourceName, int64 Del
 		return;
 	}
 	Resources.Add(ResourceName, Delta);
+	SaveToDisk();
 }
 
 bool UYIPlayerInventoryStateComponent::ConsumeResource(FName ResourceName, int64 Amount)
@@ -139,7 +143,12 @@ bool UYIPlayerInventoryStateComponent::ConsumeResource(FName ResourceName, int64
 	{
 		return false;
 	}
-	return Resources.Consume(ResourceName, Amount);
+	const bool bConsumed = Resources.Consume(ResourceName, Amount);
+	if (bConsumed)
+	{
+		SaveToDisk();
+	}
+	return bConsumed;
 }
 
 int64 UYIPlayerInventoryStateComponent::GetResourceAmount(FName ResourceName) const
@@ -309,24 +318,72 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 		return;
 	}
 
+	if (bSaveInProgress)
+	{
+		bSaveQueued = true;
+		return;
+	}
+
 	UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(UGameplayStatics::CreateSaveGameObject(UYIInventorySaveGame::StaticClass()));
 	if (!Save) return;
 
 	Save->SavedBags = SavedBags;
 	Save->SavedResources = Resources;
+	Save->SavedObservedPartyIndex = ObservedPartyIndex;
 
-	if (bSaveInProgress)
+	Save->SavedSharedBags.Reset(SharedBags.Num());
+	for (const TSoftObjectPtr<UYIInventoryBag>& SharedBag : SharedBags)
 	{
-		return; // drop this request; next OnChanged will requeue
+		FYIPersistedSharedBagEntry PersistedBag;
+		PersistedBag.BagAsset = SharedBag;
+
+		UYIInventoryBag* Bag = SharedBag.IsValid() ? SharedBag.Get() : SharedBag.LoadSynchronous();
+		if (Bag)
+		{
+			CopyBagToSnapshot(Bag, PersistedBag.Snapshot);
+			PersistedBag.bHasSnapshot = true;
+		}
+
+		Save->SavedSharedBags.Add(MoveTemp(PersistedBag));
 	}
-	bSaveInProgress = true;
 
-	FAsyncSaveGameToSlotDelegate Finished;
-	Finished.BindLambda([this](const FString&, const int32, bool)
+	Save->SavedPartyMembers.Reset(PartyMembers.Num());
+	for (const FYIPartyMemberEntry& Member : PartyMembers)
 	{
-		bSaveInProgress = false;
+		FYIPersistedPartyMemberEntry PersistedMember;
+		PersistedMember.Member = Member;
+
+		UYIInventoryBag* MemberBag = Member.InventoryBag.IsValid() ? Member.InventoryBag.Get() : Member.InventoryBag.LoadSynchronous();
+		if (MemberBag)
+		{
+			CopyBagToSnapshot(MemberBag, PersistedMember.InventorySnapshot);
+			PersistedMember.bHasInventorySnapshot = true;
+		}
+
+		Save->SavedPartyMembers.Add(MoveTemp(PersistedMember));
+	}
+
+	bSaveInProgress = true;
+	bSaveQueued = false;
+
+	const TWeakObjectPtr<UYIPlayerInventoryStateComponent> WeakThis(this);
+	FAsyncSaveGameToSlotDelegate Finished;
+	Finished.BindLambda([WeakThis](const FString&, const int32, bool)
+	{
+		UYIPlayerInventoryStateComponent* Self = WeakThis.Get();
+		if (!Self)
+		{
+			return;
+		}
+
+		Self->bSaveInProgress = false;
+		if (Self->bSaveQueued)
+		{
+			Self->bSaveQueued = false;
+			Self->SaveToDisk();
+		}
 	});
-	UGameplayStatics::AsyncSaveGameToSlot(Save, SaveSlotName, SaveUserIndex, Finished);
+	UGameplayStatics::AsyncSaveGameToSlot(Save, BuildEffectiveSaveSlotName(), SaveUserIndex, Finished);
 }
 
 void UYIPlayerInventoryStateComponent::LoadFromDisk()
@@ -336,19 +393,115 @@ void UYIPlayerInventoryStateComponent::LoadFromDisk()
 		return;
 	}
 
-	if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
+	const FString EffectiveSlotName = BuildEffectiveSaveSlotName();
+	if (!UGameplayStatics::DoesSaveGameExist(EffectiveSlotName, SaveUserIndex))
 	{
 		return;
 	}
 
-	if (USaveGame* Raw = UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex))
+	if (USaveGame* Raw = UGameplayStatics::LoadGameFromSlot(EffectiveSlotName, SaveUserIndex))
 	{
 		if (UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(Raw))
 		{
 			SavedBags = Save->SavedBags;
 			Resources = Save->SavedResources;
+			ObservedPartyIndex = FMath::Max(0, Save->SavedObservedPartyIndex);
+
+			SharedBags.Reset();
+			SharedBags.Reserve(Save->SavedSharedBags.Num());
+			for (const FYIPersistedSharedBagEntry& PersistedBag : Save->SavedSharedBags)
+			{
+				if (PersistedBag.BagAsset.ToSoftObjectPath().IsValid())
+				{
+					SharedBags.Add(PersistedBag.BagAsset);
+				}
+				else if (PersistedBag.bHasSnapshot)
+				{
+					// Fallback when a shared bag only existed as runtime data.
+					if (UYIInventoryBag* RuntimeBag = SnapshotToBag(this, PersistedBag.Snapshot))
+					{
+						SharedBags.Add(TSoftObjectPtr<UYIInventoryBag>(RuntimeBag));
+					}
+				}
+			}
+
+			PartyMembers.Reset();
+			PartyMembers.Reserve(Save->SavedPartyMembers.Num());
+			for (int32 Index = 0; Index < Save->SavedPartyMembers.Num(); ++Index)
+			{
+				const FYIPersistedPartyMemberEntry& PersistedMember = Save->SavedPartyMembers[Index];
+				FYIPartyMemberEntry Member = PersistedMember.Member;
+				PartyMembers.Add(MoveTemp(Member));
+
+				if (PersistedMember.bHasInventorySnapshot)
+				{
+					SavedBags.SetNum(FMath::Max(SavedBags.Num(), Index + 1));
+					SavedBags[Index] = PersistedMember.InventorySnapshot;
+				}
+			}
+
+			if (PartyMembers.Num() > 0)
+			{
+				ObservedPartyIndex = FMath::Clamp(ObservedPartyIndex, 0, PartyMembers.Num() - 1);
+			}
+			else
+			{
+				ObservedPartyIndex = 0;
+			}
 		}
 	}
+}
+
+FString UYIPlayerInventoryStateComponent::BuildEffectiveSaveSlotName() const
+{
+	const FString BaseSlotName = SaveSlotName.IsEmpty() ? TEXT("YOLOInventory_Autosave") : SaveSlotName;
+	if (!bUsePerPlayerSaveSlot)
+	{
+		return BaseSlotName;
+	}
+
+	FString PlayerIdentity;
+	if (const APlayerState* PlayerState = Cast<APlayerState>(GetOwner()))
+	{
+		const FUniqueNetIdRepl& UniqueId = PlayerState->GetUniqueId();
+		if (UniqueId.IsValid())
+		{
+			PlayerIdentity = UniqueId->ToString();
+		}
+
+		if (PlayerIdentity.IsEmpty())
+		{
+			PlayerIdentity = PlayerState->GetPlayerName();
+		}
+
+		if (PlayerIdentity.IsEmpty())
+		{
+			PlayerIdentity = PlayerState->GetFName().ToString();
+		}
+	}
+
+	if (PlayerIdentity.IsEmpty())
+	{
+		if (const UObject* OwnerObj = GetOwner())
+		{
+			PlayerIdentity = OwnerObj->GetFName().ToString();
+		}
+	}
+
+	if (PlayerIdentity.IsEmpty())
+	{
+		PlayerIdentity = TEXT("Player");
+	}
+
+	for (TCHAR& Ch : PlayerIdentity)
+	{
+		if (!(FChar::IsAlnum(Ch) || Ch == TEXT('_') || Ch == TEXT('-')))
+		{
+			Ch = TEXT('_');
+		}
+	}
+
+	return FString::Printf(TEXT("%s_%s"), *BaseSlotName, *PlayerIdentity);
 }
 
 void UYIPlayerInventoryStateComponent::TryAutoRegisterPawn()

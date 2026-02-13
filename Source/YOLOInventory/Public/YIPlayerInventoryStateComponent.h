@@ -232,6 +232,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
 	int32 SaveUserIndex = 0;
 
+	/** Append PlayerState identity to slot name to prevent collisions in multiplayer sessions. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	bool bUsePerPlayerSaveSlot = true;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
@@ -261,11 +265,13 @@ private:
 	void DebouncedSave();
 	void SaveToDisk();
 	void LoadFromDisk();
+	FString BuildEffectiveSaveSlotName() const;
 	void TryAutoRegisterPawn();
 	FTimerHandle AutoSavePollHandle;
 	FTimerHandle DebounceHandle;
 	int32 ObservedPartyIndex = 0;
 	bool bSaveInProgress = false;
+	bool bSaveQueued = false;
 
 	UPROPERTY(EditAnywhere, Category="YOLOInventory|Save", meta=(ClampMin="0.05"))
 	float AutoSaveDebounceSeconds = 0.35f;
