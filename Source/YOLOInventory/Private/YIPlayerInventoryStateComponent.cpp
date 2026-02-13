@@ -8,21 +8,109 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Misc/Crc.h"
 #include "TimerManager.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogYIInventoryPersistence, Log, All);
 
 UYIPlayerInventoryStateComponent::UYIPlayerInventoryStateComponent()
 {
 	SetIsReplicatedByDefault(true);
 }
 
+void UYIPlayerInventoryStateComponent::EmitSaveDiagnostic(const FString& Message, const FColor& Color, bool bForceOnScreen) const
+{
+	UE_LOG(LogYIInventoryPersistence, Log, TEXT("%s"), *Message);
+
+	if (!bEnableSaveDiagnostics && !bForceOnScreen)
+	{
+		return;
+	}
+
+	if ((bShowSaveDiagnosticsOnScreen || bForceOnScreen) && GEngine)
+	{
+		const uint32 MessageHash = FCrc::StrCrc32(*Message);
+		const uint64 PersistentMessageKey = 0x5949000000000000ULL | static_cast<uint64>(MessageHash); // "YI" namespace + message hash
+		const float DisplaySeconds = bKeepDiagnosticsPinnedOnScreen ? 1800.0f : SaveDiagnosticOnScreenSeconds;
+		const uint64 ScreenKey = bKeepDiagnosticsPinnedOnScreen ? PersistentMessageKey : static_cast<uint64>(-1);
+		GEngine->AddOnScreenDebugMessage(ScreenKey, DisplaySeconds, Color, Message);
+	}
+}
+
+bool UYIPlayerInventoryStateComponent::DiagnoseSaveSetup(FString& OutMessage) const
+{
+	if (!GetOwner())
+	{
+		OutMessage = TEXT("Persistence disabled: component has no owner.");
+		return false;
+	}
+	if (!Cast<APlayerState>(GetOwner()))
+	{
+		OutMessage = FString::Printf(TEXT("Persistence warning: owner '%s' is not PlayerState."), *GetOwner()->GetName());
+		return false;
+	}
+	if (GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		OutMessage = TEXT("Persistence inactive on this instance: not authority (expected on clients).");
+		return false;
+	}
+	if (!bEnableAutoSave)
+	{
+		OutMessage = TEXT("Persistence disabled: bEnableAutoSave=false.");
+		return false;
+	}
+
+	OutMessage = FString::Printf(TEXT("Persistence ready. Slot='%s' User=%d"), *BuildEffectiveSaveSlotName(), SaveUserIndex);
+	return true;
+}
+
+void UYIPlayerInventoryStateComponent::SaveNow()
+{
+	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		EmitSaveDiagnostic(TEXT("SaveNow skipped: authority only."), FColor::Yellow, true);
+		return;
+	}
+
+	if (ObservedPawn.IsValid())
+	{
+		SaveCurrentPawnInventory(ObservedPawn.Get());
+	}
+	SaveToDisk();
+}
+
+void UYIPlayerInventoryStateComponent::LoadNow()
+{
+	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
+	{
+		EmitSaveDiagnostic(TEXT("LoadNow skipped: authority only."), FColor::Yellow, true);
+		return;
+	}
+
+	LoadFromDisk();
+	if (ObservedPawn.IsValid())
+	{
+		RestoreInventoryToPawn(ObservedPawn.Get());
+	}
+}
+
 void UYIPlayerInventoryStateComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (!Cast<APlayerState>(GetOwner()))
+	{
+		EmitSaveDiagnostic(TEXT("UYIPlayerInventoryStateComponent should live on PlayerState for stable multiplayer persistence."), FColor::Orange, true);
+	}
+
 	// Only the server should drive persistence + bag rebinding.
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority && bEnableAutoSave)
 	{
+		FString SetupMessage;
+		DiagnoseSaveSetup(SetupMessage);
+		EmitSaveDiagnostic(SetupMessage, FColor::Cyan, true);
 		LoadFromDisk();
 		// Poll until a pawn exists, then bind to its bag changes.
 		TryAutoRegisterPawn();
@@ -30,6 +118,10 @@ void UYIPlayerInventoryStateComponent::BeginPlay()
 		{
 			World->GetTimerManager().SetTimer(AutoSavePollHandle, this, &UYIPlayerInventoryStateComponent::TryAutoRegisterPawn, 1.0f, true);
 		}
+	}
+	else if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority && !bEnableAutoSave)
+	{
+		EmitSaveDiagnostic(TEXT("Autosave is disabled (bEnableAutoSave=false)."), FColor::Yellow, true);
 	}
 }
 
@@ -70,12 +162,14 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 {
 	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority || !Pawn)
 	{
+		EmitSaveDiagnostic(TEXT("AssignInventoryToPawn failed: invalid owner/authority/pawn."), FColor::Red, true);
 		return false;
 	}
 
 	UYIInventoryComponent* InvComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
 	if (!InvComp)
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("AssignInventoryToPawn failed: pawn '%s' is missing UYIInventoryComponent."), *Pawn->GetName()), FColor::Red, true);
 		return false;
 	}
 
@@ -103,6 +197,7 @@ bool UYIPlayerInventoryStateComponent::AssignInventoryToPawn(APawn* Pawn, int32 
 	UYIInventoryBag* Bag = Entry.InventoryBag.IsValid() ? Entry.InventoryBag.Get() : Entry.InventoryBag.LoadSynchronous();
 	if (!Bag)
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("AssignInventoryToPawn failed: party bag could not be loaded for pawn '%s'."), *Pawn->GetName()), FColor::Red, true);
 		return false;
 	}
 
@@ -209,11 +304,13 @@ bool UYIPlayerInventoryStateComponent::SaveCurrentPawnInventory(APawn* Pawn)
 {
 	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority || !Pawn)
 	{
+		EmitSaveDiagnostic(TEXT("SaveCurrentPawnInventory skipped: invalid owner/authority/pawn."), FColor::Yellow);
 		return false;
 	}
 	UYIInventoryComponent* InvComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
 	if (!InvComp || !InvComp->EquippedBag)
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("SaveCurrentPawnInventory skipped: pawn '%s' has no inventory component or equipped bag."), *Pawn->GetName()), FColor::Yellow);
 		return false;
 	}
 	FYISavedBagSnapshot Snap;
@@ -228,17 +325,20 @@ bool UYIPlayerInventoryStateComponent::RestoreInventoryToPawn(APawn* Pawn)
 {
 	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority || !Pawn)
 	{
+		EmitSaveDiagnostic(TEXT("RestoreInventoryToPawn skipped: invalid owner/authority/pawn."), FColor::Yellow);
 		return false;
 	}
 	const int32 Index = ObservedPartyIndex;
 	if (!SavedBags.IsValidIndex(Index))
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("RestoreInventoryToPawn skipped: no saved snapshot for party index %d."), Index), FColor::Yellow);
 		return false;
 	}
 
 	UYIInventoryComponent* InvComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
 	if (!InvComp)
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("RestoreInventoryToPawn failed: pawn '%s' is missing UYIInventoryComponent."), *Pawn->GetName()), FColor::Red, true);
 		return false;
 	}
 
@@ -246,6 +346,7 @@ bool UYIPlayerInventoryStateComponent::RestoreInventoryToPawn(APawn* Pawn)
 	UYIInventoryBag* RuntimeBag = SnapshotToBag(Pawn, SavedBags[Index]);
 	if (!RuntimeBag)
 	{
+		EmitSaveDiagnostic(FString::Printf(TEXT("RestoreInventoryToPawn failed: could not build runtime bag for pawn '%s'."), *Pawn->GetName()), FColor::Red, true);
 		return false;
 	}
 
@@ -264,17 +365,42 @@ void UYIPlayerInventoryStateComponent::BindAutoSave(APawn* Pawn)
 
 	if (!Pawn || Pawn->GetLocalRole() != ROLE_Authority)
 	{
+		EmitSaveDiagnostic(TEXT("BindAutoSave skipped: invalid pawn or non-authority pawn."), FColor::Yellow);
 		return;
 	}
 
 	if (UYIInventoryComponent* Inv = Pawn->FindComponentByClass<UYIInventoryComponent>())
 	{
-		if (UYIInventoryBag* Bag = Inv->GetBag())
+		UYIInventoryBag* Bag = Inv->GetBag();
+		if (!Bag)
+		{
+			Bag = Inv->EquippedBag;
+		}
+		if (!Bag && Inv->Bags.Num() > 0)
+		{
+			Bag = Inv->Bags[0];
+			Inv->OpenBag(Bag); // normalize runtime state so save tracking is always attached.
+		}
+
+		if (Bag)
 		{
 			Bag->OnChanged.AddUObject(this, &UYIPlayerInventoryStateComponent::HandleBagChanged);
 			ObservedBag = Bag;
 			ObservedPawn = Pawn;
+			bReportedMissingInventoryComp = false;
+			bReportedMissingBag = false;
+			EmitSaveDiagnostic(FString::Printf(TEXT("Autosave bound to pawn '%s' bag."), *Pawn->GetName()), FColor::Green);
 		}
+		else if (!bReportedMissingBag)
+		{
+			bReportedMissingBag = true;
+			EmitSaveDiagnostic(FString::Printf(TEXT("Autosave not bound: pawn '%s' inventory has no bag."), *Pawn->GetName()), FColor::Orange, true);
+		}
+	}
+	else if (!bReportedMissingInventoryComp)
+	{
+		bReportedMissingInventoryComp = true;
+		EmitSaveDiagnostic(FString::Printf(TEXT("Autosave not bound: pawn '%s' is missing UYIInventoryComponent."), *Pawn->GetName()), FColor::Orange, true);
 	}
 }
 
@@ -315,17 +441,24 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 {
 	if (!bEnableAutoSave || !GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
 	{
+		EmitSaveDiagnostic(TEXT("SaveToDisk skipped: autosave disabled or non-authority instance."), FColor::Yellow);
 		return;
 	}
 
 	if (bSaveInProgress)
 	{
 		bSaveQueued = true;
+		EmitSaveDiagnostic(TEXT("Save queued: previous async save is still running."), FColor::Yellow);
 		return;
 	}
 
 	UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(UGameplayStatics::CreateSaveGameObject(UYIInventorySaveGame::StaticClass()));
-	if (!Save) return;
+	if (!Save)
+	{
+		EmitSaveDiagnostic(TEXT("SaveToDisk failed: could not create savegame object."), FColor::Red, true);
+		OnSaveFinished.Broadcast(false, TEXT("Could not create savegame object."));
+		return;
+	}
 
 	Save->SavedBags = SavedBags;
 	Save->SavedResources = Resources;
@@ -365,10 +498,14 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 
 	bSaveInProgress = true;
 	bSaveQueued = false;
+	const FString EffectiveSlotName = BuildEffectiveSaveSlotName();
+	const FString StartMessage = FString::Printf(TEXT("Saving inventory state... Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
+	EmitSaveDiagnostic(StartMessage, FColor::Cyan, true);
+	OnSaveStarted.Broadcast(StartMessage);
 
 	const TWeakObjectPtr<UYIPlayerInventoryStateComponent> WeakThis(this);
 	FAsyncSaveGameToSlotDelegate Finished;
-	Finished.BindLambda([WeakThis](const FString&, const int32, bool)
+	Finished.BindLambda([WeakThis](const FString& SlotName, const int32 UserIndex, bool bSuccess)
 	{
 		UYIPlayerInventoryStateComponent* Self = WeakThis.Get();
 		if (!Self)
@@ -377,25 +514,39 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 		}
 
 		Self->bSaveInProgress = false;
+		const FString ResultMessage = bSuccess
+			? FString::Printf(TEXT("Save succeeded. Slot='%s' User=%d"), *SlotName, UserIndex)
+			: FString::Printf(TEXT("Save failed. Slot='%s' User=%d"), *SlotName, UserIndex);
+		Self->EmitSaveDiagnostic(ResultMessage, bSuccess ? FColor::Green : FColor::Red, true);
+		Self->OnSaveFinished.Broadcast(bSuccess, ResultMessage);
+
 		if (Self->bSaveQueued)
 		{
 			Self->bSaveQueued = false;
 			Self->SaveToDisk();
 		}
 	});
-	UGameplayStatics::AsyncSaveGameToSlot(Save, BuildEffectiveSaveSlotName(), SaveUserIndex, Finished);
+	UGameplayStatics::AsyncSaveGameToSlot(Save, EffectiveSlotName, SaveUserIndex, Finished);
 }
 
 void UYIPlayerInventoryStateComponent::LoadFromDisk()
 {
 	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
 	{
+		EmitSaveDiagnostic(TEXT("LoadFromDisk skipped: non-authority instance."), FColor::Yellow);
+		OnLoadFinished.Broadcast(false, TEXT("Skipped load on non-authority instance."));
 		return;
 	}
 
 	const FString EffectiveSlotName = BuildEffectiveSaveSlotName();
+	const FString LoadStartMessage = FString::Printf(TEXT("Loading inventory state... Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
+	EmitSaveDiagnostic(LoadStartMessage, FColor::Cyan, true);
+	OnLoadStarted.Broadcast(LoadStartMessage);
 	if (!UGameplayStatics::DoesSaveGameExist(EffectiveSlotName, SaveUserIndex))
 	{
+		const FString MissingMessage = FString::Printf(TEXT("Load skipped: no save file found for Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
+		EmitSaveDiagnostic(MissingMessage, FColor::Yellow, true);
+		OnLoadFinished.Broadcast(false, MissingMessage);
 		return;
 	}
 
@@ -448,8 +599,21 @@ void UYIPlayerInventoryStateComponent::LoadFromDisk()
 			{
 				ObservedPartyIndex = 0;
 			}
+
+			const FString LoadedMessage = FString::Printf(
+				TEXT("Load succeeded. PartyMembers=%d SharedBags=%d SavedSnapshots=%d"),
+				PartyMembers.Num(),
+				SharedBags.Num(),
+				SavedBags.Num());
+			EmitSaveDiagnostic(LoadedMessage, FColor::Green, true);
+			OnLoadFinished.Broadcast(true, LoadedMessage);
+			return;
 		}
 	}
+
+	const FString FailedMessage = FString::Printf(TEXT("Load failed: could not deserialize save for Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
+	EmitSaveDiagnostic(FailedMessage, FColor::Red, true);
+	OnLoadFinished.Broadcast(false, FailedMessage);
 }
 
 FString UYIPlayerInventoryStateComponent::BuildEffectiveSaveSlotName() const
@@ -523,6 +687,17 @@ void UYIPlayerInventoryStateComponent::TryAutoRegisterPawn()
 			}
 		}
 	}
+
+	if (!Pawn)
+	{
+		if (!bReportedNoPawnYet)
+		{
+			bReportedNoPawnYet = true;
+			EmitSaveDiagnostic(TEXT("Waiting for pawn possession before inventory autosave can bind."), FColor::Yellow, true);
+		}
+		return;
+	}
+	bReportedNoPawnYet = false;
 
 	if (Pawn && Pawn != ObservedPawn.Get())
 	{

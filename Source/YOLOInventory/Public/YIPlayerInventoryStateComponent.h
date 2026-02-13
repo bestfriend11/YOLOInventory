@@ -159,6 +159,9 @@ struct YOLOINVENTORY_API FYIResourceWallet
 	}
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FYIInventoryPersistenceEvent, FString, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIInventoryPersistenceResultEvent, bool, bSuccess, FString, Message);
+
 /**
  * Player-level inventory state meant to be added to PlayerState.
  * Holds shared stash and party member inventories; pawns pull bags from here on spawn.
@@ -236,6 +239,50 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
 	bool bUsePerPlayerSaveSlot = true;
 
+	/** Verbose runtime diagnostics for save/load flow. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	bool bEnableSaveDiagnostics = true;
+
+	/** Draw save/load diagnostics on screen (useful during integration/testing). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	bool bShowSaveDiagnosticsOnScreen = true;
+
+	/** Keep diagnostic message pinned for a long duration instead of short fadeouts. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	bool bKeepDiagnosticsPinnedOnScreen = true;
+
+	/** Duration for on-screen diagnostic messages when pinning is disabled. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ClampMin="1.0", ClampMax="600.0"))
+	float SaveDiagnosticOnScreenSeconds = 4.0f;
+
+	/** Fired when async save starts. */
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	FYIInventoryPersistenceEvent OnSaveStarted;
+
+	/** Fired when async save completes. */
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	FYIInventoryPersistenceResultEvent OnSaveFinished;
+
+	/** Fired when load starts. */
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	FYIInventoryPersistenceEvent OnLoadStarted;
+
+	/** Fired when load completes or is skipped. */
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	FYIInventoryPersistenceResultEvent OnLoadFinished;
+
+	/** Manual save helper for debugging/tools (server only). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly)
+	void SaveNow();
+
+	/** Manual load helper for debugging/tools (server only). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly)
+	void LoadNow();
+
+	/** Returns whether persistence setup is valid on this instance and why. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
+	bool DiagnoseSaveSetup(FString& OutMessage) const;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
@@ -266,12 +313,16 @@ private:
 	void SaveToDisk();
 	void LoadFromDisk();
 	FString BuildEffectiveSaveSlotName() const;
+	void EmitSaveDiagnostic(const FString& Message, const FColor& Color, bool bForceOnScreen = false) const;
 	void TryAutoRegisterPawn();
 	FTimerHandle AutoSavePollHandle;
 	FTimerHandle DebounceHandle;
 	int32 ObservedPartyIndex = 0;
 	bool bSaveInProgress = false;
 	bool bSaveQueued = false;
+	bool bReportedNoPawnYet = false;
+	bool bReportedMissingInventoryComp = false;
+	bool bReportedMissingBag = false;
 
 	UPROPERTY(EditAnywhere, Category="YOLOInventory|Save", meta=(ClampMin="0.05"))
 	float AutoSaveDebounceSeconds = 0.35f;

@@ -31,6 +31,11 @@ UYIInventoryBag* UYIInventoryComponent::CreateBag(FName BagName, FIntPoint GridS
 		NewBag->GridSize = GridSize;
 		NewBag->DisplayName = FText::FromName(BagName);
 		Bags.Add(NewBag);
+		// Keep setup simple: first created bag becomes active automatically.
+		if (!EquippedBag)
+		{
+			OpenBag(NewBag);
+		}
 		return NewBag;
 	}
 	return nullptr;
@@ -42,12 +47,18 @@ void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 	// Prevent templates from being used directly at runtime
 	if (GetOwner() && GetOwner()->HasAuthority() && IsTemplateBag(Bag))
 	{
-		Bag = CloneBagTemplate(Bag);
+		UYIInventoryBag* RuntimeBag = CloneBagTemplate(Bag);
+		if (!RuntimeBag)
+		{
+			return;
+		}
+		Bag = RuntimeBag;
 	}
-	if (EquippedBag == Bag)
+
+	// Ensure the active bag is tracked in Bags so designers do not need to keep two fields in sync.
+	if (!Bags.Contains(Bag))
 	{
-		OnBagOpened.Broadcast(Bag);
-		return;
+		Bags.Add(Bag);
 	}
 
 	if (EquippedBag && BagChangedHandle.IsValid())
@@ -87,7 +98,28 @@ void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return;
-	if (EquippedBag == Bag) { EquippedBag = nullptr; }
+	if (EquippedBag == Bag)
+	{
+		if (BagChangedHandle.IsValid())
+		{
+			EquippedBag->OnChanged.Remove(BagChangedHandle);
+			BagChangedHandle.Reset();
+		}
+		if (BagEventSource)
+		{
+			BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
+			BagEventSource->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
+			BagEventSource->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
+			BagEventSource->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
+			BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
+			BagEventSource = nullptr;
+		}
+		EquippedBag = nullptr;
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			SyncNetState();
+		}
+	}
 	OnBagClosed.Broadcast(Bag);
 }
 
@@ -104,11 +136,21 @@ UYIInventoryBag* UYIInventoryComponent::GetBag() const
 bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return false;
+	const bool bWasEquipped = (EquippedBag == Bag);
+	if (bWasEquipped)
+	{
+		CloseBag(Bag);
+	}
+
 	int32 Index = Bags.IndexOfByKey(Bag);
 	if (Index != INDEX_NONE)
 	{
 		Bags.RemoveAt(Index);
-		if (EquippedBag == Bag) { EquippedBag = nullptr; }
+		// Keep workflow predictable: if the current bag was removed, auto-open another one if available.
+		if (bWasEquipped && Bags.Num() > 0)
+		{
+			OpenBag(Bags[0]);
+		}
 		return true;
 	}
 	return false;
@@ -154,17 +196,53 @@ void UYIInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// If EquippedBag is an asset/template, clone to a runtime instance (server only)
-	if (GetOwner() && GetOwner()->HasAuthority() && EquippedBag)
+	// Normalize bag setup on authority so EquippedBag/Bags/OpenBag stay connected.
+	if (GetOwner() && GetOwner()->HasAuthority())
 	{
-		if (IsTemplateBag(EquippedBag))
+		TMap<const UYIInventoryBag*, UYIInventoryBag*> RuntimeCloneMap;
+		for (int32 Index = 0; Index < Bags.Num(); ++Index)
 		{
-			UYIInventoryBag* RuntimeBag = CloneBagTemplate(EquippedBag);
-			if (RuntimeBag)
+			UYIInventoryBag* Bag = Bags[Index];
+			if (!Bag)
 			{
-				EquippedBag = RuntimeBag;
-				OpenBag(EquippedBag); // rebind delegate and sync
+				continue;
 			}
+			if (IsTemplateBag(Bag))
+			{
+				if (UYIInventoryBag* RuntimeBag = CloneBagTemplate(Bag))
+				{
+					RuntimeCloneMap.Add(Bag, RuntimeBag);
+					Bags[Index] = RuntimeBag;
+				}
+			}
+		}
+
+		Bags.RemoveAllSwap([](UYIInventoryBag* Bag) { return Bag == nullptr; }, false);
+
+		if (EquippedBag)
+		{
+			if (UYIInventoryBag** RuntimeFromList = RuntimeCloneMap.Find(EquippedBag))
+			{
+				EquippedBag = *RuntimeFromList;
+			}
+			else if (IsTemplateBag(EquippedBag))
+			{
+				EquippedBag = CloneBagTemplate(EquippedBag);
+			}
+		}
+
+		if (!EquippedBag && Bags.Num() > 0)
+		{
+			EquippedBag = Bags[0];
+		}
+
+		if (EquippedBag)
+		{
+			if (!Bags.Contains(EquippedBag))
+			{
+				Bags.Insert(EquippedBag, 0);
+			}
+			OpenBag(EquippedBag); // binds events + net sync consistently
 		}
 	}
 }
