@@ -28,6 +28,7 @@ UYIInventoryBag* UYIInventoryComponent::CreateBag(FName BagName, FIntPoint GridS
 	UYIInventoryBag* NewBag = NewObject<UYIInventoryBag>(this);
 	if (NewBag)
 	{
+		NewBag->EnsureBagId();
 		NewBag->GridSize = GridSize;
 		NewBag->DisplayName = FText::FromName(BagName);
 		Bags.Add(NewBag);
@@ -35,6 +36,10 @@ UYIInventoryBag* UYIInventoryComponent::CreateBag(FName BagName, FIntPoint GridS
 		if (!EquippedBag)
 		{
 			OpenBag(NewBag);
+		}
+		else if (!ActiveBagId.IsValid())
+		{
+			ActiveBagId = NewBag->BagId;
 		}
 		return NewBag;
 	}
@@ -79,6 +84,8 @@ void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 	EquippedBag = Bag;
 	if (EquippedBag)
 	{
+		EquippedBag->EnsureBagId();
+		ActiveBagId = EquippedBag->BagId;
 		BagChangedHandle = EquippedBag->OnChanged.AddUObject(this, &UYIInventoryComponent::SyncNetState);
 		BagEventSource = EquippedBag;
 		BagEventSource->OnItemAdded.AddDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
@@ -115,6 +122,7 @@ void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 			BagEventSource = nullptr;
 		}
 		EquippedBag = nullptr;
+		ActiveBagId.Invalidate();
 		if (GetOwner() && GetOwner()->HasAuthority())
 		{
 			SyncNetState();
@@ -125,17 +133,199 @@ void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 
 UYIInventoryBag* UYIInventoryComponent::GetBag() const
 {
+	auto ResolvePrimaryBag = [this]() -> UYIInventoryBag*
+	{
+		if (ActiveBagId.IsValid())
+		{
+			if (UYIInventoryBag* ActiveBag = GetBagById(ActiveBagId))
+			{
+				return ActiveBag;
+			}
+		}
+		for (UYIInventoryBag* Bag : Bags)
+		{
+			if (Bag)
+			{
+				return Bag;
+			}
+		}
+		return nullptr;
+	};
+
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority)
 	{
-		return EquippedBag;
+		if (EquippedBag)
+		{
+			return EquippedBag.Get();
+		}
+		return ResolvePrimaryBag();
 	}
 	// Client: prefer preview mirror if present
-	return ClientPreviewBag ? ClientPreviewBag : EquippedBag;
+	if (ClientPreviewBag)
+	{
+		return ClientPreviewBag;
+	}
+	if (EquippedBag)
+	{
+		return EquippedBag.Get();
+	}
+	return ResolvePrimaryBag();
+}
+
+UYIInventoryBag* UYIInventoryComponent::GetActiveSpellbookBag() const
+{
+	if (!ActiveSpellbookBagId.IsValid())
+	{
+		return nullptr;
+	}
+	return GetBagById(ActiveSpellbookBagId);
+}
+
+UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
+{
+	if (!BagId.IsValid())
+	{
+		return nullptr;
+	}
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+		if (!Bag->BagId.IsValid())
+		{
+			Bag->EnsureBagId();
+		}
+		if (Bag->BagId == BagId)
+		{
+			return Bag;
+		}
+	}
+	return nullptr;
+}
+
+bool UYIInventoryComponent::SetActiveBagById(const FGuid& InBagId)
+{
+	if (!InBagId.IsValid())
+	{
+		return false;
+	}
+
+	if (UYIInventoryBag* Bag = GetBagById(InBagId))
+	{
+		OpenBag(Bag);
+		return true;
+	}
+	return false;
+}
+
+bool UYIInventoryComponent::SetActiveBagByRoleTag(FGameplayTag InBagRoleTag)
+{
+	if (!InBagRoleTag.IsValid())
+	{
+		return false;
+	}
+	if (UYIInventoryBag* Bag = GetBagByRoleTag(InBagRoleTag))
+	{
+		OpenBag(Bag);
+		return true;
+	}
+	return false;
+}
+
+bool UYIInventoryComponent::SetActiveSpellbookBagById(const FGuid& InBagId)
+{
+	if (!InBagId.IsValid())
+	{
+		return false;
+	}
+
+	if (UYIInventoryBag* Bag = GetBagById(InBagId))
+	{
+		Bag->EnsureBagId();
+		ActiveSpellbookBagId = Bag->BagId;
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			SyncNetState();
+		}
+		return true;
+	}
+	return false;
+}
+
+bool UYIInventoryComponent::SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRoleTag)
+{
+	if (!InBagRoleTag.IsValid())
+	{
+		return false;
+	}
+
+	if (UYIInventoryBag* Bag = GetBagByRoleTag(InBagRoleTag))
+	{
+		Bag->EnsureBagId();
+		ActiveSpellbookBagId = Bag->BagId;
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			SyncNetState();
+		}
+		return true;
+	}
+	return false;
+}
+
+UYIInventoryBag* UYIInventoryComponent::GetBagByRoleTag(FGameplayTag BagRoleTag) const
+{
+	if (!BagRoleTag.IsValid())
+	{
+		return nullptr;
+	}
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (Bag && Bag->BagRoleTag.IsValid() && Bag->BagRoleTag.MatchesTag(BagRoleTag))
+		{
+			return Bag;
+		}
+	}
+	return nullptr;
+}
+
+UYIInventoryBag* UYIInventoryComponent::GetBagByDisplayName(FName BagName) const
+{
+	if (BagName.IsNone())
+	{
+		return nullptr;
+	}
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (Bag && Bag->DisplayName.EqualTo(FText::FromName(BagName)))
+		{
+			return Bag;
+		}
+	}
+	return nullptr;
+}
+
+void UYIInventoryComponent::GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const
+{
+	OutDescriptors = NetBagDescriptors;
 }
 
 bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return false;
+	Bag->EnsureBagId();
+	if (ActiveBagId.IsValid() && ActiveBagId == Bag->BagId)
+	{
+		ActiveBagId.Invalidate();
+	}
+	if (ActiveSpellbookBagId.IsValid() && ActiveSpellbookBagId == Bag->BagId)
+	{
+		ActiveSpellbookBagId.Invalidate();
+	}
 	const bool bWasEquipped = (EquippedBag == Bag);
 	if (bWasEquipped)
 	{
@@ -217,7 +407,7 @@ void UYIInventoryComponent::BeginPlay()
 			}
 		}
 
-		Bags.RemoveAllSwap([](UYIInventoryBag* Bag) { return Bag == nullptr; }, false);
+		Bags.RemoveAllSwap([](UYIInventoryBag* Bag) { return Bag == nullptr; }, EAllowShrinking::No);
 
 		if (EquippedBag)
 		{
@@ -238,6 +428,8 @@ void UYIInventoryComponent::BeginPlay()
 
 		if (EquippedBag)
 		{
+			EquippedBag->EnsureBagId();
+			ActiveBagId = EquippedBag->BagId;
 			if (!Bags.Contains(EquippedBag))
 			{
 				Bags.Insert(EquippedBag, 0);
@@ -259,9 +451,11 @@ UYIInventoryBag* UYIInventoryComponent::CloneBagTemplate(const UYIInventoryBag* 
 	{
 		return nullptr;
 	}
+	NewBag->EnsureBagId();
 
 	// Copy layout/settings
 	NewBag->DisplayName = TemplateBag->DisplayName;
+	NewBag->BagRoleTag = TemplateBag->BagRoleTag;
 	NewBag->GridSize = TemplateBag->GridSize;
 	NewBag->CellPixelSize = TemplateBag->CellPixelSize;
 	NewBag->bAllowRotation = TemplateBag->bAllowRotation;
@@ -323,9 +517,47 @@ void UYIInventoryComponent::SyncNetState()
 		return;
 	}
 
+	if (!ActiveBagId.IsValid() && EquippedBag)
+	{
+		EquippedBag->EnsureBagId();
+		ActiveBagId = EquippedBag->BagId;
+	}
+	if (!ActiveBagId.IsValid())
+	{
+		for (UYIInventoryBag* Bag : Bags)
+		{
+			if (Bag)
+			{
+				Bag->EnsureBagId();
+				ActiveBagId = Bag->BagId;
+				break;
+			}
+		}
+	}
+
 	NetBagItems.Reset();
+	NetBagDescriptors.Reset();
+	NetBagDescriptors.Reserve(Bags.Num());
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+		Bag->EnsureBagId();
+		FYINetBagDescriptor Desc;
+		Desc.BagId = Bag->BagId;
+		Desc.DisplayName = Bag->DisplayName;
+		Desc.BagRoleTag = Bag->BagRoleTag;
+		Desc.GridSize = Bag->GridSize;
+		Desc.bIsActive = (Bag->BagId == ActiveBagId);
+		NetBagDescriptors.Add(Desc);
+	}
+
 	if (EquippedBag)
 	{
+		EquippedBag->EnsureBagId();
 		NetBagGridSize = EquippedBag->GridSize;
 		for (const FYIBagItem& It : EquippedBag->Items)
 		{
@@ -383,11 +615,24 @@ void UYIInventoryComponent::OnRep_NetBag()
 	OnBagOpened.Broadcast(ClientPreviewBag); // UI can listen to refresh
 }
 
+void UYIInventoryComponent::OnRep_NetBagDescriptors()
+{
+	// No-op for now: UI can poll NetBagDescriptors via component reference.
+}
+
+void UYIInventoryComponent::OnRep_ActiveBagContexts()
+{
+	// Intentionally lightweight; UI widgets can query active ids via getters.
+}
+
 void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagItems, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagDescriptors, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagId, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveSpellbookBagId, COND_OwnerOnly);
 }
 
 // -------- Net-safe bag mutations --------
@@ -592,7 +837,7 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 	{
 		if (UInventoryGridWidget* Grid = ActiveInventoryScreen->GetGrid())
 		{
-			Grid->SetBag(GetBag());
+			Grid->SetBagBindingToActiveContext(this, false);
 		}
 		return ActiveInventoryScreen.Get();
 	}
@@ -619,7 +864,7 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 
 	if (UInventoryGridWidget* Grid = Screen->GetGrid())
 	{
-		Grid->SetBag(GetBag());
+		Grid->SetBagBindingToActiveContext(this, false);
 	}
 	Screen->AddToViewport();
 	ActiveInventoryScreen = Screen;

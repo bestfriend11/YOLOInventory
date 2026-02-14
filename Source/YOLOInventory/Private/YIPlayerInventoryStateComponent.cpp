@@ -3,11 +3,11 @@
 #include "Net/UnrealNetwork.h"
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
+#include "YIInventoryPersistenceProvider.h"
 #include "YIInventorySaveGame.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
-#include "Kismet/GameplayStatics.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Misc/Crc.h"
@@ -18,6 +18,15 @@ DEFINE_LOG_CATEGORY_STATIC(LogYIInventoryPersistence, Log, All);
 UYIPlayerInventoryStateComponent::UYIPlayerInventoryStateComponent()
 {
 	SetIsReplicatedByDefault(true);
+}
+
+UYIInventoryPersistenceProviderBase* UYIPlayerInventoryStateComponent::GetOrCreatePersistenceProvider()
+{
+	if (!PersistenceProvider)
+	{
+		PersistenceProvider = NewObject<UYISaveGameInventoryPersistenceProvider>(this, UYISaveGameInventoryPersistenceProvider::StaticClass(), NAME_None, RF_Transient);
+	}
+	return PersistenceProvider;
 }
 
 void UYIPlayerInventoryStateComponent::EmitSaveDiagnostic(const FString& Message, const FColor& Color, bool bForceOnScreen) const
@@ -59,6 +68,11 @@ bool UYIPlayerInventoryStateComponent::DiagnoseSaveSetup(FString& OutMessage) co
 	if (!bEnableAutoSave)
 	{
 		OutMessage = TEXT("Persistence disabled: bEnableAutoSave=false.");
+		return false;
+	}
+	if (!const_cast<UYIPlayerInventoryStateComponent*>(this)->GetOrCreatePersistenceProvider())
+	{
+		OutMessage = TEXT("Persistence disabled: no persistence provider is configured.");
 		return false;
 	}
 
@@ -625,6 +639,14 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 		EmitSaveDiagnostic(TEXT("SaveToDisk skipped: autosave disabled or non-authority instance."), FColor::Yellow);
 		return;
 	}
+	UYIInventoryPersistenceProviderBase* Provider = GetOrCreatePersistenceProvider();
+	if (!Provider)
+	{
+		const FString ProviderMissingMessage = TEXT("SaveToDisk failed: no persistence provider configured.");
+		EmitSaveDiagnostic(ProviderMissingMessage, FColor::Red, true);
+		OnSaveFinished.Broadcast(false, ProviderMissingMessage);
+		return;
+	}
 
 	if (bSaveInProgress)
 	{
@@ -633,7 +655,7 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 		return;
 	}
 
-	UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(UGameplayStatics::CreateSaveGameObject(UYIInventorySaveGame::StaticClass()));
+	UYIInventorySaveGame* Save = NewObject<UYIInventorySaveGame>(this, UYIInventorySaveGame::StaticClass());
 	if (!Save)
 	{
 		EmitSaveDiagnostic(TEXT("SaveToDisk failed: could not create savegame object."), FColor::Red, true);
@@ -701,8 +723,7 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 	OnSaveStarted.Broadcast(StartMessage);
 
 	const TWeakObjectPtr<UYIPlayerInventoryStateComponent> WeakThis(this);
-	FAsyncSaveGameToSlotDelegate Finished;
-	Finished.BindLambda([WeakThis](const FString& SlotName, const int32 UserIndex, bool bSuccess)
+	Provider->SaveAsync(this, Save, EffectiveSlotName, SaveUserIndex, [WeakThis, EffectiveSlotName](bool bSuccess)
 	{
 		UYIPlayerInventoryStateComponent* Self = WeakThis.Get();
 		if (!Self)
@@ -712,8 +733,8 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 
 		Self->bSaveInProgress = false;
 		const FString ResultMessage = bSuccess
-			? FString::Printf(TEXT("Save succeeded. Slot='%s' User=%d"), *SlotName, UserIndex)
-			: FString::Printf(TEXT("Save failed. Slot='%s' User=%d"), *SlotName, UserIndex);
+			? FString::Printf(TEXT("Save succeeded. Slot='%s' User=%d"), *EffectiveSlotName, Self->SaveUserIndex)
+			: FString::Printf(TEXT("Save failed. Slot='%s' User=%d"), *EffectiveSlotName, Self->SaveUserIndex);
 		Self->EmitSaveDiagnostic(ResultMessage, bSuccess ? FColor::Green : FColor::Red, true);
 		Self->OnSaveFinished.Broadcast(bSuccess, ResultMessage);
 
@@ -723,7 +744,6 @@ void UYIPlayerInventoryStateComponent::SaveToDisk()
 			Self->SaveToDisk();
 		}
 	});
-	UGameplayStatics::AsyncSaveGameToSlot(Save, EffectiveSlotName, SaveUserIndex, Finished);
 }
 
 void UYIPlayerInventoryStateComponent::LoadFromDisk()
@@ -734,12 +754,20 @@ void UYIPlayerInventoryStateComponent::LoadFromDisk()
 		OnLoadFinished.Broadcast(false, TEXT("Skipped load on non-authority instance."));
 		return;
 	}
+	UYIInventoryPersistenceProviderBase* Provider = GetOrCreatePersistenceProvider();
+	if (!Provider)
+	{
+		const FString ProviderMissingMessage = TEXT("Load failed: no persistence provider configured.");
+		EmitSaveDiagnostic(ProviderMissingMessage, FColor::Red, true);
+		OnLoadFinished.Broadcast(false, ProviderMissingMessage);
+		return;
+	}
 
 	const FString EffectiveSlotName = BuildEffectiveSaveSlotName();
 	const FString LoadStartMessage = FString::Printf(TEXT("Loading inventory state... Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
 	EmitSaveDiagnostic(LoadStartMessage, FColor::Cyan, true);
 	OnLoadStarted.Broadcast(LoadStartMessage);
-	if (!UGameplayStatics::DoesSaveGameExist(EffectiveSlotName, SaveUserIndex))
+	if (!Provider->DoesSaveExist(this, EffectiveSlotName, SaveUserIndex))
 	{
 		const FString MissingMessage = FString::Printf(TEXT("Load skipped: no save file found for Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);
 		EmitSaveDiagnostic(MissingMessage, FColor::Yellow, true);
@@ -747,71 +775,68 @@ void UYIPlayerInventoryStateComponent::LoadFromDisk()
 		return;
 	}
 
-	if (USaveGame* Raw = UGameplayStatics::LoadGameFromSlot(EffectiveSlotName, SaveUserIndex))
+	if (UYIInventorySaveGame* Save = Provider->Load(this, EffectiveSlotName, SaveUserIndex))
 	{
-		if (UYIInventorySaveGame* Save = Cast<UYIInventorySaveGame>(Raw))
+		SavedBags = Save->SavedBags;
+		Resources = Save->SavedResources;
+		ObservedPartyIndex = FMath::Max(0, Save->SavedObservedPartyIndex);
+		LoadedEquippedItems = Save->SavedEquippedItems;
+		LoadedActionBindings = Save->SavedActionBindings;
+		LoadedActionInvocationLog = Save->SavedActionInvocationLog;
+		bHasLoadedEquipmentState = true;
+		bHasLoadedActionBindings = true;
+		bHasLoadedInvocationLog = true;
+
+		SharedBags.Reset();
+		SharedBags.Reserve(Save->SavedSharedBags.Num());
+		for (const FYIPersistedSharedBagEntry& PersistedBag : Save->SavedSharedBags)
 		{
-			SavedBags = Save->SavedBags;
-			Resources = Save->SavedResources;
-			ObservedPartyIndex = FMath::Max(0, Save->SavedObservedPartyIndex);
-			LoadedEquippedItems = Save->SavedEquippedItems;
-			LoadedActionBindings = Save->SavedActionBindings;
-			LoadedActionInvocationLog = Save->SavedActionInvocationLog;
-			bHasLoadedEquipmentState = true;
-			bHasLoadedActionBindings = true;
-			bHasLoadedInvocationLog = true;
-
-			SharedBags.Reset();
-			SharedBags.Reserve(Save->SavedSharedBags.Num());
-			for (const FYIPersistedSharedBagEntry& PersistedBag : Save->SavedSharedBags)
+			if (PersistedBag.BagAsset.ToSoftObjectPath().IsValid())
 			{
-				if (PersistedBag.BagAsset.ToSoftObjectPath().IsValid())
+				SharedBags.Add(PersistedBag.BagAsset);
+			}
+			else if (PersistedBag.bHasSnapshot)
+			{
+				// Fallback when a shared bag only existed as runtime data.
+				if (UYIInventoryBag* RuntimeBag = SnapshotToBag(this, PersistedBag.Snapshot))
 				{
-					SharedBags.Add(PersistedBag.BagAsset);
-				}
-				else if (PersistedBag.bHasSnapshot)
-				{
-					// Fallback when a shared bag only existed as runtime data.
-					if (UYIInventoryBag* RuntimeBag = SnapshotToBag(this, PersistedBag.Snapshot))
-					{
-						SharedBags.Add(TSoftObjectPtr<UYIInventoryBag>(RuntimeBag));
-					}
+					SharedBags.Add(TSoftObjectPtr<UYIInventoryBag>(RuntimeBag));
 				}
 			}
-
-			PartyMembers.Reset();
-			PartyMembers.Reserve(Save->SavedPartyMembers.Num());
-			for (int32 Index = 0; Index < Save->SavedPartyMembers.Num(); ++Index)
-			{
-				const FYIPersistedPartyMemberEntry& PersistedMember = Save->SavedPartyMembers[Index];
-				FYIPartyMemberEntry Member = PersistedMember.Member;
-				PartyMembers.Add(MoveTemp(Member));
-
-				if (PersistedMember.bHasInventorySnapshot)
-				{
-					SavedBags.SetNum(FMath::Max(SavedBags.Num(), Index + 1));
-					SavedBags[Index] = PersistedMember.InventorySnapshot;
-				}
-			}
-
-			if (PartyMembers.Num() > 0)
-			{
-				ObservedPartyIndex = FMath::Clamp(ObservedPartyIndex, 0, PartyMembers.Num() - 1);
-			}
-			else
-			{
-				ObservedPartyIndex = 0;
-			}
-
-			const FString LoadedMessage = FString::Printf(
-				TEXT("Load succeeded. PartyMembers=%d SharedBags=%d SavedSnapshots=%d"),
-				PartyMembers.Num(),
-				SharedBags.Num(),
-				SavedBags.Num());
-			EmitSaveDiagnostic(LoadedMessage, FColor::Green, true);
-			OnLoadFinished.Broadcast(true, LoadedMessage);
-			return;
 		}
+
+		PartyMembers.Reset();
+		PartyMembers.Reserve(Save->SavedPartyMembers.Num());
+		for (int32 Index = 0; Index < Save->SavedPartyMembers.Num(); ++Index)
+		{
+			const FYIPersistedPartyMemberEntry& PersistedMember = Save->SavedPartyMembers[Index];
+			FYIPartyMemberEntry Member = PersistedMember.Member;
+			PartyMembers.Add(MoveTemp(Member));
+
+			if (PersistedMember.bHasInventorySnapshot)
+			{
+				SavedBags.SetNum(FMath::Max(SavedBags.Num(), Index + 1));
+				SavedBags[Index] = PersistedMember.InventorySnapshot;
+			}
+		}
+
+		if (PartyMembers.Num() > 0)
+		{
+			ObservedPartyIndex = FMath::Clamp(ObservedPartyIndex, 0, PartyMembers.Num() - 1);
+		}
+		else
+		{
+			ObservedPartyIndex = 0;
+		}
+
+		const FString LoadedMessage = FString::Printf(
+			TEXT("Load succeeded. PartyMembers=%d SharedBags=%d SavedSnapshots=%d"),
+			PartyMembers.Num(),
+			SharedBags.Num(),
+			SavedBags.Num());
+		EmitSaveDiagnostic(LoadedMessage, FColor::Green, true);
+		OnLoadFinished.Broadcast(true, LoadedMessage);
+		return;
 	}
 
 	const FString FailedMessage = FString::Printf(TEXT("Load failed: could not deserialize save for Slot='%s' User=%d"), *EffectiveSlotName, SaveUserIndex);

@@ -78,6 +78,14 @@ class YOLOINVENTORY_API UYIInventoryBag : public UObject
 {
 	GENERATED_BODY()
 public:
+	/** Stable runtime identifier used by network/persistence layers. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Bag|Identity")
+	FGuid BagId;
+
+	/** Optional semantic role (for example Bag.Role.Main, Bag.Role.Spellbook). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Identity")
+	FGameplayTag BagRoleTag;
+
 	// Fired when items or layout change; editors can subscribe for live repaint
 	FSimpleMulticastDelegate OnChanged;
 
@@ -178,6 +186,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Bag|Rules")
 	bool CanAcceptItemDefinition(const UYIItemDefinition* Definition) const;
 
+	/** Ensure bag has a valid BagId (called automatically by runtime systems). */
+	UFUNCTION(BlueprintCallable, Category="Bag|Identity")
+	void EnsureBagId();
+
 	// Returns true if rectangle [Pos, Pos+Size) is free (no overlap) and inside grid
 	UFUNCTION(BlueprintCallable, Category="Bag")
 	bool CanPlaceAt(const FIntPoint Pos, const FIntPoint Size) const;
@@ -240,4 +252,6 @@ public:
 protected:
 	/** Only mark package dirty when this is a persistent asset (not PIE/runtime clone). */
 	bool ShouldMarkDirty() const;
+
+	virtual void PostLoad() override;
 };

@@ -622,9 +622,9 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	UYIInventoryBag* DestBag = DestInventory->EquippedBag;
 	if (!DestBag)
 	{
-		if (DestInventory->Bags.Num() > 0)
+		DestBag = DestInventory->GetBag();
+		if (DestBag)
 		{
-			DestBag = DestInventory->Bags[0];
 			DestInventory->OpenBag(DestBag);
 		}
 	}

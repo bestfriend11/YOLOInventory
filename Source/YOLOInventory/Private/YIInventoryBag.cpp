@@ -4,6 +4,20 @@
 #include "InventoryUtils.h"
 #include "UObject/Package.h"
 
+void UYIInventoryBag::PostLoad()
+{
+	Super::PostLoad();
+	EnsureBagId();
+}
+
+void UYIInventoryBag::EnsureBagId()
+{
+	if (!BagId.IsValid())
+	{
+		BagId = FGuid::NewGuid();
+	}
+}
+
 bool UYIInventoryBag::CanAcceptItemDefinition(const UYIItemDefinition* Definition) const
 {
 	if (!Definition)

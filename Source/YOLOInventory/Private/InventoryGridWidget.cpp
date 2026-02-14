@@ -143,6 +143,8 @@ void UInventoryGridWidget::OnWidgetRebuilt()
 {
 	Super::OnWidgetRebuilt();
 	GRegisteredGrids.Add(this);
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
 }
 
 void UInventoryGridWidget::BeginDestroy()
@@ -209,6 +211,8 @@ void UInventoryGridWidget::SetWrapNavigation(bool bEnable)
 void UInventoryGridWidget::SynchronizeProperties()
 {
 	Super::SynchronizeProperties();
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
 	if (MySlateWidget)
 	{
 		MySlateWidget->SetBag(Bag);
@@ -672,7 +676,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			{
 				// Temporarily disable auto-merge to enforce exact placement at target cell
 				bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false;
-				int32 NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
+				int32 NewIdx = Bag->AddBagItem(ToPlace);
 				Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 				if (NewIdx != INDEX_NONE)
 				{
@@ -703,13 +707,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			int32 NewIdx = INDEX_NONE;
 			if (Bag->CanPlaceAt(Cell, ToPlace.Size))
 			{
-				NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
+				NewIdx = Bag->AddBagItem(ToPlace);
 			}
 			if (NewIdx == INDEX_NONE)
 			{
 				// Rollback: reinsert victim to its original spot
 				SavedVictim.Pos = SavedVictim.Pos; // unchanged
-				if (OwnerComp) OwnerComp->AddBagItem(SavedVictim); else Bag->AddBagItem(SavedVictim);
+				Bag->AddBagItem(SavedVictim);
 				OnItemDropped.Broadcast(this, INDEX_NONE, Cell, false);
 				PlayInvalidMoveSound();
 				return false;
@@ -782,7 +786,6 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Cross-bag: perform an atomic swap (drag item takes victim's slot, victim becomes active drag or drops)
 	FYIBagItem ToPlace = GInventoryDrag.Item;
 	ToPlace.Pos = Cell;
-	UYIInventoryComponent* SourceComp = (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag) ? GInventoryDrag.SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
 
 	// If this grid participates in a shop session, route drag from shop stock to buyer inventory via shop RPCs.
 	if (ActiveShopComponent && GInventoryDrag.SourceGrid)
@@ -914,13 +917,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	{
 		// Clean placement: just add and remove from source
 		// Temporarily disable auto-merge to avoid merging dragged item into existing stacks during cross-bag direct placement
-		int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
+		int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
 		if (NewIdx != INDEX_NONE)
 		{
 			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
 {
 // If item was already removed at pickup, skip removing now
-				if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || (SourceComp ? SourceComp->RemoveItem(GInventoryDrag.SourceIndex) : GInventoryDrag.SourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex)))
+				if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || GInventoryDrag.SourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex))
 				{
 					OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
 					if (GInventoryDrag.SourceGrid != this) GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
@@ -969,7 +972,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	FYIBagItem SavedVictim = Bag->Items[VictimIdx];
 	const FIntPoint SavedVictimPos = SavedVictim.Pos;
 
-	auto RestoreVictim = [this, OwnerComp, &SavedVictim, SavedVictimPos]() -> bool
+	auto RestoreVictim = [this, &SavedVictim, SavedVictimPos]() -> bool
 	{
 		FYIBagItem VictimToRestore = SavedVictim;
 		VictimToRestore.Pos = SavedVictimPos;
@@ -979,13 +982,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		}
 		const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
 		Bag->bAutoMergeOnAdd = false;
-		const int32 RestoreIdx = OwnerComp ? OwnerComp->AddBagItem(VictimToRestore) : Bag->AddBagItem(VictimToRestore);
+		const int32 RestoreIdx = Bag->AddBagItem(VictimToRestore);
 		Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 		return RestoreIdx != INDEX_NONE;
 	};
 
 	// Remove victim first so destination constraints are re-evaluated through AddBagItem.
-	if (!(OwnerComp ? OwnerComp->RemoveItem(VictimIdx) : Bag->RemoveItem(VictimIdx)))
+	if (!Bag->RemoveItem(VictimIdx))
 	{
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
 		PlayInvalidMoveSound();
@@ -1004,7 +1007,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 
 	const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
 	Bag->bAutoMergeOnAdd = false;
-	const int32 DraggedDestIndex = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
+	const int32 DraggedDestIndex = Bag->AddBagItem(ToPlace);
 	Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 	if (DraggedDestIndex == INDEX_NONE)
 	{
@@ -1021,17 +1024,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		const int32 SourceIdx = GInventoryDrag.SourceIndex;
 		if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
 		{
-			const bool bRemoved = SourceComp ? SourceComp->RemoveItem(SourceIdx) : SourceBag->RemoveItem(SourceIdx);
+			const bool bRemoved = SourceBag->RemoveItem(SourceIdx);
 			if (!bRemoved)
 			{
-				if (OwnerComp)
-				{
-					OwnerComp->RemoveItem(DraggedDestIndex);
-				}
-				else
-				{
-					Bag->RemoveItem(DraggedDestIndex);
-				}
+				Bag->RemoveItem(DraggedDestIndex);
 				RestoreVictim();
 				OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
 				PlayInvalidMoveSound();
@@ -1334,6 +1330,13 @@ void UInventoryGridWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
 
+	if (CachedBoundInventoryComponent.IsValid())
+	{
+		CachedBoundInventoryComponent->OnBagOpened.RemoveDynamic(this, &UInventoryGridWidget::HandleInventoryBagOpened);
+		CachedBoundInventoryComponent->OnBagClosed.RemoveDynamic(this, &UInventoryGridWidget::HandleInventoryBagClosed);
+		CachedBoundInventoryComponent.Reset();
+	}
+
 	// Unregister bag change delegate
 	if (CachedBag)
 	{
@@ -1383,5 +1386,143 @@ void UInventoryGridWidget::SetBag(UYIInventoryBag* InBag)
 	}
 	// Ensure tooltip reflects current selection and new bag
 	UpdateBoundTooltip();
+}
+
+void UInventoryGridWidget::SetBagBindingById(UYIInventoryComponent* InInventoryComponent, const FGuid& InBagId)
+{
+	BoundInventoryComponent = InInventoryComponent;
+	BoundBagId = InBagId;
+	BoundBagRoleTag = FGameplayTag();
+	bBindToActiveBagContext = false;
+	bUseActiveSpellbookContext = false;
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
+}
+
+void UInventoryGridWidget::SetBagBindingByRole(UYIInventoryComponent* InInventoryComponent, FGameplayTag InBagRoleTag)
+{
+	BoundInventoryComponent = InInventoryComponent;
+	BoundBagId.Invalidate();
+	BoundBagRoleTag = InBagRoleTag;
+	bBindToActiveBagContext = false;
+	bUseActiveSpellbookContext = false;
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
+}
+
+void UInventoryGridWidget::SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, bool bSpellbookContext)
+{
+	BoundInventoryComponent = InInventoryComponent;
+	BoundBagId.Invalidate();
+	BoundBagRoleTag = FGameplayTag();
+	bBindToActiveBagContext = true;
+	bUseActiveSpellbookContext = bSpellbookContext;
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
+}
+
+void UInventoryGridWidget::ClearBagBinding()
+{
+	BoundBagId.Invalidate();
+	BoundBagRoleTag = FGameplayTag();
+	bBindToActiveBagContext = false;
+	bUseActiveSpellbookContext = false;
+	BoundInventoryComponent = nullptr;
+	RebindInventoryContextDelegates();
+}
+
+void UInventoryGridWidget::RebindInventoryContextDelegates()
+{
+	if (CachedBoundInventoryComponent.IsValid())
+	{
+		CachedBoundInventoryComponent->OnBagOpened.RemoveDynamic(this, &UInventoryGridWidget::HandleInventoryBagOpened);
+		CachedBoundInventoryComponent->OnBagClosed.RemoveDynamic(this, &UInventoryGridWidget::HandleInventoryBagClosed);
+		CachedBoundInventoryComponent.Reset();
+	}
+
+	if (BoundInventoryComponent)
+	{
+		BoundInventoryComponent->OnBagOpened.AddDynamic(this, &UInventoryGridWidget::HandleInventoryBagOpened);
+		BoundInventoryComponent->OnBagClosed.AddDynamic(this, &UInventoryGridWidget::HandleInventoryBagClosed);
+		CachedBoundInventoryComponent = BoundInventoryComponent;
+	}
+}
+
+void UInventoryGridWidget::RefreshBagFromBinding()
+{
+	if (!BoundInventoryComponent)
+	{
+		return;
+	}
+
+	UYIInventoryBag* ResolvedBag = nullptr;
+	if (bBindToActiveBagContext)
+	{
+		ResolvedBag = bUseActiveSpellbookContext
+			? BoundInventoryComponent->GetActiveSpellbookBag()
+			: BoundInventoryComponent->GetBagById(BoundInventoryComponent->GetActiveBagId());
+		if (!ResolvedBag && !bUseActiveSpellbookContext)
+		{
+			ResolvedBag = BoundInventoryComponent->GetBag();
+		}
+	}
+	else if (BoundBagId.IsValid())
+	{
+		ResolvedBag = BoundInventoryComponent->GetBagById(BoundBagId);
+	}
+	else if (BoundBagRoleTag.IsValid())
+	{
+		ResolvedBag = BoundInventoryComponent->GetBagByRoleTag(BoundBagRoleTag);
+	}
+
+	if (ResolvedBag && ResolvedBag != Bag)
+	{
+		SetBag(ResolvedBag);
+	}
+}
+
+void UInventoryGridWidget::HandleInventoryBagOpened(UYIInventoryBag* InBag)
+{
+	if (!InBag)
+	{
+		return;
+	}
+	if (bBindToActiveBagContext)
+	{
+		RefreshBagFromBinding();
+		return;
+	}
+	if (BoundBagId.IsValid())
+	{
+		if (InBag->BagId == BoundBagId)
+		{
+			SetBag(InBag);
+		}
+		return;
+	}
+	if (BoundBagRoleTag.IsValid() && InBag->BagRoleTag.IsValid() && InBag->BagRoleTag.MatchesTag(BoundBagRoleTag))
+	{
+		SetBag(InBag);
+	}
+}
+
+void UInventoryGridWidget::HandleInventoryBagClosed(UYIInventoryBag* InBag)
+{
+	if (!InBag)
+	{
+		return;
+	}
+
+	if (Bag == InBag)
+	{
+		if (bBindToActiveBagContext)
+		{
+			RefreshBagFromBinding();
+		}
+		else
+		{
+			SetBag(nullptr);
+		}
+	}
 }
 

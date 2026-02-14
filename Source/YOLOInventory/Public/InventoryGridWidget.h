@@ -15,6 +15,7 @@ class UYIItemSFXLibrary;
 class UYIEquipmentComponent;
 enum class ETradeSide : uint8;
 class UYIShopComponent;
+class UYIInventoryComponent;
 
 /**
  * UInventoryGridWidget
@@ -35,9 +36,41 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ToolTip="The inventory bag asset to display"))
 	UYIInventoryBag* Bag;
 
+	/** Optional owner inventory component for ID/role-based runtime bag binding. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Optional inventory component to resolve BagId/RoleTag bindings"))
+	TObjectPtr<UYIInventoryComponent> BoundInventoryComponent = nullptr;
+
+	/** Optional bag id binding. If valid and BoundInventoryComponent is set, this takes precedence over role binding. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag identity binding (preferred when valid)"))
+	FGuid BoundBagId;
+
+	/** Optional role tag binding when BoundBagId is not set. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag role binding fallback (for example Bag.Role.Spellbook)"))
+	FGameplayTag BoundBagRoleTag;
+
+	/** If true, this grid always resolves from inventory active bag contexts instead of a fixed role/id. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
+	bool bBindToActiveBagContext = false;
+
+	/** If active-context binding is enabled, use ActiveSpellbookBagId instead of ActiveBagId. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(EditCondition="bBindToActiveBagContext", EditConditionHides))
+	bool bUseActiveSpellbookContext = false;
+
 	/** Set/replace the bag shown by this grid at runtime. Ensures Slate and delegates are rebound. */
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void SetBag(class UYIInventoryBag* InBag);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
+	void SetBagBindingById(UYIInventoryComponent* InInventoryComponent, const FGuid& InBagId);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
+	void SetBagBindingByRole(UYIInventoryComponent* InInventoryComponent, FGameplayTag InBagRoleTag);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
+	void SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, bool bSpellbookContext);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
+	void ClearBagBinding();
 
 	/** Size of one grid cell in pixels. Designers can clamp this between 8 and 128 for readability. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ClampMin="8.0", ClampMax="128.0", ToolTip="Pixel size of each grid cell"))
@@ -340,6 +373,7 @@ private:
 	// Cached bag change handle so we can update tooltip when items change
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* CachedBag = nullptr;
+	TWeakObjectPtr<UYIInventoryComponent> CachedBoundInventoryComponent;
 	int32 HoveredItemIndexCached = INDEX_NONE;
 	FIntPoint HoveredCellCached = FIntPoint(-1, -1);
 
@@ -348,6 +382,13 @@ private:
 
 	// Called when the bound Bag fires OnChanged
 	void OnBagChanged();
+	void RebindInventoryContextDelegates();
+	void RefreshBagFromBinding();
+
+	UFUNCTION()
+	void HandleInventoryBagOpened(UYIInventoryBag* InBag);
+	UFUNCTION()
+	void HandleInventoryBagClosed(UYIInventoryBag* InBag);
 
 	// Internal handlers invoked from Slate callbacks
 	void HandleSelectionChanged(const FIntPoint& NewCell);

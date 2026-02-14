@@ -84,9 +84,12 @@ bool UYIInventoryGameplaySetupLibrary::EnsurePawnInventoryGameplaySetup(
 			}
 		}
 
-		if (!InventoryComp->GetBag() && InventoryComp->Bags.Num() > 0)
+		if (!InventoryComp->EquippedBag)
 		{
-			InventoryComp->OpenBag(InventoryComp->Bags[0]);
+			if (UYIInventoryBag* BagToOpen = InventoryComp->GetBag())
+			{
+				InventoryComp->OpenBag(BagToOpen);
+			}
 		}
 	}
 
@@ -206,4 +209,3 @@ bool UYIInventoryGameplaySetupLibrary::ApplySpellbookActionPreset(
 
 	return EnsurePawnInventoryGameplaySetup(Pawn, Options, OutResult);
 }
-

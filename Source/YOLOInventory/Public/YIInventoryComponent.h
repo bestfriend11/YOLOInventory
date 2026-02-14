@@ -12,6 +12,27 @@ class UShopScreenWidget;
 class AYITradeSessionActor;
 class UYIShopComponent;
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYINetBagDescriptor
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid BagId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGameplayTag BagRoleTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FIntPoint GridSize = FIntPoint(0, 0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	bool bIsActive = false;
+};
+
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORY_API UYIInventoryComponent : public UActorComponent
 {
@@ -51,6 +72,39 @@ public:
 	// Quick accessors
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UYIInventoryBag* GetBag() const;
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	UYIInventoryBag* GetBagById(const FGuid& BagId) const;
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	UYIInventoryBag* GetBagByRoleTag(FGameplayTag BagRoleTag) const;
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	UYIInventoryBag* GetBagByDisplayName(FName BagName) const;
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	FGuid GetActiveBagId() const { return ActiveBagId; }
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	FGuid GetActiveSpellbookBagId() const { return ActiveSpellbookBagId; }
+
+	UFUNCTION(BlueprintPure, Category="Inventory")
+	UYIInventoryBag* GetActiveSpellbookBag() const;
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	bool SetActiveBagById(const FGuid& InBagId);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	bool SetActiveBagByRoleTag(FGameplayTag InBagRoleTag);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	bool SetActiveSpellbookBagById(const FGuid& InBagId);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	bool SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRoleTag);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const;
 
 	// Add an item to a bag; returns success
 	UFUNCTION(BlueprintCallable, Category="Inventory")
@@ -174,9 +228,19 @@ protected:
 	TArray<FYINetBagItem> NetBagItems;
 	UPROPERTY(Replicated, Transient)
 	FIntPoint NetBagGridSize = FIntPoint(0, 0);
+	UPROPERTY(ReplicatedUsing=OnRep_NetBagDescriptors, Transient)
+	TArray<FYINetBagDescriptor> NetBagDescriptors;
+	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
+	FGuid ActiveBagId;
+	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
+	FGuid ActiveSpellbookBagId;
 
 	UFUNCTION()
 	void OnRep_NetBag();
+	UFUNCTION()
+	void OnRep_NetBagDescriptors();
+	UFUNCTION()
+	void OnRep_ActiveBagContexts();
 
 	/** Client-only preview bag built from NetBagItems (not authoritative). */
 	UPROPERTY(Transient)

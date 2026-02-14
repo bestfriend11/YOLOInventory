@@ -11,6 +11,7 @@
 
 class UYIInventoryBag;
 class APawn;
+class UYIInventoryPersistenceProviderBase;
 
 /** Snapshot of a bag for persistence (owner-only replicated). */
 USTRUCT(BlueprintType)
@@ -289,6 +290,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
 	bool RunRuntimePreflight(APawn* Pawn, TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
 
+	/** Persistence backend provider abstraction (SaveGame by default, DB provider later). */
+	UPROPERTY(EditAnywhere, Instanced, BlueprintReadOnly, Category="YOLOInventory|Save")
+	TObjectPtr<UYIInventoryPersistenceProviderBase> PersistenceProvider;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
@@ -323,6 +328,7 @@ private:
 	void CapturePawnRuntimeState(APawn* Pawn, TArray<FYIEquippedItemEntry>& OutEquippedItems, TArray<FYIActionBarBinding>& OutActionBindings, TArray<FYIActionInvocationRecord>& OutInvocationLog) const;
 	void ApplySavedRuntimeStateToPawn(APawn* Pawn);
 	void TryAutoRegisterPawn();
+	UYIInventoryPersistenceProviderBase* GetOrCreatePersistenceProvider();
 	FTimerHandle AutoSavePollHandle;
 	FTimerHandle DebounceHandle;
 	int32 ObservedPartyIndex = 0;
