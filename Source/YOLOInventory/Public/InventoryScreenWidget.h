@@ -25,6 +25,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UInventoryGridWidget* GetGrid() const { return Grid; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UInventoryGridWidget* GetSpellbookGrid() const { return SpellbookGrid; }
+	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UInventoryTooltipView* GetTooltip() const { return Tooltip; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	class UInventoryActionMenuWidget* GetActionMenu() const { return ActionMenu; }
@@ -35,11 +37,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
 	void RebuildEquipmentSlotPaneFromLayout();
 
+	/** Bind inventory grids (main + optional spellbook) to inventory active bag contexts. */
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void BindInventoryBagContexts(class UYIInventoryComponent* InInventoryComponent);
+
 protected:
 	// Bind these to matching named widgets in your UMG widget blueprint
 	/** The runtime grid widget that shows items and selection. */
 	UPROPERTY(meta = (BindWidget))
 	UInventoryGridWidget* Grid;
+
+	/** Optional second grid used for spellbook/context bags. */
+	UPROPERTY(meta = (BindWidgetOptional))
+	UInventoryGridWidget* SpellbookGrid;
 
 	/** The tooltip widget that will receive data for the selected cell. */
 	UPROPERTY(meta = (BindWidget))

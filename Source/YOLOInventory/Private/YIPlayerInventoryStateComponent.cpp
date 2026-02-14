@@ -571,9 +571,8 @@ void UYIPlayerInventoryStateComponent::BindAutoSave(APawn* Pawn)
 		{
 			Bag = Inv->EquippedBag;
 		}
-		if (!Bag && Inv->Bags.Num() > 0)
+		if (Bag && !Inv->EquippedBag)
 		{
-			Bag = Inv->Bags[0];
 			Inv->OpenBag(Bag); // normalize runtime state so save tracking is always attached.
 		}
 

@@ -27,6 +27,14 @@ This setup gives you a fast runtime validation map for:
      - `StarterItems`
 4. Press Play (Listen Server + one client for multiplayer checks).
 
+### Optional UMG binding (Phase 2)
+
+- In your `UInventoryScreenWidget` blueprint, add a second `UInventoryGridWidget` named `SpellbookGrid` (BindWidgetOptional).
+- The screen now binds:
+  - `Grid` -> active inventory bag context
+  - `SpellbookGrid` -> active spellbook bag context
+- This uses bag identity contexts (`ActiveBagId` / `ActiveSpellbookBagId`) instead of bag-array index assumptions.
+
 ## What it does at runtime
 
 On authority (server), the actor:

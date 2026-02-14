@@ -22,6 +22,24 @@
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetTree.h"
 
+void UInventoryScreenWidget::BindInventoryBagContexts(UYIInventoryComponent* InInventoryComponent)
+{
+	if (!InInventoryComponent)
+	{
+		return;
+	}
+
+	if (Grid)
+	{
+		Grid->SetBagBindingToActiveContext(InInventoryComponent, false);
+		Grid->RefreshBoundTooltip();
+	}
+	if (SpellbookGrid)
+	{
+		SpellbookGrid->SetBagBindingToActiveContext(InInventoryComponent, true);
+		SpellbookGrid->RefreshBoundTooltip();
+	}
+}
 
 void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 {
@@ -107,6 +125,17 @@ void UInventoryScreenWidget::NativeConstruct()
 	Super::NativeConstruct();
 	// Ensure we can receive keyboard/gamepad input
 	if (GetOwningPlayer()) { SetUserFocus(GetOwningPlayer()); }
+
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+			{
+				BindInventoryBagContexts(InventoryComp);
+			}
+		}
+	}
 
 	if (Grid && Tooltip)
 	{

@@ -337,9 +337,12 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 	{
 		Bags.RemoveAt(Index);
 		// Keep workflow predictable: if the current bag was removed, auto-open another one if available.
-		if (bWasEquipped && Bags.Num() > 0)
+		if (bWasEquipped)
 		{
-			OpenBag(Bags[0]);
+			if (UYIInventoryBag* NextBag = GetBag())
+			{
+				OpenBag(NextBag);
+			}
 		}
 		return true;
 	}
@@ -421,9 +424,9 @@ void UYIInventoryComponent::BeginPlay()
 			}
 		}
 
-		if (!EquippedBag && Bags.Num() > 0)
+		if (!EquippedBag)
 		{
-			EquippedBag = Bags[0];
+			EquippedBag = GetBag();
 		}
 
 		if (EquippedBag)
@@ -622,7 +625,20 @@ void UYIInventoryComponent::OnRep_NetBagDescriptors()
 
 void UYIInventoryComponent::OnRep_ActiveBagContexts()
 {
-	// Intentionally lightweight; UI widgets can query active ids via getters.
+	// Notify UI bindings that resolve from active bag contexts.
+	if (UYIInventoryBag* ActiveBag = GetBagById(ActiveBagId))
+	{
+		OnBagOpened.Broadcast(ActiveBag);
+	}
+	else if (ClientPreviewBag && ActiveBagId.IsValid())
+	{
+		OnBagOpened.Broadcast(ClientPreviewBag);
+	}
+
+	if (UYIInventoryBag* SpellbookBag = GetBagById(ActiveSpellbookBagId))
+	{
+		OnBagOpened.Broadcast(SpellbookBag);
+	}
 }
 
 void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -835,10 +851,7 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 	if (GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr; // no UI on dedicated server
 	if (ActiveInventoryScreen.IsValid())
 	{
-		if (UInventoryGridWidget* Grid = ActiveInventoryScreen->GetGrid())
-		{
-			Grid->SetBagBindingToActiveContext(this, false);
-		}
+		ActiveInventoryScreen->BindInventoryBagContexts(this);
 		return ActiveInventoryScreen.Get();
 	}
 
@@ -862,10 +875,7 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 	UInventoryScreenWidget* Screen = CreateWidget<UInventoryScreenWidget>(PC, InventoryScreenClass.Get());
 	if (!Screen) return nullptr;
 
-	if (UInventoryGridWidget* Grid = Screen->GetGrid())
-	{
-		Grid->SetBagBindingToActiveContext(this, false);
-	}
+	Screen->BindInventoryBagContexts(this);
 	Screen->AddToViewport();
 	ActiveInventoryScreen = Screen;
 	return Screen;
