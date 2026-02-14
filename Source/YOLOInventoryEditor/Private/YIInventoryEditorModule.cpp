@@ -49,6 +49,19 @@ uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 static const FName YOLOInventoryHelpTabName(TEXT("YOLOInventory_Help"));
 
+namespace
+{
+static EYIUnifiedDashboardTab YIHelpIndexToTab(int32 Index)
+{
+	switch (Index)
+	{
+	case 1: return EYIUnifiedDashboardTab::Affixes;
+	case 2: return EYIUnifiedDashboardTab::Generators;
+	default: return EYIUnifiedDashboardTab::Items;
+	}
+}
+}
+
 #include "Toolkits/AssetEditorToolkit.h"
 #include "Toolkits/IToolkitHost.h"
 
@@ -122,7 +135,7 @@ void FYOLOInventoryEditorModule::RegisterHelpWidget(const TSharedPtr<SYIUnifiedH
 	}
 	HelpWidgets.Add(Widget);
 	const int32 Clamped = FMath::Clamp(LastHelpTabIndex, 0, 2);
-	Widget->SetActiveTab(static_cast<EYIUnifiedDashboardTab>(Clamped));
+	Widget->SetActiveTab(YIHelpIndexToTab(Clamped));
 }
 
 void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
@@ -132,7 +145,7 @@ void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
 	{
 		if (TSharedPtr<SYIUnifiedHelpPanel> Widget = HelpWidgets[i].Pin())
 		{
-			Widget->SetActiveTab(static_cast<EYIUnifiedDashboardTab>(LastHelpTabIndex));
+			Widget->SetActiveTab(YIHelpIndexToTab(LastHelpTabIndex));
 		}
 		else
 		{

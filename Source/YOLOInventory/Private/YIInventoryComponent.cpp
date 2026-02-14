@@ -859,6 +859,10 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 	{
 		InventoryScreenClass.LoadSynchronous();
 	}
+	if (!InventoryScreenClass.IsValid())
+	{
+		InventoryScreenClass = TSoftClassPtr<UInventoryScreenWidget>(UInventoryScreenWidget::StaticClass());
+	}
 	if (!InventoryScreenClass.IsValid()) return nullptr;
 
 	APlayerController* PC = nullptr;

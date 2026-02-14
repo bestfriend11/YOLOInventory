@@ -278,8 +278,10 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 			SNew(SBorder)
 			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 			.Padding(4)
+			.Clipping(EWidgetClipping::ClipToBoundsAlways)
 			[
 				SAssignNew(GridHost, SBox)
+				.Clipping(EWidgetClipping::ClipToBoundsAlways)
 			]
 		]
 	];
@@ -571,6 +573,7 @@ void SYIBagDashboard::RebuildBagView()
 			SNew(SBorder)
 			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 			.Padding(4)
+			.Clipping(EWidgetClipping::ClipToBoundsAlways)
 			[
 				SAssignNew(GridWidget, SBagEditor)
 				.Bag(Bag)

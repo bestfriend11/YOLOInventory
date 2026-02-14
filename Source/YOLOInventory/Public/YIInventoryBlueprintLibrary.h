@@ -179,4 +179,12 @@ public:
 	/** Resolve a specific SFX sound for an item + event. Returns nullptr if none. */
 	UFUNCTION(BlueprintPure, Category="YOLOInventory|Audio")
 	static USoundBase* ResolveItemSFXSound(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library, EYIItemSFXEvent Event);
+
+	/** Optional helper for custom tag-chooser UIs: returns commonly used inventory tags from the global tag registry. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Tags")
+	static void GetSuggestedInventoryGameplayTags(TArray<FGameplayTag>& OutTags);
+
+	/** Optional helper for custom tag-chooser UIs: returns tags matching any provided prefix (for example Equip., Item., Actions.). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Tags")
+	static void GetSuggestedInventoryGameplayTagsByPrefixes(const TArray<FString>& Prefixes, TArray<FGameplayTag>& OutTags, bool bSortLexical = true);
 };

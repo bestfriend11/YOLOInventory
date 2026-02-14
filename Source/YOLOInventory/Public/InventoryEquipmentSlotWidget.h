@@ -105,4 +105,3 @@ private:
 	TObjectPtr<UTexture2D> CachedIcon = nullptr;
 	bool bBoundEquipmentEvents = false;
 };
-

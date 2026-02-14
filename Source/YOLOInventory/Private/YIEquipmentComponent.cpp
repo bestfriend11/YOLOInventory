@@ -4,6 +4,8 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIEquipmentLayoutAsset.h"
+#include "YOLOInventorySettings.h"
 #include "Engine/Engine.h"
 #include "Algo/Unique.h"
 
@@ -96,6 +98,20 @@ bool UYIEquipmentComponent::IsAllowedSlot(FGameplayTag SlotTag) const
 	}
 	if (AllowedEquipSlots.Num() == 0)
 	{
+		const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
+		if (Settings.bEnableEquipmentSlotTagLocking)
+		{
+			if (Settings.AllowedEquipmentSlotTags.Num() > 0)
+			{
+				return Settings.AllowedEquipmentSlotTags.HasTagExact(SlotTag);
+			}
+
+			const FString Prefix = Settings.EquipmentSlotTagPrefix;
+			if (!Prefix.IsEmpty())
+			{
+				return SlotTag.ToString().StartsWith(Prefix, ESearchCase::IgnoreCase);
+			}
+		}
 		return true;
 	}
 	return AllowedEquipSlots.HasTagExact(SlotTag);
@@ -157,10 +173,16 @@ FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDe
 		ItemTags.Add(Definition->ItemType);
 	}
 
+	FString EffectivePrefix = EquipSlotTagPrefix;
+	if (EffectivePrefix.IsEmpty())
+	{
+		EffectivePrefix = UYOLOInventorySettings::Get().EquipmentSlotTagPrefix;
+	}
+
 	for (const FGameplayTag& Tag : ItemTags)
 	{
 		const FString TagString = Tag.ToString();
-		if (TagString.StartsWith(EquipSlotTagPrefix))
+		if (!EffectivePrefix.IsEmpty() && TagString.StartsWith(EffectivePrefix))
 		{
 			return Tag;
 		}
@@ -303,6 +325,51 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 	OutBlockingIssues.Reset();
 	OutWarnings.Reset();
 
+	TSet<FGameplayTag> SeenSlotDefs;
+	for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)
+	{
+		if (!SlotDef.SlotTag.IsValid())
+		{
+			OutBlockingIssues.Add(TEXT("SlotDefinitions contains an invalid SlotTag."));
+			continue;
+		}
+
+		if (SeenSlotDefs.Contains(SlotDef.SlotTag))
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("SlotDefinitions has duplicate slot '%s'."), *SlotDef.SlotTag.ToString()));
+		}
+		SeenSlotDefs.Add(SlotDef.SlotTag);
+	}
+
+	if (!DefaultEquipmentLayoutAsset.IsNull())
+	{
+		if (const UYIEquipmentLayoutAsset* Layout = DefaultEquipmentLayoutAsset.LoadSynchronous())
+		{
+			TSet<FGameplayTag> LayoutSlots;
+			for (const FYIEquipmentSlotLayoutEntry& LayoutEntry : Layout->Slots)
+			{
+				if (!LayoutEntry.SlotTag.IsValid())
+				{
+					OutWarnings.Add(FString::Printf(TEXT("Layout '%s' has an entry with invalid SlotTag."), *Layout->GetName()));
+					continue;
+				}
+				LayoutSlots.Add(LayoutEntry.SlotTag);
+			}
+
+			for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)
+			{
+				if (SlotDef.SlotTag.IsValid() && !LayoutSlots.Contains(SlotDef.SlotTag))
+				{
+					OutWarnings.Add(FString::Printf(TEXT("Layout '%s' missing slot '%s' defined on equipment component."), *Layout->GetName(), *SlotDef.SlotTag.ToString()));
+				}
+			}
+		}
+		else
+		{
+			OutWarnings.Add(TEXT("DefaultEquipmentLayoutAsset is set but failed to load."));
+		}
+	}
+
 	TSet<FGameplayTag> SeenSlots;
 	for (const FYIEquippedItemEntry& Entry : EquippedItems)
 	{
@@ -333,6 +400,10 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 		}
 		else if (const UYIItemDefinition* Def = Entry.Item.Definition.IsValid() ? Entry.Item.Definition.Get() : Entry.Item.Definition.LoadSynchronous())
 		{
+			if (!DoesDefinitionSupportSlot(Def, Entry.SlotTag))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Equipped item '%s' does not declare support for slot '%s'."), *Def->GetName(), *Entry.SlotTag.ToString()));
+			}
 			if (!DoesDefinitionPassSlotFilter(Def, Entry.SlotTag))
 			{
 				OutWarnings.Add(FString::Printf(TEXT("Equipped item '%s' does not satisfy slot '%s' accepted tag filter."), *Def->GetName(), *Entry.SlotTag.ToString()));

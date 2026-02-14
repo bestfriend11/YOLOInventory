@@ -3,7 +3,9 @@
 #include "GameFramework/Pawn.h"
 #include "YIActionBarComponent.h"
 #include "YIEquipmentComponent.h"
+#include "YIEquipmentLayoutAsset.h"
 #include "YIInventoryComponent.h"
+#include "YIItemDefinition.h"
 
 namespace YIInventorySetupPrivate
 {
@@ -112,6 +114,45 @@ bool UYIInventoryGameplaySetupLibrary::EnsurePawnInventoryGameplaySetup(
 	return OutResult.bSuccess;
 }
 
+bool UYIInventoryGameplaySetupLibrary::QuickStartPawnInventory(APawn* Pawn, bool bOpenInventoryScreen, FYIInventoryGameplaySetupResult& OutResult)
+{
+	OutResult = FYIInventoryGameplaySetupResult();
+	if (!Pawn)
+	{
+		OutResult.BlockingIssues.Add(TEXT("Pawn is null."));
+		YIInventorySetupPrivate::BuildSummary(OutResult);
+		return false;
+	}
+
+	if (Pawn->HasAuthority())
+	{
+		FYIInventoryGameplaySetupOptions DefaultOptions;
+		EnsurePawnInventoryGameplaySetup(Pawn, DefaultOptions, OutResult);
+	}
+	else
+	{
+		ValidatePawnInventoryGameplaySetup(Pawn, OutResult);
+	}
+
+	if (bOpenInventoryScreen)
+	{
+		if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+		{
+			if (!InventoryComp->OpenInventoryScreen())
+			{
+				OutResult.Warnings.Add(FString::Printf(TEXT("Inventory screen did not open for pawn '%s'. Set InventoryScreenClass or call on local owning client."), *Pawn->GetName()));
+			}
+		}
+		else
+		{
+			OutResult.Warnings.Add(FString::Printf(TEXT("Pawn '%s' has no UYIInventoryComponent yet; screen could not open."), *Pawn->GetName()));
+		}
+	}
+
+	YIInventorySetupPrivate::BuildSummary(OutResult);
+	return OutResult.bSuccess;
+}
+
 bool UYIInventoryGameplaySetupLibrary::ValidatePawnInventoryGameplaySetup(APawn* Pawn, FYIInventoryGameplaySetupResult& OutResult)
 {
 	OutResult = FYIInventoryGameplaySetupResult();
@@ -208,4 +249,84 @@ bool UYIInventoryGameplaySetupLibrary::ApplySpellbookActionPreset(
 	Options.AutoBindRules.Add(Rule);
 
 	return EnsurePawnInventoryGameplaySetup(Pawn, Options, OutResult);
+}
+
+bool UYIInventoryGameplaySetupLibrary::SyncEquipmentLayoutFromComponentSlots(UYIEquipmentComponent* EquipmentComp, UYIEquipmentLayoutAsset* LayoutAsset, bool bClearExisting)
+{
+	if (!EquipmentComp || !LayoutAsset)
+	{
+		return false;
+	}
+
+	if (bClearExisting)
+	{
+		LayoutAsset->Slots.Reset();
+	}
+
+	TSet<FGameplayTag> ExistingTags;
+	for (const FYIEquipmentSlotLayoutEntry& Existing : LayoutAsset->Slots)
+	{
+		if (Existing.SlotTag.IsValid())
+		{
+			ExistingTags.Add(Existing.SlotTag);
+		}
+	}
+
+	int32 SortBase = LayoutAsset->Slots.Num();
+	for (const FYIEquipmentSlotDefinition& SlotDef : EquipmentComp->SlotDefinitions)
+	{
+		if (!SlotDef.SlotTag.IsValid() || ExistingTags.Contains(SlotDef.SlotTag))
+		{
+			continue;
+		}
+
+		FYIEquipmentSlotLayoutEntry Entry;
+		Entry.SlotTag = SlotDef.SlotTag;
+
+		const FString TagString = SlotDef.SlotTag.ToString();
+		int32 LastDotIndex = INDEX_NONE;
+		if (TagString.FindLastChar('.', LastDotIndex) && LastDotIndex >= 0 && LastDotIndex + 1 < TagString.Len())
+		{
+			Entry.DisplayName = FText::FromString(TagString.RightChop(LastDotIndex + 1));
+		}
+		else
+		{
+			Entry.DisplayName = FText::FromString(TagString);
+		}
+
+		Entry.SortOrder = SortBase++;
+		LayoutAsset->Slots.Add(Entry);
+		ExistingTags.Add(SlotDef.SlotTag);
+	}
+
+	LayoutAsset->SortSlotsByOrder();
+	LayoutAsset->MarkPackageDirty();
+	return true;
+}
+
+bool UYIInventoryGameplaySetupLibrary::EnsureItemSupportsEquipSlot(UYIItemDefinition* ItemDef, FGameplayTag SlotTag, bool bSetItemTypeToSlotTag, bool bAddToOccupiedSlots)
+{
+	if (!ItemDef || !SlotTag.IsValid())
+	{
+		return false;
+	}
+
+	ItemDef->Modify();
+	if (!ItemDef->Tags.HasTagExact(SlotTag))
+	{
+		ItemDef->Tags.AddTag(SlotTag);
+	}
+
+	if (bSetItemTypeToSlotTag)
+	{
+		ItemDef->ItemType = SlotTag;
+	}
+
+	if (bAddToOccupiedSlots && !ItemDef->OccupiedEquipSlots.HasTagExact(SlotTag))
+	{
+		ItemDef->OccupiedEquipSlots.AddTag(SlotTag);
+	}
+
+	ItemDef->MarkPackageDirty();
+	return true;
 }

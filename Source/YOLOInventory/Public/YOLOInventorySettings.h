@@ -36,6 +36,22 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Visuals", meta=(ToolTip="Ordered list of rarity tag colors; first matching tag is used"))
 	TArray<FYIRarityColorEntry> RarityColors;
 
+	/** If enabled, equipment slot tags are validated/filtered against settings below when component-local lists are empty. */
+	UPROPERTY(EditAnywhere, config, Category = "Gameplay Tags", meta=(ToolTip="Enable global equipment slot tag locking (used as fallback when component-local slot rules are empty)."))
+	bool bEnableEquipmentSlotTagLocking = false;
+
+	/** Prefix used to identify equip slot tags globally (for example Equip.Slot.). */
+	UPROPERTY(EditAnywhere, config, Category = "Gameplay Tags", meta=(ToolTip="Global equip slot tag prefix used by validation and helpers."))
+	FString EquipmentSlotTagPrefix = TEXT("Equip.Slot.");
+
+	/** Optional explicit allow-list for equipment slot tags (when locking is enabled). */
+	UPROPERTY(EditAnywhere, config, Category = "Gameplay Tags", meta=(ToolTip="Optional explicit allow-list for equip slots. If empty, prefix-based validation is used."))
+	FGameplayTagContainer AllowedEquipmentSlotTags;
+
+	/** Prefixes used by optional tag chooser helper APIs to surface common inventory tags. */
+	UPROPERTY(EditAnywhere, config, Category = "Gameplay Tags", meta=(ToolTip="Tag prefixes used by inventory tag suggestion helpers."))
+	TArray<FString> SuggestedInventoryTagPrefixes;
+
 	/** Read-only access to settings. */
 	static const UYOLOInventorySettings& Get();
 

@@ -4,6 +4,7 @@
 #include "SYIGeneratorDashboard.h"
 #include "SYICraftingDashboard.h"
 #include "SYIBagDashboard.h"
+#include "SYICatalogDashboard.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIInventoryEditorModule.h"
 #include "YIUnifiedDashboardContext.h"
@@ -22,8 +23,10 @@
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Styling/AppStyle.h"
+#include "FileHelpers.h"
 
 static const FName Tab_Dashboard_Items(TEXT("YOLOInventory_Dashboard_Items"));
+static const FName Tab_Dashboard_Catalog(TEXT("YOLOInventory_Dashboard_Catalog"));
 static const FName Tab_Dashboard_Affixes(TEXT("YOLOInventory_Dashboard_Affixes"));
 static const FName Tab_Dashboard_Generators(TEXT("YOLOInventory_Dashboard_Generators"));
 static const FName Tab_Dashboard_Crafting(TEXT("YOLOInventory_Dashboard_Crafting"));
@@ -62,6 +65,7 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 			->Split(
 				FTabManager::NewStack()
 				->SetSizeCoefficient(0.75f)
+				->AddTab(Tab_Dashboard_Catalog, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Items, ETabState::OpenedTab)
 				->AddTab(Tab_Dashboard_Affixes, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Generators, ETabState::ClosedTab)
@@ -125,6 +129,9 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 
 	TabManager->RegisterTabSpawner(Tab_Dashboard_Items, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnItemsTab))
 		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabItems", "Items"))
+		.SetGroup(ModesWorkspace);
+	TabManager->RegisterTabSpawner(Tab_Dashboard_Catalog, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnCatalogTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabCatalog", "Catalog"))
 		.SetGroup(ModesWorkspace);
 	TabManager->RegisterTabSpawner(Tab_Dashboard_Affixes, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnAffixesTab))
 		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabAffixes", "Affixes"))
@@ -223,23 +230,51 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 	};
 
 	ToolbarBuilder.BeginSection("YOLOInventoryCompactModes");
-	ToolbarBuilder.AddComboButton(
-		FUIAction(),
-		FOnGetContent::CreateLambda([this]()
-		{
-			FMenuBuilder MenuBuilder(true, nullptr);
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Items", "Items"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Items_TT", "Switch to Items mode"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"), FUIAction(FExecuteAction::CreateLambda([this]() { SetActiveTab(EYIUnifiedDashboardTab::Items); })));
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Affixes", "Affixes"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Affixes_TT", "Switch to Affixes mode"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Star"), FUIAction(FExecuteAction::CreateLambda([this]() { SetActiveTab(EYIUnifiedDashboardTab::Affixes); })));
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Generators", "Generators"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Generators_TT", "Switch to Generators mode"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust"), FUIAction(FExecuteAction::CreateLambda([this]() { SetActiveTab(EYIUnifiedDashboardTab::Generators); })));
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Crafting", "Crafting"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Crafting_TT", "Switch to Crafting mode"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"), FUIAction(FExecuteAction::CreateLambda([this]() { SetActiveTab(EYIUnifiedDashboardTab::Crafting); })));
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags", "Bags"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags_TT", "Switch to Bags mode"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.FolderOpen"), FUIAction(FExecuteAction::CreateLambda([this]() { SetActiveTab(EYIUnifiedDashboardTab::Bags); })));
-			MenuBuilder.AddSeparator();
-			MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Mode_Help", "Help"), NSLOCTEXT("YOLOInventory", "Dash_Mode_Help_TT", "Open Help panel"), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Help"), FUIAction(FExecuteAction::CreateSP(this, &FYIUnifiedDashboardEditor::OpenHelpTab)));
-			return MenuBuilder.MakeWidget();
-		}),
-		NSLOCTEXT("YOLOInventory", "Dash_Mode_Menu", "Mode"),
-		NSLOCTEXT("YOLOInventory", "Dash_Mode_Menu_TT", "Switch dashboard mode"),
-		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Layout"));
+	auto AddModeButton = [this, &ToolbarBuilder](EYIUnifiedDashboardTab ModeTab, const FText& Label, const FText& Tooltip, const FSlateIcon& Icon)
+	{
+		ToolbarBuilder.AddToolBarButton(
+			FUIAction(
+				FExecuteAction::CreateLambda([this, ModeTab]() { SetActiveTab(ModeTab); }),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateLambda([this, ModeTab]() { return ActiveTab == ModeTab; })),
+			NAME_None,
+			Label,
+			Tooltip,
+			Icon,
+			EUserInterfaceActionType::ToggleButton);
+	};
+
+	AddModeButton(EYIUnifiedDashboardTab::Catalog,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Catalog", "Catalog"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Catalog_TT", "Switch to Catalog mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "ContentBrowser.TabIcon"));
+	AddModeButton(EYIUnifiedDashboardTab::Items,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Items", "Items"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Items_TT", "Switch to Items mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"));
+	AddModeButton(EYIUnifiedDashboardTab::Affixes,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Affixes", "Affixes"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Affixes_TT", "Switch to Affixes mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Star"));
+	AddModeButton(EYIUnifiedDashboardTab::Generators,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Generators", "Generators"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Generators_TT", "Switch to Generators mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Adjust"));
+	AddModeButton(EYIUnifiedDashboardTab::Crafting,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Crafting", "Crafting"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Crafting_TT", "Switch to Crafting mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
+	AddModeButton(EYIUnifiedDashboardTab::Bags,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags", "Bags"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags_TT", "Switch to Bags mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.FolderOpen"));
+
+	ToolbarBuilder.AddToolBarButton(
+		FUIAction(FExecuteAction::CreateSP(this, &FYIUnifiedDashboardEditor::OpenHelpTab)),
+		NAME_None,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Help", "Help"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Help_TT", "Open Help panel"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Help"));
 	ToolbarBuilder.AddToolBarButton(
 		FUIAction(FExecuteAction::CreateSP(this, &FYIUnifiedDashboardEditor::SaveAsset_Execute)),
 		NAME_None,
@@ -395,6 +430,7 @@ void FYIUnifiedDashboardEditor::CloseBagPanelTabs()
 void FYIUnifiedDashboardEditor::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
 {
 	FWorkflowCentricApplication::UnregisterTabSpawners(InTabManager);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Catalog);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Items);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Affixes);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Generators);
@@ -422,6 +458,11 @@ void FYIUnifiedDashboardEditor::CreateWidgetsIfNeeded()
 	if (!ItemDashboard.IsValid())
 	{
 		ItemDashboard = SNew(SYIItemDashboard).LayoutMode(EYIItemDashboardLayout::ItemListOnly);
+	}
+	if (!CatalogDashboard.IsValid())
+	{
+		CatalogDashboard = SNew(SYICatalogDashboard)
+			.OnOpenAsset(FYICatalogOpenAsset::CreateSP(this, &FYIUnifiedDashboardEditor::OpenAsset));
 	}
 	if (!AffixDashboard.IsValid())
 	{
@@ -460,6 +501,21 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnItemsTab(const FSpawnTabArg
 			{
 				SetActiveTab(EYIUnifiedDashboardTab::Items);
 			}
+		}));
+	return Tab;
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnCatalogTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	TSharedRef<SDockTab> Tab = SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabCatalogLabel", "Catalog"))
+		[
+			CatalogDashboard.ToSharedRef()
+		];
+	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
+		{
+			SetActiveTab(EYIUnifiedDashboardTab::Catalog);
 		}));
 	return Tab;
 }
@@ -775,6 +831,19 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 
 	switch (ActiveTab)
 	{
+	case EYIUnifiedDashboardTab::Catalog:
+		CloseItemPanelTabs();
+		CloseAffixPanelTabs();
+		CloseGeneratorPanelTabs();
+		CloseCraftingPanelTabs();
+		CloseBagPanelTabs();
+		EnsureTabOpen(Tab_Dashboard_Catalog);
+		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
+		if (CatalogDashboard.IsValid())
+		{
+			CatalogDashboard->Refresh();
+		}
+		break;
 	case EYIUnifiedDashboardTab::Items:
 		CloseAffixPanelTabs();
 		CloseGeneratorPanelTabs();
@@ -860,6 +929,21 @@ void FYIUnifiedDashboardEditor::SaveAsset_Execute()
 {
 	switch (ActiveTab)
 	{
+	case EYIUnifiedDashboardTab::Catalog:
+		if (CatalogDashboard.IsValid())
+		{
+			if (UObject* Selected = CatalogDashboard->GetSelectedAsset())
+			{
+				if (UPackage* Package = Selected->GetOutermost())
+				{
+					TArray<UPackage*> PackagesToSave;
+					PackagesToSave.Add(Package);
+					FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, false, false);
+				}
+				return;
+			}
+		}
+		break;
 	case EYIUnifiedDashboardTab::Items:
 		if (ItemDashboard.IsValid())
 		{

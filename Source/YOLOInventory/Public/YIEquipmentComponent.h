@@ -8,6 +8,7 @@
 
 class UYIInventoryComponent;
 class UYIItemDefinition;
+class UYIEquipmentLayoutAsset;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIEquippedItemEntry
@@ -67,6 +68,10 @@ public:
 	/** Designer-authored slot table. If provided, this becomes the primary slot source. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="Equipment|Rules")
 	TArray<FYIEquipmentSlotDefinition> SlotDefinitions;
+
+	/** Optional default runtime panel layout used by UInventoryScreenWidget auto wiring. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|UI")
+	TSoftObjectPtr<UYIEquipmentLayoutAsset> DefaultEquipmentLayoutAsset;
 
 	/** Prints equipment operation messages on screen/log. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Debug")

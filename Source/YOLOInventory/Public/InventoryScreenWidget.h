@@ -41,6 +41,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void BindInventoryBagContexts(class UYIInventoryComponent* InInventoryComponent);
 
+	/** Resolve and wire inventory/equipment UI pieces automatically (widgets, bag contexts, equipment slots). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Setup")
+	bool AutoWireScreen(bool bRebuildEquipmentPane = true);
+
 protected:
 	// Bind these to matching named widgets in your UMG widget blueprint
 	/** The runtime grid widget that shows items and selection. */
@@ -96,6 +100,26 @@ protected:
 	/** If true and EquipmentSlotsPanel + EquipmentLayoutAsset are set, slot widgets are generated on construct. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	bool bAutoGenerateEquipmentSlotPane = true;
+
+	/** If true, missing widget bindings are auto-resolved by name/type (Grid, SpellbookGrid, Tooltip, ActionMenu, equipment panels). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
+	bool bAutoResolveWidgetReferences = true;
+
+	/** If true and EquipmentLayoutAsset is empty, the screen derives slot UI from UYIEquipmentComponent::SlotDefinitions. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
+	bool bAutoResolveLayoutFromEquipmentComponent = true;
+
+	/** Retry auto wiring for a short window to support delayed pawn/component spawn in runtime game flow. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
+	bool bRetryAutoWireUntilReady = true;
+
+	/** Retry interval in seconds while waiting for owning pawn inventory/equipment components. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup", meta=(ClampMin="0.05", ClampMax="2.0"))
+	float AutoWireRetryInterval = 0.25f;
+
+	/** Total retry timeout in seconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup", meta=(ClampMin="0.1", ClampMax="30.0"))
+	float AutoWireRetryTimeout = 4.0f;
 
 	/** UMG panel where auto-generated equipment slots will be inserted. */
 	UPROPERTY(BlueprintReadOnly, Category="Inventory|Equipment", meta=(BindWidgetOptional))
@@ -169,4 +193,16 @@ protected:
 	/** Transfer the currently selected item in the Grid to Dest's grid (BP-friendly helper). */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool TransferSelectionTo(UInventoryGridWidget* Dest, int32 Count, int32& OutDestIndex);
+
+private:
+	void AutoResolveWidgetReferences();
+	void EnsureMinimalDefaultLayout();
+	bool ResolveRuntimeComponents(class UYIInventoryComponent*& OutInventory, class UYIEquipmentComponent*& OutEquipment) const;
+	void StartAutoWireRetry();
+	void StopAutoWireRetry();
+	void HandleAutoWireRetry();
+	void BuildFallbackSlotLayoutFromDefinitions(const class UYIEquipmentComponent* EquipmentComp, TArray<struct FYIEquipmentSlotLayoutEntry>& OutSlots) const;
+
+	FTimerHandle AutoWireRetryTimer;
+	float AutoWireRetryStartTime = 0.f;
 };

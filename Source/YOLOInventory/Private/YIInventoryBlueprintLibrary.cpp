@@ -947,3 +947,79 @@ USoundBase* UYIInventoryBlueprintLibrary::ResolveItemSFXSound(const UYIItemDefin
 		default: return nullptr;
 	}
 }
+
+void UYIInventoryBlueprintLibrary::GetSuggestedInventoryGameplayTags(TArray<FGameplayTag>& OutTags)
+{
+	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
+	if (Settings.SuggestedInventoryTagPrefixes.Num() > 0)
+	{
+		GetSuggestedInventoryGameplayTagsByPrefixes(Settings.SuggestedInventoryTagPrefixes, OutTags, true);
+	}
+	else
+	{
+		static const TArray<FString> DefaultPrefixes = {
+			TEXT("Inventory."),
+			TEXT("Item."),
+			TEXT("Equip."),
+			TEXT("Bag."),
+			TEXT("Actions."),
+			TEXT("Affix."),
+			TEXT("Loot."),
+			TEXT("Craft."),
+			TEXT("Rarity."),
+			TEXT("Audio.")
+		};
+		GetSuggestedInventoryGameplayTagsByPrefixes(DefaultPrefixes, OutTags, true);
+	}
+}
+
+void UYIInventoryBlueprintLibrary::GetSuggestedInventoryGameplayTagsByPrefixes(const TArray<FString>& Prefixes, TArray<FGameplayTag>& OutTags, bool bSortLexical)
+{
+	OutTags.Reset();
+
+	FGameplayTagContainer AllTags;
+	UGameplayTagsManager::Get().RequestAllGameplayTags(AllTags, true);
+
+	TArray<FGameplayTag> AllTagArray;
+	AllTags.GetGameplayTagArray(AllTagArray);
+	AllTagArray.Reserve(AllTagArray.Num());
+
+	for (const FGameplayTag& Tag : AllTagArray)
+	{
+		if (!Tag.IsValid())
+		{
+			continue;
+		}
+
+		const FString TagString = Tag.ToString();
+		bool bMatch = Prefixes.Num() == 0;
+		if (!bMatch)
+		{
+			for (const FString& Prefix : Prefixes)
+			{
+				if (Prefix.IsEmpty())
+				{
+					continue;
+				}
+				if (TagString.StartsWith(Prefix, ESearchCase::IgnoreCase))
+				{
+					bMatch = true;
+					break;
+				}
+			}
+		}
+
+		if (bMatch)
+		{
+			OutTags.Add(Tag);
+		}
+	}
+
+	if (bSortLexical)
+	{
+		OutTags.Sort([](const FGameplayTag& A, const FGameplayTag& B)
+		{
+			return A.ToString() < B.ToString();
+		});
+	}
+}

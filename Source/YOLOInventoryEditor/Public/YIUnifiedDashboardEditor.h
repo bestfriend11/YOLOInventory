@@ -9,6 +9,7 @@ class SYIAffixDashboard;
 class SYIGeneratorDashboard;
 class SYICraftingDashboard;
 class SYIBagDashboard;
+class SYICatalogDashboard;
 class SYIUnifiedHelpPanel;
 class FWorkspaceItem;
 class FToolBarBuilder;
@@ -44,6 +45,7 @@ private:
 	void CloseBagPanelTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnCatalogTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnCraftingTab(const FSpawnTabArgs& Args);
@@ -65,6 +67,7 @@ private:
 	TSharedRef<SDockTab> SpawnBagsEquipmentLayoutTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
+	TSharedPtr<SYICatalogDashboard> CatalogDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
 	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
 	TSharedPtr<SYICraftingDashboard> CraftingDashboard;

@@ -6,6 +6,9 @@
 #include "YIInventoryGameplaySetupLibrary.generated.h"
 
 class APawn;
+class UYIEquipmentLayoutAsset;
+class UYIEquipmentComponent;
+class UYIItemDefinition;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIInventoryGameplaySetupOptions
@@ -77,6 +80,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup", meta=(BlueprintAuthorityOnly="true"))
 	static bool EnsurePawnInventoryGameplaySetup(APawn* Pawn, const FYIInventoryGameplaySetupOptions& Options, FYIInventoryGameplaySetupResult& OutResult);
 
+	/** Runtime quick-start: ensures setup on authority and opens screen on local clients when possible. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup")
+	static bool QuickStartPawnInventory(APawn* Pawn, bool bOpenInventoryScreen, FYIInventoryGameplaySetupResult& OutResult);
+
 	/** Run setup diagnostics without mutating components. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup")
 	static bool ValidatePawnInventoryGameplaySetup(APawn* Pawn, FYIInventoryGameplaySetupResult& OutResult);
@@ -84,5 +91,12 @@ public:
 	/** Convenience preset for spellbook slot -> action bar slot mapping. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup", meta=(BlueprintAuthorityOnly="true"))
 	static bool ApplySpellbookActionPreset(APawn* Pawn, FGameplayTag SpellbookEquipSlotTag, int32 ActionSlotIndex, FYIInventoryGameplaySetupResult& OutResult);
-};
 
+	/** Build/update an equipment layout asset directly from equipment slot definitions (single source of truth). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup|Equipment")
+	static bool SyncEquipmentLayoutFromComponentSlots(UYIEquipmentComponent* EquipmentComp, UYIEquipmentLayoutAsset* LayoutAsset, bool bClearExisting = true);
+
+	/** Make an item explicitly support a slot tag so equip checks pass consistently. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup|Equipment")
+	static bool EnsureItemSupportsEquipSlot(UYIItemDefinition* ItemDef, FGameplayTag SlotTag, bool bSetItemTypeToSlotTag = false, bool bAddToOccupiedSlots = false);
+};

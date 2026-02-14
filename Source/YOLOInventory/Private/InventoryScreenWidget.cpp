@@ -19,8 +19,51 @@
 #include "Components/GridSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/PanelWidget.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/Widget.h"
+#include "TimerManager.h"
+
+namespace YIInventoryScreenPrivate
+{
+	template<typename TWidgetType>
+	TWidgetType* FindWidgetByNameOrType(UWidgetTree* WidgetTree, const TCHAR* PreferredName, const TSet<UWidget*>& ExcludedWidgets = TSet<UWidget*>())
+	{
+		if (!WidgetTree)
+		{
+			return nullptr;
+		}
+
+		if (PreferredName && PreferredName[0] != 0)
+		{
+			if (UWidget* NamedWidget = WidgetTree->FindWidget(FName(PreferredName)))
+			{
+				if (TWidgetType* TypedNamedWidget = Cast<TWidgetType>(NamedWidget))
+				{
+					return TypedNamedWidget;
+				}
+			}
+		}
+
+		TArray<UWidget*> AllWidgets;
+		WidgetTree->GetAllWidgets(AllWidgets);
+		for (UWidget* Widget : AllWidgets)
+		{
+			if (!Widget || ExcludedWidgets.Contains(Widget))
+			{
+				continue;
+			}
+			if (TWidgetType* Typed = Cast<TWidgetType>(Widget))
+			{
+				return Typed;
+			}
+		}
+		return nullptr;
+	}
+}
 
 void UInventoryScreenWidget::BindInventoryBagContexts(UYIInventoryComponent* InInventoryComponent)
 {
@@ -38,6 +81,258 @@ void UInventoryScreenWidget::BindInventoryBagContexts(UYIInventoryComponent* InI
 	{
 		SpellbookGrid->SetBagBindingToActiveContext(InInventoryComponent, true);
 		SpellbookGrid->RefreshBoundTooltip();
+	}
+}
+
+void UInventoryScreenWidget::AutoResolveWidgetReferences()
+{
+	if (!bAutoResolveWidgetReferences || !WidgetTree)
+	{
+		return;
+	}
+
+	TSet<UWidget*> Excluded;
+	if (!Grid)
+	{
+		Grid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("Grid"));
+	}
+	if (Grid)
+	{
+		Excluded.Add(Grid);
+	}
+
+	if (!SpellbookGrid)
+	{
+		SpellbookGrid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("SpellbookGrid"), Excluded);
+	}
+	if (SpellbookGrid)
+	{
+		Excluded.Add(SpellbookGrid);
+	}
+
+	if (!Tooltip)
+	{
+		Tooltip = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryTooltipView>(WidgetTree, TEXT("Tooltip"));
+	}
+	if (!ActionMenu)
+	{
+		ActionMenu = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryActionMenuWidget>(WidgetTree, TEXT("ActionMenu"));
+	}
+
+	if (!EquipmentSlotsPanel)
+	{
+		EquipmentSlotsPanel = YIInventoryScreenPrivate::FindWidgetByNameOrType<UGridPanel>(WidgetTree, TEXT("EquipmentSlotsPanel"));
+	}
+	if (!EquipmentSlotsCanvasPanel)
+	{
+		EquipmentSlotsCanvasPanel = YIInventoryScreenPrivate::FindWidgetByNameOrType<UCanvasPanel>(WidgetTree, TEXT("EquipmentSlotsCanvasPanel"));
+	}
+}
+
+void UInventoryScreenWidget::EnsureMinimalDefaultLayout()
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	if (Grid && Tooltip)
+	{
+		return;
+	}
+
+	if (!WidgetTree->RootWidget)
+	{
+		UHorizontalBox* DefaultRoot = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("InventoryDefaultRoot"));
+		WidgetTree->RootWidget = DefaultRoot;
+	}
+
+	UPanelWidget* RootPanel = Cast<UPanelWidget>(WidgetTree->RootWidget);
+	if (!RootPanel)
+	{
+		return;
+	}
+
+	if (!Grid)
+	{
+		Grid = WidgetTree->ConstructWidget<UInventoryGridWidget>(UInventoryGridWidget::StaticClass(), TEXT("Grid"));
+		if (Grid)
+		{
+			if (UHorizontalBox* RootHorizontalBox = Cast<UHorizontalBox>(RootPanel))
+			{
+				if (UHorizontalBoxSlot* Slot = RootHorizontalBox->AddChildToHorizontalBox(Grid))
+				{
+					Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+					Slot->SetPadding(FMargin(8.f));
+				}
+			}
+			else
+			{
+				RootPanel->AddChild(Grid);
+			}
+		}
+	}
+
+	if (!Tooltip)
+	{
+		Tooltip = WidgetTree->ConstructWidget<UInventoryTooltipView>(UInventoryTooltipView::StaticClass(), TEXT("Tooltip"));
+		if (Tooltip)
+		{
+			if (UHorizontalBox* RootHorizontalBox = Cast<UHorizontalBox>(RootPanel))
+			{
+				if (UHorizontalBoxSlot* Slot = RootHorizontalBox->AddChildToHorizontalBox(Tooltip))
+				{
+					Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+					Slot->SetPadding(FMargin(8.f));
+				}
+			}
+			else
+			{
+				RootPanel->AddChild(Tooltip);
+			}
+		}
+	}
+}
+
+bool UInventoryScreenWidget::ResolveRuntimeComponents(UYIInventoryComponent*& OutInventory, UYIEquipmentComponent*& OutEquipment) const
+{
+	OutInventory = nullptr;
+	OutEquipment = nullptr;
+
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			OutInventory = Pawn->FindComponentByClass<UYIInventoryComponent>();
+			OutEquipment = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+
+	if (!OutInventory && Grid && Grid->Bag)
+	{
+		OutInventory = Grid->Bag->GetTypedOuter<UYIInventoryComponent>();
+		if (OutInventory && OutInventory->GetOwner())
+		{
+			OutEquipment = OutInventory->GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
+		}
+	}
+
+	return OutInventory != nullptr || OutEquipment != nullptr;
+}
+
+void UInventoryScreenWidget::BuildFallbackSlotLayoutFromDefinitions(const UYIEquipmentComponent* EquipmentComp, TArray<FYIEquipmentSlotLayoutEntry>& OutSlots) const
+{
+	OutSlots.Reset();
+	if (!EquipmentComp)
+	{
+		return;
+	}
+
+	for (const FYIEquipmentSlotDefinition& SlotDef : EquipmentComp->SlotDefinitions)
+	{
+		if (!SlotDef.SlotTag.IsValid())
+		{
+			continue;
+		}
+
+		FYIEquipmentSlotLayoutEntry Entry;
+		Entry.SlotTag = SlotDef.SlotTag;
+		const FString SlotName = SlotDef.SlotTag.ToString();
+		int32 LastDotIndex = INDEX_NONE;
+		if (SlotName.FindLastChar('.', LastDotIndex) && LastDotIndex >= 0 && LastDotIndex + 1 < SlotName.Len())
+		{
+			Entry.DisplayName = FText::FromString(SlotName.RightChop(LastDotIndex + 1));
+		}
+		else
+		{
+			Entry.DisplayName = FText::FromString(SlotName);
+		}
+		Entry.SortOrder = OutSlots.Num();
+		OutSlots.Add(Entry);
+	}
+}
+
+bool UInventoryScreenWidget::AutoWireScreen(bool bRebuildEquipmentPane)
+{
+	EnsureMinimalDefaultLayout();
+	AutoResolveWidgetReferences();
+
+	UYIInventoryComponent* InventoryComp = nullptr;
+	UYIEquipmentComponent* EquipmentComp = nullptr;
+	ResolveRuntimeComponents(InventoryComp, EquipmentComp);
+
+	if (InventoryComp)
+	{
+		BindInventoryBagContexts(InventoryComp);
+	}
+
+	if (Grid && Tooltip)
+	{
+		Grid->SetBoundTooltipWidget(Tooltip);
+		Grid->RefreshBoundTooltip();
+	}
+
+	if (bAutoGenerateEquipmentSlotPane && bRebuildEquipmentPane)
+	{
+		if (!EquipmentLayoutAsset.IsValid() && EquipmentComp && bAutoResolveLayoutFromEquipmentComponent)
+		{
+			EquipmentLayoutAsset = EquipmentComp->DefaultEquipmentLayoutAsset;
+		}
+		RebuildEquipmentSlotPaneFromLayout();
+	}
+
+	if (bAutoBindEquipmentSlots)
+	{
+		BindEquipmentSlotWidgets();
+	}
+
+	if (ActionMenu)
+	{
+		ActionMenu->HideActions();
+		ActionMenu->OnActionSelected.RemoveDynamic(this, &UInventoryScreenWidget::OnActionChosen);
+		ActionMenu->OnActionSelected.AddDynamic(this, &UInventoryScreenWidget::OnActionChosen);
+	}
+
+	// Consider wiring complete when at least inventory context + main grid are resolved.
+	return Grid != nullptr && InventoryComp != nullptr;
+}
+
+void UInventoryScreenWidget::StartAutoWireRetry()
+{
+	if (!bRetryAutoWireUntilReady)
+	{
+		return;
+	}
+	if (UWorld* World = GetWorld())
+	{
+		AutoWireRetryStartTime = World->GetTimeSeconds();
+		World->GetTimerManager().ClearTimer(AutoWireRetryTimer);
+		World->GetTimerManager().SetTimer(AutoWireRetryTimer, this, &UInventoryScreenWidget::HandleAutoWireRetry, AutoWireRetryInterval, true);
+	}
+}
+
+void UInventoryScreenWidget::StopAutoWireRetry()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(AutoWireRetryTimer);
+	}
+}
+
+void UInventoryScreenWidget::HandleAutoWireRetry()
+{
+	if (AutoWireScreen(false))
+	{
+		StopAutoWireRetry();
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		if (World->GetTimeSeconds() - AutoWireRetryStartTime >= AutoWireRetryTimeout)
+		{
+			StopAutoWireRetry();
+		}
 	}
 }
 
@@ -126,38 +421,10 @@ void UInventoryScreenWidget::NativeConstruct()
 	// Ensure we can receive keyboard/gamepad input
 	if (GetOwningPlayer()) { SetUserFocus(GetOwningPlayer()); }
 
-	if (APlayerController* PC = GetOwningPlayer())
+	const bool bWiredNow = AutoWireScreen(true);
+	if (!bWiredNow)
 	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
-			{
-				BindInventoryBagContexts(InventoryComp);
-			}
-		}
-	}
-
-	if (Grid && Tooltip)
-	{
-		Grid->SetBoundTooltipWidget(Tooltip);
-		// Prime tooltip for current selection
-		Grid->RefreshBoundTooltip();
-	}
-
-	if (bAutoGenerateEquipmentSlotPane)
-	{
-		RebuildEquipmentSlotPaneFromLayout();
-	}
-
-	if (bAutoBindEquipmentSlots)
-	{
-		BindEquipmentSlotWidgets();
-	}
-
-	if (ActionMenu)
-	{
-		ActionMenu->HideActions();
-		ActionMenu->OnActionSelected.AddDynamic(this, &UInventoryScreenWidget::OnActionChosen);
+		StartAutoWireRetry();
 	}
 
 	// Setup Enhanced Input if requested
@@ -179,24 +446,7 @@ void UInventoryScreenWidget::BindEquipmentSlotWidgets()
 
 	UYIInventoryComponent* InventoryComp = nullptr;
 	UYIEquipmentComponent* EquipmentComp = nullptr;
-	if (APlayerController* PC = GetOwningPlayer())
-	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
-			EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
-		}
-	}
-
-	// Fallback to grid owner component if screen wasn't opened through a pawn context.
-	if (!InventoryComp && Grid && Grid->Bag)
-	{
-		InventoryComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>();
-		if (InventoryComp && InventoryComp->GetOwner())
-		{
-			EquipmentComp = InventoryComp->GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
-		}
-	}
+	ResolveRuntimeComponents(InventoryComp, EquipmentComp);
 
 	TArray<UWidget*> Widgets;
 	WidgetTree->GetAllWidgets(Widgets);
@@ -227,6 +477,17 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 		return;
 	}
 
+	AutoResolveWidgetReferences();
+
+	UYIInventoryComponent* InventoryComp = nullptr;
+	UYIEquipmentComponent* EquipmentComp = nullptr;
+	ResolveRuntimeComponents(InventoryComp, EquipmentComp);
+
+	if (!EquipmentLayoutAsset.IsValid() && EquipmentComp && bAutoResolveLayoutFromEquipmentComponent)
+	{
+		EquipmentLayoutAsset = EquipmentComp->DefaultEquipmentLayoutAsset;
+	}
+
 	UYIEquipmentLayoutAsset* Layout = EquipmentLayoutAsset.IsValid()
 		? EquipmentLayoutAsset.Get()
 		: EquipmentLayoutAsset.LoadSynchronous();
@@ -239,12 +500,8 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 	{
 		EquipmentSlotsCanvasPanel->ClearChildren();
 	}
-	if (!Layout)
-	{
-		return;
-	}
 
-	const bool bUseCanvasLayout = Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas;
+	const bool bUseCanvasLayout = Layout ? (Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas) : false;
 	UGridPanel* TargetGridPanel = bUseCanvasLayout ? nullptr : EquipmentSlotsPanel;
 	UCanvasPanel* TargetCanvasPanel = bUseCanvasLayout ? EquipmentSlotsCanvasPanel : nullptr;
 	if (!TargetGridPanel && !TargetCanvasPanel)
@@ -253,32 +510,21 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 	}
 
 	TArray<FYIEquipmentSlotLayoutEntry> SortedSlots;
-	Layout->GetSortedSlots(SortedSlots);
+	if (Layout)
+	{
+		Layout->GetSortedSlots(SortedSlots);
+	}
+	else if (bAutoResolveLayoutFromEquipmentComponent)
+	{
+		BuildFallbackSlotLayoutFromDefinitions(EquipmentComp, SortedSlots);
+	}
 	if (SortedSlots.Num() == 0)
 	{
 		return;
 	}
 
-	UYIInventoryComponent* InventoryComp = nullptr;
-	UYIEquipmentComponent* EquipmentComp = nullptr;
-	if (APlayerController* PC = GetOwningPlayer())
-	{
-		if (APawn* Pawn = PC->GetPawn())
-		{
-			InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
-			EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
-		}
-	}
-	if (!InventoryComp && Grid && Grid->Bag)
-	{
-		InventoryComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>();
-		if (InventoryComp && InventoryComp->GetOwner())
-		{
-			EquipmentComp = InventoryComp->GetOwner()->FindComponentByClass<UYIEquipmentComponent>();
-		}
-	}
-
-	const int32 AutoColumns = FMath::Max(1, Layout->AutoColumnCount);
+	const int32 AutoColumns = FMath::Max(1, Layout ? Layout->AutoColumnCount : 4);
+	const float SlotPadding = Layout ? Layout->SlotPadding : 4.f;
 	int32 AutoPlacementIndex = 0;
 
 	for (const FYIEquipmentSlotLayoutEntry& SlotEntry : SortedSlots)
@@ -322,15 +568,15 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 				GridSlot->SetVerticalAlignment(VAlign_Fill);
 				GridSlot->SetRowSpan(FMath::Max(1, SlotEntry.RowSpan));
 				GridSlot->SetColumnSpan(FMath::Max(1, SlotEntry.ColumnSpan));
-				GridSlot->SetPadding(FMargin(Layout->SlotPadding));
+				GridSlot->SetPadding(FMargin(SlotPadding));
 			}
 		}
 		else if (TargetCanvasPanel)
 		{
 			const FVector2D AutoCellSize(96.f, 96.f);
 			const FVector2D AutoPos(
-				(float)(Column * AutoCellSize.X) + Layout->SlotPadding,
-				(float)(Row * AutoCellSize.Y) + Layout->SlotPadding);
+				(float)(Column * AutoCellSize.X) + SlotPadding,
+				(float)(Row * AutoCellSize.Y) + SlotPadding);
 
 			const FVector2D CanvasPos = SlotEntry.bUseCanvasPosition ? SlotEntry.CanvasPosition : AutoPos;
 			const FVector2D CanvasSize(
@@ -350,6 +596,11 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 
 void UInventoryScreenWidget::NativeDestruct()
 {
+	StopAutoWireRetry();
+	if (ActionMenu)
+	{
+		ActionMenu->OnActionSelected.RemoveDynamic(this, &UInventoryScreenWidget::OnActionChosen);
+	}
 	// Clean up Enhanced Input first
 	UnbindEnhancedInput();
 	Super::NativeDestruct();

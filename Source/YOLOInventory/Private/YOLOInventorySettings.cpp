@@ -20,6 +20,22 @@ UYOLOInventorySettings::UYOLOInventorySettings()
 		AddDefault(TEXT("Rarity.Mythic"), YI_GetRarityColor(EYOLOItemRarity::Mythic));
 		AddDefault(TEXT("Rarity.Unique"), FLinearColor(0.95f, 0.55f, 0.15f, 1.f));
 	}
+
+	if (SuggestedInventoryTagPrefixes.Num() == 0)
+	{
+		SuggestedInventoryTagPrefixes = {
+			TEXT("Inventory."),
+			TEXT("Item."),
+			TEXT("Equip."),
+			TEXT("Bag."),
+			TEXT("Actions."),
+			TEXT("Affix."),
+			TEXT("Loot."),
+			TEXT("Craft."),
+			TEXT("Rarity."),
+			TEXT("Audio.")
+		};
+	}
 }
 
 const UYOLOInventorySettings& UYOLOInventorySettings::Get()

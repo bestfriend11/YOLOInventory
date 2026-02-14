@@ -10,6 +10,7 @@ class SYIUnifiedHelpPanel;
 
 enum class EYIUnifiedDashboardTab : uint8
 {
+	Catalog,
 	Items,
 	Affixes,
 	Generators,
