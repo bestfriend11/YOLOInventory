@@ -158,7 +158,7 @@ private:
 	void OnSearchTextChanged(const FText& NewText);
 	void OpenEntry(const TSharedPtr<FYIItemDashboardEntry>& Entry);
 	void OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& Entry);
-	void CreateDataTableSourceAsset() const;
+	void CreateDataTableSourceAsset();
 	void ValidateUniqueCodes() const;
 	bool CreateAssetFromEntry(const FYIItemDashboardEntry& Entry) const;
 	bool UpdateAssetFromLinkedSource(class UYIItemDefinition* ItemDef) const;

@@ -872,23 +872,6 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarDiff", "Diff"))
 										]
 								]
-							+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
-								[
-									SNew(SCheckBox)
-										.Style(FAppStyle::Get(), "ToggleButtonCheckbox")
-										.IsChecked_Lambda([this]() { return bShowBatchPanel ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-										.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
-											{
-												bShowBatchPanel = (State == ECheckBoxState::Checked);
-												if (bShowBatchPanel)
-												{
-													ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
-												}
-											})
-										[
-											SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_ToolbarBatch", "Batch"))
-										]
-								]
 						]
 				]
 			+ SVerticalBox::Slot().AutoHeight().Padding(8, 0, 8, 6)
@@ -975,26 +958,6 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 										.OnClicked_Lambda([this]()
 											{
 												ApplySuggestedMappings();
-												return FReply::Handled();
-											})
-								]
-								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
-								[
-									SNew(SButton)
-										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_Queue", "Queue Selected"))
-										.OnClicked_Lambda([this]()
-											{
-												EnqueueSelectedRows();
-												return FReply::Handled();
-											})
-								]
-								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
-								[
-									SNew(SButton)
-										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_RunQueue", "Run Queue"))
-										.OnClicked_Lambda([this]()
-											{
-												ProcessBatchQueue();
 												return FReply::Handled();
 											})
 								]
@@ -1509,8 +1472,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 														{
 														case EYIDashboardBottomPanel::Preflight: return 0;
 														case EYIDashboardBottomPanel::Diff: return 1;
-														case EYIDashboardBottomPanel::Batch: return 2;
-														default: return 3;
+														default: return 2;
 														}
 													})
 												+ SWidgetSwitcher::Slot()
@@ -1520,10 +1482,6 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 												+ SWidgetSwitcher::Slot()
 												[
 													GetDiffPanelWidget()
-												]
-												+ SWidgetSwitcher::Slot()
-												[
-													GetBatchPanelWidget()
 												]
 												+ SWidgetSwitcher::Slot()
 												[
@@ -1908,26 +1866,6 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 							.OnClicked_Lambda([this]()
 								{
 									ApplySuggestedMappings();
-									return FReply::Handled();
-								})
-					]
-					+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
-					[
-						SNew(SButton)
-							.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_Queue", "Queue Selected"))
-							.OnClicked_Lambda([this]()
-								{
-									EnqueueSelectedRows();
-									return FReply::Handled();
-								})
-					]
-					+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
-					[
-						SNew(SButton)
-							.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_RunQueue", "Run Queue"))
-							.OnClicked_Lambda([this]()
-								{
-									ProcessBatchQueue();
 									return FReply::Handled();
 								})
 					]
@@ -3192,23 +3130,19 @@ void SYIItemDashboard::Refresh()
 	}
 	if (ActiveBottomPanel == EYIDashboardBottomPanel::Diff && !bShowDiffPanel)
 	{
-		ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
-	}
-	if (ActiveBottomPanel == EYIDashboardBottomPanel::Batch && !bShowBatchPanel)
-	{
 		ActiveBottomPanel = EYIDashboardBottomPanel::Logs;
 	}
 	if (ActiveBottomPanel == EYIDashboardBottomPanel::Logs && !bShowLogPanel)
 	{
 		if (bShowPreflightPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Preflight;
 		else if (bShowDiffPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Diff;
-		else if (bShowBatchPanel) ActiveBottomPanel = EYIDashboardBottomPanel::Batch;
 	}
 
 	Items.Reset();
 	FilteredItems.Reset();
 	TMap<int64, TSoftObjectPtr<UYIItemDefinition>> ExistingAssets;
 	TSet<FString> ExistingRowKeys;
+	TSet<FString> ExistingSourcePaths;
 
 	if (GEngine)
 	{
@@ -3227,6 +3161,10 @@ void SYIItemDashboard::Refresh()
 				Entry->RowName = View.RowName;
 				Entry->Object = View.Object;
 				Entry->DataSource = View.DataSource;
+				if (Entry->DataSource.ToSoftObjectPath().IsValid())
+				{
+					ExistingSourcePaths.Add(Entry->DataSource.ToSoftObjectPath().ToString());
+				}
 
 				if (!Entry->bIsDataTable)
 				{
@@ -3284,8 +3222,23 @@ void SYIItemDashboard::Refresh()
 
 	for (const FAssetData& SourceData : Sources)
 	{
+		const FString SourceObjectPath = SourceData.GetSoftObjectPath().ToString();
 		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceData.GetAsset()))
 		{
+			if (!ExistingSourcePaths.Contains(SourceObjectPath))
+			{
+				TSharedPtr<FYIItemDashboardEntry> SourceEntry = MakeShared<FYIItemDashboardEntry>();
+				SourceEntry->Code = 0;
+				SourceEntry->Name = SourceData.AssetName.ToString();
+				SourceEntry->TemplateId = TEXT("DataSource");
+				SourceEntry->Source = SourceObjectPath;
+				SourceEntry->bIsDataTable = false;
+				SourceEntry->Object = Source;
+				SourceEntry->DataSource = Source;
+				Items.Add(SourceEntry);
+				ExistingSourcePaths.Add(SourceObjectPath);
+			}
+
 			if (UDataTable* Table = Source->ResolveDataTable())
 			{
 				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
@@ -3486,7 +3439,7 @@ void SYIItemDashboard::OpenDataSource(const TSharedPtr<FYIItemDashboardEntry>& E
 	}
 }
 
-void SYIItemDashboard::CreateDataTableSourceAsset() const
+void SYIItemDashboard::CreateDataTableSourceAsset()
 {
 	IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
 	UDataAssetFactory* Factory = NewObject<UDataAssetFactory>();
@@ -3496,7 +3449,12 @@ void SYIItemDashboard::CreateDataTableSourceAsset() const
 	const FString BaseName = TEXT("ItemSource");
 	FString PackageName, AssetName;
 	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
-	Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->DataAssetClass, Factory);
+	UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->DataAssetClass, Factory);
+	Refresh();
+	if (NewAsset)
+	{
+		OpenAsset(NewAsset);
+	}
 }
 
 void SYIItemDashboard::ValidateUniqueCodes() const
@@ -3834,23 +3792,6 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 					TArray<FYIPreflightIssue> Issues;
 					Self->RunPreflightForEntry(*Entry, Issues, true);
 					Self->RebuildPreflightForSelection();
-				})));
-
-		MenuBuilder.AddMenuEntry(
-			NSLOCTEXT("YOLOInventory", "Dash_Context_QueueRow", "Queue Row"),
-			NSLOCTEXT("YOLOInventory", "Dash_Context_QueueRow_Tip", "Add this row to the batch queue."),
-			FSlateIcon(),
-			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
-				{
-					if (!Self || !Entry.IsValid())
-					{
-						return;
-					}
-					if (Self->ListView.IsValid())
-					{
-						Self->ListView->SetSelection(Entry);
-					}
-					Self->EnqueueSelectedRows();
 				})));
 
 		MenuBuilder.AddSeparator();

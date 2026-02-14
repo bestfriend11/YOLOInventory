@@ -89,8 +89,8 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 	DetailsView = PropModule.CreateDetailView(DetailArgs);
 	LayoutMode = InArgs._LayoutMode;
 
-	AssetPanelWidget = BuildAssetPicker();
 	SourcePanelWidget = BuildSourcePicker();
+	AssetPanelWidget = BuildAssetPicker();
 	DetailsPanelWidget = BuildDetailsPanelWidget();
 	MappingPanelWidget = BuildMappingPanelWidget();
 	PreviewPanelWidget = BuildPreviewPanelWidget();
@@ -133,10 +133,6 @@ void SYIAffixDashboard::Construct(const FArguments& InArgs)
 					.Text(NSLOCTEXT("YOLOInventory","AffixDash_NewSource","New Affix Source"))
 					.OnClicked(this, &SYIAffixDashboard::CreateAffixSource)
 				]
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(6, 2)
-			[
-				SourcePanelWidget.ToSharedRef()
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(6, 2)
 			[
@@ -374,6 +370,11 @@ void SYIAffixDashboard::GuidedSetupFromToolbar()
 
 TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
 {
+	if (!SourcePanelWidget.IsValid())
+	{
+		SourcePanelWidget = BuildSourcePicker();
+	}
+
 	return SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 4)
 		[
@@ -421,6 +422,15 @@ TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
 							FText::AsNumber(TotalAssetCount),
 							FText::AsNumber(TotalNeedsAssetCount));
 					})
+			]
+		]
+		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)
+		[
+			SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			.Padding(6)
+			[
+				SourcePanelWidget.ToSharedRef()
 			]
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(6, 0, 6, 6)

@@ -16,6 +16,7 @@
 #include "Widgets/Views/SHeaderRow.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
+#include "InputCoreTypes.h"
 #include "FileHelpers.h"
 
 namespace
@@ -446,8 +447,34 @@ FReply SYICraftingDashboard::SaveCurrentBag()
 
 TSharedRef<ITableRow> SYICraftingDashboard::MakeAffixRow(TSharedPtr<FCraftAffixEntry> Entry, const TSharedRef<STableViewBase>& Owner)
 {
+	auto ToggleSelection = [this, Entry]()
+	{
+		if (!Entry.IsValid())
+		{
+			return;
+		}
+		Entry->bSelected = !Entry->bSelected;
+		if (AffixListView.IsValid())
+		{
+			AffixListView->RequestListRefresh();
+		}
+	};
+
 	return SNew(STableRow<TSharedPtr<FCraftAffixEntry>>, Owner)
 	[
+		SNew(SBorder)
+		.Padding(0)
+		.BorderImage(FAppStyle::Get().GetBrush("NoBorder"))
+		.OnMouseButtonDown_Lambda([ToggleSelection](const FGeometry&, const FPointerEvent& MouseEvent)
+		{
+			if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+			{
+				ToggleSelection();
+				return FReply::Handled();
+			}
+			return FReply::Unhandled();
+		})
+		[
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(2)
 		[
@@ -481,6 +508,6 @@ TSharedRef<ITableRow> SYICraftingDashboard::MakeAffixRow(TSharedPtr<FCraftAffixE
 		[
 			SNew(STextBlock).Text(Entry.IsValid() ? FText::FromString(Entry->Affix.ToSoftObjectPath().GetAssetName()) : FText::GetEmpty())
 		]
+		]
 	];
 }
-

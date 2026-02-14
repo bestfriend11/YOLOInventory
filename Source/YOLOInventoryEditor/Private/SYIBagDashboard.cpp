@@ -253,7 +253,7 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							]
 						]
 					]
-					+ SSplitter::Slot().Value(0.33f)
+					+ SSplitter::Slot().Value(0.66f)
 					[
 						SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
@@ -270,47 +270,16 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							]
 						]
 					]
-					+ SSplitter::Slot().Value(0.33f)
-					[
-						SNew(SBorder)
-						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-						.Padding(2)
-						[
-							SNew(SVerticalBox)
-							+ SVerticalBox::Slot().AutoHeight().Padding(2)
-							[
-								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_EquipLayoutPicker", "Equipment Layouts"))
-							]
-							+ SVerticalBox::Slot().FillHeight(1.f)
-							[
-								BuildEquipmentLayoutPicker()
-							]
-						]
-					]
 				]
 			]
 		]
 		+ SSplitter::Slot().Value(0.72f)
 		[
-			SNew(SSplitter)
-			.Orientation(Orient_Vertical)
-			+ SSplitter::Slot().Value(0.72f)
+			SNew(SBorder)
+			.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+			.Padding(4)
 			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-				.Padding(4)
-				[
-					SAssignNew(GridHost, SBox)
-				]
-			]
-			+ SSplitter::Slot().Value(0.28f)
-			[
-				SNew(SBorder)
-				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
-				.Padding(6)
-				[
-					SAssignNew(EquipmentLayoutPreviewHost, SBox)
-				]
+				SAssignNew(GridHost, SBox)
 			]
 		]
 	];
