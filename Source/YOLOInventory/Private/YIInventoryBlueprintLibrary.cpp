@@ -217,20 +217,41 @@ int32 UYIInventoryBlueprintLibrary::GetSellPrice(const UYIItemDefinition* Defini
 bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Source, UYIInventoryBag* Dest, int32 Index, int32 Count, int32& OutDestIndex)
 {
 	OutDestIndex = INDEX_NONE;
-	if (!Source || !Dest || !Source->Items.IsValidIndex(Index)) return false;
+	if (!Source || !Dest || Source == Dest || !Source->Items.IsValidIndex(Index))
+	{
+		return false;
+	}
 	FYIBagItem Src = Source->Items[Index];
-	UYIItemDefinition* Def = Src.Item.Definition.IsValid()? Src.Item.Definition.Get() : Src.Item.Definition.LoadSynchronous();
-	if (!Def) return false;
+	UYIItemDefinition* Def = Src.Item.Definition.IsValid() ? Src.Item.Definition.Get() : Src.Item.Definition.LoadSynchronous();
+	if (!Def)
+	{
+		return false;
+	}
+
+	if (!Dest->CanAcceptItemDefinition(Def))
+	{
+		return false;
+	}
 
 	FYIBagItem ToPlace = Src;
-	if (Def->bAllowStacking && Def->MaxStackCount > 1 && Count > 0)
+	const bool bStacking = Def->bAllowStacking && Def->MaxStackCount > 1;
+	if (bStacking && Count > 0)
 	{
 		ToPlace.Item.Count = FMath::Clamp(Count, 1, Src.Item.Count);
 	}
 
 	// Try combine into existing stack
-	int32 Existing = Dest->FindExistingStackIndex(Def);
-	if (Existing != INDEX_NONE && Def->bAllowStacking && Def->MaxStackCount > 1)
+	int32 Existing = INDEX_NONE;
+	if (Src.Item.CustomStackKey != 0)
+	{
+		Existing = Dest->FindExistingStackIndexForItem(Src);
+	}
+	if (Existing == INDEX_NONE)
+	{
+		Existing = Dest->FindExistingStackIndex(Def);
+	}
+
+	if (Existing != INDEX_NONE && bStacking)
 	{
 		FYIBagItem& DestIt = Dest->Items[Existing];
 		int32 Room = Def->MaxStackCount - DestIt.Item.Count;
@@ -239,9 +260,18 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 			int32 MoveCount = FMath::Min(Room, ToPlace.Item.Count);
 			DestIt.Item.Count += MoveCount;
 			Source->Items[Index].Item.Count -= MoveCount;
-			if (Source->Items[Index].Item.Count <= 0) { Source->RemoveItem(Index); }
+			if (Source->Items[Index].Item.Count <= 0)
+			{
+				Source->RemoveItem(Index);
+			}
+			else
+			{
+				Source->MarkPackageDirty();
+				Source->OnChanged.Broadcast();
+			}
 			OutDestIndex = Existing;
 			Dest->MarkPackageDirty();
+			Dest->OnChanged.Broadcast();
 			// Broadcast transfer event on both bags
 			Source->OnItemTransferred.Broadcast(Source, Dest, Index, Existing);
 			Dest->OnItemTransferred.Broadcast(Source, Dest, Index, Existing);
@@ -257,24 +287,49 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 	}
 	ToPlace.Pos = Pos;
 
-	// Reduce source count and add to dest
-	if (Def->bAllowStacking && Def->MaxStackCount > 1 && Count > 0)
+	// Add to destination first so failed adds never lose source data.
+	const bool bSavedAutoMerge = Dest->bAutoMergeOnAdd;
+	Dest->bAutoMergeOnAdd = false;
+	OutDestIndex = Dest->AddBagItem(ToPlace);
+	Dest->bAutoMergeOnAdd = bSavedAutoMerge;
+	if (OutDestIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// Reduce source count only after destination insert succeeds.
+	if (bStacking && Count > 0)
 	{
 		Source->Items[Index].Item.Count -= ToPlace.Item.Count;
-		if (Source->Items[Index].Item.Count <= 0) { Source->RemoveItem(Index); }
+		if (Source->Items[Index].Item.Count <= 0)
+		{
+			if (!Source->RemoveItem(Index))
+			{
+				Dest->RemoveItem(OutDestIndex);
+				OutDestIndex = INDEX_NONE;
+				return false;
+			}
+		}
+		else
+		{
+			Source->MarkPackageDirty();
+			Source->OnChanged.Broadcast();
+		}
 	}
 	else
 	{
 		// Move whole stack
-		Source->RemoveItem(Index);
+		if (!Source->RemoveItem(Index))
+		{
+			Dest->RemoveItem(OutDestIndex);
+			OutDestIndex = INDEX_NONE;
+			return false;
+		}
 	}
-	OutDestIndex = Dest->AddBagItem(ToPlace);
-	if (OutDestIndex != INDEX_NONE)
-	{
-		Source->OnItemTransferred.Broadcast(Source, Dest, Index, OutDestIndex);
-		Dest->OnItemTransferred.Broadcast(Source, Dest, Index, OutDestIndex);
-	}
-	return OutDestIndex != INDEX_NONE;
+
+	Source->OnItemTransferred.Broadcast(Source, Dest, Index, OutDestIndex);
+	Dest->OnItemTransferred.Broadcast(Source, Dest, Index, OutDestIndex);
+	return true;
 }
 
 bool UYIInventoryBlueprintLibrary::GetFirstEmptyPosForItem(const UYIInventoryBag* Bag, const UYIItemDefinition* Definition, FIntPoint& OutPos)

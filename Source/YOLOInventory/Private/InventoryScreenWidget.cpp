@@ -17,6 +17,8 @@
 #include "YIEquipmentLayoutAsset.h"
 #include "Components/GridPanel.h"
 #include "Components/GridSlot.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetTree.h"
 
@@ -191,7 +193,7 @@ void UInventoryScreenWidget::BindEquipmentSlotWidgets()
 
 void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 {
-	if (!WidgetTree || !EquipmentSlotsPanel)
+	if (!WidgetTree)
 	{
 		return;
 	}
@@ -200,8 +202,23 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 		? EquipmentLayoutAsset.Get()
 		: EquipmentLayoutAsset.LoadSynchronous();
 
-	EquipmentSlotsPanel->ClearChildren();
+	if (EquipmentSlotsPanel)
+	{
+		EquipmentSlotsPanel->ClearChildren();
+	}
+	if (EquipmentSlotsCanvasPanel)
+	{
+		EquipmentSlotsCanvasPanel->ClearChildren();
+	}
 	if (!Layout)
+	{
+		return;
+	}
+
+	const bool bUseCanvasLayout = Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas;
+	UGridPanel* TargetGridPanel = bUseCanvasLayout ? nullptr : EquipmentSlotsPanel;
+	UCanvasPanel* TargetCanvasPanel = bUseCanvasLayout ? EquipmentSlotsCanvasPanel : nullptr;
+	if (!TargetGridPanel && !TargetCanvasPanel)
 	{
 		return;
 	}
@@ -267,14 +284,37 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 		SlotWidget->SetInventoryComponent(InventoryComp);
 		SlotWidget->SetEquipmentComponent(EquipmentComp);
 
-		UGridSlot* GridSlot = EquipmentSlotsPanel->AddChildToGrid(SlotWidget, Row, Column);
-		if (GridSlot)
+		if (TargetGridPanel)
 		{
-			GridSlot->SetHorizontalAlignment(HAlign_Fill);
-			GridSlot->SetVerticalAlignment(VAlign_Fill);
-			GridSlot->SetRowSpan(FMath::Max(1, SlotEntry.RowSpan));
-			GridSlot->SetColumnSpan(FMath::Max(1, SlotEntry.ColumnSpan));
-			GridSlot->SetPadding(FMargin(Layout->SlotPadding));
+			UGridSlot* GridSlot = TargetGridPanel->AddChildToGrid(SlotWidget, Row, Column);
+			if (GridSlot)
+			{
+				GridSlot->SetHorizontalAlignment(HAlign_Fill);
+				GridSlot->SetVerticalAlignment(VAlign_Fill);
+				GridSlot->SetRowSpan(FMath::Max(1, SlotEntry.RowSpan));
+				GridSlot->SetColumnSpan(FMath::Max(1, SlotEntry.ColumnSpan));
+				GridSlot->SetPadding(FMargin(Layout->SlotPadding));
+			}
+		}
+		else if (TargetCanvasPanel)
+		{
+			const FVector2D AutoCellSize(96.f, 96.f);
+			const FVector2D AutoPos(
+				(float)(Column * AutoCellSize.X) + Layout->SlotPadding,
+				(float)(Row * AutoCellSize.Y) + Layout->SlotPadding);
+
+			const FVector2D CanvasPos = SlotEntry.bUseCanvasPosition ? SlotEntry.CanvasPosition : AutoPos;
+			const FVector2D CanvasSize(
+				FMath::Max(8.f, SlotEntry.CanvasSize.X),
+				FMath::Max(8.f, SlotEntry.CanvasSize.Y));
+
+			UCanvasPanelSlot* CanvasSlot = TargetCanvasPanel->AddChildToCanvas(SlotWidget);
+			if (CanvasSlot)
+			{
+				CanvasSlot->SetAutoSize(false);
+				CanvasSlot->SetPosition(CanvasPos);
+				CanvasSlot->SetSize(CanvasSize);
+			}
 		}
 	}
 }

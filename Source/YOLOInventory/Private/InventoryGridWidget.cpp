@@ -886,6 +886,16 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			return false;
 		}
 	}
+
+	UYIItemDefinition* DraggedDef = ToPlace.Item.Definition.IsValid()
+		? ToPlace.Item.Definition.Get()
+		: ToPlace.Item.Definition.LoadSynchronous();
+	if (!DraggedDef || !Bag->CanAcceptItemDefinition(DraggedDef))
+	{
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
+	}
 	
 	// If we are not authoritative, do not mutate bags directly for cross-bag operations.
 	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
@@ -953,89 +963,95 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		return false;
 	}
 
-	// Non-authority clients should not perform in-place swaps; trigger server ops instead.
-	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
-	{
-		// Try removing victim then adding dragged via RPC
-		UYIInventoryComponent* SrcCompInner = SourceComp;
-		if (SrcCompInner) SrcCompInner->RemoveItem(VictimIdx); // victim in dest bag index; safe because server will validate
-		OwnerComp->AddBagItem(ToPlace);
-		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
-		PlayDropSound();
-		GInventoryDrag.Reset();
-		return true;
-	}
-	
 	// We have a victim. Now perform an ATOMIC swap across bags:
 	// 1. Save both items
 	FYIBagItem SavedDragged = GInventoryDrag.Item;
 	FYIBagItem SavedVictim = Bag->Items[VictimIdx];
-	
-	// Debug: log pre-swap state
-	auto GetDefName = [](const FYIBagItem& It)->FString { return It.Item.Definition.IsValid() ? It.Item.Definition.Get()->GetName() : It.Item.Definition.ToSoftObjectPath().ToString(); };
-	UE_LOG(LogTemp, Warning, TEXT("Inventory Swap START: SrcGrid=%s SrcIdx=%d SrcBagCount=%d DestBagCount=%d VictimIdx=%d Cell=(%d,%d) Dragged=%s Victim=%s"),
-		(GInventoryDrag.SourceGrid? *GInventoryDrag.SourceGrid->GetName() : TEXT("null")),
-		GInventoryDrag.SourceIndex,
-		(GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag) ? GInventoryDrag.SourceGrid->Bag->Items.Num() : -1,
-		Bag->Items.Num(),
-		VictimIdx,
-		Cell.X, Cell.Y,
-		*GetDefName(SavedDragged), *GetDefName(SavedVictim));
+	const FIntPoint SavedVictimPos = SavedVictim.Pos;
 
-	// 2. Place dragged at Cell with victim's position as fallback
+	auto RestoreVictim = [this, OwnerComp, &SavedVictim, SavedVictimPos]() -> bool
+	{
+		FYIBagItem VictimToRestore = SavedVictim;
+		VictimToRestore.Pos = SavedVictimPos;
+		if (!Bag->CanPlaceAt(VictimToRestore.Pos, VictimToRestore.Size))
+		{
+			return false;
+		}
+		const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
+		Bag->bAutoMergeOnAdd = false;
+		const int32 RestoreIdx = OwnerComp ? OwnerComp->AddBagItem(VictimToRestore) : Bag->AddBagItem(VictimToRestore);
+		Bag->bAutoMergeOnAdd = bSavedAutoMerge;
+		return RestoreIdx != INDEX_NONE;
+	};
+
+	// Remove victim first so destination constraints are re-evaluated through AddBagItem.
+	if (!(OwnerComp ? OwnerComp->RemoveItem(VictimIdx) : Bag->RemoveItem(VictimIdx)))
+	{
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
+	}
+
 	ToPlace.Pos = Cell;
 	SavedDragged.Pos = Cell;
-	
-	// 3. Perform swap in destination bag
-	Bag->Items[VictimIdx] = SavedDragged;
-	Bag->Items[VictimIdx].Pos = Cell;
-	Bag->MarkPackageDirty();
-	Bag->OnChanged.Broadcast();
-	UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Placed dragged into dest at idx %d. DestCount=%d"), VictimIdx, Bag->Items.Num());
-	
-	// 4. Remove the original dragged item from its source bag (if not already this grid and not the same as victim)
-			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
-			{
-				UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
-				UYIInventoryComponent* SrcCompInner = SourceBag->GetTypedOuter<UYIInventoryComponent>();
-				const int32 SourceIdx = GInventoryDrag.SourceIndex;
-				// Skip removal if the item was already removed at pickup or SourceIdx is invalid
-				if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
-				{
-					// Only remove if source is not the same as destination victim index
-					if (!(SourceBag == Bag && SourceIdx == VictimIdx))
-					{
-						UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removing original dragged item from source bag. SourceIdx=%d SourceBagCountBefore=%d"), SourceIdx, SourceBag->Items.Num());
-						const bool bRemoved = SrcCompInner ? SrcCompInner->RemoveItem(SourceIdx) : SourceBag->RemoveItem(SourceIdx);
-						if (!bRemoved)
-						{
-							// Source removal failed; FULLY REVERT the destination change
-					Bag->Items[VictimIdx] = SavedVictim;
-					Bag->MarkPackageDirty();
-					Bag->OnChanged.Broadcast();
-					UE_LOG(LogTemp, Error, TEXT("Inventory Swap: Failed to remove original dragged item from source. Reverting. DestCount=%d"), Bag->Items.Num());
-					OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
-					PlayInvalidMoveSound();
-					GInventoryDrag.Reset();
-					return false;
-				}
-				UE_LOG(LogTemp, Warning, TEXT("Inventory Swap: Removed original dragged item from source. SourceBagCountAfter=%d"), SourceBag->Items.Num());
-			}
-		}
-		// Success! Notify both grids
-		OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, VictimIdx);
-		if (GInventoryDrag.SourceGrid != this) 
+	if (!Bag->CanPlaceAt(Cell, ToPlace.Size))
+	{
+		RestoreVictim();
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
+	}
+
+	const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
+	Bag->bAutoMergeOnAdd = false;
+	const int32 DraggedDestIndex = OwnerComp ? OwnerComp->AddBagItem(ToPlace) : Bag->AddBagItem(ToPlace);
+	Bag->bAutoMergeOnAdd = bSavedAutoMerge;
+	if (DraggedDestIndex == INDEX_NONE)
+	{
+		RestoreVictim();
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
+	}
+
+	// Remove the original dragged item from source bag only after destination placement succeeds.
+	if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
+	{
+		UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
+		const int32 SourceIdx = GInventoryDrag.SourceIndex;
+		if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
 		{
-			GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, VictimIdx);
+			const bool bRemoved = SourceComp ? SourceComp->RemoveItem(SourceIdx) : SourceBag->RemoveItem(SourceIdx);
+			if (!bRemoved)
+			{
+				if (OwnerComp)
+				{
+					OwnerComp->RemoveItem(DraggedDestIndex);
+				}
+				else
+				{
+					Bag->RemoveItem(DraggedDestIndex);
+				}
+				RestoreVictim();
+				OnItemDropped.Broadcast(this, SourceIdx, Cell, false);
+				PlayInvalidMoveSound();
+				GInventoryDrag.Reset();
+				return false;
+			}
+
+			OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, DraggedDestIndex);
+			if (GInventoryDrag.SourceGrid != this)
+			{
+				GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, DraggedDestIndex);
+			}
+			GInventoryDrag.SourceGrid->RefreshBoundTooltip();
 		}
-		GInventoryDrag.SourceGrid->RefreshBoundTooltip();
 	}
 	
 	// 5. Set victim as active drag for the next placement
 	RefreshBoundTooltip();
 	OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 	PlayDropSound();
-	UE_LOG(LogTemp, Warning, TEXT("Inventory Swap COMPLETE: NewDragItem=%s NewDragActive=%d DestCount=%d"), *GetDefName(SavedVictim), (int)GInventoryDrag.bActive, Bag->Items.Num());
 
 	// Update drag state: the victim is now at VictimIdx in this bag (linked, not unattached)
 	// If BeginDragFromCell is called again, it will just pick up the victim from its new location

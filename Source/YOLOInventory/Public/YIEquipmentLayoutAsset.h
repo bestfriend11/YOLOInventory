@@ -5,6 +5,13 @@
 #include "GameplayTagContainer.h"
 #include "YIEquipmentLayoutAsset.generated.h"
 
+UENUM(BlueprintType)
+enum class EYIEquipmentLayoutMode : uint8
+{
+	Grid UMETA(DisplayName = "Grid"),
+	Canvas UMETA(DisplayName = "Canvas")
+};
+
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIEquipmentSlotLayoutEntry
 {
@@ -41,6 +48,18 @@ struct YOLOINVENTORY_API FYIEquipmentSlotLayoutEntry
 	/** Icon size used for generated UInventoryEquipmentSlotWidget. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout", meta = (ClampMin = "8.0", ClampMax = "256.0"))
 	FVector2D IconSize = FVector2D(56.f, 56.f);
+
+	/** Top-left position used when LayoutMode is Canvas. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout|Canvas")
+	bool bUseCanvasPosition = false;
+
+	/** Top-left position used when LayoutMode is Canvas. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout|Canvas")
+	FVector2D CanvasPosition = FVector2D::ZeroVector;
+
+	/** Slot widget size used when LayoutMode is Canvas. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout|Canvas", meta = (ClampMin = "8.0", ClampMax = "1024.0"))
+	FVector2D CanvasSize = FVector2D(96.f, 96.f);
 };
 
 UCLASS(BlueprintType)
@@ -48,6 +67,13 @@ class YOLOINVENTORY_API UYIEquipmentLayoutAsset : public UDataAsset
 {
 	GENERATED_BODY()
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout")
+	EYIEquipmentLayoutMode LayoutMode = EYIEquipmentLayoutMode::Grid;
+
+	/** Canvas size hint for editor/runtime layout previews. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout|Canvas", meta = (ClampMin = "64.0", ClampMax = "4096.0"))
+	FVector2D CanvasSize = FVector2D(600.f, 450.f);
+
 	/** Used for entries that do not specify explicit Row/Column. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment Layout", meta = (ClampMin = "1", ClampMax = "16"))
 	int32 AutoColumnCount = 4;
@@ -66,4 +92,3 @@ public:
 	UFUNCTION(BlueprintPure, Category = "YOLOInventory|Equipment|Layout")
 	void GetSortedSlots(TArray<FYIEquipmentSlotLayoutEntry>& OutSlots) const;
 };
-

@@ -17,6 +17,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SGridPanel.h"
+#include "Widgets/Layout/SConstraintCanvas.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
@@ -666,48 +667,109 @@ void SYIBagDashboard::RebuildEquipmentLayoutPreview()
 	{
 		const int32 AutoColumns = FMath::Max(1, Layout->AutoColumnCount);
 		int32 AutoPlacementIndex = 0;
+		TSharedPtr<SWidget> PreviewBody;
 
-		TSharedRef<SGridPanel> PreviewGrid = SNew(SGridPanel);
-		for (const FYIEquipmentSlotLayoutEntry& Entry : SortedSlots)
+		if (Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas)
 		{
-			if (!Entry.SlotTag.IsValid())
+			TSharedRef<SConstraintCanvas> PreviewCanvas = SNew(SConstraintCanvas);
+			for (const FYIEquipmentSlotLayoutEntry& Entry : SortedSlots)
 			{
-				continue;
-			}
+				if (!Entry.SlotTag.IsValid())
+				{
+					continue;
+				}
 
-			int32 Row = Entry.Row;
-			int32 Column = Entry.Column;
-			if (Row < 0 || Column < 0)
-			{
-				Row = AutoPlacementIndex / AutoColumns;
-				Column = AutoPlacementIndex % AutoColumns;
-				++AutoPlacementIndex;
-			}
+				int32 Row = Entry.Row;
+				int32 Column = Entry.Column;
+				if (Row < 0 || Column < 0)
+				{
+					Row = AutoPlacementIndex / AutoColumns;
+					Column = AutoPlacementIndex % AutoColumns;
+					++AutoPlacementIndex;
+				}
 
-			const FText SlotTitle = Entry.DisplayName.IsEmpty() ? FText::FromString(Entry.SlotTag.ToString()) : Entry.DisplayName;
-			PreviewGrid->AddSlot(Column, Row)
-				.ColumnSpan(FMath::Max(1, Entry.ColumnSpan))
-				.RowSpan(FMath::Max(1, Entry.RowSpan))
-				.Padding(FMargin(Layout->SlotPadding))
-				[
-					SNew(SBorder)
-					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-					.Padding(4)
+				const FVector2D AutoPos(
+					(float)(Column * 98) + Layout->SlotPadding,
+					(float)(Row * 98) + Layout->SlotPadding);
+				const FVector2D Position = Entry.bUseCanvasPosition ? Entry.CanvasPosition : AutoPos;
+				const FVector2D Size(
+					FMath::Max(8.f, Entry.CanvasSize.X),
+					FMath::Max(8.f, Entry.CanvasSize.Y));
+				const FText SlotTitle = Entry.DisplayName.IsEmpty() ? FText::FromString(Entry.SlotTag.ToString()) : Entry.DisplayName;
+
+				PreviewCanvas->AddSlot()
+					.Offset(FMargin(Position.X, Position.Y, Size.X, Size.Y))
 					[
-						SNew(SVerticalBox)
-						+ SVerticalBox::Slot().AutoHeight()
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+						.Padding(4)
 						[
-							SNew(STextBlock)
-							.Text(SlotTitle)
+							SNew(SVerticalBox)
+							+ SVerticalBox::Slot().AutoHeight()
+							[
+								SNew(STextBlock).Text(SlotTitle)
+							]
+							+ SVerticalBox::Slot().AutoHeight()
+							[
+								SNew(STextBlock)
+								.Text(FText::FromString(Entry.SlotTag.ToString()))
+								.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f)))
+							]
 						]
-						+ SVerticalBox::Slot().AutoHeight()
-						[
-							SNew(STextBlock)
-							.Text(FText::FromString(Entry.SlotTag.ToString()))
-							.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f)))
-						]
-					]
+					];
+			}
+
+			PreviewBody = SNew(SBox)
+				.WidthOverride(Layout->CanvasSize.X)
+				.HeightOverride(Layout->CanvasSize.Y)
+				[
+					PreviewCanvas
 				];
+		}
+		else
+		{
+			TSharedRef<SGridPanel> PreviewGrid = SNew(SGridPanel);
+			for (const FYIEquipmentSlotLayoutEntry& Entry : SortedSlots)
+			{
+				if (!Entry.SlotTag.IsValid())
+				{
+					continue;
+				}
+
+				int32 Row = Entry.Row;
+				int32 Column = Entry.Column;
+				if (Row < 0 || Column < 0)
+				{
+					Row = AutoPlacementIndex / AutoColumns;
+					Column = AutoPlacementIndex % AutoColumns;
+					++AutoPlacementIndex;
+				}
+
+				const FText SlotTitle = Entry.DisplayName.IsEmpty() ? FText::FromString(Entry.SlotTag.ToString()) : Entry.DisplayName;
+				PreviewGrid->AddSlot(Column, Row)
+					.ColumnSpan(FMath::Max(1, Entry.ColumnSpan))
+					.RowSpan(FMath::Max(1, Entry.RowSpan))
+					.Padding(FMargin(Layout->SlotPadding))
+					[
+						SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
+						.Padding(4)
+						[
+							SNew(SVerticalBox)
+							+ SVerticalBox::Slot().AutoHeight()
+							[
+								SNew(STextBlock).Text(SlotTitle)
+							]
+							+ SVerticalBox::Slot().AutoHeight()
+							[
+								SNew(STextBlock)
+								.Text(FText::FromString(Entry.SlotTag.ToString()))
+								.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f)))
+							]
+						]
+					];
+			}
+			PreviewBody = PreviewGrid;
 		}
 
 		return SNew(SBorder)
@@ -719,12 +781,15 @@ void SYIBagDashboard::RebuildEquipmentLayoutPreview()
 				[
 					SNew(STextBlock)
 					.Text(FText::Format(
-						NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewTitle", "Equipment Slot Pane Preview ({0} slots)"),
-						FText::AsNumber(SortedSlots.Num())))
+						NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewTitle", "Equipment Slot Pane Preview ({0} slots) [{1}]"),
+						FText::AsNumber(SortedSlots.Num()),
+						Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas
+							? NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewModeCanvas", "Canvas")
+							: NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewModeGrid", "Grid")))
 				]
 				+ SVerticalBox::Slot().FillHeight(1.f)
 				[
-					PreviewGrid
+					PreviewBody.ToSharedRef()
 				]
 			];
 	};

@@ -19,6 +19,27 @@ struct YOLOINVENTORY_API FYIEquippedItemEntry
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
 	FYIItemInstanceNet Item;
+
+	/** Same value across all slot entries occupied by one equipped item. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	int32 EquipGroupId = 0;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYIEquipmentSlotDefinition
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	FGameplayTag SlotTag;
+
+	/** Optional item type/tag filter for this slot. Empty means no extra filter. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	FGameplayTagContainer AcceptedItemTags;
+
+	/** If false, slot cannot be used until unlocked at runtime. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	bool bUnlocked = true;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIEquipmentChangedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item);
@@ -42,6 +63,10 @@ public:
 	/** Auto-resolve item equip slot from item tags that start with this prefix. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")
 	FString EquipSlotTagPrefix = TEXT("Equip.Slot.");
+
+	/** Designer-authored slot table. If provided, this becomes the primary slot source. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="Equipment|Rules")
+	TArray<FYIEquipmentSlotDefinition> SlotDefinitions;
 
 	/** Prints equipment operation messages on screen/log. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Debug")
@@ -91,6 +116,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Diagnostics")
 	bool ValidateEquipmentSetup(TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
 
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Equipment")
+	bool IsSlotUnlocked(FGameplayTag SlotTag) const;
+
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Rules")
+	bool SetSlotUnlocked(FGameplayTag SlotTag, bool bUnlocked);
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -102,10 +133,16 @@ private:
 	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage);
 
 	int32 FindEntryIndex(FGameplayTag SlotTag) const;
+	int32 FindSlotDefinitionIndex(FGameplayTag SlotTag) const;
 	bool IsAllowedSlot(FGameplayTag SlotTag) const;
 	FGameplayTag ResolveSlotTagFromDefinition(const UYIItemDefinition* Definition) const;
 	bool DoesDefinitionSupportSlot(const UYIItemDefinition* Definition, FGameplayTag SlotTag) const;
+	bool DoesDefinitionPassSlotFilter(const UYIItemDefinition* Definition, FGameplayTag SlotTag) const;
+	int32 ResolveOrCreateEquipGroupId();
+	int32 GetEntryGroupIdForIndex(int32 EntryIndex) const;
 
 	void EmitEquipmentMessage(const FString& Message, const FColor& Color) const;
 	void BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message);
+
+	int32 NextEquipGroupId = 1;
 };

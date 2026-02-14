@@ -109,6 +109,30 @@ void FYIInventoryTransferSpec::Define()
 		TestEqual(TEXT("Source unique still present"), Src->Items.Num(), 1);
 	});
 
+	It("honors destination acceptance rules without losing source items", [this]()
+	{
+		using namespace InventoryTransferHelpers;
+		UYIInventoryBag* Src = NewObject<UYIInventoryBag>(GetTransientPackage());
+		UYIInventoryBag* Dest = NewObject<UYIInventoryBag>(GetTransientPackage());
+		Src->GridSize = Dest->GridSize = FIntPoint(4,4);
+
+		const FGameplayTag AllowedTag = UGameplayTagsManager::Get().AddNativeGameplayTag(FName("YOLOInventory.Test.Accepted"));
+		const FGameplayTag BlockedTag = UGameplayTagsManager::Get().AddNativeGameplayTag(FName("YOLOInventory.Test.Blocked"));
+
+		Dest->bEnforceAcceptanceRules = true;
+		Dest->AllowedItemTypes.AddTag(AllowedTag);
+
+		UYIItemDefinition* Def = MakeDef(FIntPoint(1,1), true, true, 20, false, BlockedTag);
+		const int32 SrcIdx = Src->AddBagItem(MakeBagItem(Def, 7, FIntPoint(0,0)));
+		TestTrue(TEXT("Setup source item"), SrcIdx != INDEX_NONE);
+
+		int32 OutDest = INDEX_NONE;
+		const bool bOk = UYIInventoryBlueprintLibrary::TransferItemBetweenBags(Src, Dest, SrcIdx, 3, OutDest);
+		TestFalse(TEXT("Transfer blocked by acceptance rules"), bOk);
+		TestEqual(TEXT("Destination untouched"), Dest->Items.Num(), 0);
+		TestEqual(TEXT("Source stack count unchanged"), Src->Items[SrcIdx].Item.Count, 7);
+	});
+
 	It("supports grid container add/transfer without loss", [this]()
 	{
 		using namespace InventoryTransferHelpers;

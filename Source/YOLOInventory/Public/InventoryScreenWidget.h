@@ -91,6 +91,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category="Inventory|Equipment", meta=(BindWidgetOptional))
 	class UGridPanel* EquipmentSlotsPanel;
 
+	/** Optional canvas panel for paperdoll-style layouts (used when layout mode is Canvas). */
+	UPROPERTY(BlueprintReadOnly, Category="Inventory|Equipment", meta=(BindWidgetOptional))
+	class UCanvasPanel* EquipmentSlotsCanvasPanel;
+
 	/** Debounce window (seconds) to ignore duplicate confirm/open events fired in quick succession (prevents immediate open+confirm when same key is bound for both). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input", meta=(ToolTip="Seconds to ignore duplicate Confirm/Open events fired quickly"))
 	float ConfirmOpenDebounceSeconds = 0.20f;

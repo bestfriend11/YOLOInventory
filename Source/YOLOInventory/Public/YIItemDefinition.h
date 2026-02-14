@@ -75,6 +75,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(ToolTip="Whether the item can be rotated in grid-based inventories"))
 	bool bAllowRotation = true;
 
+	/** If set, item will occupy all these equipment slots when equipped (multi-slot items such as two-handed weapons). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Slots occupied by this item while equipped. If empty, only requested/auto-resolved slot is occupied."))
+	FGameplayTagContainer OccupiedEquipSlots;
+
 	// Attributes defaults (legacy, not used when GAS is authoritative)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attributes", meta=(EditCondition=false, EditConditionHides, ToolTip="Legacy per-name attribute defaults; use AttributeMods/GAS for runtime values"))
 	TMap<FName,float> AttributeDefaults;

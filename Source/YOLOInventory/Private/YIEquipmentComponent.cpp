@@ -5,6 +5,7 @@
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
 #include "Engine/Engine.h"
+#include "Algo/Unique.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIEquipment, Log, All);
 
@@ -56,6 +57,7 @@ void UYIEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(UYIEquipmentComponent, EquippedItems);
+	DOREPLIFETIME(UYIEquipmentComponent, SlotDefinitions);
 }
 
 void UYIEquipmentComponent::OnRep_EquippedItems()
@@ -74,17 +76,71 @@ int32 UYIEquipmentComponent::FindEntryIndex(FGameplayTag SlotTag) const
 	});
 }
 
+int32 UYIEquipmentComponent::FindSlotDefinitionIndex(FGameplayTag SlotTag) const
+{
+	return SlotDefinitions.IndexOfByPredicate([SlotTag](const FYIEquipmentSlotDefinition& Entry)
+	{
+		return Entry.SlotTag == SlotTag;
+	});
+}
+
 bool UYIEquipmentComponent::IsAllowedSlot(FGameplayTag SlotTag) const
 {
 	if (!SlotTag.IsValid())
 	{
 		return false;
 	}
+	if (SlotDefinitions.Num() > 0)
+	{
+		return FindSlotDefinitionIndex(SlotTag) != INDEX_NONE;
+	}
 	if (AllowedEquipSlots.Num() == 0)
 	{
 		return true;
 	}
 	return AllowedEquipSlots.HasTagExact(SlotTag);
+}
+
+bool UYIEquipmentComponent::IsSlotUnlocked(FGameplayTag SlotTag) const
+{
+	if (!SlotTag.IsValid())
+	{
+		return false;
+	}
+
+	const int32 SlotDefIndex = FindSlotDefinitionIndex(SlotTag);
+	if (SlotDefIndex != INDEX_NONE)
+	{
+		return SlotDefinitions[SlotDefIndex].bUnlocked;
+	}
+
+	return true;
+}
+
+bool UYIEquipmentComponent::SetSlotUnlocked(FGameplayTag SlotTag, bool bUnlocked)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !SlotTag.IsValid())
+	{
+		return false;
+	}
+
+	const int32 SlotDefIndex = FindSlotDefinitionIndex(SlotTag);
+	if (SlotDefIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	if (SlotDefinitions[SlotDefIndex].bUnlocked == bUnlocked)
+	{
+		return true;
+	}
+
+	SlotDefinitions[SlotDefIndex].bUnlocked = bUnlocked;
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->ForceNetUpdate();
+	}
+	return true;
 }
 
 FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDefinition* Definition) const
@@ -144,6 +200,51 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 	return false;
 }
 
+bool UYIEquipmentComponent::DoesDefinitionPassSlotFilter(const UYIItemDefinition* Definition, FGameplayTag SlotTag) const
+{
+	if (!Definition || !SlotTag.IsValid())
+	{
+		return false;
+	}
+
+	const int32 SlotDefIndex = FindSlotDefinitionIndex(SlotTag);
+	if (SlotDefIndex == INDEX_NONE || SlotDefinitions[SlotDefIndex].AcceptedItemTags.Num() == 0)
+	{
+		return true;
+	}
+
+	FGameplayTagContainer ItemTags = Definition->Tags;
+	if (Definition->ItemType.IsValid())
+	{
+		ItemTags.AddTag(Definition->ItemType);
+	}
+
+	return ItemTags.HasAny(SlotDefinitions[SlotDefIndex].AcceptedItemTags);
+}
+
+int32 UYIEquipmentComponent::ResolveOrCreateEquipGroupId()
+{
+	const int32 NewGroupId = FMath::Max(1, NextEquipGroupId++);
+	return NewGroupId;
+}
+
+int32 UYIEquipmentComponent::GetEntryGroupIdForIndex(int32 EntryIndex) const
+{
+	if (!EquippedItems.IsValidIndex(EntryIndex))
+	{
+		return 0;
+	}
+
+	const int32 GroupId = EquippedItems[EntryIndex].EquipGroupId;
+	if (GroupId > 0)
+	{
+		return GroupId;
+	}
+
+	// Legacy entries before group support: treat each slot as standalone group.
+	return (EntryIndex + 1) * -1;
+}
+
 void UYIEquipmentComponent::EmitEquipmentMessage(const FString& Message, const FColor& Color) const
 {
 	UE_LOG(LogYIEquipment, Log, TEXT("%s"), *Message);
@@ -188,6 +289,10 @@ void UYIEquipmentComponent::LoadPersistedEquipment(const TArray<FYIEquippedItemE
 	EquippedItems = InEntries;
 	for (const FYIEquippedItemEntry& Entry : EquippedItems)
 	{
+		NextEquipGroupId = FMath::Max(NextEquipGroupId, Entry.EquipGroupId + 1);
+	}
+	for (const FYIEquippedItemEntry& Entry : EquippedItems)
+	{
 		OnEquipmentChanged.Broadcast(Entry.SlotTag, Entry.Item);
 	}
 	EmitEquipmentMessage(FString::Printf(TEXT("Loaded %d persisted equipped entries."), EquippedItems.Num()), FColor::Cyan);
@@ -213,14 +318,25 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 		}
 		SeenSlots.Add(Entry.SlotTag);
 
-		if (AllowedEquipSlots.Num() > 0 && !AllowedEquipSlots.HasTagExact(Entry.SlotTag))
+		if (!IsAllowedSlot(Entry.SlotTag))
 		{
-			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' is outside AllowedEquipSlots."), *Entry.SlotTag.ToString()));
+			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' is not allowed by current slot rules."), *Entry.SlotTag.ToString()));
+		}
+		if (!IsSlotUnlocked(Entry.SlotTag))
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' is currently locked."), *Entry.SlotTag.ToString()));
 		}
 
 		if (Entry.Item.Definition.ToSoftObjectPath().IsNull())
 		{
 			OutWarnings.Add(FString::Printf(TEXT("Equipped slot '%s' has no item definition."), *Entry.SlotTag.ToString()));
+		}
+		else if (const UYIItemDefinition* Def = Entry.Item.Definition.IsValid() ? Entry.Item.Definition.Get() : Entry.Item.Definition.LoadSynchronous())
+		{
+			if (!DoesDefinitionPassSlotFilter(Def, Entry.SlotTag))
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Equipped item '%s' does not satisfy slot '%s' accepted tag filter."), *Def->GetName(), *Entry.SlotTag.ToString()));
+			}
 		}
 	}
 
@@ -321,6 +437,11 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		OutMessage = FString::Printf(TEXT("Equip failed: Slot tag '%s' is invalid or not allowed."), *SlotTag.ToString());
 		return false;
 	}
+	if (!IsSlotUnlocked(SlotTag))
+	{
+		OutMessage = FString::Printf(TEXT("Equip failed: Slot tag '%s' is currently locked."), *SlotTag.ToString());
+		return false;
+	}
 	if (!DoesDefinitionSupportSlot(Definition, SlotTag))
 	{
 		OutMessage = FString::Printf(
@@ -329,9 +450,43 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 			*SlotTag.ToString());
 		return false;
 	}
+	if (!DoesDefinitionPassSlotFilter(Definition, SlotTag))
+	{
+		OutMessage = FString::Printf(
+			TEXT("Equip failed: Item '%s' does not match slot '%s' accepted item tags."),
+			*Definition->GetName(),
+			*SlotTag.ToString());
+		return false;
+	}
 
-	const int32 ExistingIndex = FindEntryIndex(SlotTag);
-	const FYIItemInstanceNet SourceNet = YIEquipmentPrivate::FullToNet(SourceBagItem.Item);
+	TArray<FGameplayTag> OccupiedSlots;
+	Definition->OccupiedEquipSlots.GetGameplayTagArray(OccupiedSlots);
+	OccupiedSlots.RemoveAll([](const FGameplayTag& Tag) { return !Tag.IsValid(); });
+	OccupiedSlots.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.ToString() < B.ToString(); });
+	OccupiedSlots.SetNum(Algo::Unique(OccupiedSlots));
+	if (!OccupiedSlots.Contains(SlotTag))
+	{
+		OccupiedSlots.Add(SlotTag);
+	}
+
+	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
+	{
+		if (!IsAllowedSlot(OccupiedSlot))
+		{
+			OutMessage = FString::Printf(TEXT("Equip failed: Occupied slot '%s' is not allowed."), *OccupiedSlot.ToString());
+			return false;
+		}
+		if (!IsSlotUnlocked(OccupiedSlot))
+		{
+			OutMessage = FString::Printf(TEXT("Equip failed: Occupied slot '%s' is locked."), *OccupiedSlot.ToString());
+			return false;
+		}
+		if (!DoesDefinitionPassSlotFilter(Definition, OccupiedSlot))
+		{
+			OutMessage = FString::Printf(TEXT("Equip failed: Item '%s' does not satisfy slot '%s' tag filter."), *Definition->GetName(), *OccupiedSlot.ToString());
+			return false;
+		}
+	}
 
 	if (!SourceInventory->RemoveItem(SourceIndex))
 	{
@@ -339,50 +494,108 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		return false;
 	}
 
-	if (ExistingIndex != INDEX_NONE)
+	TSet<int32> ReplaceGroupIds;
+	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
 	{
-		FYIBagItem ReturnToBag;
-		ReturnToBag.Item = YIEquipmentPrivate::NetToFull(EquippedItems[ExistingIndex].Item);
-		if (UYIItemDefinition* ExistingDef = ReturnToBag.Item.Definition.IsValid()
-			? ReturnToBag.Item.Definition.Get()
-			: ReturnToBag.Item.Definition.LoadSynchronous())
+		const int32 ExistingIndex = FindEntryIndex(OccupiedSlot);
+		if (ExistingIndex != INDEX_NONE)
+		{
+			ReplaceGroupIds.Add(GetEntryGroupIdForIndex(ExistingIndex));
+		}
+	}
+
+	TArray<FYIBagItem> ReturnItems;
+	TMap<int32, int32> GroupFirstEntryIndex;
+	TArray<int32> EntryIndicesToRemove;
+	for (int32 EntryIndex = 0; EntryIndex < EquippedItems.Num(); ++EntryIndex)
+	{
+		const int32 GroupId = GetEntryGroupIdForIndex(EntryIndex);
+		if (!ReplaceGroupIds.Contains(GroupId))
+		{
+			continue;
+		}
+
+		EntryIndicesToRemove.Add(EntryIndex);
+		if (!GroupFirstEntryIndex.Contains(GroupId))
+		{
+			GroupFirstEntryIndex.Add(GroupId, EntryIndex);
+		}
+	}
+
+	for (const TPair<int32, int32>& Pair : GroupFirstEntryIndex)
+	{
+		const FYIEquippedItemEntry* GroupEntry = EquippedItems.IsValidIndex(Pair.Value) ? &EquippedItems[Pair.Value] : nullptr;
+		if (!GroupEntry)
+		{
+			continue;
+		}
+
+		FYIBagItem ReturnItem;
+		ReturnItem.Item = YIEquipmentPrivate::NetToFull(GroupEntry->Item);
+		if (UYIItemDefinition* ExistingDef = ReturnItem.Item.Definition.IsValid()
+			? ReturnItem.Item.Definition.Get()
+			: ReturnItem.Item.Definition.LoadSynchronous())
 		{
 			const FIntPoint BaseSize = ExistingDef->DefaultSize;
-			ReturnToBag.Size = ReturnToBag.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
+			ReturnItem.Size = ReturnItem.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
 		}
 		else
 		{
-			ReturnToBag.Size = FIntPoint(1, 1);
+			ReturnItem.Size = FIntPoint(1, 1);
 		}
+		ReturnItems.Add(ReturnItem);
+	}
 
-		if (SourceBag->AddBagItem(ReturnToBag) == INDEX_NONE)
+	const TArray<FYIEquippedItemEntry> BackupEntries = EquippedItems;
+	EntryIndicesToRemove.Sort([](int32 A, int32 B) { return A > B; });
+	for (const int32 RemoveIdx : EntryIndicesToRemove)
+	{
+		if (EquippedItems.IsValidIndex(RemoveIdx))
 		{
-			// Best-effort rollback: put source item back.
+			EquippedItems.RemoveAt(RemoveIdx);
+		}
+	}
+
+	TArray<int32> AddedReturnIndices;
+	for (FYIBagItem& ReturnItem : ReturnItems)
+	{
+		const bool bSavedAutoMerge = SourceBag->bAutoMergeOnAdd;
+		SourceBag->bAutoMergeOnAdd = false;
+		const int32 AddedIdx = SourceBag->AddBagItem(ReturnItem);
+		SourceBag->bAutoMergeOnAdd = bSavedAutoMerge;
+
+		if (AddedIdx == INDEX_NONE)
+		{
+			for (int32 i = AddedReturnIndices.Num() - 1; i >= 0; --i)
+			{
+				SourceBag->RemoveItem(AddedReturnIndices[i]);
+			}
+			EquippedItems = BackupEntries;
 			const int32 RollbackIndex = SourceBag->AddBagItem(SourceBagItem);
 			if (RollbackIndex == INDEX_NONE)
 			{
 				EmitEquipmentMessage(TEXT("Equip rollback failed: source item could not be restored to bag."), FColor::Red);
 			}
-			OutMessage = TEXT("Equip failed: Could not move previously equipped item back to bag.");
+			OutMessage = TEXT("Equip failed: Could not move replaced equipped item(s) back to bag.");
 			return false;
 		}
+
+		AddedReturnIndices.Add(AddedIdx);
 	}
 
-	FYIEquippedItemEntry NewEntry;
-	NewEntry.SlotTag = SlotTag;
-	NewEntry.Item = SourceNet;
-
-	if (ExistingIndex != INDEX_NONE)
+	const FYIItemInstanceNet SourceNet = YIEquipmentPrivate::FullToNet(SourceBagItem.Item);
+	const int32 NewGroupId = ResolveOrCreateEquipGroupId();
+	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
 	{
-		EquippedItems[ExistingIndex] = NewEntry;
-	}
-	else
-	{
+		FYIEquippedItemEntry NewEntry;
+		NewEntry.SlotTag = OccupiedSlot;
+		NewEntry.Item = SourceNet;
+		NewEntry.EquipGroupId = NewGroupId;
 		EquippedItems.Add(NewEntry);
+		OnEquipmentChanged.Broadcast(OccupiedSlot, SourceNet);
 	}
 
-	OnEquipmentChanged.Broadcast(SlotTag, SourceNet);
-	OutMessage = FString::Printf(TEXT("Equipped '%s' into slot '%s'."), *Definition->GetName(), *SlotTag.ToString());
+	OutMessage = FString::Printf(TEXT("Equipped '%s' into %d slot(s), primary '%s'."), *Definition->GetName(), OccupiedSlots.Num(), *SlotTag.ToString());
 	return true;
 }
 
@@ -442,8 +655,27 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	}
 
 	const FYIItemInstanceNet UnequippedItem = EquippedItems[EntryIndex].Item;
-	EquippedItems.RemoveAt(EntryIndex);
-	OnEquipmentChanged.Broadcast(SlotTag, UnequippedItem);
-	OutMessage = FString::Printf(TEXT("Unequipped slot '%s' to bag '%s'."), *SlotTag.ToString(), *DestBag->GetName());
+	const int32 UnequipGroupId = GetEntryGroupIdForIndex(EntryIndex);
+
+	TArray<FGameplayTag> RemovedSlots;
+	for (int32 i = EquippedItems.Num() - 1; i >= 0; --i)
+	{
+		if (GetEntryGroupIdForIndex(i) == UnequipGroupId)
+		{
+			RemovedSlots.Add(EquippedItems[i].SlotTag);
+			EquippedItems.RemoveAt(i);
+		}
+	}
+
+	if (RemovedSlots.Num() == 0)
+	{
+		RemovedSlots.Add(SlotTag);
+	}
+	for (const FGameplayTag& RemovedSlot : RemovedSlots)
+	{
+		OnEquipmentChanged.Broadcast(RemovedSlot, UnequippedItem);
+	}
+
+	OutMessage = FString::Printf(TEXT("Unequipped %d slot(s) to bag '%s'."), RemovedSlots.Num(), *DestBag->GetName());
 	return true;
 }
