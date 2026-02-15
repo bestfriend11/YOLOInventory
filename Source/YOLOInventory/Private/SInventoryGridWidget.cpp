@@ -169,23 +169,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			IconBrush.SetResourceObject(IconTex);
 			IconBrush.ImageSize = FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY());
 			IconBrush.DrawAs = ESlateBrushDrawType::Image;
-			const float Pad = 2.f;
-			FVector2D MaxIconSize = S - FVector2D(Pad * 2.f, Pad * 2.f);
-			MaxIconSize.X = FMath::Max(1.f, MaxIconSize.X);
-			MaxIconSize.Y = FMath::Max(1.f, MaxIconSize.Y);
-			const float TexAspect = (IconBrush.ImageSize.Y > KINDA_SMALL_NUMBER) ? (IconBrush.ImageSize.X / IconBrush.ImageSize.Y) : 1.f;
-			const float SlotAspect = MaxIconSize.X / MaxIconSize.Y;
-			FVector2D IconSize = MaxIconSize;
-			if (TexAspect > SlotAspect)
-			{
-				IconSize = FVector2D(MaxIconSize.X, MaxIconSize.X / FMath::Max(TexAspect, KINDA_SMALL_NUMBER));
-			}
-			else
-			{
-				IconSize = FVector2D(MaxIconSize.Y * TexAspect, MaxIconSize.Y);
-			}
-			const FVector2D IconPos = P + (S - IconSize) * 0.5f;
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(IconSize), FSlateLayoutTransform(FVector2f(IconPos))), &IconBrush, ESlateDrawEffect::None, FLinearColor::White);
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), &IconBrush, ESlateDrawEffect::None, FLinearColor::White);
 		}
 		// Border
 		{
@@ -245,23 +229,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 					HoverIconBrush.SetResourceObject(HoverIcon);
 					HoverIconBrush.ImageSize = FVector2D(HoverIcon->GetSizeX(), HoverIcon->GetSizeY());
 					HoverIconBrush.DrawAs = ESlateBrushDrawType::Image;
-					const float Pad = 2.f;
-					FVector2D MaxIconSize = S - FVector2D(Pad * 2.f, Pad * 2.f);
-					MaxIconSize.X = FMath::Max(1.f, MaxIconSize.X);
-					MaxIconSize.Y = FMath::Max(1.f, MaxIconSize.Y);
-					const float TexAspect = (HoverIconBrush.ImageSize.Y > KINDA_SMALL_NUMBER) ? (HoverIconBrush.ImageSize.X / HoverIconBrush.ImageSize.Y) : 1.f;
-					const float SlotAspect = MaxIconSize.X / MaxIconSize.Y;
-					FVector2D IconSize = MaxIconSize;
-					if (TexAspect > SlotAspect)
-					{
-						IconSize = FVector2D(MaxIconSize.X, MaxIconSize.X / FMath::Max(TexAspect, KINDA_SMALL_NUMBER));
-					}
-					else
-					{
-						IconSize = FVector2D(MaxIconSize.Y * TexAspect, MaxIconSize.Y);
-					}
-					const FVector2D IconPos = P + (S - IconSize) * 0.5f;
-					FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(IconSize), FSlateLayoutTransform(FVector2f(IconPos))), &HoverIconBrush, ESlateDrawEffect::None, FLinearColor::White);
+					FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), &HoverIconBrush, ESlateDrawEffect::None, FLinearColor::White);
 				}
 			}
 		}

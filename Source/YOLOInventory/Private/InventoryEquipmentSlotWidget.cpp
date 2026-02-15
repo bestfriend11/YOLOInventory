@@ -143,7 +143,7 @@ void UInventoryEquipmentSlotWidget::UpdateVisualState(bool bForceInvalidTint)
 	if (CachedIcon)
 	{
 		IconBrush.SetResourceObject(CachedIcon);
-		IconBrush.ImageSize = IconSize;
+		IconBrush.ImageSize = FVector2D(CachedIcon->GetSizeX(), CachedIcon->GetSizeY());
 		IconBrush.DrawAs = ESlateBrushDrawType::Image;
 		IconWidget->SetImage(&IconBrush);
 		IconWidget->SetVisibility(EVisibility::Visible);
@@ -294,7 +294,7 @@ TSharedRef<SWidget> UInventoryEquipmentSlotWidget::RebuildWidget()
 		SNew(SBorder)
 		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
 		.BorderBackgroundColor(EmptyTint)
-		.Padding(FMargin(6.f))
+		.Padding(FMargin(3.f))
 		.OnMouseButtonDown(BIND_UOBJECT_DELEGATE(FPointerEventHandler, HandleMouseButtonDown))
 		[
 			SNew(SVerticalBox)
@@ -307,12 +307,13 @@ TSharedRef<SWidget> UInventoryEquipmentSlotWidget::RebuildWidget()
 				.Text(SlotDisplayName.IsEmpty() ? FText::FromString(SlotTag.ToString()) : SlotDisplayName)
 			]
 			+ SVerticalBox::Slot()
-			.AutoHeight()
-			.HAlign(HAlign_Center)
+			.FillHeight(1.f)
+			.HAlign(HAlign_Fill)
+			.VAlign(VAlign_Fill)
 			[
 				SNew(SBox)
-				.WidthOverride(IconSize.X)
-				.HeightOverride(IconSize.Y)
+				.MinDesiredWidth(IconSize.X)
+				.MinDesiredHeight(IconSize.Y)
 				[
 					SAssignNew(IconWidget, SImage)
 				]

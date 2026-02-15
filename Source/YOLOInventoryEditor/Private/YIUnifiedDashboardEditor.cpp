@@ -323,7 +323,6 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 				break;
 			case EYIUnifiedDashboardTab::Equipment:
 				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_EquipmentLayout", "Equipment Layout"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Layout"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_Equipment); }));
-				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_EquipmentBagDetails", "Bag Details"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_BagDetails); }));
 				break;
 			default:
 				MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Panel_None", "No mode panels"), FText::GetEmpty(), FSlateIcon(), FUIAction());
@@ -966,7 +965,6 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseCraftingPanelTabs();
 		CloseBagPanelTabs();
 		EnsureTabOpen(Tab_Dashboard_Equipment);
-		EnsureTabOpen(Tab_Dashboard_BagDetails);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
 		break;
 	default:
