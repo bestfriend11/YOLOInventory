@@ -4,6 +4,7 @@
 #include "YIItemDefinition.h"
 #include "YIEquipmentLayoutAsset.h"
 #include "YIEquipmentSchemaAsset.h"
+#include "YIBagItemDetailsProxy.h"
 #include "YIInventoryGameplaySetupLibrary.h"
 #include "YIInventoryBagFactory.h"
 #include "YIEquipmentLayoutAssetFactory.h"
@@ -519,6 +520,7 @@ void SYIBagDashboard::ValidateRuntimeSetupFromToolbar()
 void SYIBagDashboard::SetSelectedBag(UYIInventoryBag* InBag)
 {
 	SelectedBag = InBag;
+	SelectedBagItemProxy.Reset();
 	RebuildBagView();
 }
 
@@ -630,6 +632,7 @@ void SYIBagDashboard::RebuildBagView()
 			[
 				SAssignNew(GridWidget, SBagEditor)
 				.Bag(Bag)
+				.OnSelectionChanged(SBagEditor::FOnSelectionChanged::CreateSP(this, &SYIBagDashboard::HandleGridSelectionChanged))
 			]
 		);
 		if (DetailsView.IsValid())
@@ -647,11 +650,36 @@ void SYIBagDashboard::RebuildBagView()
 				SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_SelectBag", "Select an Inventory Bag asset from the left panel."))
 			]
 		);
+		SelectedBagItemProxy.Reset();
 		if (DetailsView.IsValid())
 		{
 			DetailsView->SetObject(nullptr);
 		}
 	}
+}
+
+void SYIBagDashboard::HandleGridSelectionChanged(int32 SelectedIndex)
+{
+	if (!DetailsView.IsValid())
+	{
+		return;
+	}
+
+	UYIInventoryBag* Bag = SelectedBag.Get();
+	if (!Bag || !Bag->Items.IsValidIndex(SelectedIndex))
+	{
+		SelectedBagItemProxy.Reset();
+		DetailsView->SetObject(Bag);
+		return;
+	}
+
+	if (!SelectedBagItemProxy.IsValid())
+	{
+		SelectedBagItemProxy = TStrongObjectPtr<UYIBagItemDetailsProxy>(NewObject<UYIBagItemDetailsProxy>(GetTransientPackage()));
+	}
+
+	SelectedBagItemProxy->LoadFromBag(Bag, SelectedIndex);
+	DetailsView->SetObject(SelectedBagItemProxy.Get());
 }
 
 void SYIBagDashboard::RebuildEquipmentLayoutPreview()

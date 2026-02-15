@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "WorkflowOrientedApp/WorkflowCentricApplication.h"
 #include "SYIUnifiedDashboard.h"
+#include "YIUnifiedDashboardContext.h"
 
 class SYIItemDashboard;
 class SYIAffixDashboard;
@@ -13,7 +14,6 @@ class SYICatalogDashboard;
 class SYIUnifiedHelpPanel;
 class FWorkspaceItem;
 class FToolBarBuilder;
-class UYIUnifiedDashboardContext;
 
 class YOLOINVENTORYEDITOR_API FYIUnifiedDashboardEditor : public FWorkflowCentricApplication
 {

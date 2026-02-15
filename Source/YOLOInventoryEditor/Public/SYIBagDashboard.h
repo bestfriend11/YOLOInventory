@@ -2,7 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/SCompoundWidget.h"
+#include "YIBagItemDetailsProxy.h"
 
 class UYIInventoryBag;
 class UYIItemDefinition;
@@ -34,6 +36,7 @@ public:
 	UYIInventoryBag* GetSelectedBag() const;
 
 private:
+	void HandleGridSelectionChanged(int32 SelectedIndex);
 	void RebuildBagView();
 	void RebuildEquipmentLayoutPreview();
 	TSharedRef<class SWidget> BuildBagAssetPicker();
@@ -55,6 +58,7 @@ private:
 	TWeakObjectPtr<UYIItemDefinition> SelectedPaletteItem;
 	TWeakObjectPtr<UYIEquipmentLayoutAsset> SelectedEquipmentLayout;
 	TWeakObjectPtr<UYIEquipmentSchemaAsset> SelectedEquipmentSchema;
+	TStrongObjectPtr<UYIBagItemDetailsProxy> SelectedBagItemProxy;
 	TSharedPtr<SBagEditor> GridWidget;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<IDetailsView> EquipmentLayoutDetailsView;
