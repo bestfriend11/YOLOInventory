@@ -915,7 +915,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 								+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
 								[
 									SNew(SButton)
-										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_UpdateLinked", "Update Linked Asset"))
+										.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_UpdateLinked", "Update Linked (Selected)"))
 										.OnClicked_Lambda([this]()
 											{
 												if (!ListView.IsValid())
@@ -930,7 +930,21 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 													{
 														continue;
 													}
+
+													if (E->bIsDataTable)
+													{
+														if (E->bHasAsset || E->ItemAsset.IsValid())
+														{
+															bChanged |= CreateAssetFromEntry(*E);
+														}
+														continue;
+													}
+
 													UObject* Obj = E->Object.LoadSynchronous();
+													if (!Obj && E->ItemAsset.IsValid())
+													{
+														Obj = E->ItemAsset.LoadSynchronous();
+													}
 													if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Obj))
 													{
 														bChanged |= UpdateAssetFromLinkedSource(Def);
@@ -1823,7 +1837,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 					+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
 					[
 						SNew(SButton)
-							.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_UpdateLinked", "Update Linked Asset"))
+							.Text(NSLOCTEXT("YOLOInventory", "Dash_Action_UpdateLinked", "Update Linked (Selected)"))
 							.OnClicked_Lambda([this]()
 								{
 									if (!ListView.IsValid())
@@ -1838,7 +1852,21 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 										{
 											continue;
 										}
+
+										if (E->bIsDataTable)
+										{
+											if (E->bHasAsset || E->ItemAsset.IsValid())
+											{
+												bChanged |= CreateAssetFromEntry(*E);
+											}
+											continue;
+										}
+
 										UObject* Obj = E->Object.LoadSynchronous();
+										if (!Obj && E->ItemAsset.IsValid())
+										{
+											Obj = E->ItemAsset.LoadSynchronous();
+										}
 										if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Obj))
 										{
 											bChanged |= UpdateAssetFromLinkedSource(Def);
@@ -4032,16 +4060,26 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 		SYIItemDashboard* Self = this;
 		FMenuBuilder MenuBuilder(true, nullptr);
 
+		auto GetCurrentSelection = [Self]() -> TArray<TSharedPtr<FYIItemDashboardEntry>>
+		{
+			if (!Self || !Self->ListView.IsValid())
+			{
+				return TArray<TSharedPtr<FYIItemDashboardEntry>>();
+			}
+			return Self->ListView->GetSelectedItems();
+		};
+
 		if (bAnyRows)
 		{
 			MenuBuilder.AddMenuEntry(
 				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkCreate", "Create Assets for Selected Rows"),
 				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkCreate_Tip", "Run transformer/inline mappings for all selected data table rows."),
 				FSlateIcon(),
-				FUIAction(FExecuteAction::CreateLambda([Self, Selected]()
+				FUIAction(FExecuteAction::CreateLambda([Self, GetCurrentSelection]()
 					{
+						const TArray<TSharedPtr<FYIItemDashboardEntry>> CurrentSelected = GetCurrentSelection();
 						bool bChanged = false;
-						for (const TSharedPtr<FYIItemDashboardEntry>& E : Selected)
+						for (const TSharedPtr<FYIItemDashboardEntry>& E : CurrentSelected)
 						{
 							if (E.IsValid() && E->bIsDataTable)
 							{
@@ -4055,14 +4093,79 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 					})));
 		}
 
-		// Provide single-entry actions for the first selected item as a convenience
-		if (Selected[0].IsValid())
-		{
-			MenuBuilder.AddSeparator();
-			if (TSharedPtr<SWidget> Single = BuildContextMenuForEntry(Selected[0]))
+		const bool bAnyAssets = Selected.ContainsByPredicate([](const TSharedPtr<FYIItemDashboardEntry>& E)
 			{
-				MenuBuilder.AddWidget(Single.ToSharedRef(), FText::GetEmpty(), true);
-			}
+				return E.IsValid() && !E->bIsDataTable;
+			});
+		const bool bAnyLinkedRows = Selected.ContainsByPredicate([](const TSharedPtr<FYIItemDashboardEntry>& E)
+			{
+				return E.IsValid() && E->bIsDataTable && (E->bHasAsset || E->ItemAsset.IsValid());
+			});
+
+		if (bAnyAssets || bAnyLinkedRows)
+		{
+			MenuBuilder.AddMenuEntry(
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkUpdateLinked", "Update Linked Assets for Selection"),
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkUpdateLinked_Tip", "Refresh linked item assets from current source row and inline mappings."),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([Self, GetCurrentSelection]()
+					{
+						const TArray<TSharedPtr<FYIItemDashboardEntry>> CurrentSelected = GetCurrentSelection();
+						bool bChanged = false;
+						for (const TSharedPtr<FYIItemDashboardEntry>& E : CurrentSelected)
+						{
+							if (!E.IsValid())
+							{
+								continue;
+							}
+
+							if (E->bIsDataTable)
+							{
+								if (E->bHasAsset || E->ItemAsset.IsValid())
+								{
+									bChanged |= Self->CreateAssetFromEntry(*E);
+								}
+								continue;
+							}
+
+							if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(E->Object.LoadSynchronous()))
+							{
+								bChanged |= Self->UpdateAssetFromLinkedSource(Def);
+							}
+						}
+
+						if (bChanged)
+						{
+							Self->Refresh();
+						}
+					})));
+		}
+
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_BulkPreflight", "Run Preflight for Selection"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_BulkPreflight_Tip", "Run preflight checks for all selected entries."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self]()
+				{
+					if (Self)
+					{
+						Self->RebuildPreflightForSelection();
+					}
+				})));
+
+		if (bAnyRows)
+		{
+			MenuBuilder.AddMenuEntry(
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkQueueRows", "Queue Selected Rows"),
+				NSLOCTEXT("YOLOInventory", "Dash_Context_BulkQueueRows_Tip", "Add all selected data-table rows to the batch queue."),
+				FSlateIcon(),
+				FUIAction(FExecuteAction::CreateLambda([Self]()
+					{
+						if (Self)
+						{
+							Self->EnqueueSelectedRows();
+						}
+					})));
 		}
 
 		return MenuBuilder.MakeWidget();
