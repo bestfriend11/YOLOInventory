@@ -41,6 +41,7 @@
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SNumericEntryBox.h"
 #include "InputCoreTypes.h"
 #include "ObjectTools.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
@@ -48,6 +49,7 @@
 #include "UObject/StructOnScope.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "GameplayTagsManager.h"
 #include "Engine/Texture.h"
 #include "Algo/Sort.h"
 #include "YIEditorRowHelpers.h"
@@ -4772,13 +4774,84 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			return nullptr;
 		};
 
+	auto GetTargetBool = [GetTargetProp]() -> const FBoolProperty*
+		{
+			return CastField<FBoolProperty>(GetTargetProp());
+		};
+
+	auto GetTargetNumeric = [GetTargetProp]() -> const FNumericProperty*
+		{
+			return CastField<FNumericProperty>(GetTargetProp());
+		};
+
+	auto IsGameplayTagStaticTarget = [Mapping, GetTargetProp]() -> bool
+		{
+			const FProperty* TargetProp = GetTargetProp();
+			if (const FStructProperty* StructProp = CastField<FStructProperty>(TargetProp))
+			{
+				if (StructProp->Struct == FGameplayTag::StaticStruct())
+				{
+					return true;
+				}
+			}
+			return Mapping.IsValid() && Mapping->Conversion == EYIFieldMappingConversion::ToGameplayTag;
+		};
+
+	auto ParseStaticNumber = [Mapping]() -> TOptional<double>
+		{
+			if (!Mapping.IsValid() || Mapping->StaticValue.IsEmpty())
+			{
+				return TOptional<double>();
+			}
+			double Parsed = 0.0;
+			if (LexTryParseString(Parsed, *Mapping->StaticValue))
+			{
+				return Parsed;
+			}
+			return TOptional<double>();
+		};
+
+	auto GetNumericClamp = [GetTargetNumeric](const TCHAR* MetaKey) -> TOptional<double>
+		{
+			const FNumericProperty* NumProp = GetTargetNumeric();
+			if (!NumProp)
+			{
+				return TOptional<double>();
+			}
+			const FString Meta = NumProp->GetMetaData(MetaKey);
+			if (Meta.IsEmpty())
+			{
+				return TOptional<double>();
+			}
+			double Value = 0.0;
+			return LexTryParseString(Value, *Meta) ? TOptional<double>(Value) : TOptional<double>();
+		};
+
 	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	TSharedPtr<TArray<TSharedPtr<FString>>> StaticGameplayTagOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	auto RefreshMappingUi = [this]()
 		{
 			RefreshMappingPreview();
 			if (MappingListView.IsValid())
 			{
 				MappingListView->RequestListRefresh();
+			}
+		};
+
+	auto RefreshStaticGameplayTagOptions = [StaticGameplayTagOptions]()
+		{
+			StaticGameplayTagOptions->Reset();
+			FGameplayTagContainer AllTags;
+			UGameplayTagsManager::Get().RequestAllGameplayTags(AllTags, true);
+			TArray<FGameplayTag> TagArray;
+			AllTags.GetGameplayTagArray(TagArray);
+			TagArray.Sort([](const FGameplayTag& A, const FGameplayTag& B)
+				{
+					return A.ToString() < B.ToString();
+				});
+			for (const FGameplayTag& Tag : TagArray)
+			{
+				StaticGameplayTagOptions->Add(MakeShared<FString>(Tag.ToString()));
 			}
 		};
 
@@ -5101,16 +5174,40 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 						+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 						[
 							SNew(SWidgetSwitcher)
-								.WidgetIndex_Lambda([IsStaticMapping, GetTargetEnum]()
+								.WidgetIndex_Lambda([IsStaticMapping, GetTargetEnum, GetTargetBool, IsGameplayTagStaticTarget, GetTargetNumeric]()
 									{
-										return (IsStaticMapping() && GetTargetEnum() != nullptr) ? 1 : 0;
+										if (!IsStaticMapping())
+										{
+											return 0;
+										}
+										if (GetTargetEnum() != nullptr)
+										{
+											return 1;
+										}
+										if (GetTargetBool() != nullptr)
+										{
+											return 2;
+										}
+										if (IsGameplayTagStaticTarget())
+										{
+											return 3;
+										}
+										if (GetTargetNumeric() != nullptr)
+										{
+											return 4;
+										}
+										return 0;
 									})
 								+ SWidgetSwitcher::Slot()
 								[
 									SNew(SEditableTextBox)
-										.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum]()
+										.IsEnabled_Lambda([IsStaticMapping, GetTargetEnum, GetTargetBool, IsGameplayTagStaticTarget, GetTargetNumeric]()
 											{
-												return IsStaticMapping() && GetTargetEnum() == nullptr;
+												return IsStaticMapping()
+													&& GetTargetEnum() == nullptr
+													&& GetTargetBool() == nullptr
+													&& !IsGameplayTagStaticTarget()
+													&& GetTargetNumeric() == nullptr;
 											})
 										.Text_Lambda([Mapping]()
 											{
@@ -5219,6 +5316,142 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 													return FText::FromString(Mapping->StaticValue);
 												})
 										]
+								]
+								+ SWidgetSwitcher::Slot()
+								[
+									SNew(SCheckBox)
+										.IsChecked_Lambda([Mapping]()
+											{
+												if (!Mapping.IsValid())
+												{
+													return ECheckBoxState::Unchecked;
+												}
+												const FString Lower = Mapping->StaticValue.ToLower();
+												const bool bTrue = (Lower == TEXT("true") || Lower == TEXT("1") || Lower == TEXT("yes") || Lower == TEXT("on"));
+												return bTrue ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+											})
+										.OnCheckStateChanged_Lambda([this, Mapping, RefreshMappingUi](ECheckBoxState State)
+											{
+												if (CurrentMappingSource.IsValid() && Mapping.IsValid())
+												{
+													CurrentMappingSource->Modify();
+													Mapping->StaticValue = (State == ECheckBoxState::Checked) ? TEXT("true") : TEXT("false");
+													Mapping->bUseStaticValue = true;
+													const int32 Index = MappingRows.Find(Mapping);
+													if (Index != INDEX_NONE)
+													{
+														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+														CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+													}
+													RefreshMappingUi();
+												}
+											})
+										[
+											SNew(STextBlock)
+												.Text(NSLOCTEXT("YOLOInventory", "Dash_StaticBoolLabel", "Static Bool"))
+										]
+								]
+								+ SWidgetSwitcher::Slot()
+								[
+									SNew(SComboBox<TSharedPtr<FString>>)
+										.OptionsSource(StaticGameplayTagOptions.Get())
+										.IsEnabled_Lambda([IsStaticMapping, IsGameplayTagStaticTarget]()
+											{
+												return IsStaticMapping() && IsGameplayTagStaticTarget();
+											})
+										.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+											{
+												return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+											})
+										.OnComboBoxOpening_Lambda([RefreshStaticGameplayTagOptions]()
+											{
+												RefreshStaticGameplayTagOptions();
+											})
+										.OnSelectionChanged_Lambda([this, Mapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+											{
+												if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+												{
+													CurrentMappingSource->Modify();
+													Mapping->StaticValue = *NewItem;
+													Mapping->bUseStaticValue = true;
+													const int32 Index = MappingRows.Find(Mapping);
+													if (Index != INDEX_NONE)
+													{
+														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+														CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+													}
+													RefreshMappingUi();
+												}
+											})
+										.Content()
+										[
+											SNew(STextBlock).Text_Lambda([Mapping]()
+												{
+													if (!Mapping.IsValid() || Mapping->StaticValue.IsEmpty())
+													{
+														return NSLOCTEXT("YOLOInventory", "Dash_StaticGameplayTagHint", "Select gameplay tag");
+													}
+													return FText::FromString(Mapping->StaticValue);
+												})
+										]
+								]
+								+ SWidgetSwitcher::Slot()
+								[
+									SNew(SNumericEntryBox<double>)
+										.IsEnabled_Lambda([IsStaticMapping, GetTargetNumeric]()
+											{
+												return IsStaticMapping() && GetTargetNumeric() != nullptr;
+											})
+										.Value_Lambda([ParseStaticNumber]()
+											{
+												return ParseStaticNumber();
+											})
+										.MinValue_Lambda([GetNumericClamp]()
+											{
+												return GetNumericClamp(TEXT("ClampMin"));
+											})
+										.MaxValue_Lambda([GetNumericClamp]()
+											{
+												return GetNumericClamp(TEXT("ClampMax"));
+											})
+										.MinSliderValue_Lambda([GetNumericClamp]()
+											{
+												return GetNumericClamp(TEXT("UIMin"));
+											})
+										.MaxSliderValue_Lambda([GetNumericClamp]()
+											{
+												return GetNumericClamp(TEXT("UIMax"));
+											})
+										.OnValueCommitted_Lambda([this, Mapping, GetTargetNumeric, RefreshMappingUi](double NewValue, ETextCommit::Type)
+											{
+												if (CurrentMappingSource.IsValid() && Mapping.IsValid())
+												{
+													CurrentMappingSource->Modify();
+													if (const FNumericProperty* Num = GetTargetNumeric())
+													{
+														if (Num->IsInteger())
+														{
+															Mapping->StaticValue = LexToString((int64)FMath::RoundToInt64(NewValue));
+														}
+														else
+														{
+															Mapping->StaticValue = LexToString(NewValue);
+														}
+													}
+													else
+													{
+														Mapping->StaticValue = LexToString(NewValue);
+													}
+													Mapping->bUseStaticValue = true;
+													const int32 Index = MappingRows.Find(Mapping);
+													if (Index != INDEX_NONE)
+													{
+														CurrentMappingSource->InlineMappings[Index].StaticValue = Mapping->StaticValue;
+														CurrentMappingSource->InlineMappings[Index].bUseStaticValue = Mapping->bUseStaticValue;
+													}
+													RefreshMappingUi();
+												}
+											})
 								]
 						]
 				]

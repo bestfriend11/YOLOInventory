@@ -5,6 +5,7 @@
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
 #include "YIEquipmentLayoutAsset.h"
+#include "YIEquipmentSchemaAsset.h"
 #include "YOLOInventorySettings.h"
 #include "Engine/Engine.h"
 #include "Algo/Unique.h"
@@ -53,6 +54,16 @@ UYIEquipmentComponent::UYIEquipmentComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
+}
+
+void UYIEquipmentComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (GetOwner() && GetOwner()->HasAuthority() && bApplySchemaOnBeginPlay)
+	{
+		ApplyEquipmentSchema(false);
+	}
 }
 
 void UYIEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -157,6 +168,48 @@ bool UYIEquipmentComponent::SetSlotUnlocked(FGameplayTag SlotTag, bool bUnlocked
 		Owner->ForceNetUpdate();
 	}
 	return true;
+}
+
+bool UYIEquipmentComponent::ApplyEquipmentSchema(bool bOverwriteExisting)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
+	UYIEquipmentSchemaAsset* Schema = EquipmentSchemaAsset.IsValid()
+		? EquipmentSchemaAsset.Get()
+		: EquipmentSchemaAsset.LoadSynchronous();
+	if (!Schema)
+	{
+		return false;
+	}
+
+	bool bChanged = false;
+	if (bOverwriteExisting || SlotDefinitions.Num() == 0)
+	{
+		SlotDefinitions = Schema->SlotDefinitions;
+		bChanged = true;
+	}
+	if (bOverwriteExisting || AllowedEquipSlots.Num() == 0)
+	{
+		AllowedEquipSlots = Schema->AllowedEquipSlots;
+		bChanged = true;
+	}
+	if (bOverwriteExisting || EquipSlotTagPrefix.IsEmpty())
+	{
+		if (!Schema->EquipSlotTagPrefix.IsEmpty())
+		{
+			EquipSlotTagPrefix = Schema->EquipSlotTagPrefix;
+			bChanged = true;
+		}
+	}
+
+	if (bChanged && GetOwner())
+	{
+		GetOwner()->ForceNetUpdate();
+	}
+	return bChanged;
 }
 
 FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDefinition* Definition) const
@@ -324,6 +377,26 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 {
 	OutBlockingIssues.Reset();
 	OutWarnings.Reset();
+
+	if (SlotDefinitions.Num() == 0)
+	{
+		if (!EquipmentSchemaAsset.IsNull())
+		{
+			const UYIEquipmentSchemaAsset* Schema = EquipmentSchemaAsset.LoadSynchronous();
+			if (!Schema)
+			{
+				OutWarnings.Add(TEXT("EquipmentSchemaAsset is set but failed to load."));
+			}
+			else if (Schema->SlotDefinitions.Num() == 0)
+			{
+				OutWarnings.Add(FString::Printf(TEXT("Equipment schema '%s' has no slot definitions."), *Schema->GetName()));
+			}
+		}
+		else
+		{
+			OutWarnings.Add(TEXT("No SlotDefinitions and no EquipmentSchemaAsset configured."));
+		}
+	}
 
 	TSet<FGameplayTag> SeenSlotDefs;
 	for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)

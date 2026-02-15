@@ -19,6 +19,7 @@
 #include "YIItemGenerator.h"
 #include "YIInventoryBag.h"
 #include "YIEquipmentLayoutAsset.h"
+#include "YIEquipmentSchemaAsset.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
@@ -31,6 +32,7 @@ static const FName Tab_Dashboard_Affixes(TEXT("YOLOInventory_Dashboard_Affixes")
 static const FName Tab_Dashboard_Generators(TEXT("YOLOInventory_Dashboard_Generators"));
 static const FName Tab_Dashboard_Crafting(TEXT("YOLOInventory_Dashboard_Crafting"));
 static const FName Tab_Dashboard_Bags(TEXT("YOLOInventory_Dashboard_Bags"));
+static const FName Tab_Dashboard_Equipment(TEXT("YOLOInventory_Dashboard_Equipment"));
 static const FName Tab_Dashboard_Help(TEXT("YOLOInventory_Dashboard_Help"));
 static const FName Tab_Dashboard_ItemDetails(TEXT("YOLOInventory_Dashboard_ItemDetails"));
 static const FName Tab_Dashboard_ItemMappings(TEXT("YOLOInventory_Dashboard_ItemMappings"));
@@ -58,7 +60,7 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 {
 	CreateWidgetsIfNeeded();
 
-	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v5")
+	const TSharedRef<FTabManager::FLayout> Layout = FTabManager::NewLayout("YOLOInventory_Dashboard_Layout_v6")
 		->AddArea(
 			FTabManager::NewPrimaryArea()
 			->SetOrientation(Orient_Horizontal)
@@ -71,6 +73,7 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 				->AddTab(Tab_Dashboard_Generators, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Crafting, ETabState::ClosedTab)
 				->AddTab(Tab_Dashboard_Bags, ETabState::ClosedTab)
+				->AddTab(Tab_Dashboard_Equipment, ETabState::ClosedTab)
 				->SetForegroundTab(Tab_Dashboard_Items)
 			)
 			->Split(
@@ -144,6 +147,9 @@ void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const 
 		.SetGroup(ModesWorkspace);
 	TabManager->RegisterTabSpawner(Tab_Dashboard_Bags, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnBagsTab))
 		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabBags", "Bags"))
+		.SetGroup(ModesWorkspace);
+	TabManager->RegisterTabSpawner(Tab_Dashboard_Equipment, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnEquipmentTab))
+		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabEquipment", "Equipment"))
 		.SetGroup(ModesWorkspace);
 	TabManager->RegisterTabSpawner(Tab_Dashboard_Help, FOnSpawnTab::CreateSP(this, &FYIUnifiedDashboardEditor::SpawnHelpTab))
 		.SetDisplayName(NSLOCTEXT("YOLOInventory", "DashboardTabHelp", "Help"))
@@ -268,6 +274,10 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 		NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags", "Bags"),
 		NSLOCTEXT("YOLOInventory", "Dash_Mode_Bags_TT", "Switch to Bags mode"),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.FolderOpen"));
+	AddModeButton(EYIUnifiedDashboardTab::Equipment,
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Equipment", "Equipment"),
+		NSLOCTEXT("YOLOInventory", "Dash_Mode_Equipment_TT", "Switch to Equipment mode"),
+		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Layout"));
 
 	ToolbarBuilder.AddToolBarButton(
 		FUIAction(FExecuteAction::CreateSP(this, &FYIUnifiedDashboardEditor::OpenHelpTab)),
@@ -310,7 +320,10 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 				break;
 			case EYIUnifiedDashboardTab::Bags:
 				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_BagDetails", "Bag Details"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_BagDetails); }));
-				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_BagLayout", "Equipment Layout"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Layout"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_BagEquipmentLayout); }));
+				break;
+			case EYIUnifiedDashboardTab::Equipment:
+				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_EquipmentLayout", "Equipment Layout"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Layout"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_Equipment); }));
+				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_EquipmentBagDetails", "Bag Details"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_BagDetails); }));
 				break;
 			default:
 				MenuBuilder.AddMenuEntry(NSLOCTEXT("YOLOInventory", "Dash_Panel_None", "No mode panels"), FText::GetEmpty(), FSlateIcon(), FUIAction());
@@ -427,6 +440,19 @@ void FYIUnifiedDashboardEditor::CloseBagPanelTabs()
 	}
 }
 
+void FYIUnifiedDashboardEditor::CloseEquipmentModeTabs()
+{
+	if (!TabManager.IsValid())
+	{
+		return;
+	}
+
+	if (TSharedPtr<SDockTab> Tab = TabManager->FindExistingLiveTab(Tab_Dashboard_Equipment))
+	{
+		Tab->RequestCloseTab();
+	}
+}
+
 void FYIUnifiedDashboardEditor::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
 {
 	FWorkflowCentricApplication::UnregisterTabSpawners(InTabManager);
@@ -436,6 +462,7 @@ void FYIUnifiedDashboardEditor::UnregisterTabSpawners(const TSharedRef<FTabManag
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Generators);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Crafting);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Bags);
+	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Equipment);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_Help);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemDetails);
 	InTabManager->UnregisterTabSpawner(Tab_Dashboard_ItemMappings);
@@ -576,6 +603,21 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnBagsTab(const FSpawnTabArgs
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{
 			SetActiveTab(EYIUnifiedDashboardTab::Bags);
+		}));
+	return Tab;
+}
+
+TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnEquipmentTab(const FSpawnTabArgs& Args)
+{
+	CreateWidgetsIfNeeded();
+	TSharedRef<SDockTab> Tab = SNew(SDockTab)
+		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabEquipmentLabel", "Equipment"))
+		[
+			BagDashboard->GetEquipmentLayoutPanelWidget()
+		];
+	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
+		{
+			SetActiveTab(EYIUnifiedDashboardTab::Equipment);
 		}));
 	return Tab;
 }
@@ -837,6 +879,7 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseGeneratorPanelTabs();
 		CloseCraftingPanelTabs();
 		CloseBagPanelTabs();
+		CloseEquipmentModeTabs();
 		EnsureTabOpen(Tab_Dashboard_Catalog);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
 		if (CatalogDashboard.IsValid())
@@ -849,6 +892,7 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseGeneratorPanelTabs();
 		CloseCraftingPanelTabs();
 		CloseBagPanelTabs();
+		CloseEquipmentModeTabs();
 		EnsureTabOpen(Tab_Dashboard_Items);
 		EnsureTabOpen(Tab_Dashboard_ItemDetails);
 		EnsureTabOpen(Tab_Dashboard_ItemMappings);
@@ -863,6 +907,7 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseGeneratorPanelTabs();
 		CloseCraftingPanelTabs();
 		CloseBagPanelTabs();
+		CloseEquipmentModeTabs();
 		EnsureTabOpen(Tab_Dashboard_Affixes);
 		EnsureTabOpen(Tab_Dashboard_AffixDetails);
 		EnsureTabOpen(Tab_Dashboard_AffixMappings);
@@ -874,6 +919,7 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseAffixPanelTabs();
 		CloseCraftingPanelTabs();
 		CloseBagPanelTabs();
+		CloseEquipmentModeTabs();
 		EnsureTabOpen(Tab_Dashboard_Generators);
 		EnsureTabOpen(Tab_Dashboard_GeneratorDetails);
 		EnsureTabOpen(Tab_Dashboard_GeneratorTest);
@@ -884,6 +930,7 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseAffixPanelTabs();
 		CloseGeneratorPanelTabs();
 		CloseBagPanelTabs();
+		CloseEquipmentModeTabs();
 		if (TabManager.IsValid())
 		{
 			if (TSharedPtr<SDockTab> DetailTab = TabManager->FindExistingLiveTab(Tab_Dashboard_CraftingDetails))
@@ -903,11 +950,22 @@ void FYIUnifiedDashboardEditor::SetActiveTab(EYIUnifiedDashboardTab NewTab)
 		CloseAffixPanelTabs();
 		CloseGeneratorPanelTabs();
 		CloseCraftingPanelTabs();
+		CloseEquipmentModeTabs();
 		if (BagDashboard.IsValid() && CraftingDashboard.IsValid() && !BagDashboard->GetSelectedBag())
 		{
 			BagDashboard->SetSelectedBag(CraftingDashboard->GetTargetBag());
 		}
 		EnsureTabOpen(Tab_Dashboard_Bags);
+		EnsureTabOpen(Tab_Dashboard_BagDetails);
+		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
+		break;
+	case EYIUnifiedDashboardTab::Equipment:
+		CloseItemPanelTabs();
+		CloseAffixPanelTabs();
+		CloseGeneratorPanelTabs();
+		CloseCraftingPanelTabs();
+		CloseBagPanelTabs();
+		EnsureTabOpen(Tab_Dashboard_Equipment);
 		EnsureTabOpen(Tab_Dashboard_BagDetails);
 		FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(0);
 		break;
@@ -979,6 +1037,13 @@ void FYIUnifiedDashboardEditor::SaveAsset_Execute()
 			return;
 		}
 		break;
+	case EYIUnifiedDashboardTab::Equipment:
+		if (BagDashboard.IsValid())
+		{
+			BagDashboard->SaveCurrentEquipmentLayoutFromToolbar();
+			return;
+		}
+		break;
 	default:
 		break;
 	}
@@ -1030,21 +1095,40 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 				GeneratorDashboard->OpenAsset(Asset);
 			}
 			return;
+		case EYIUnifiedDashboardTab::Equipment:
+			if (BagDashboard.IsValid())
+			{
+				BagDashboard->OpenAsset(Asset);
+			}
+			return;
 		default:
 			break;
 		}
 	}
 
 	// In Bags/Crafting modes, keep focus there for item selection workflows.
-	if (ActiveTab == EYIUnifiedDashboardTab::Bags && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIEquipmentLayoutAsset>()))
+	if (ActiveTab == EYIUnifiedDashboardTab::Bags && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIEquipmentLayoutAsset>() || Asset->IsA<UYIEquipmentSchemaAsset>()))
 	{
+		if (Asset->IsA<UYIEquipmentLayoutAsset>() || Asset->IsA<UYIEquipmentSchemaAsset>())
+		{
+			SetActiveTab(EYIUnifiedDashboardTab::Equipment);
+			if (BagDashboard.IsValid())
+			{
+				BagDashboard->OpenAsset(Asset);
+			}
+			return;
+		}
 		if (BagDashboard.IsValid())
 		{
 			BagDashboard->OpenAsset(Asset);
 		}
-		if (Asset->IsA<UYIEquipmentLayoutAsset>() && TabManager.IsValid())
+		return;
+	}
+	if (ActiveTab == EYIUnifiedDashboardTab::Equipment && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIEquipmentLayoutAsset>() || Asset->IsA<UYIEquipmentSchemaAsset>()))
+	{
+		if (BagDashboard.IsValid())
 		{
-			TabManager->TryInvokeTab(Tab_Dashboard_BagEquipmentLayout);
+			BagDashboard->OpenAsset(Asset);
 		}
 		return;
 	}
@@ -1091,7 +1175,7 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 		return;
 	}
 
-	if (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIEquipmentLayoutAsset>())
+	if (Asset->IsA<UYIInventoryBag>())
 	{
 		SetActiveTab(EYIUnifiedDashboardTab::Bags);
 		if (BagDashboard.IsValid())
@@ -1102,9 +1186,25 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 		{
 			CraftingDashboard->OpenAsset(Asset);
 		}
-		if (Asset->IsA<UYIEquipmentLayoutAsset>() && TabManager.IsValid())
+		return;
+	}
+
+	if (Asset->IsA<UYIEquipmentLayoutAsset>())
+	{
+		SetActiveTab(EYIUnifiedDashboardTab::Equipment);
+		if (BagDashboard.IsValid())
 		{
-			TabManager->TryInvokeTab(Tab_Dashboard_BagEquipmentLayout);
+			BagDashboard->OpenAsset(Asset);
+		}
+		return;
+	}
+
+	if (Asset->IsA<UYIEquipmentSchemaAsset>())
+	{
+		SetActiveTab(EYIUnifiedDashboardTab::Equipment);
+		if (BagDashboard.IsValid())
+		{
+			BagDashboard->OpenAsset(Asset);
 		}
 		return;
 	}

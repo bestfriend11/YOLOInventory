@@ -7,6 +7,7 @@
 class UYIInventoryBag;
 class UYIItemDefinition;
 class UYIEquipmentLayoutAsset;
+class UYIEquipmentSchemaAsset;
 class SBagEditor;
 class IDetailsView;
 
@@ -38,16 +39,22 @@ private:
 	TSharedRef<class SWidget> BuildBagAssetPicker();
 	TSharedRef<class SWidget> BuildItemAssetPicker();
 	TSharedRef<class SWidget> BuildEquipmentLayoutPicker();
+	TSharedRef<class SWidget> BuildEquipmentSchemaPicker();
 	FReply SaveCurrentBag();
 	FReply CreateNewBag();
 	FReply SaveCurrentEquipmentLayout();
 	FReply CreateNewEquipmentLayout();
+	FReply SaveCurrentEquipmentSchema();
+	FReply CreateNewEquipmentSchema();
 	void SetSelectedEquipmentLayout(UYIEquipmentLayoutAsset* InLayout);
+	void SetSelectedEquipmentSchema(UYIEquipmentSchemaAsset* InSchema);
 	UYIEquipmentLayoutAsset* GetSelectedEquipmentLayout() const;
+	UYIEquipmentSchemaAsset* GetSelectedEquipmentSchema() const;
 
 	TWeakObjectPtr<UYIInventoryBag> SelectedBag;
 	TWeakObjectPtr<UYIItemDefinition> SelectedPaletteItem;
 	TWeakObjectPtr<UYIEquipmentLayoutAsset> SelectedEquipmentLayout;
+	TWeakObjectPtr<UYIEquipmentSchemaAsset> SelectedEquipmentSchema;
 	TSharedPtr<SBagEditor> GridWidget;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<IDetailsView> EquipmentLayoutDetailsView;

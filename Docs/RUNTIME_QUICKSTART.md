@@ -40,7 +40,14 @@ For a polished UI, create `WBP_InventoryScreen` derived from `UInventoryScreenWi
 
 Assign this class to `UYIInventoryComponent.InventoryScreenClass`.
 
-## 5) Troubleshoot quickly
+## 5) Equipment schema (recommended)
+
+- Create an `Equipment Schema` asset (Content Browser -> YOLO Inventory).
+- Define slot tags and accepted item tags there.
+- On your pawn `UYIEquipmentComponent`, set `EquipmentSchemaAsset`.
+- Keep UI layout in UMG (`UInventoryEquipmentSlotWidget` + `SlotTag`), not in schema.
+
+## 6) Troubleshoot quickly
 
 - Read `OutResult.Summary`, `BlockingIssues`, `Warnings` from `Quick Start Pawn Inventory`.
 - If UI does not open, call it from the local owning client and verify pawn ownership/controller.

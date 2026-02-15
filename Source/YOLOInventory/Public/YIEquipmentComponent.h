@@ -9,6 +9,7 @@
 class UYIInventoryComponent;
 class UYIItemDefinition;
 class UYIEquipmentLayoutAsset;
+class UYIEquipmentSchemaAsset;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIEquippedItemEntry
@@ -69,6 +70,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category="Equipment|Rules")
 	TArray<FYIEquipmentSlotDefinition> SlotDefinitions;
 
+	/** Optional schema asset shared across pawns. Layout stays in UMG; this asset defines slot rules. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Schema")
+	TSoftObjectPtr<UYIEquipmentSchemaAsset> EquipmentSchemaAsset;
+
+	/** If true, apply schema on BeginPlay when local fields are empty. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Schema")
+	bool bApplySchemaOnBeginPlay = true;
+
 	/** Optional default runtime panel layout used by UInventoryScreenWidget auto wiring. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|UI")
 	TSoftObjectPtr<UYIEquipmentLayoutAsset> DefaultEquipmentLayoutAsset;
@@ -127,7 +136,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Rules")
 	bool SetSlotUnlocked(FGameplayTag SlotTag, bool bUnlocked);
 
+	/** Applies schema rules to this component (server authority). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Schema", BlueprintAuthorityOnly)
+	bool ApplyEquipmentSchema(bool bOverwriteExisting = false);
+
 protected:
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION()

@@ -15,7 +15,8 @@ enum class EYIUnifiedDashboardTab : uint8
 	Affixes,
 	Generators,
 	Crafting,
-	Bags
+	Bags,
+	Equipment
 };
 
 class SYIUnifiedDashboard : public SCompoundWidget

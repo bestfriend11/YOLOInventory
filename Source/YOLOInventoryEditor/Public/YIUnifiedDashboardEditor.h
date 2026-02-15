@@ -43,6 +43,7 @@ private:
 	void CloseGeneratorPanelTabs();
 	void CloseCraftingPanelTabs();
 	void CloseBagPanelTabs();
+	void CloseEquipmentModeTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnCatalogTab(const FSpawnTabArgs& Args);
@@ -50,6 +51,7 @@ private:
 	TSharedRef<SDockTab> SpawnGeneratorsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnCraftingTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnBagsTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnEquipmentTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnHelpTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnItemMappingsTab(const FSpawnTabArgs& Args);

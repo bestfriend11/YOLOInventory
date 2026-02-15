@@ -97,9 +97,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	TSoftObjectPtr<class UYIEquipmentLayoutAsset> EquipmentLayoutAsset;
 
-	/** If true and EquipmentSlotsPanel + EquipmentLayoutAsset are set, slot widgets are generated on construct. */
+	/** If true and EquipmentSlotsPanel + EquipmentLayoutAsset are set, slot widgets are generated on construct (optional; UMG-authored slot widgets are preferred). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
-	bool bAutoGenerateEquipmentSlotPane = true;
+	bool bAutoGenerateEquipmentSlotPane = false;
 
 	/** If true, missing widget bindings are auto-resolved by name/type (Grid, SpellbookGrid, Tooltip, ActionMenu, equipment panels). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")

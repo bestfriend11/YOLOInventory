@@ -3,9 +3,11 @@
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "YIEquipmentLayoutAsset.h"
+#include "YIEquipmentSchemaAsset.h"
 #include "YIInventoryGameplaySetupLibrary.h"
 #include "YIInventoryBagFactory.h"
 #include "YIEquipmentLayoutAssetFactory.h"
+#include "YIEquipmentSchemaAssetFactory.h"
 #include "PropertyEditorModule.h"
 #include "IDetailsView.h"
 #include "Modules/ModuleManager.h"
@@ -304,6 +306,12 @@ void SYIBagDashboard::OpenAsset(UObject* Asset)
 		return;
 	}
 
+	if (UYIEquipmentSchemaAsset* Schema = Cast<UYIEquipmentSchemaAsset>(Asset))
+	{
+		SetSelectedEquipmentSchema(Schema);
+		return;
+	}
+
 	if (UYIItemDefinition* ItemDef = Cast<UYIItemDefinition>(Asset))
 	{
 		SelectedPaletteItem = ItemDef;
@@ -377,17 +385,38 @@ TSharedRef<SWidget> SYIBagDashboard::GetEquipmentLayoutPanelWidget() const
 						return FReply::Handled();
 					})
 				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "BagDash_SchemaPanel_New", "New Schema"))
+					.OnClicked(Self, &SYIBagDashboard::CreateNewEquipmentSchema)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "BagDash_SchemaPanel_Save", "Save Schema"))
+					.OnClicked(Self, &SYIBagDashboard::SaveCurrentEquipmentSchema)
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(2, 2, 2, 4)
+			[
+				SNew(STextBlock)
+				.Text(NSLOCTEXT("YOLOInventory", "BagDash_SchemaPanel_ListTitle", "Equipment Schema Assets"))
+			]
+			+ SVerticalBox::Slot().FillHeight(0.20f).Padding(2, 0, 2, 6)
+			[
+				Self->BuildEquipmentSchemaPicker()
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(2, 2, 2, 4)
 			[
 				SNew(STextBlock)
 				.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPanel_ListTitle", "Equipment Layout Assets"))
 			]
-			+ SVerticalBox::Slot().FillHeight(0.35f).Padding(2, 0, 2, 6)
+			+ SVerticalBox::Slot().FillHeight(0.22f).Padding(2, 0, 2, 6)
 			[
 				Self->BuildEquipmentLayoutPicker()
 			]
-			+ SVerticalBox::Slot().FillHeight(0.65f).Padding(2, 0, 2, 0)
+			+ SVerticalBox::Slot().FillHeight(0.58f).Padding(2, 0, 2, 0)
 			[
 				SNew(SSplitter)
 				.Orientation(Orient_Horizontal)
@@ -428,6 +457,11 @@ void SYIBagDashboard::CreateBagFromToolbar()
 
 void SYIBagDashboard::SaveCurrentEquipmentLayoutFromToolbar()
 {
+	if (SelectedEquipmentSchema.IsValid())
+	{
+		SaveCurrentEquipmentSchema();
+		return;
+	}
 	SaveCurrentEquipmentLayout();
 }
 
@@ -558,6 +592,25 @@ TSharedRef<SWidget> SYIBagDashboard::BuildEquipmentLayoutPicker()
 	return CB.Get().CreateAssetPicker(Picker);
 }
 
+TSharedRef<SWidget> SYIBagDashboard::BuildEquipmentSchemaPicker()
+{
+	FAssetPickerConfig Picker;
+	Picker.InitialAssetViewType = EAssetViewType::Tile;
+	Picker.Filter.ClassPaths.Add(UYIEquipmentSchemaAsset::StaticClass()->GetClassPathName());
+	Picker.bAllowNullSelection = false;
+	Picker.OnAssetSelected = FOnAssetSelected::CreateLambda([this](const FAssetData& AssetData)
+	{
+		SetSelectedEquipmentSchema(Cast<UYIEquipmentSchemaAsset>(AssetData.GetAsset()));
+	});
+	Picker.OnAssetDoubleClicked = FOnAssetDoubleClicked::CreateLambda([this](const FAssetData& AssetData)
+	{
+		SetSelectedEquipmentSchema(Cast<UYIEquipmentSchemaAsset>(AssetData.GetAsset()));
+	});
+
+	FContentBrowserModule& CB = FModuleManager::LoadModuleChecked<FContentBrowserModule>("ContentBrowser");
+	return CB.Get().CreateAssetPicker(Picker);
+}
+
 void SYIBagDashboard::RebuildBagView()
 {
 	if (!GridHost.IsValid())
@@ -615,7 +668,7 @@ void SYIBagDashboard::RebuildEquipmentLayoutPreview()
 			.Padding(8)
 			[
 				SNew(STextBlock)
-				.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewEmpty", "Select an Equipment Layout to preview generated slot pane."))
+				.Text(NSLOCTEXT("YOLOInventory", "BagDash_LayoutPreviewEmpty", "Select an Equipment Schema (rules) or Layout (optional preview)."))
 			];
 	};
 
@@ -785,6 +838,10 @@ FReply SYIBagDashboard::SaveCurrentBag()
 		{
 			return SaveCurrentEquipmentLayout();
 		}
+		if (SelectedEquipmentSchema.IsValid())
+		{
+			return SaveCurrentEquipmentSchema();
+		}
 
 		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusNoBag", "No bag selected.");
 		return FReply::Handled();
@@ -855,9 +912,50 @@ FReply SYIBagDashboard::CreateNewEquipmentLayout()
 	return FReply::Handled();
 }
 
+FReply SYIBagDashboard::SaveCurrentEquipmentSchema()
+{
+	UYIEquipmentSchemaAsset* Schema = SelectedEquipmentSchema.Get();
+	if (!Schema)
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusNoSchema", "No equipment schema selected.");
+		return FReply::Handled();
+	}
+
+	if (YIBagDash_SaveObjectPackage(Schema))
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusSchemaSaved", "Equipment schema saved.");
+	}
+	else
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_StatusSchemaSaveFail", "Equipment schema save canceled or failed.");
+	}
+	return FReply::Handled();
+}
+
+FReply SYIBagDashboard::CreateNewEquipmentSchema()
+{
+	IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	UYIEquipmentSchemaAssetFactory* Factory = NewObject<UYIEquipmentSchemaAssetFactory>();
+	const FString TargetPath = TEXT("/Game/YOLOInventory/Schemas");
+	const FString BaseName = TEXT("EquipmentSchema");
+	FString PackageName;
+	FString AssetName;
+	Tools.CreateUniqueAssetName(TargetPath / BaseName, TEXT(""), PackageName, AssetName);
+	UObject* NewAsset = Tools.CreateAsset(AssetName, FPackageName::GetLongPackagePath(PackageName), Factory->SupportedClass, Factory);
+	SetSelectedEquipmentSchema(Cast<UYIEquipmentSchemaAsset>(NewAsset));
+	StatusText = NewAsset
+		? NSLOCTEXT("YOLOInventory", "BagDash_StatusSchemaCreated", "New equipment schema created.")
+		: NSLOCTEXT("YOLOInventory", "BagDash_StatusSchemaCreateFail", "Failed to create equipment schema.");
+	return FReply::Handled();
+}
+
 void SYIBagDashboard::SetSelectedEquipmentLayout(UYIEquipmentLayoutAsset* InLayout)
 {
 	SelectedEquipmentLayout = InLayout;
+	if (InLayout)
+	{
+		SelectedEquipmentSchema.Reset();
+	}
 
 	if (EquipmentLayoutDetailsView.IsValid())
 	{
@@ -870,4 +968,25 @@ void SYIBagDashboard::SetSelectedEquipmentLayout(UYIEquipmentLayoutAsset* InLayo
 UYIEquipmentLayoutAsset* SYIBagDashboard::GetSelectedEquipmentLayout() const
 {
 	return SelectedEquipmentLayout.Get();
+}
+
+void SYIBagDashboard::SetSelectedEquipmentSchema(UYIEquipmentSchemaAsset* InSchema)
+{
+	SelectedEquipmentSchema = InSchema;
+	if (InSchema)
+	{
+		SelectedEquipmentLayout.Reset();
+	}
+
+	if (EquipmentLayoutDetailsView.IsValid())
+	{
+		EquipmentLayoutDetailsView->SetObject(InSchema);
+	}
+
+	RebuildEquipmentLayoutPreview();
+}
+
+UYIEquipmentSchemaAsset* SYIBagDashboard::GetSelectedEquipmentSchema() const
+{
+	return SelectedEquipmentSchema.Get();
 }

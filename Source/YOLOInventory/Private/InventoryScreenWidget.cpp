@@ -160,10 +160,10 @@ void UInventoryScreenWidget::EnsureMinimalDefaultLayout()
 		{
 			if (UHorizontalBox* RootHorizontalBox = Cast<UHorizontalBox>(RootPanel))
 			{
-				if (UHorizontalBoxSlot* Slot = RootHorizontalBox->AddChildToHorizontalBox(Grid))
+				if (UHorizontalBoxSlot* HorizontalSlot = RootHorizontalBox->AddChildToHorizontalBox(Grid))
 				{
-					Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-					Slot->SetPadding(FMargin(8.f));
+					HorizontalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+					HorizontalSlot->SetPadding(FMargin(8.f));
 				}
 			}
 			else
@@ -180,10 +180,10 @@ void UInventoryScreenWidget::EnsureMinimalDefaultLayout()
 		{
 			if (UHorizontalBox* RootHorizontalBox = Cast<UHorizontalBox>(RootPanel))
 			{
-				if (UHorizontalBoxSlot* Slot = RootHorizontalBox->AddChildToHorizontalBox(Tooltip))
+				if (UHorizontalBoxSlot* HorizontalSlot = RootHorizontalBox->AddChildToHorizontalBox(Tooltip))
 				{
-					Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-					Slot->SetPadding(FMargin(8.f));
+					HorizontalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+					HorizontalSlot->SetPadding(FMargin(8.f));
 				}
 			}
 			else
