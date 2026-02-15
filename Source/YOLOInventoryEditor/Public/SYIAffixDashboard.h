@@ -68,6 +68,7 @@ private:
 	void OnAssetDoubleClicked(const FAssetData& AssetData);
 	void RefreshList();
 	void OnSearchTextChanged(const FText& NewText);
+	TSharedPtr<SWidget> BuildListContextMenu();
 	void SelectRowsNeedingAssets();
 	void SelectRowsForCurrentSource();
 	void ClearListSelection();

@@ -46,6 +46,7 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Images/SImage.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "GameplayTagsManager.h"
 
 static bool YIAffixDash_SaveObjectPackage(UObject* ObjectToSave)
@@ -280,53 +281,75 @@ void SYIAffixDashboard::AddAllMappingsFromToolbar()
 
 void SYIAffixDashboard::SaveCurrentAssetFromToolbar()
 {
-	UObject* ObjectToSave = nullptr;
+	TArray<UObject*> ObjectsToSave;
+	TSet<FString> ObjectPathsToSave;
+	auto AddSaveObject = [&ObjectsToSave, &ObjectPathsToSave](UObject* InObject)
+	{
+		if (!InObject)
+		{
+			return;
+		}
+		const FString Path = InObject->GetPathName();
+		if (ObjectPathsToSave.Contains(Path))
+		{
+			return;
+		}
+		ObjectPathsToSave.Add(Path);
+		ObjectsToSave.Add(InObject);
+	};
+
 	if (ListView.IsValid())
 	{
 		const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
-		if (Selected.Num() > 0 && Selected[0].IsValid())
+		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
 		{
-			const TSharedPtr<FYIAffixDashboardEntry> Entry = Selected[0];
+			if (!Entry.IsValid())
+			{
+				continue;
+			}
 			if (!Entry->bIsDataTable)
 			{
-				ObjectToSave = Entry->Object.LoadSynchronous();
+				AddSaveObject(Entry->Object.LoadSynchronous());
 			}
 			else
 			{
 				if (Entry->AffixAsset.IsValid() || Entry->AffixAsset.ToSoftObjectPath().IsValid())
 				{
-					ObjectToSave = Entry->AffixAsset.LoadSynchronous();
+					AddSaveObject(Entry->AffixAsset.LoadSynchronous());
 				}
-				if (!ObjectToSave && (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid()))
+				if (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid())
 				{
-					ObjectToSave = Entry->DataSource.LoadSynchronous();
+					AddSaveObject(Entry->DataSource.LoadSynchronous());
 				}
 			}
 		}
 	}
-	if (!ObjectToSave)
+	if (ObjectsToSave.Num() == 0)
 	{
-		ObjectToSave = LastSelectedAsset.Get();
+		AddSaveObject(LastSelectedAsset.Get());
 	}
-	if (!ObjectToSave)
+	if (ObjectsToSave.Num() == 0)
 	{
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
 			NSLOCTEXT("YOLOInventory", "AffixDash_Save_NoSelection", "Save skipped: no selected affix/source asset."));
 		return;
 	}
 
-	if (YIAffixDash_SaveObjectPackage(ObjectToSave))
+	int32 SavedCount = 0;
+	for (UObject* ObjectToSave : ObjectsToSave)
 	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
-			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Success", "Saved selected asset."),
-			FText::FromString(ObjectToSave->GetPathName()));
+		if (YIAffixDash_SaveObjectPackage(ObjectToSave))
+		{
+			++SavedCount;
+		}
 	}
-	else
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Failed", "Save was canceled or failed."),
-			FText::FromString(ObjectToSave->GetPathName()));
-	}
+
+	FYIEditorMessageLog::Add(
+		SavedCount == ObjectsToSave.Num() ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Summary", "Save selected assets complete. Saved: {0}/{1}"),
+			FText::AsNumber(SavedCount),
+			FText::AsNumber(ObjectsToSave.Num())));
 }
 
 void SYIAffixDashboard::GuidedSetupFromToolbar()
@@ -539,6 +562,7 @@ TSharedRef<SWidget> SYIAffixDashboard::BuildAssetPicker()
 			SAssignNew(ListView, SListView<TSharedPtr<FYIAffixDashboardEntry>>)
 				.ListItemsSource(&FilteredItems)
 				.SelectionMode(ESelectionMode::Multi)
+				.OnContextMenuOpening(FOnContextMenuOpening::CreateSP(this, &SYIAffixDashboard::BuildListContextMenu))
 				.OnSelectionChanged_Lambda([this](TSharedPtr<FYIAffixDashboardEntry> Entry, ESelectInfo::Type)
 					{
 						ShowDetailsForEntry(Entry);
@@ -973,6 +997,133 @@ void SYIAffixDashboard::OpenEntry(const TSharedPtr<FYIAffixDashboardEntry>& Entr
 	}
 }
 
+TSharedPtr<SWidget> SYIAffixDashboard::BuildListContextMenu()
+{
+	if (!ListView.IsValid())
+	{
+		return nullptr;
+	}
+
+	const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
+	if (Selected.Num() == 0)
+	{
+		return nullptr;
+	}
+
+	SYIAffixDashboard* Self = this;
+	auto GetCurrentSelection = [Self]() -> TArray<TSharedPtr<FYIAffixDashboardEntry>>
+	{
+		if (!Self || !Self->ListView.IsValid())
+		{
+			return TArray<TSharedPtr<FYIAffixDashboardEntry>>();
+		}
+		return Self->ListView->GetSelectedItems();
+	};
+
+	auto SaveSelection = [Self, GetCurrentSelection]()
+	{
+		const TArray<TSharedPtr<FYIAffixDashboardEntry>> CurrentSelected = GetCurrentSelection();
+		TSet<FString> SavedObjectPaths;
+		int32 SavedCount = 0;
+
+		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : CurrentSelected)
+		{
+			if (!Entry.IsValid())
+			{
+				continue;
+			}
+
+			UObject* ObjectToSave = nullptr;
+			if (!Entry->bIsDataTable)
+			{
+				ObjectToSave = Entry->Object.LoadSynchronous();
+			}
+			else
+			{
+				if (Entry->AffixAsset.IsValid() || Entry->AffixAsset.ToSoftObjectPath().IsValid())
+				{
+					ObjectToSave = Entry->AffixAsset.LoadSynchronous();
+				}
+				if (!ObjectToSave && (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid()))
+				{
+					ObjectToSave = Entry->DataSource.LoadSynchronous();
+				}
+			}
+
+			if (!ObjectToSave)
+			{
+				continue;
+			}
+
+			const FString ObjectPath = ObjectToSave->GetPathName();
+			if (SavedObjectPaths.Contains(ObjectPath))
+			{
+				continue;
+			}
+
+			if (YIAffixDash_SaveObjectPackage(ObjectToSave))
+			{
+				SavedObjectPaths.Add(ObjectPath);
+				++SavedCount;
+			}
+		}
+
+		FYIEditorMessageLog::Add(
+			SavedCount > 0 ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+			FText::Format(
+				NSLOCTEXT("YOLOInventory", "AffixDash_SaveSelectionSummary", "Saved {0} selected asset(s)."),
+				FText::AsNumber(SavedCount)));
+	};
+
+	FMenuBuilder MenuBuilder(true, nullptr);
+	const bool bAnyRows = Selected.ContainsByPredicate([](const TSharedPtr<FYIAffixDashboardEntry>& Entry)
+		{
+			return Entry.IsValid() && Entry->bIsDataTable;
+		});
+	const bool bAnyAssets = Selected.ContainsByPredicate([](const TSharedPtr<FYIAffixDashboardEntry>& Entry)
+		{
+			return Entry.IsValid() && !Entry->bIsDataTable;
+		});
+
+	if (bAnyRows)
+	{
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkCreate", "Create/Update Selected Rows"),
+			NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkCreate_Tip", "Create or update affix assets from selected data rows."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self]()
+				{
+					if (Self)
+					{
+						Self->CreateOrUpdateSelectedRows();
+					}
+				})));
+	}
+
+	if (bAnyAssets || bAnyRows)
+	{
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkUpdateLinked", "Update Linked Affixes for Selection"),
+			NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkUpdateLinked_Tip", "Rebuild selected linked affix assets using current source mappings."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self]()
+				{
+					if (Self)
+					{
+						Self->UpdateSelectedAffix();
+					}
+				})));
+	}
+
+	MenuBuilder.AddMenuEntry(
+		NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkSave", "Save Selected Assets"),
+		NSLOCTEXT("YOLOInventory", "AffixDash_Context_BulkSave_Tip", "Save all unique selected affix/source assets."),
+		FSlateIcon(),
+		FUIAction(FExecuteAction::CreateLambda(SaveSelection)));
+
+	return MenuBuilder.MakeWidget();
+}
+
 TSharedRef<ITableRow> SYIAffixDashboard::MakeRowWidget(TSharedPtr<FYIAffixDashboardEntry> Entry, const TSharedRef<STableViewBase>& Owner)
 {
 	auto StatusColor = [Entry]() -> FLinearColor
@@ -1132,14 +1283,49 @@ FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
 	TSet<UYIDataTableAffixSource*> SourcesTouched;
 
 	TArray<TSharedPtr<FYIAffixDashboardEntry>> CandidateRows;
+	TSet<FString> CandidateKeys;
+	auto AddCandidateRow = [&CandidateRows, &CandidateKeys](const TSharedPtr<FYIAffixDashboardEntry>& Candidate)
+	{
+		if (!Candidate.IsValid() || Candidate->RowName.IsNone())
+		{
+			return;
+		}
+		const FString SourceKey = Candidate->DataSource.IsValid()
+			? Candidate->DataSource.ToSoftObjectPath().ToString()
+			: FString();
+		const FString Key = SourceKey + TEXT("|") + Candidate->RowName.ToString();
+		if (!CandidateKeys.Contains(Key))
+		{
+			CandidateKeys.Add(Key);
+			CandidateRows.Add(Candidate);
+		}
+	};
 	if (ListView.IsValid())
 	{
 		const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
 		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
 		{
-			if (Entry.IsValid() && Entry->bIsDataTable)
+			if (!Entry.IsValid())
 			{
-				CandidateRows.Add(Entry);
+				continue;
+			}
+
+			if (Entry->bIsDataTable)
+			{
+				AddCandidateRow(Entry);
+				continue;
+			}
+
+			UYIAffixAsset* SelectedAffix = Cast<UYIAffixAsset>(Entry->Object.LoadSynchronous());
+			if (SelectedAffix && SelectedAffix->SourceDataSource.IsValid() && !SelectedAffix->SourceRowName.IsNone())
+			{
+				TSharedPtr<FYIAffixDashboardEntry> LinkedRow = MakeShared<FYIAffixDashboardEntry>();
+				LinkedRow->bIsDataTable = true;
+				LinkedRow->DataSource = SelectedAffix->SourceDataSource;
+				LinkedRow->RowName = SelectedAffix->SourceRowName;
+				LinkedRow->Code = SelectedAffix->UniqueCode;
+				LinkedRow->Name = SelectedAffix->DisplayName.ToString();
+				AddCandidateRow(LinkedRow);
 			}
 		}
 	}
@@ -1168,7 +1354,7 @@ FReply SYIAffixDashboard::CreateOrUpdateSelectedRows()
 					{
 						Entry->Name = PreviewName;
 					}
-					CandidateRows.Add(Entry);
+					AddCandidateRow(Entry);
 				}
 			}
 		}
@@ -2422,60 +2608,147 @@ FReply SYIAffixDashboard::ImportFromSource()
 
 FReply SYIAffixDashboard::UpdateSelectedAffix()
 {
-	UYIAffixAsset* Affix = LastSelectedAsset.IsValid() ? Cast<UYIAffixAsset>(LastSelectedAsset.Get()) : nullptr;
-	if (!Affix)
+	TArray<UYIAffixAsset*> CandidateAffixes;
+	TSet<FString> CandidatePaths;
+	auto AddCandidateAffix = [&CandidateAffixes, &CandidatePaths](UYIAffixAsset* InAffix)
+	{
+		if (!InAffix)
+		{
+			return;
+		}
+		const FString Path = InAffix->GetPathName();
+		if (CandidatePaths.Contains(Path))
+		{
+			return;
+		}
+		CandidatePaths.Add(Path);
+		CandidateAffixes.Add(InAffix);
+	};
+
+	if (ListView.IsValid())
+	{
+		const TArray<TSharedPtr<FYIAffixDashboardEntry>> Selected = ListView->GetSelectedItems();
+		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : Selected)
+		{
+			if (!Entry.IsValid())
+			{
+				continue;
+			}
+
+			if (Entry->bIsDataTable)
+			{
+				if (UYIAffixAsset* LinkedAffix = Entry->AffixAsset.LoadSynchronous())
+				{
+					AddCandidateAffix(LinkedAffix);
+				}
+				continue;
+			}
+
+			if (UYIAffixAsset* SelectedAffix = Cast<UYIAffixAsset>(Entry->Object.LoadSynchronous()))
+			{
+				AddCandidateAffix(SelectedAffix);
+			}
+		}
+	}
+
+	if (CandidateAffixes.Num() == 0)
+	{
+		AddCandidateAffix(LastSelectedAsset.IsValid() ? Cast<UYIAffixAsset>(LastSelectedAsset.Get()) : nullptr);
+	}
+
+	if (CandidateAffixes.Num() == 0)
 	{
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory","AffixDash_NoSelectedAffix","Update failed: select an affix asset first."));
+			NSLOCTEXT("YOLOInventory","AffixDash_NoSelectedAffix","Update failed: select one or more linked affix assets first."));
 		return FReply::Handled();
 	}
 
-	UYIDataTableAffixSource* Source = Affix->SourceDataSource.LoadSynchronous();
-	if (!Source || Affix->SourceRowName.IsNone())
+	int32 Succeeded = 0;
+	int32 Failed = 0;
+	TSet<UYIDataTableAffixSource*> SourcesTouched;
+
+	for (UYIAffixAsset* Affix : CandidateAffixes)
 	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory","AffixDash_NoLinkedSource","Update failed: affix has no linked data source/row."));
-		return FReply::Handled();
+		if (!Affix)
+		{
+			++Failed;
+			continue;
+		}
+
+		UYIDataTableAffixSource* Source = Affix->SourceDataSource.LoadSynchronous();
+		if (!Source || Affix->SourceRowName.IsNone())
+		{
+			FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
+				NSLOCTEXT("YOLOInventory","AffixDash_NoLinkedSource","Update skipped: affix has no linked data source/row."),
+				FText::FromString(Affix->GetPathName()));
+			++Failed;
+			continue;
+		}
+
+		UDataTable* Table = Source->ResolveDataTable();
+		if (!Table || !Table->RowStruct)
+		{
+			FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+				NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoTable","Update skipped: data table missing or invalid."),
+				FText::FromString(Affix->GetPathName()));
+			++Failed;
+			continue;
+		}
+
+		const uint8* const* Found = Table->GetRowMap().Find(Affix->SourceRowName);
+		if (!Found || !*Found)
+		{
+			FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+				NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoRow","Update skipped: row not found in data table."),
+				FText::FromName(Affix->SourceRowName));
+			++Failed;
+			continue;
+		}
+
+		int64 Code = Affix->UniqueCode;
+		if (Code == 0)
+		{
+			const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+			Code = ExtractCodeFromRow(Table->RowStruct, *Found, CodeField);
+		}
+		if (Code == 0)
+		{
+			FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
+				NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoCode","Update skipped: affix UniqueCode is 0."),
+				FText::FromString(Affix->GetPathName()));
+			++Failed;
+			continue;
+		}
+
+		const bool bOk = CreateOrUpdateAffixFromRow(Source, Table, Affix->SourceRowName, *Found, Code, nullptr);
+		if (bOk)
+		{
+			++Succeeded;
+			SourcesTouched.Add(Source);
+		}
+		else
+		{
+			++Failed;
+		}
 	}
 
-	UDataTable* Table = Source->ResolveDataTable();
-	if (!Table || !Table->RowStruct)
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
-			NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoTable","Update failed: data table missing or invalid."));
-		return FReply::Handled();
-	}
-
-	const uint8* const* Found = Table->GetRowMap().Find(Affix->SourceRowName);
-	if (!Found || !*Found)
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
-			NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoRow","Update failed: row not found in data table."),
-			FText::FromName(Affix->SourceRowName));
-		return FReply::Handled();
-	}
-
-	const int64 Code = Affix->UniqueCode;
-	if (Code == 0)
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error,
-			NSLOCTEXT("YOLOInventory","AffixDash_UpdateNoCode","Update failed: affix UniqueCode is 0."));
-		return FReply::Handled();
-	}
-
-	const bool bOk = CreateOrUpdateAffixFromRow(Source, Table, Affix->SourceRowName, *Found, Code, nullptr);
-	if (bOk)
+	for (UYIDataTableAffixSource* Source : SourcesTouched)
 	{
 		SyncTargetPoolsForSource(Source);
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
-			NSLOCTEXT("YOLOInventory","AffixDash_UpdateOk","Affix updated from data source."));
+	}
+
+	FYIEditorMessageLog::Add(
+		Failed > 0 ? EYIEditorLogSeverity::Warning : EYIEditorLogSeverity::Info,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory","AffixDash_UpdateSelectedSummary","Updated linked affixes. Success: {0}, Failed: {1}"),
+			FText::AsNumber(Succeeded),
+			FText::AsNumber(Failed)));
+
+	if (Succeeded > 0)
+	{
 		RefreshList();
 	}
-	else
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory","AffixDash_UpdateFailed","Affix update failed."));
-	}
+
 	return FReply::Handled();
 }
 

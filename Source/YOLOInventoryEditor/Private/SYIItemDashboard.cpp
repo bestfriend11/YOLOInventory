@@ -1674,55 +1674,77 @@ void SYIItemDashboard::RunQueueFromToolbar()
 
 void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 {
-	UObject* ObjectToSave = nullptr;
+	TArray<UObject*> ObjectsToSave;
+	TSet<FString> ObjectPathsToSave;
+	auto AddSaveObject = [&ObjectsToSave, &ObjectPathsToSave](UObject* InObject)
+	{
+		if (!InObject)
+		{
+			return;
+		}
+		const FString Path = InObject->GetPathName();
+		if (ObjectPathsToSave.Contains(Path))
+		{
+			return;
+		}
+		ObjectPathsToSave.Add(Path);
+		ObjectsToSave.Add(InObject);
+	};
+
 	if (ListView.IsValid())
 	{
 		const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
-		if (Selected.Num() > 0 && Selected[0].IsValid())
+		for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Selected)
 		{
-			const TSharedPtr<FYIItemDashboardEntry> Entry = Selected[0];
+			if (!Entry.IsValid())
+			{
+				continue;
+			}
 			if (!Entry->bIsDataTable)
 			{
-				ObjectToSave = Entry->Object.LoadSynchronous();
+				AddSaveObject(Entry->Object.LoadSynchronous());
 			}
 			else
 			{
-				// Prefer generated asset for row entries; fallback to source asset.
+				// Prefer generated asset for row entries; also include source asset.
 				if (Entry->ItemAsset.IsValid() || Entry->ItemAsset.ToSoftObjectPath().IsValid())
 				{
-					ObjectToSave = Entry->ItemAsset.LoadSynchronous();
+					AddSaveObject(Entry->ItemAsset.LoadSynchronous());
 				}
-				if (!ObjectToSave && (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid()))
+				if (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid())
 				{
-					ObjectToSave = Entry->DataSource.LoadSynchronous();
+					AddSaveObject(Entry->DataSource.LoadSynchronous());
 				}
 			}
 		}
 	}
-	if (!ObjectToSave)
+	if (ObjectsToSave.Num() == 0)
 	{
-		ObjectToSave = LastDetailObject.Get();
+		AddSaveObject(LastDetailObject.Get());
 	}
 
-	if (!ObjectToSave)
+	if (ObjectsToSave.Num() == 0)
 	{
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
 			NSLOCTEXT("YOLOInventory", "Dash_Save_NoSelection", "Save skipped: no selected item/data source asset."));
 		return;
 	}
 
-	if (YIItemDash_SaveObjectPackage(ObjectToSave))
+	int32 SavedCount = 0;
+	for (UObject* ObjectToSave : ObjectsToSave)
 	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
-			NSLOCTEXT("YOLOInventory", "Dash_Save_Success", "Saved selected asset."),
-			FText::FromString(ObjectToSave->GetPathName()));
+		if (YIItemDash_SaveObjectPackage(ObjectToSave))
+		{
+			++SavedCount;
+		}
 	}
-	else
-	{
-		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Warning,
-			NSLOCTEXT("YOLOInventory", "Dash_Save_Failed", "Save was canceled or failed."),
-			FText::FromString(ObjectToSave->GetPathName()));
-	}
+
+	FYIEditorMessageLog::Add(
+		SavedCount == ObjectsToSave.Num() ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+		FText::Format(
+			NSLOCTEXT("YOLOInventory", "Dash_Save_Summary", "Save selected assets complete. Saved: {0}/{1}"),
+			FText::AsNumber(SavedCount),
+			FText::AsNumber(ObjectsToSave.Num())));
 }
 
 void SYIItemDashboard::GuidedSetupFromToolbar()
@@ -4150,6 +4172,18 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 					if (Self)
 					{
 						Self->RebuildPreflightForSelection();
+					}
+				})));
+
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_BulkSave", "Save Selected Assets"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_BulkSave_Tip", "Save all unique selected item and source assets."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self]()
+				{
+					if (Self)
+					{
+						Self->SaveCurrentAssetFromToolbar();
 					}
 				})));
 
