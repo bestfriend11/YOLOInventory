@@ -561,7 +561,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		return false;
 	}
 
-	const FYIBagItem SourceBagItem = SourceBag->Items[SourceIndex];
+	FYIBagItem SourceBagItem = SourceBag->Items[SourceIndex];
 	UYIItemDefinition* Definition = SourceBagItem.Item.Definition.IsValid()
 		? SourceBagItem.Item.Definition.Get()
 		: SourceBagItem.Item.Definition.LoadSynchronous();
@@ -608,9 +608,38 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	OccupiedSlots.RemoveAll([](const FGameplayTag& Tag) { return !Tag.IsValid(); });
 	OccupiedSlots.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.ToString() < B.ToString(); });
 	OccupiedSlots.SetNum(Algo::Unique(OccupiedSlots));
+
+	const int32 RequiredSlotsFromSize = FMath::Max(1, Definition->DefaultSize.X * Definition->DefaultSize.Y);
+	if (OccupiedSlots.Num() == 0 && RequiredSlotsFromSize > 1 && SlotDefinitions.Num() > 0)
+	{
+		const int32 PrimarySlotDefIndex = FindSlotDefinitionIndex(SlotTag);
+		if (PrimarySlotDefIndex != INDEX_NONE)
+		{
+			OccupiedSlots.Add(SlotTag);
+			for (int32 SlotDefIndex = PrimarySlotDefIndex + 1;
+				SlotDefIndex < SlotDefinitions.Num() && OccupiedSlots.Num() < RequiredSlotsFromSize;
+				++SlotDefIndex)
+			{
+				const FGameplayTag CandidateSlot = SlotDefinitions[SlotDefIndex].SlotTag;
+				if (CandidateSlot.IsValid() && !OccupiedSlots.Contains(CandidateSlot))
+				{
+					OccupiedSlots.Add(CandidateSlot);
+				}
+			}
+		}
+	}
 	if (!OccupiedSlots.Contains(SlotTag))
 	{
 		OccupiedSlots.Add(SlotTag);
+	}
+	if (RequiredSlotsFromSize > 1 && OccupiedSlots.Num() < RequiredSlotsFromSize)
+	{
+		OutMessage = FString::Printf(
+			TEXT("Equip failed: Item '%s' requires %d equipment slots but only %d are configured."),
+			*Definition->GetName(),
+			RequiredSlotsFromSize,
+			OccupiedSlots.Num());
+		return false;
 	}
 
 	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
@@ -631,8 +660,18 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 			return false;
 		}
 	}
-
-	if (!SourceInventory->RemoveItem(SourceIndex))
+	const bool bKeepInInventoryLocked = (EquipInventoryBehavior == EYIEquipInventoryBehavior::KeepInInventoryLocked);
+	if (bKeepInInventoryLocked)
+	{
+		SourceBag->EnsureBagId();
+		if (!SourceInventory->SetBagItemLocked(SourceBag, SourceIndex, true))
+		{
+			OutMessage = TEXT("Equip failed: Could not lock source inventory item.");
+			return false;
+		}
+		SourceBagItem = SourceBag->Items[SourceIndex];
+	}
+	else if (!SourceInventory->RemoveItem(SourceIndex))
 	{
 		OutMessage = TEXT("Equip failed: Could not remove source item from bag.");
 		return false;
@@ -674,20 +713,28 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 			continue;
 		}
 
-		FYIBagItem ReturnItem;
-		ReturnItem.Item = YIEquipmentPrivate::NetToFull(GroupEntry->Item);
-		if (UYIItemDefinition* ExistingDef = ReturnItem.Item.Definition.IsValid()
-			? ReturnItem.Item.Definition.Get()
-			: ReturnItem.Item.Definition.LoadSynchronous())
+		if (GroupEntry->bInventoryLocked && GroupEntry->SourceBagId.IsValid() && GroupEntry->SourceCustomStackKey != 0)
 		{
-			const FIntPoint BaseSize = ExistingDef->DefaultSize;
-			ReturnItem.Size = ReturnItem.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
+			SourceInventory->SetBagItemLockedByRef(GroupEntry->SourceBagId, GroupEntry->SourceCustomStackKey, GroupEntry->SourceItemCode, false);
 		}
-		else
+
+		if (!bKeepInInventoryLocked && !GroupEntry->bInventoryLocked)
 		{
-			ReturnItem.Size = FIntPoint(1, 1);
+			FYIBagItem ReturnItem;
+			ReturnItem.Item = YIEquipmentPrivate::NetToFull(GroupEntry->Item);
+			if (UYIItemDefinition* ExistingDef = ReturnItem.Item.Definition.IsValid()
+				? ReturnItem.Item.Definition.Get()
+				: ReturnItem.Item.Definition.LoadSynchronous())
+			{
+				const FIntPoint BaseSize = ExistingDef->DefaultSize;
+				ReturnItem.Size = ReturnItem.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
+			}
+			else
+			{
+				ReturnItem.Size = FIntPoint(1, 1);
+			}
+			ReturnItems.Add(ReturnItem);
 		}
-		ReturnItems.Add(ReturnItem);
 	}
 
 	const TArray<FYIEquippedItemEntry> BackupEntries = EquippedItems;
@@ -735,6 +782,13 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		NewEntry.SlotTag = OccupiedSlot;
 		NewEntry.Item = SourceNet;
 		NewEntry.EquipGroupId = NewGroupId;
+		NewEntry.bInventoryLocked = bKeepInInventoryLocked;
+		if (bKeepInInventoryLocked)
+		{
+			NewEntry.SourceBagId = SourceBag->BagId;
+			NewEntry.SourceCustomStackKey = SourceBagItem.Item.CustomStackKey;
+			NewEntry.SourceItemCode = Definition->UniqueCode;
+		}
 		EquippedItems.Add(NewEntry);
 		OnEquipmentChanged.Broadcast(OccupiedSlot, SourceNet);
 	}
@@ -762,52 +816,67 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 		OutMessage = FString::Printf(TEXT("Unequip failed: No equipped item in slot '%s'."), *SlotTag.ToString());
 		return false;
 	}
+	const FYIItemInstanceNet UnequippedItem = EquippedItems[EntryIndex].Item;
+	const bool bInventoryLockedGroup = EquippedItems[EntryIndex].bInventoryLocked;
 
-	UYIInventoryBag* DestBag = DestInventory->EquippedBag;
-	if (!DestBag)
+	UYIInventoryBag* DestBag = nullptr;
+	if (!bInventoryLockedGroup)
 	{
-		DestBag = DestInventory->GetBag();
-		if (DestBag)
+		DestBag = DestInventory->EquippedBag;
+		if (!DestBag)
 		{
-			DestInventory->OpenBag(DestBag);
+			DestBag = DestInventory->GetBag();
+			if (DestBag)
+			{
+				DestInventory->OpenBag(DestBag);
+			}
+		}
+		if (!DestBag)
+		{
+			OutMessage = TEXT("Unequip failed: Destination inventory has no active bag.");
+			return false;
+		}
+
+		FYIBagItem ToInventory;
+		ToInventory.Item = YIEquipmentPrivate::NetToFull(UnequippedItem);
+		if (UYIItemDefinition* Def = ToInventory.Item.Definition.IsValid()
+			? ToInventory.Item.Definition.Get()
+			: ToInventory.Item.Definition.LoadSynchronous())
+		{
+			const FIntPoint BaseSize = Def->DefaultSize;
+			ToInventory.Size = ToInventory.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
+		}
+		else
+		{
+			ToInventory.Size = FIntPoint(1, 1);
+		}
+
+		if (DestBag->AddBagItem(ToInventory) == INDEX_NONE)
+		{
+			OutMessage = TEXT("Unequip failed: Destination bag has no room for the item.");
+			return false;
 		}
 	}
-	if (!DestBag)
-	{
-		OutMessage = TEXT("Unequip failed: Destination inventory has no active bag.");
-		return false;
-	}
 
-	FYIBagItem ToInventory;
-	ToInventory.Item = YIEquipmentPrivate::NetToFull(EquippedItems[EntryIndex].Item);
-	if (UYIItemDefinition* Def = ToInventory.Item.Definition.IsValid()
-		? ToInventory.Item.Definition.Get()
-		: ToInventory.Item.Definition.LoadSynchronous())
-	{
-		const FIntPoint BaseSize = Def->DefaultSize;
-		ToInventory.Size = ToInventory.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
-	}
-	else
-	{
-		ToInventory.Size = FIntPoint(1, 1);
-	}
-
-	if (DestBag->AddBagItem(ToInventory) == INDEX_NONE)
-	{
-		OutMessage = TEXT("Unequip failed: Destination bag has no room for the item.");
-		return false;
-	}
-
-	const FYIItemInstanceNet UnequippedItem = EquippedItems[EntryIndex].Item;
 	const int32 UnequipGroupId = GetEntryGroupIdForIndex(EntryIndex);
 
 	TArray<FGameplayTag> RemovedSlots;
+	TArray<FYIEquippedItemEntry> GroupEntries;
 	for (int32 i = EquippedItems.Num() - 1; i >= 0; --i)
 	{
 		if (GetEntryGroupIdForIndex(i) == UnequipGroupId)
 		{
+			GroupEntries.Add(EquippedItems[i]);
 			RemovedSlots.Add(EquippedItems[i].SlotTag);
 			EquippedItems.RemoveAt(i);
+		}
+	}
+
+	for (const FYIEquippedItemEntry& GroupEntry : GroupEntries)
+	{
+		if (GroupEntry.bInventoryLocked && GroupEntry.SourceBagId.IsValid() && GroupEntry.SourceCustomStackKey != 0)
+		{
+			DestInventory->SetBagItemLockedByRef(GroupEntry.SourceBagId, GroupEntry.SourceCustomStackKey, GroupEntry.SourceItemCode, false);
 		}
 	}
 
@@ -820,6 +889,13 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 		OnEquipmentChanged.Broadcast(RemovedSlot, UnequippedItem);
 	}
 
-	OutMessage = FString::Printf(TEXT("Unequipped %d slot(s) to bag '%s'."), RemovedSlots.Num(), *DestBag->GetName());
+	if (bInventoryLockedGroup)
+	{
+		OutMessage = FString::Printf(TEXT("Unequipped %d locked slot(s). Item remained in inventory and was unlocked."), RemovedSlots.Num());
+	}
+	else
+	{
+		OutMessage = FString::Printf(TEXT("Unequipped %d slot(s) to bag '%s'."), RemovedSlots.Num(), *DestBag->GetName());
+	}
 	return true;
 }

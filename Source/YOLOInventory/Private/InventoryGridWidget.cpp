@@ -320,6 +320,12 @@ bool UInventoryGridWidget::MoveSelectionRight()
 
 void UInventoryGridWidget::SetSelectedCell(FIntPoint Cell)
 {
+	const int32 ItemIndex = (Bag && Cell.X >= 0 && Cell.Y >= 0) ? GetItemIndexAtCell(Bag, Cell) : INDEX_NONE;
+	if (ItemIndex != INDEX_NONE && IsItemIndexLockedForUI(ItemIndex))
+	{
+		Cell = FIntPoint(-1, -1);
+	}
+
 	if (MySlateWidget.IsValid())
 	{
 		MySlateWidget->SetSelectedCell(Cell);
@@ -378,6 +384,15 @@ void UInventoryGridWidget::HandleSelectionChanged(const FIntPoint& NewCell)
 	SelectedCell = NewCell;
 	// Determine item index now selected
 	int32 ItemIndex = GetSelectedItemIndex();
+	if (ItemIndex != INDEX_NONE && IsItemIndexLockedForUI(ItemIndex))
+	{
+		SelectedCell = FIntPoint(-1, -1);
+		ItemIndex = INDEX_NONE;
+		if (MySlateWidget.IsValid())
+		{
+			MySlateWidget->SetSelectedCell(SelectedCell);
+		}
+	}
 	// Legacy simple cell selected event
 	OnCellSelected.Broadcast(SelectedCell);
 	// New detailed event
@@ -399,6 +414,7 @@ bool UInventoryGridWidget::GetAvailableActionsForSelectedItem(TArray<FText>& Out
 	if (!Bag) return false;
 	int32 Index = GetSelectedItemIndex();
 	if (Index == INDEX_NONE) return false;
+	if (IsItemIndexLockedForUI(Index)) return false;
 
 	// Default actions
 	OutActions.Add(NSLOCTEXT("YOLOInventory", "UseAction", "Use")); OutActionIds.Add(ACTION_USE);
@@ -577,6 +593,10 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	if (!Bag) return false;
 	int32 Idx = GetItemIndexAtCell(Bag, Cell);
 	if (Idx == INDEX_NONE) return false;
+	if (IsItemIndexLockedForUI(Idx))
+	{
+		return false;
+	}
 	// Only allow drag within this game instance (prevents cross-PIE bleed)
 	if (UWorld* World = GetWorld())
 	{
@@ -657,6 +677,38 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			UGameplayStatics::PlaySound2D(this, InvalidMoveSound);
 		}
 	};
+
+	const auto HasLockedOverlapAtCell = [this, Cell]() -> bool
+	{
+		if (!Bag)
+		{
+			return false;
+		}
+
+		const FYIBagItem ToPlace = GInventoryDrag.Item;
+		const FIntPoint Footprint = Bag->GetEffectiveSize(ToPlace.Size);
+		for (int32 ItemIndex = 0; ItemIndex < Bag->Items.Num(); ++ItemIndex)
+		{
+			if (GInventoryDrag.SourceGrid == this && ItemIndex == GInventoryDrag.SourceIndex)
+			{
+				continue;
+			}
+
+			const FYIBagItem& ExistingItem = Bag->Items[ItemIndex];
+			const FIntPoint ExistingSize = Bag->GetEffectiveSize(ExistingItem.Size);
+			if (RectsOverlap(Cell, Footprint, ExistingItem.Pos, ExistingSize) && IsItemIndexLockedForUI(ItemIndex))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	if (HasLockedOverlapAtCell())
+	{
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
+	}
 
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid == this)
@@ -1200,6 +1252,63 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* Equi
 		GInventoryDrag.Reset();
 	}
 	return bEquipped;
+}
+
+UInventoryGridWidget* UInventoryGridWidget::FindRegisteredGridForBag(UYIInventoryBag* InBag, const UWorld* ContextWorld)
+{
+	if (!InBag)
+	{
+		return nullptr;
+	}
+
+	for (auto It = GRegisteredGrids.CreateIterator(); It; ++It)
+	{
+		UInventoryGridWidget* Grid = It->Get();
+		if (!Grid)
+		{
+			It.RemoveCurrent();
+			continue;
+		}
+		if (ContextWorld && Grid->GetWorld() && Grid->GetWorld()->GetGameInstance() != ContextWorld->GetGameInstance())
+		{
+			continue;
+		}
+		if (Grid->Bag == InBag)
+		{
+			return Grid;
+		}
+	}
+
+	return nullptr;
+}
+
+bool UInventoryGridWidget::BeginDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld)
+{
+	if (!InBag || !InBag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	UInventoryGridWidget* Grid = FindRegisteredGridForBag(InBag, ContextWorld);
+	if (!Grid)
+	{
+		return false;
+	}
+
+	return Grid->BeginDragFromCell(InBag->Items[ItemIndex].Pos);
+}
+
+bool UInventoryGridWidget::IsItemIndexLockedForUI(int32 ItemIndex) const
+{
+	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	const UYIInventoryComponent* OwnerInventory = BoundInventoryComponent
+		? BoundInventoryComponent.Get()
+		: Bag->GetTypedOuter<UYIInventoryComponent>();
+	return OwnerInventory && OwnerInventory->IsBagItemLocked(Bag, ItemIndex);
 }
 
 void UInventoryGridWidget::SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide)

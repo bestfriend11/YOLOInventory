@@ -33,6 +33,21 @@ struct YOLOINVENTORY_API FYINetBagDescriptor
 	bool bIsActive = false;
 };
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORY_API FYILockedBagItemRef
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid BagId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	int64 CustomStackKey = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	int64 Code = 0;
+};
+
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORY_API UYIInventoryComponent : public UActorComponent
 {
@@ -113,6 +128,16 @@ public:
 	// Remove a bag owned by this component
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool RemoveBag(UYIInventoryBag* Bag);
+
+	/** Runtime lock used by keep-in-inventory equip mode. Locked items cannot be moved/rotated/removed. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	bool SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked);
+
+	UFUNCTION(BlueprintPure, Category="Inventory|Equipment")
+	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
 
 	/** Server-only: push current bag state into net mirror to replicate to owning client. */
 	void SyncNetState();
@@ -241,6 +266,11 @@ protected:
 	void OnRep_NetBagDescriptors();
 	UFUNCTION()
 	void OnRep_ActiveBagContexts();
+	UFUNCTION()
+	void OnRep_LockedBagItems();
+
+	UPROPERTY(ReplicatedUsing=OnRep_LockedBagItems, Transient)
+	TArray<FYILockedBagItemRef> LockedBagItems;
 
 	/** Client-only preview bag built from NetBagItems (not authoritative). */
 	UPROPERTY(Transient)
@@ -274,4 +304,7 @@ private:
 	void HandleBagItemRotated(int32 Index);
 	UFUNCTION()
 	void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
+
+	bool GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYILockedBagItemRef& OutIdentity) const;
+	bool IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const;
 };

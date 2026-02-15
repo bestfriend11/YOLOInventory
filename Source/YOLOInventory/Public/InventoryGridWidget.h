@@ -323,6 +323,11 @@ public:
 	/** Equip the currently dragged inventory item into the requested equipment slot. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
 	static bool TryEquipActiveDraggedItem(class UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag);
+	/** Locate a live runtime grid currently bound to the provided bag. */
+	static UInventoryGridWidget* FindRegisteredGridForBag(UYIInventoryBag* InBag, const UWorld* ContextWorld = nullptr);
+	/** Starts drag for a specific item index from the provided bag using a registered runtime grid. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
+	static bool BeginDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld = nullptr);
 
 	/** Optional: route cross-owner transfers through a trade session (server-authoritative). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
@@ -350,6 +355,9 @@ protected:
 	// Global registry for all live grids (for overlay queries)
 public:
 	static void ForEachRegisteredGrid(TFunctionRef<void(UInventoryGridWidget*)> Callback);
+
+	/** UI helper used by Slate drawing to tint equipment-locked items. */
+	bool IsItemIndexLockedForUI(int32 ItemIndex) const;
 
 private:
 	UPROPERTY(Transient)

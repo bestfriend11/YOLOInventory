@@ -996,7 +996,7 @@ void FYIUnifiedDashboardEditor::SaveAsset_Execute()
 				{
 					TArray<UPackage*> PackagesToSave;
 					PackagesToSave.Add(Package);
-					FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, false, false);
+					FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, false, true);
 				}
 				return;
 			}

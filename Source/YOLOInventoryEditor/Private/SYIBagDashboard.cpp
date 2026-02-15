@@ -53,7 +53,7 @@ static bool YIBagDash_SaveObjectPackage(UObject* ObjectToSave)
 	TArray<UPackage*> PackagesToSave;
 	PackagesToSave.Add(Package);
 	const bool bCheckDirty = false;
-	const bool bPromptToSave = false;
+	const bool bPromptToSave = true;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
 }
 

@@ -11,6 +11,16 @@ class UYIItemDefinition;
 class UYIEquipmentLayoutAsset;
 class UYIEquipmentSchemaAsset;
 
+UENUM(BlueprintType)
+enum class EYIEquipInventoryBehavior : uint8
+{
+	/** Move equipped item out of inventory and store it only in equipment slots. */
+	MoveToEquipment UMETA(DisplayName = "Move Item To Equipment"),
+
+	/** Keep item in inventory, lock it there, and mirror it in equipment slots until unequipped. */
+	KeepInInventoryLocked UMETA(DisplayName = "Keep Item In Inventory (Locked)")
+};
+
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIEquippedItemEntry
 {
@@ -25,6 +35,22 @@ struct YOLOINVENTORY_API FYIEquippedItemEntry
 	/** Same value across all slot entries occupied by one equipped item. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
 	int32 EquipGroupId = 0;
+
+	/** True when equipped entry mirrors an item that remains in inventory and is locked. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	bool bInventoryLocked = false;
+
+	/** Source bag id used when bInventoryLocked is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	FGuid SourceBagId;
+
+	/** Source item identity used when bInventoryLocked is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	int64 SourceCustomStackKey = 0;
+
+	/** Source item code fallback for lock resolution. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
+	int64 SourceItemCode = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -61,6 +87,10 @@ public:
 	/** Optional allow-list of equip slot tags (e.g. Equip.Slot.WeaponMain, Equip.Slot.Spellbook.Primary). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")
 	FGameplayTagContainer AllowedEquipSlots;
+
+	/** Controls whether equipped items are removed from bag or kept there as locked references. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")
+	EYIEquipInventoryBehavior EquipInventoryBehavior = EYIEquipInventoryBehavior::MoveToEquipment;
 
 	/** Auto-resolve item equip slot from item tags that start with this prefix. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Rules")

@@ -49,23 +49,39 @@
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "GameplayTagsManager.h"
 
-static bool YIAffixDash_SaveObjectPackage(UObject* ObjectToSave)
+static bool YIAffixDash_PromptSavePackages(const TArray<UObject*>& ObjectsToSave, int32& OutRequestedCount)
 {
-	if (!ObjectToSave)
-	{
-		return false;
-	}
-
-	UPackage* Package = ObjectToSave->GetOutermost();
-	if (!Package)
-	{
-		return false;
-	}
-
 	TArray<UPackage*> PackagesToSave;
-	PackagesToSave.Add(Package);
+	TSet<FString> AddedPackages;
+	for (UObject* ObjectToSave : ObjectsToSave)
+	{
+		if (!ObjectToSave)
+		{
+			continue;
+		}
+		UPackage* Package = ObjectToSave->GetOutermost();
+		if (!Package)
+		{
+			continue;
+		}
+
+		const FString PackageName = Package->GetName();
+		if (AddedPackages.Contains(PackageName))
+		{
+			continue;
+		}
+		AddedPackages.Add(PackageName);
+		PackagesToSave.Add(Package);
+	}
+
+	OutRequestedCount = PackagesToSave.Num();
+	if (OutRequestedCount == 0)
+	{
+		return false;
+	}
+
 	const bool bCheckDirty = false;
-	const bool bPromptToSave = false;
+	const bool bPromptToSave = true;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
 }
 
@@ -335,21 +351,16 @@ void SYIAffixDashboard::SaveCurrentAssetFromToolbar()
 		return;
 	}
 
-	int32 SavedCount = 0;
-	for (UObject* ObjectToSave : ObjectsToSave)
-	{
-		if (YIAffixDash_SaveObjectPackage(ObjectToSave))
-		{
-			++SavedCount;
-		}
-	}
+	int32 RequestedCount = 0;
+	const bool bSaved = YIAffixDash_PromptSavePackages(ObjectsToSave, RequestedCount);
+	const int32 SavedCount = bSaved ? RequestedCount : 0;
 
 	FYIEditorMessageLog::Add(
-		SavedCount == ObjectsToSave.Num() ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+		SavedCount == RequestedCount ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
 		FText::Format(
 			NSLOCTEXT("YOLOInventory", "AffixDash_Save_Summary", "Save selected assets complete. Saved: {0}/{1}"),
 			FText::AsNumber(SavedCount),
-			FText::AsNumber(ObjectsToSave.Num())));
+			FText::AsNumber(RequestedCount)));
 }
 
 void SYIAffixDashboard::GuidedSetupFromToolbar()
@@ -1023,8 +1034,8 @@ TSharedPtr<SWidget> SYIAffixDashboard::BuildListContextMenu()
 	auto SaveSelection = [Self, GetCurrentSelection]()
 	{
 		const TArray<TSharedPtr<FYIAffixDashboardEntry>> CurrentSelected = GetCurrentSelection();
-		TSet<FString> SavedObjectPaths;
-		int32 SavedCount = 0;
+		TArray<UObject*> ObjectsToSave;
+		TSet<FString> AddedObjectPaths;
 
 		for (const TSharedPtr<FYIAffixDashboardEntry>& Entry : CurrentSelected)
 		{
@@ -1056,23 +1067,23 @@ TSharedPtr<SWidget> SYIAffixDashboard::BuildListContextMenu()
 			}
 
 			const FString ObjectPath = ObjectToSave->GetPathName();
-			if (SavedObjectPaths.Contains(ObjectPath))
+			if (AddedObjectPaths.Contains(ObjectPath))
 			{
 				continue;
 			}
-
-			if (YIAffixDash_SaveObjectPackage(ObjectToSave))
-			{
-				SavedObjectPaths.Add(ObjectPath);
-				++SavedCount;
-			}
+			AddedObjectPaths.Add(ObjectPath);
+			ObjectsToSave.Add(ObjectToSave);
 		}
 
+		int32 RequestedCount = 0;
+		const bool bSaved = YIAffixDash_PromptSavePackages(ObjectsToSave, RequestedCount);
+		const int32 SavedCount = bSaved ? RequestedCount : 0;
 		FYIEditorMessageLog::Add(
-			SavedCount > 0 ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+			SavedCount == RequestedCount ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
 			FText::Format(
-				NSLOCTEXT("YOLOInventory", "AffixDash_SaveSelectionSummary", "Saved {0} selected asset(s)."),
-				FText::AsNumber(SavedCount)));
+				NSLOCTEXT("YOLOInventory", "AffixDash_SaveSelectionSummary", "Save selected assets complete. Saved: {0}/{1}."),
+				FText::AsNumber(SavedCount),
+				FText::AsNumber(RequestedCount)));
 	};
 
 	FMenuBuilder MenuBuilder(true, nullptr);
@@ -1140,6 +1151,26 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeRowWidget(TSharedPtr<FYIAffixDashbo
 		}
 		return FLinearColor(0.20f, 0.45f, 0.90f, 0.9f);
 	};
+	auto IsEntryDirty = [Entry]() -> bool
+	{
+		auto IsDirtyObject = [](UObject* Object) -> bool
+		{
+			return Object && Object->GetOutermost() && Object->GetOutermost()->IsDirty();
+		};
+
+		if (!Entry.IsValid())
+		{
+			return false;
+		}
+		if (!Entry->bIsDataTable)
+		{
+			return IsDirtyObject(Entry->Object.Get());
+		}
+
+		return IsDirtyObject(Entry->AffixAsset.Get())
+			|| IsDirtyObject(Entry->DataSource.Get())
+			|| IsDirtyObject(Entry->DataTable.Get());
+	};
 
 	return SNew(STableRow<TSharedPtr<FYIAffixDashboardEntry>>, Owner)
 	[
@@ -1155,11 +1186,13 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeRowWidget(TSharedPtr<FYIAffixDashbo
 			[
 				SNew(STextBlock)
 					.Text(FText::AsNumber(Entry.IsValid() ? Entry->Code : 0))
-					.ColorAndOpacity(StatusColor())
+					.ColorAndOpacity(IsEntryDirty() ? FLinearColor(1.f, 0.85f, 0.2f) : StatusColor())
 			]
 			+ SHorizontalBox::Slot().FillWidth(0.35f)
 			[
-				SNew(STextBlock).Text(FText::FromString(Entry.IsValid() ? Entry->Name : TEXT("")))
+				SNew(STextBlock).Text(FText::FromString(Entry.IsValid()
+					? (IsEntryDirty() ? FString::Printf(TEXT("* %s"), *Entry->Name) : Entry->Name)
+					: TEXT("")))
 			]
 			+ SHorizontalBox::Slot().FillWidth(0.15f)
 			[

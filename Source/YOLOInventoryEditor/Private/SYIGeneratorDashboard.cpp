@@ -34,23 +34,39 @@
 #include "FileHelpers.h"
 #include "PropertyCustomizationHelpers.h"
 
-static bool YIGeneratorDash_SaveObjectPackage(UObject* ObjectToSave)
+static bool YIGeneratorDash_PromptSavePackages(const TArray<UObject*>& ObjectsToSave, int32& OutRequestedCount)
 {
-	if (!ObjectToSave)
-	{
-		return false;
-	}
-
-	UPackage* Package = ObjectToSave->GetOutermost();
-	if (!Package)
-	{
-		return false;
-	}
-
 	TArray<UPackage*> PackagesToSave;
-	PackagesToSave.Add(Package);
+	TSet<FString> AddedPackages;
+	for (UObject* ObjectToSave : ObjectsToSave)
+	{
+		if (!ObjectToSave)
+		{
+			continue;
+		}
+		UPackage* Package = ObjectToSave->GetOutermost();
+		if (!Package)
+		{
+			continue;
+		}
+
+		const FString PackageName = Package->GetName();
+		if (AddedPackages.Contains(PackageName))
+		{
+			continue;
+		}
+		AddedPackages.Add(PackageName);
+		PackagesToSave.Add(Package);
+	}
+
+	OutRequestedCount = PackagesToSave.Num();
+	if (OutRequestedCount == 0)
+	{
+		return false;
+	}
+
 	const bool bCheckDirty = false;
-	const bool bPromptToSave = false;
+	const bool bPromptToSave = true;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
 }
 
@@ -234,11 +250,14 @@ void SYIGeneratorDashboard::SaveCurrentAssetFromToolbar()
 		return;
 	}
 
-	if (YIGeneratorDash_SaveObjectPackage(ObjectToSave))
+	TArray<UObject*> ObjectsToSave;
+	ObjectsToSave.Add(ObjectToSave);
+	int32 RequestedCount = 0;
+	if (YIGeneratorDash_PromptSavePackages(ObjectsToSave, RequestedCount))
 	{
 		TestResult = FText::Format(
-			NSLOCTEXT("YOLOInventory","GenDash_Save_Success","Saved: {0}"),
-			FText::FromString(ObjectToSave->GetPathName()));
+			NSLOCTEXT("YOLOInventory","GenDash_Save_Success","Saved {0} asset package(s)."),
+			FText::AsNumber(RequestedCount));
 	}
 	else
 	{

@@ -309,6 +309,123 @@ UYIInventoryBag* UYIInventoryComponent::GetBagByDisplayName(FName BagName) const
 	return nullptr;
 }
 
+bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYILockedBagItemRef& OutIdentity) const
+{
+	OutIdentity = FYILockedBagItemRef();
+	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
+	if (BagItem.Item.CustomStackKey == 0)
+	{
+		return false;
+	}
+
+	OutIdentity.BagId = Bag->BagId;
+	OutIdentity.CustomStackKey = BagItem.Item.CustomStackKey;
+	OutIdentity.Code = 0;
+	if (UYIItemDefinition* Def = BagItem.Item.Definition.IsValid()
+		? BagItem.Item.Definition.Get()
+		: BagItem.Item.Definition.LoadSynchronous())
+	{
+		OutIdentity.Code = Def->UniqueCode;
+	}
+
+	return OutIdentity.BagId.IsValid() && OutIdentity.CustomStackKey != 0;
+}
+
+bool UYIInventoryComponent::IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const
+{
+	if (!Identity.BagId.IsValid() || Identity.CustomStackKey == 0)
+	{
+		return false;
+	}
+
+	return LockedBagItems.ContainsByPredicate([&Identity](const FYILockedBagItemRef& Entry)
+	{
+		return Entry.BagId == Identity.BagId && Entry.CustomStackKey == Identity.CustomStackKey;
+	});
+}
+
+bool UYIInventoryComponent::SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	Bag->EnsureBagId();
+
+	FYIBagItem& MutableItem = Bag->Items[ItemIndex];
+	if (MutableItem.Item.CustomStackKey == 0)
+	{
+		const int64 NewKey = (static_cast<int64>(FDateTime::UtcNow().GetTicks()) ^ static_cast<int64>(FMath::Rand())) & MAX_int64;
+		MutableItem.Item.CustomStackKey = NewKey == 0 ? 1 : NewKey;
+	}
+
+	FYILockedBagItemRef Identity;
+	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
+	{
+		return false;
+	}
+
+	return SetBagItemLockedByRef(Identity.BagId, Identity.CustomStackKey, Identity.Code, bLocked);
+}
+
+bool UYIInventoryComponent::SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !BagId.IsValid() || CustomStackKey == 0)
+	{
+		return false;
+	}
+
+	const int32 ExistingIndex = LockedBagItems.IndexOfByPredicate([&](const FYILockedBagItemRef& Entry)
+	{
+		return Entry.BagId == BagId && Entry.CustomStackKey == CustomStackKey;
+	});
+
+	if (bLocked)
+	{
+		if (ExistingIndex != INDEX_NONE)
+		{
+			return true;
+		}
+
+		FYILockedBagItemRef NewEntry;
+		NewEntry.BagId = BagId;
+		NewEntry.CustomStackKey = CustomStackKey;
+		NewEntry.Code = Code;
+		LockedBagItems.Add(NewEntry);
+		SyncNetState();
+		return true;
+	}
+
+	if (ExistingIndex != INDEX_NONE)
+	{
+		LockedBagItems.RemoveAt(ExistingIndex);
+		SyncNetState();
+	}
+	return true;
+}
+
+bool UYIInventoryComponent::IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const
+{
+	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	FYILockedBagItemRef Identity;
+	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
+	{
+		return false;
+	}
+
+	return IsBagItemLockedByIdentity(Identity);
+}
+
 void UYIInventoryComponent::GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const
 {
 	OutDescriptors = NetBagDescriptors;
@@ -318,6 +435,10 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return false;
 	Bag->EnsureBagId();
+	LockedBagItems.RemoveAllSwap([Bag](const FYILockedBagItemRef& Entry)
+	{
+		return Entry.BagId == Bag->BagId;
+	}, EAllowShrinking::No);
 	if (ActiveBagId.IsValid() && ActiveBagId == Bag->BagId)
 	{
 		ActiveBagId.Invalidate();
@@ -641,6 +762,18 @@ void UYIInventoryComponent::OnRep_ActiveBagContexts()
 	}
 }
 
+void UYIInventoryComponent::OnRep_LockedBagItems()
+{
+	if (ClientPreviewBag)
+	{
+		ClientPreviewBag->OnChanged.Broadcast();
+	}
+	if (EquippedBag)
+	{
+		EquippedBag->OnChanged.Broadcast();
+	}
+}
+
 void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -649,6 +782,7 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagDescriptors, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagId, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveSpellbookBagId, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, LockedBagItems, COND_OwnerOnly);
 }
 
 // -------- Net-safe bag mutations --------
@@ -657,6 +791,10 @@ bool UYIInventoryComponent::MoveItem(int32 Index, FIntPoint NewPos)
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
+		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
+		{
+			return false;
+		}
 		if (EquippedBag && EquippedBag->MoveItem(Index, NewPos))
 		{
 			SyncNetState();
@@ -677,6 +815,10 @@ bool UYIInventoryComponent::RotateItem(int32 Index)
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
+		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
+		{
+			return false;
+		}
 		if (EquippedBag && EquippedBag->RotateItem(Index))
 		{
 			SyncNetState();
@@ -750,6 +892,10 @@ bool UYIInventoryComponent::RemoveItem(int32 Index)
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
+		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
+		{
+			return false;
+		}
 		if (EquippedBag && EquippedBag->RemoveItem(Index))
 		{
 			SyncNetState();
@@ -805,6 +951,18 @@ void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
 
 void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 {
+	if (EquippedBag && EquippedBag->BagId.IsValid() && Item.Item.CustomStackKey != 0)
+	{
+		const int32 Removed = LockedBagItems.RemoveAllSwap([this, &Item](const FYILockedBagItemRef& Entry)
+		{
+			return EquippedBag && Entry.BagId == EquippedBag->BagId && Entry.CustomStackKey == Item.Item.CustomStackKey;
+		}, EAllowShrinking::No);
+		if (Removed > 0 && GetOwner() && GetOwner()->HasAuthority())
+		{
+			SyncNetState();
+		}
+	}
+
 	OnInventoryItemRemoved.Broadcast(EquippedBag, Index, Item);
 	if (bDebugInventoryActions && GEngine)
 	{

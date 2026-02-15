@@ -147,6 +147,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	for (int32 i=0;i<Bag->Items.Num();++i)
 	{
 		const auto& It = Bag->Items[i];
+		const bool bLocked = OwnerWidget.IsValid() && OwnerWidget.Pin()->IsItemIndexLockedForUI(i);
 		FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
 		FVector2D P = FVector2D(It.Pos) * LocalCell;
 		FVector2D S = FVector2D(Eff) * LocalCell;
@@ -207,6 +208,21 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			FVector2D TextSize = FVector2D(40, 14);
 			FVector2D TP = P + S - TextSize - FVector2D(2,2);
 			FSlateDrawElement::MakeText(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(TextSize), FSlateLayoutTransform(FVector2f(TP))), FText::FromString(CountStr), Font, ESlateDrawEffect::None, FLinearColor::White);
+		}
+		if (bLocked)
+		{
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.16f, 0.42f, 0.9f, 0.24f));
+			const FSlateFontInfo LockFont = FCoreStyle::GetDefaultFontStyle("Bold", 9);
+			const FVector2D LockTextSize(64.f, 14.f);
+			const FVector2D LockPos = P + FVector2D(2.f, 2.f);
+			FSlateDrawElement::MakeText(
+				OutDrawElements,
+				++L,
+				AllottedGeometry.ToPaintGeometry(FVector2f(LockTextSize), FSlateLayoutTransform(FVector2f(LockPos))),
+				NSLOCTEXT("YOLOInventory", "Grid_LockedBadge", "EQUIPPED"),
+				LockFont,
+				ESlateDrawEffect::None,
+				FLinearColor(0.95f, 0.98f, 1.f, 0.95f));
 		}
 	}
 	// Hover highlight: only when not actively dragging a ghost, to avoid visual conflict
@@ -538,10 +554,12 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 		{
 			DropCell = ToCell(Local);
 		}
+		const int32 ClickedItemIndex = GetItemIndexAtCell(DropCell);
+		const bool bClickedLockedItem = (ClickedItemIndex != INDEX_NONE && OwnerWidget.IsValid() && OwnerWidget.Pin()->IsItemIndexLockedForUI(ClickedItemIndex));
 		// Update selection to reflect the drop target if mouse selection is enabled
 		if (bEnableMouseSelection)
 		{
-			SelectedCell = DropCell;
+			SelectedCell = bClickedLockedItem ? FIntPoint(-1, -1) : DropCell;
 			if (OnSelectedCellChanged.IsBound()) { OnSelectedCellChanged.Execute(SelectedCell); }
 		}
 		UWorld* ContextWorld = OwnerWidget.IsValid() ? OwnerWidget.Pin()->GetWorld() : nullptr;
@@ -559,6 +577,10 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 
 		// If a drag is still active (e.g., we picked up a displaced item), do not start another drag
 		if (UInventoryGridWidget::IsItemDragActive(ContextWorld))
+		{
+			return FReply::Handled();
+		}
+		if (bClickedLockedItem)
 		{
 			return FReply::Handled();
 		}

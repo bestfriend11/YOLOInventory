@@ -219,6 +219,55 @@ FReply UInventoryEquipmentSlotWidget::HandleMouseButtonDown(const FGeometry& Geo
 		{
 			return TryEquipFromActiveDrag() ? FReply::Handled() : FReply::Unhandled();
 		}
+
+		if (!ResolveComponents() || !EquipmentComponent || !InventoryComponent || !SlotTag.IsValid())
+		{
+			return FReply::Handled();
+		}
+
+		FYIItemInstanceNet EquippedItem;
+		if (!EquipmentComponent->GetEquippedItem(SlotTag, EquippedItem))
+		{
+			return FReply::Handled();
+		}
+
+		const bool bUnequipped = TryUnequipToInventory();
+		if (!bUnequipped)
+		{
+			return FReply::Handled();
+		}
+
+		UYIInventoryBag* ActiveBag = InventoryComponent->EquippedBag;
+		if (!ActiveBag)
+		{
+			ActiveBag = InventoryComponent->GetBag();
+		}
+		if (!ActiveBag)
+		{
+			return FReply::Handled();
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (EquippedItem.CustomStackKey != 0)
+		{
+			SourceIndex = ActiveBag->Items.IndexOfByPredicate([&EquippedItem](const FYIBagItem& Item)
+			{
+				return Item.Item.CustomStackKey == EquippedItem.CustomStackKey;
+			});
+		}
+		if (SourceIndex == INDEX_NONE)
+		{
+			SourceIndex = ActiveBag->Items.IndexOfByPredicate([&EquippedItem](const FYIBagItem& Item)
+			{
+				return Item.Item.Definition.ToSoftObjectPath() == EquippedItem.Definition.ToSoftObjectPath();
+			});
+		}
+		if (SourceIndex == INDEX_NONE)
+		{
+			return FReply::Handled();
+		}
+
+		UInventoryGridWidget::BeginDragFromBagItem(ActiveBag, SourceIndex, GetWorld());
 		return FReply::Handled();
 	}
 

@@ -55,23 +55,39 @@
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
 
-static bool YIItemDash_SaveObjectPackage(UObject* ObjectToSave)
+static bool YIItemDash_PromptSavePackages(const TArray<UObject*>& ObjectsToSave, int32& OutRequestedCount)
 {
-	if (!ObjectToSave)
-	{
-		return false;
-	}
-
-	UPackage* Package = ObjectToSave->GetOutermost();
-	if (!Package)
-	{
-		return false;
-	}
-
 	TArray<UPackage*> PackagesToSave;
-	PackagesToSave.Add(Package);
+	TSet<FString> AddedPackages;
+	for (UObject* ObjectToSave : ObjectsToSave)
+	{
+		if (!ObjectToSave)
+		{
+			continue;
+		}
+		UPackage* Package = ObjectToSave->GetOutermost();
+		if (!Package)
+		{
+			continue;
+		}
+
+		const FString PackageName = Package->GetName();
+		if (AddedPackages.Contains(PackageName))
+		{
+			continue;
+		}
+		AddedPackages.Add(PackageName);
+		PackagesToSave.Add(Package);
+	}
+
+	OutRequestedCount = PackagesToSave.Num();
+	if (OutRequestedCount == 0)
+	{
+		return false;
+	}
+
 	const bool bCheckDirty = false;
-	const bool bPromptToSave = false;
+	const bool bPromptToSave = true;
 	return FEditorFileUtils::PromptForCheckoutAndSave(PackagesToSave, bCheckDirty, bPromptToSave) == FEditorFileUtils::PR_Success;
 }
 
@@ -1730,21 +1746,16 @@ void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 		return;
 	}
 
-	int32 SavedCount = 0;
-	for (UObject* ObjectToSave : ObjectsToSave)
-	{
-		if (YIItemDash_SaveObjectPackage(ObjectToSave))
-		{
-			++SavedCount;
-		}
-	}
+	int32 RequestedCount = 0;
+	const bool bSaved = YIItemDash_PromptSavePackages(ObjectsToSave, RequestedCount);
+	const int32 SavedCount = bSaved ? RequestedCount : 0;
 
 	FYIEditorMessageLog::Add(
-		SavedCount == ObjectsToSave.Num() ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
+		SavedCount == RequestedCount ? EYIEditorLogSeverity::Info : EYIEditorLogSeverity::Warning,
 		FText::Format(
 			NSLOCTEXT("YOLOInventory", "Dash_Save_Summary", "Save selected assets complete. Saved: {0}/{1}"),
 			FText::AsNumber(SavedCount),
-			FText::AsNumber(ObjectsToSave.Num())));
+			FText::AsNumber(RequestedCount)));
 }
 
 void SYIItemDashboard::GuidedSetupFromToolbar()
@@ -3074,6 +3085,27 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 			}
 			return NSLOCTEXT("YOLOInventory", "Dash_Status_AssetOnly", "Item asset");
 		};
+	auto IsEntryDirty = [Entry]() -> bool
+		{
+			auto IsDirtyObject = [](UObject* Object) -> bool
+				{
+					return Object && Object->GetOutermost() && Object->GetOutermost()->IsDirty();
+				};
+
+			if (!Entry.IsValid())
+			{
+				return false;
+			}
+
+			if (!Entry->bIsDataTable)
+			{
+				return IsDirtyObject(Entry->Object.Get());
+			}
+
+			return IsDirtyObject(Entry->ItemAsset.Get())
+				|| IsDirtyObject(Entry->DataSource.Get())
+				|| IsDirtyObject(Entry->DataTable.Get());
+		};
 
 	return SNew(STableRow<TSharedPtr<FYIItemDashboardEntry>>, Owner)
 		.ToolTipText(BuildPreviewText(Entry))
@@ -3101,12 +3133,12 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 				[
 					SNew(STextBlock)
 						.Text(FText::AsNumber(Entry->Code))
-						.ColorAndOpacity(StatusColor())
+						.ColorAndOpacity(IsEntryDirty() ? FLinearColor(1.f, 0.85f, 0.2f) : StatusColor())
 				]
 				+ SHorizontalBox::Slot().FillWidth(0.25f)
 				[
 					SNew(STextBlock)
-						.Text(FText::FromString(Entry->Name))
+						.Text(FText::FromString(IsEntryDirty() ? FString::Printf(TEXT("* %s"), *Entry->Name) : Entry->Name))
 				]
 				+ SHorizontalBox::Slot().FillWidth(0.2f)
 				[
