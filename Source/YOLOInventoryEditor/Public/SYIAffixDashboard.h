@@ -4,6 +4,7 @@
 #include "Widgets/SCompoundWidget.h"
 
 class IDetailsView;
+class UYIAffixAsset;
 class UYIDataTableAffixSource;
 struct FYIFieldMapping;
 struct FYITransformFunctionInfo;
