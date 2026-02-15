@@ -9,7 +9,6 @@
 #include "YIRarityProfile.h"
 #include "YIItemGenerator.h"
 #include "YIInventoryBag.h"
-#include "YIEquipmentLayoutAsset.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Modules/ModuleManager.h"
@@ -273,16 +272,6 @@ void SYICatalogDashboard::Refresh()
 	AddEntriesForClass(UYIInventoryBag::StaticClass(), TEXT("Bags"), TEXT("Bag"),
 		[](UObject*, FYICatalogEntry&) {});
 
-	AddEntriesForClass(UYIEquipmentLayoutAsset::StaticClass(), TEXT("Bags"), TEXT("Equipment Layout"),
-		[](UObject* Object, FYICatalogEntry& Entry)
-		{
-			if (const UYIEquipmentLayoutAsset* Layout = Cast<UYIEquipmentLayoutAsset>(Object))
-			{
-				Entry.LinkedCount = Layout->Slots.Num();
-				Entry.Status = Layout->Slots.Num() > 0 ? TEXT("Configured") : TEXT("Empty");
-			}
-		});
-
 	AllEntries.Sort([](const TSharedPtr<FYICatalogEntry>& A, const TSharedPtr<FYICatalogEntry>& B)
 	{
 		if (!A.IsValid() || !B.IsValid())
@@ -418,4 +407,3 @@ void SYICatalogDashboard::RebuildFilterOptions()
 	FilterOptions.Add(MakeShared<FString>(TEXT("Generators")));
 	FilterOptions.Add(MakeShared<FString>(TEXT("Bags")));
 }
-

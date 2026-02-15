@@ -942,6 +942,7 @@ USoundBase* UYIInventoryBlueprintLibrary::ResolveItemSFXSound(const UYIItemDefin
 		case EYIItemSFXEvent::HoverItem: return Profile->HoverItemSound;
 		case EYIItemSFXEvent::DragStart: return Profile->DragStartSound;
 		case EYIItemSFXEvent::Drop: return Profile->DropSound;
+		case EYIItemSFXEvent::Equip: return Profile->EquipSound;
 		case EYIItemSFXEvent::Cancel: return Profile->CancelSound;
 		case EYIItemSFXEvent::InvalidMove: return Profile->InvalidMoveSound;
 		default: return nullptr;

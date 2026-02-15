@@ -6,8 +6,11 @@
 #include "YIItemDefinition.h"
 #include "YIEquipmentLayoutAsset.h"
 #include "YIEquipmentSchemaAsset.h"
+#include "YIInventoryBlueprintLibrary.h"
+#include "YIItemSFXLibrary.h"
 #include "YOLOInventorySettings.h"
 #include "Engine/Engine.h"
+#include "Kismet/GameplayStatics.h"
 #include "Algo/Unique.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIEquipment, Log, All);
@@ -342,6 +345,55 @@ void UYIEquipmentComponent::BroadcastResult(bool bSuccess, FGameplayTag SlotTag,
 	EmitEquipmentMessage(Message, bSuccess ? FColor::Green : FColor::Red);
 }
 
+USoundBase* UYIEquipmentComponent::ResolveEquipSound(UYIItemDefinition* Definition) const
+{
+	if (!Definition || !GetOwner())
+	{
+		return nullptr;
+	}
+
+	const UYIInventoryComponent* InventoryComp = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
+	const UYIItemSFXLibrary* Library = nullptr;
+	if (InventoryComp)
+	{
+		if (InventoryComp->ItemSFXLibrary.IsValid())
+		{
+			Library = InventoryComp->ItemSFXLibrary.Get();
+		}
+		else if (InventoryComp->ItemSFXLibrary.ToSoftObjectPath().IsValid())
+		{
+			Library = InventoryComp->ItemSFXLibrary.LoadSynchronous();
+		}
+	}
+
+	USoundBase* Sound = UYIInventoryBlueprintLibrary::ResolveItemSFXSound(Definition, Library, EYIItemSFXEvent::Equip);
+	if (!Sound)
+	{
+		// Backward compatibility for profiles that only configured "Drop".
+		Sound = UYIInventoryBlueprintLibrary::ResolveItemSFXSound(Definition, Library, EYIItemSFXEvent::Drop);
+	}
+	return Sound;
+}
+
+void UYIEquipmentComponent::PlayEquipSound(UYIItemDefinition* Definition) const
+{
+	if (!bPlayEquipSound || !GetOwner())
+	{
+		return;
+	}
+
+	if (USoundBase* Sound = ResolveEquipSound(Definition))
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetOwner()->GetActorLocation());
+	}
+}
+
+void UYIEquipmentComponent::HandleItemEquippedFeedback(FGameplayTag SlotTag, const FYIItemInstanceNet& Item, UYIItemDefinition* Definition)
+{
+	OnItemEquipped.Broadcast(SlotTag, Item, Definition);
+	PlayEquipSound(Definition);
+}
+
 bool UYIEquipmentComponent::GetEquippedItem(FGameplayTag SlotTag, FYIItemInstanceNet& OutItem) const
 {
 	const int32 Index = FindEntryIndex(SlotTag);
@@ -543,6 +595,12 @@ void UYIEquipmentComponent::ServerUnequipToInventory_Implementation(UYIInventory
 		DestInventory = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
 	}
 	UnequipToInventory(DestInventory, SlotTag);
+}
+
+void UYIEquipmentComponent::ClientNotifyItemEquipped_Implementation(FGameplayTag SlotTag, FYIItemInstanceNet Item)
+{
+	UYIItemDefinition* Definition = Item.Definition.IsValid() ? Item.Definition.Get() : Item.Definition.LoadSynchronous();
+	HandleItemEquippedFeedback(SlotTag, Item, Definition);
 }
 
 bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage)
@@ -809,6 +867,12 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		}
 		EquippedItems.Add(NewEntry);
 		OnEquipmentChanged.Broadcast(OccupiedSlot, SourceNet);
+	}
+
+	HandleItemEquippedFeedback(SlotTag, SourceNet, Definition);
+	if (GetOwner() && GetOwner()->HasAuthority() && !GetOwner()->HasLocalNetOwner())
+	{
+		ClientNotifyItemEquipped(SlotTag, SourceNet);
 	}
 
 	OutMessage = FString::Printf(TEXT("Equipped '%s' into slot '%s' (cost %d)."), *Definition->GetName(), *SlotTag.ToString(), RequiredEquipCost);

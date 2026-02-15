@@ -8,7 +8,6 @@
 
 class UYIInventoryBag;
 class UYIItemDefinition;
-class UYIEquipmentLayoutAsset;
 class UYIEquipmentSchemaAsset;
 class SBagEditor;
 class IDetailsView;
@@ -27,8 +26,6 @@ public:
 	void SaveCurrentBagFromToolbar();
 	void CreateBagFromToolbar();
 	void SaveCurrentEquipmentLayoutFromToolbar();
-	void CreateEquipmentLayoutFromToolbar();
-	void RefreshEquipmentLayoutPreviewFromToolbar();
 	void ApplyRuntimeSpellbookPresetFromToolbar();
 	void ValidateRuntimeSetupFromToolbar();
 
@@ -38,33 +35,24 @@ public:
 private:
 	void HandleGridSelectionChanged(int32 SelectedIndex);
 	void RebuildBagView();
-	void RebuildEquipmentLayoutPreview();
 	TSharedRef<class SWidget> BuildBagAssetPicker();
 	TSharedRef<class SWidget> BuildItemAssetPicker();
-	TSharedRef<class SWidget> BuildEquipmentLayoutPicker();
 	TSharedRef<class SWidget> BuildEquipmentSchemaPicker();
 	FReply SaveCurrentBag();
 	FReply CreateNewBag();
-	FReply SaveCurrentEquipmentLayout();
-	FReply CreateNewEquipmentLayout();
 	FReply SaveCurrentEquipmentSchema();
 	FReply CreateNewEquipmentSchema();
-	void SetSelectedEquipmentLayout(UYIEquipmentLayoutAsset* InLayout);
 	void SetSelectedEquipmentSchema(UYIEquipmentSchemaAsset* InSchema);
-	UYIEquipmentLayoutAsset* GetSelectedEquipmentLayout() const;
 	UYIEquipmentSchemaAsset* GetSelectedEquipmentSchema() const;
 
 	TWeakObjectPtr<UYIInventoryBag> SelectedBag;
 	TWeakObjectPtr<UYIItemDefinition> SelectedPaletteItem;
-	TWeakObjectPtr<UYIEquipmentLayoutAsset> SelectedEquipmentLayout;
 	TWeakObjectPtr<UYIEquipmentSchemaAsset> SelectedEquipmentSchema;
 	TStrongObjectPtr<UYIBagItemDetailsProxy> SelectedBagItemProxy;
 	TSharedPtr<SBagEditor> GridWidget;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<IDetailsView> EquipmentLayoutDetailsView;
 	TSharedPtr<class SBox> GridHost;
-	TSharedPtr<class SBox> EquipmentLayoutPreviewHost;
-	TSharedPtr<class SBox> EquipmentLayoutDockPreviewHost;
 	TSharedPtr<class SWidget> EquipmentLayoutPanelWidget;
 	TSharedPtr<class STextBlock> StatusTextWidget;
 	FText StatusText;

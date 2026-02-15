@@ -10,6 +10,7 @@ class UYIInventoryComponent;
 class UYIItemDefinition;
 class UYIEquipmentLayoutAsset;
 class UYIEquipmentSchemaAsset;
+class USoundBase;
 
 UENUM(BlueprintType)
 enum class EYIEquipInventoryBehavior : uint8
@@ -76,6 +77,7 @@ struct YOLOINVENTORY_API FYIEquipmentSlotDefinition
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIEquipmentChangedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FYIEquipmentResultEvent, bool, bSuccess, FGameplayTag, SlotTag, FString, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FYIItemEquippedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item, UYIItemDefinition*, ItemDefinition);
 
 /**
  * Server-authoritative equipment container keyed by slot gameplay tags.
@@ -124,6 +126,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Debug")
 	bool bPinDebugMessages = true;
 
+	/** If true, plays item-based equip SFX when an equip succeeds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment|Audio")
+	bool bPlayEquipSound = true;
+
 	/** Replicated equipped entries keyed by SlotTag. */
 	UPROPERTY(ReplicatedUsing=OnRep_EquippedItems, BlueprintReadOnly, Category="Equipment")
 	TArray<FYIEquippedItemEntry> EquippedItems;
@@ -133,6 +139,10 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="Equipment|Events")
 	FYIEquipmentResultEvent OnEquipmentOperationResult;
+
+	/** Fired when an equip succeeds (server and owning client). */
+	UPROPERTY(BlueprintAssignable, Category="Equipment|Events")
+	FYIItemEquippedEvent OnItemEquipped;
 
 	/** Equip item from inventory's active bag index into the requested slot (or auto slot if empty). */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net")
@@ -147,6 +157,9 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerUnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
+
+	UFUNCTION(Client, Unreliable)
+	void ClientNotifyItemEquipped(FGameplayTag SlotTag, FYIItemInstanceNet Item);
 
 	/** Get equipped item for a slot. */
 	UFUNCTION(BlueprintPure, Category="YOLOInventory|Equipment")
@@ -196,6 +209,9 @@ private:
 
 	void EmitEquipmentMessage(const FString& Message, const FColor& Color) const;
 	void BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message);
+	void HandleItemEquippedFeedback(FGameplayTag SlotTag, const FYIItemInstanceNet& Item, UYIItemDefinition* Definition);
+	USoundBase* ResolveEquipSound(UYIItemDefinition* Definition) const;
+	void PlayEquipSound(UYIItemDefinition* Definition) const;
 
 	int32 NextEquipGroupId = 1;
 };

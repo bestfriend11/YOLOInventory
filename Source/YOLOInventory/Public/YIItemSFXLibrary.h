@@ -9,11 +9,12 @@
 UENUM(BlueprintType)
 enum class EYIItemSFXEvent : uint8
 {
-	HoverItem,
-	DragStart,
-	Drop,
-	Cancel,
-	InvalidMove
+	HoverItem = 0,
+	DragStart = 1,
+	Drop = 2,
+	Cancel = 3,
+	InvalidMove = 4,
+	Equip = 5
 };
 
 UCLASS(BlueprintType)
@@ -29,6 +30,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SFX")
 	TObjectPtr<USoundBase> DropSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SFX")
+	TObjectPtr<USoundBase> EquipSound = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="SFX")
 	TObjectPtr<USoundBase> CancelSound = nullptr;
