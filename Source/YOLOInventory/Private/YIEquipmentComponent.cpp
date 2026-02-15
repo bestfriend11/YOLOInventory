@@ -252,9 +252,13 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 	}
 
 	const FGameplayTag ResolvedSlot = ResolveSlotTagFromDefinition(Definition);
-	if (ResolvedSlot == SlotTag)
+	if (ResolvedSlot.IsValid())
 	{
-		return true;
+		// Support exact slot matches and child slots (e.g. item tag Equip.Slot.Chest matches Equip.Slot.Chest.01).
+		if (ResolvedSlot == SlotTag || SlotTag.MatchesTag(ResolvedSlot) || ResolvedSlot.MatchesTag(SlotTag))
+		{
+			return true;
+		}
 	}
 
 	TArray<FGameplayTag> ItemTags;
@@ -266,7 +270,7 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 
 	for (const FGameplayTag& Tag : ItemTags)
 	{
-		if (Tag == SlotTag)
+		if (Tag == SlotTag || SlotTag.MatchesTag(Tag) || Tag.MatchesTag(SlotTag))
 		{
 			return true;
 		}
@@ -576,6 +580,30 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	{
 		SlotTag = ResolveSlotTagFromDefinition(Definition);
 	}
+	if (!SlotTag.IsValid())
+	{
+		OutMessage = FString::Printf(TEXT("Equip failed: Item '%s' has no resolvable equipment slot tag."), *Definition->GetName());
+		return false;
+	}
+
+	// Allow parent slot tags on item defs (e.g. Equip.Slot.Chest) to resolve to concrete schema slots
+	// (e.g. Equip.Slot.Chest.01, Equip.Slot.Chest.02, ...).
+	if (!IsAllowedSlot(SlotTag) && SlotDefinitions.Num() > 0)
+	{
+		for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)
+		{
+			if (!SlotDef.SlotTag.IsValid())
+			{
+				continue;
+			}
+			if (SlotDef.SlotTag == SlotTag || SlotDef.SlotTag.MatchesTag(SlotTag) || SlotTag.MatchesTag(SlotDef.SlotTag))
+			{
+				SlotTag = SlotDef.SlotTag;
+				break;
+			}
+		}
+	}
+
 	if (!IsAllowedSlot(SlotTag))
 	{
 		OutMessage = FString::Printf(TEXT("Equip failed: Slot tag '%s' is invalid or not allowed."), *SlotTag.ToString());
@@ -603,46 +631,36 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		return false;
 	}
 
-	TArray<FGameplayTag> OccupiedSlots;
-	Definition->OccupiedEquipSlots.GetGameplayTagArray(OccupiedSlots);
-	OccupiedSlots.RemoveAll([](const FGameplayTag& Tag) { return !Tag.IsValid(); });
-	OccupiedSlots.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.ToString() < B.ToString(); });
-	OccupiedSlots.SetNum(Algo::Unique(OccupiedSlots));
-
-	const int32 RequiredSlotsFromSize = FMath::Max(1, Definition->DefaultSize.X * Definition->DefaultSize.Y);
-	if (OccupiedSlots.Num() == 0 && RequiredSlotsFromSize > 1 && SlotDefinitions.Num() > 0)
+	const int32 RequiredEquipCost = FMath::Max(1, Definition->EquipSlotCost);
+	const int32 SlotDefIndex = FindSlotDefinitionIndex(SlotTag);
+	if (SlotDefIndex != INDEX_NONE)
 	{
-		const int32 PrimarySlotDefIndex = FindSlotDefinitionIndex(SlotTag);
-		if (PrimarySlotDefIndex != INDEX_NONE)
+		const int32 SlotCapacity = FMath::Max(1, SlotDefinitions[SlotDefIndex].Capacity);
+		if (RequiredEquipCost > SlotCapacity)
 		{
-			OccupiedSlots.Add(SlotTag);
-			for (int32 SlotDefIndex = PrimarySlotDefIndex + 1;
-				SlotDefIndex < SlotDefinitions.Num() && OccupiedSlots.Num() < RequiredSlotsFromSize;
-				++SlotDefIndex)
-			{
-				const FGameplayTag CandidateSlot = SlotDefinitions[SlotDefIndex].SlotTag;
-				if (CandidateSlot.IsValid() && !OccupiedSlots.Contains(CandidateSlot))
-				{
-					OccupiedSlots.Add(CandidateSlot);
-				}
-			}
+			OutMessage = FString::Printf(
+				TEXT("Equip failed: Item '%s' requires slot cost %d but slot '%s' capacity is %d."),
+				*Definition->GetName(),
+				RequiredEquipCost,
+				*SlotTag.ToString(),
+				SlotCapacity);
+			return false;
 		}
 	}
-	if (!OccupiedSlots.Contains(SlotTag))
-	{
-		OccupiedSlots.Add(SlotTag);
-	}
-	if (RequiredSlotsFromSize > 1 && OccupiedSlots.Num() < RequiredSlotsFromSize)
+	else if (RequiredEquipCost > 1)
 	{
 		OutMessage = FString::Printf(
-			TEXT("Equip failed: Item '%s' requires %d equipment slots but only %d are configured."),
+			TEXT("Equip failed: Item '%s' requires slot cost %d but slot '%s' has no capacity definition. Add SlotDefinitions to equipment schema/component."),
 			*Definition->GetName(),
-			RequiredSlotsFromSize,
-			OccupiedSlots.Num());
+			RequiredEquipCost,
+			*SlotTag.ToString());
 		return false;
 	}
 
-	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
+	TArray<FGameplayTag> TargetSlots;
+	TargetSlots.Add(SlotTag);
+
+	for (const FGameplayTag& OccupiedSlot : TargetSlots)
 	{
 		if (!IsAllowedSlot(OccupiedSlot))
 		{
@@ -678,7 +696,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	}
 
 	TSet<int32> ReplaceGroupIds;
-	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
+	for (const FGameplayTag& OccupiedSlot : TargetSlots)
 	{
 		const int32 ExistingIndex = FindEntryIndex(OccupiedSlot);
 		if (ExistingIndex != INDEX_NONE)
@@ -776,7 +794,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 
 	const FYIItemInstanceNet SourceNet = YIEquipmentPrivate::FullToNet(SourceBagItem.Item);
 	const int32 NewGroupId = ResolveOrCreateEquipGroupId();
-	for (const FGameplayTag& OccupiedSlot : OccupiedSlots)
+	for (const FGameplayTag& OccupiedSlot : TargetSlots)
 	{
 		FYIEquippedItemEntry NewEntry;
 		NewEntry.SlotTag = OccupiedSlot;
@@ -793,7 +811,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		OnEquipmentChanged.Broadcast(OccupiedSlot, SourceNet);
 	}
 
-	OutMessage = FString::Printf(TEXT("Equipped '%s' into %d slot(s), primary '%s'."), *Definition->GetName(), OccupiedSlots.Num(), *SlotTag.ToString());
+	OutMessage = FString::Printf(TEXT("Equipped '%s' into slot '%s' (cost %d)."), *Definition->GetName(), *SlotTag.ToString(), RequiredEquipCost);
 	return true;
 }
 

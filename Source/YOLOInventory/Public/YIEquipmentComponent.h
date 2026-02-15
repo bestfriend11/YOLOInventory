@@ -65,6 +65,10 @@ struct YOLOINVENTORY_API FYIEquipmentSlotDefinition
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
 	FGameplayTagContainer AcceptedItemTags;
 
+	/** Maximum equip cost this slot can hold (for example Chest slot capacity 6). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ClampMin="1"))
+	int32 Capacity = 1;
+
 	/** If false, slot cannot be used until unlocked at runtime. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment")
 	bool bUnlocked = true;

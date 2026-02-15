@@ -16,13 +16,14 @@
 #include "Kismet/GameplayStatics.h"
 #include "YIItemPickup.h"
 #include "YIItemSFXLibrary.h"
+#include "Engine/World.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
 
 static struct FInventoryGlobalDrag
 {
-	UInventoryGridWidget* SourceGrid = nullptr;
+	TWeakObjectPtr<UInventoryGridWidget> SourceGrid;
 	int32 SourceIndex = INDEX_NONE; // original index at pickup time (may be invalid after removal)
 	FIntPoint SourcePos = FIntPoint(-1,-1);
 	FYIBagItem Item;
@@ -32,6 +33,61 @@ static struct FInventoryGlobalDrag
 	TWeakObjectPtr<UGameInstance> DragGI;
 	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; bFromExchange = false; DragGI.Reset(); }
 } GInventoryDrag;
+
+static void YI_HandleInventoryDragWorldCleanup(UWorld* World, bool /*bSessionEnded*/, bool /*bCleanupResources*/)
+{
+	if (!GInventoryDrag.bActive)
+	{
+		return;
+	}
+
+	if (!GInventoryDrag.DragGI.IsValid())
+	{
+		GInventoryDrag.Reset();
+		return;
+	}
+
+	if (World && World->GetGameInstance() == GInventoryDrag.DragGI.Get())
+	{
+		GInventoryDrag.Reset();
+	}
+}
+
+static void YI_RegisterInventoryDragCleanup()
+{
+	static bool bRegistered = false;
+	if (!bRegistered)
+	{
+		FWorldDelegates::OnWorldCleanup.AddStatic(&YI_HandleInventoryDragWorldCleanup);
+		bRegistered = true;
+	}
+}
+
+static bool YI_IsGlobalDragValid(const UWorld* ContextWorld = nullptr)
+{
+	if (!GInventoryDrag.bActive)
+	{
+		return false;
+	}
+
+	if (!GInventoryDrag.DragGI.IsValid())
+	{
+		GInventoryDrag.Reset();
+		return false;
+	}
+
+	if (ContextWorld && ContextWorld->GetGameInstance() != GInventoryDrag.DragGI.Get())
+	{
+		// Stale drag from a previous PIE run: no live source grid remains.
+		if (!GInventoryDrag.SourceGrid.IsValid())
+		{
+			GInventoryDrag.Reset();
+		}
+		return false;
+	}
+
+	return true;
+}
 
 static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 {
@@ -142,6 +198,7 @@ static int32 GetItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cel
 void UInventoryGridWidget::OnWidgetRebuilt()
 {
 	Super::OnWidgetRebuilt();
+	YI_RegisterInventoryDragCleanup();
 	GRegisteredGrids.Add(this);
 	RebindInventoryContextDelegates();
 	RefreshBagFromBinding();
@@ -149,6 +206,14 @@ void UInventoryGridWidget::OnWidgetRebuilt()
 
 void UInventoryGridWidget::BeginDestroy()
 {
+	if (GInventoryDrag.SourceGrid.Get() == this)
+	{
+		GInventoryDrag.Reset();
+	}
+	else if (GInventoryDrag.bActive && !GInventoryDrag.DragGI.IsValid())
+	{
+		GInventoryDrag.Reset();
+	}
 	GRegisteredGrids.Remove(this);
 	Super::BeginDestroy();
 }
@@ -479,7 +544,7 @@ void UInventoryGridWidget::HandleHoverCellChanged(const FIntPoint& NewCell)
 		return;
 	}
 
-	if (GInventoryDrag.bActive)
+	if (YI_IsGlobalDragValid(GetWorld()))
 	{
 		return;
 	}
@@ -501,7 +566,7 @@ void UInventoryGridWidget::HandleGhostPlacementChanged(const FIntPoint& TopLeftC
 {
 	(void)TopLeftCell;
 	// Only play ghost highlight SFX when dragging.
-	if (!GInventoryDrag.bActive)
+	if (!YI_IsGlobalDragValid(GetWorld()))
 	{
 		return;
 	}
@@ -636,16 +701,8 @@ bool UInventoryGridWidget::BeginDragFromSelectedCell()
 
 bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 {
-	if (!GInventoryDrag.bActive) return false;
+	if (!YI_IsGlobalDragValid(GetWorld())) return false;
 	if (!Bag) return false;
-	if (UWorld* World = GetWorld())
-	{
-		if (!GInventoryDrag.DragGI.IsValid() || GInventoryDrag.DragGI.Get() != World->GetGameInstance())
-		{
-			// Drag from another PIE instance; ignore
-			return false;
-		}
-	}
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 	auto PlayDropSound = [this]()
 	{
@@ -689,7 +746,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		const FIntPoint Footprint = Bag->GetEffectiveSize(ToPlace.Size);
 		for (int32 ItemIndex = 0; ItemIndex < Bag->Items.Num(); ++ItemIndex)
 		{
-			if (GInventoryDrag.SourceGrid == this && ItemIndex == GInventoryDrag.SourceIndex)
+	if (GInventoryDrag.SourceGrid.Get() == this && ItemIndex == GInventoryDrag.SourceIndex)
 			{
 				continue;
 			}
@@ -711,7 +768,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	}
 
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
-	if (GInventoryDrag.SourceGrid == this)
+	if (GInventoryDrag.SourceGrid.Get() == this)
 	{
 		if (!bAllowSelfMove)
 		{
@@ -827,7 +884,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		}
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 		PlayDropSound();
-		if (GInventoryDrag.SourceGrid != nullptr || GInventoryDrag.SourceIndex != INDEX_NONE)
+		if (GInventoryDrag.SourceGrid.IsValid() || GInventoryDrag.SourceIndex != INDEX_NONE)
 		{
 			GInventoryDrag.Reset();
 		}
@@ -840,9 +897,9 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	ToPlace.Pos = Cell;
 
 	// If this grid participates in a shop session, route drag from shop stock to buyer inventory via shop RPCs.
-	if (ActiveShopComponent && GInventoryDrag.SourceGrid)
+	if (ActiveShopComponent && GInventoryDrag.SourceGrid.IsValid())
 	{
-		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
 		if (SourceGrid->ActiveShopComponent == ActiveShopComponent)
 		{
 			// Only allow drag FROM shop stock INTO player bag.
@@ -882,8 +939,9 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				{
 					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 					{
-						UYIInventoryComponent* ShopSourceComp = (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
-							? GInventoryDrag.SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+						UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
+						UYIInventoryComponent* ShopSourceComp = (DragSourceGrid && DragSourceGrid->Bag)
+							? DragSourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
 						const int32 SellCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
 						TradeComp->RequestShopSell(ActiveShopComponent, GInventoryDrag.SourceIndex, SellCount, ShopSourceComp);
 						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
@@ -905,9 +963,9 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	}
 
 	// If this grid participates in a trade session, route cross-bag transfer through the session (server authoritative).
-	if (ActiveTradeSession && GInventoryDrag.SourceGrid)
+	if (ActiveTradeSession && GInventoryDrag.SourceGrid.IsValid())
 	{
-		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
 		if (SourceGrid->ActiveTradeSession == ActiveTradeSession && SourceGrid->bHasTradeSide && bHasTradeSide && GInventoryDrag.SourceIndex != INDEX_NONE)
 		{
 			if (OwnerComp && OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority())
@@ -972,14 +1030,15 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		int32 NewIdx; { bool bSavedAutoMerge = Bag->bAutoMergeOnAdd; Bag->bAutoMergeOnAdd = false; NewIdx = Bag->AddBagItem(ToPlace); Bag->bAutoMergeOnAdd = bSavedAutoMerge; }
 		if (NewIdx != INDEX_NONE)
 		{
-			if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
+			UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
+			if (DragSourceGrid && DragSourceGrid->Bag)
 {
 // If item was already removed at pickup, skip removing now
-				if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || GInventoryDrag.SourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex))
+				if (GInventoryDrag.bRemovedFromSource || GInventoryDrag.SourceIndex == INDEX_NONE || DragSourceGrid->Bag->RemoveItem(GInventoryDrag.SourceIndex))
 				{
-					OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
-					if (GInventoryDrag.SourceGrid != this) GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.SourceIndex, NewIdx);
-					GInventoryDrag.SourceGrid->RefreshBoundTooltip();
+					OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, NewIdx);
+					if (DragSourceGrid != this) DragSourceGrid->OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, NewIdx);
+					DragSourceGrid->RefreshBoundTooltip();
 					RefreshBoundTooltip();
 					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 					PlayDropSound();
@@ -1070,9 +1129,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	}
 
 	// Remove the original dragged item from source bag only after destination placement succeeds.
-	if (GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
+	UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
+	if (DragSourceGrid && DragSourceGrid->Bag)
 	{
-		UYIInventoryBag* SourceBag = GInventoryDrag.SourceGrid->Bag;
+		UYIInventoryBag* SourceBag = DragSourceGrid->Bag;
 		const int32 SourceIdx = GInventoryDrag.SourceIndex;
 		if (!GInventoryDrag.bRemovedFromSource && SourceIdx != INDEX_NONE)
 		{
@@ -1087,12 +1147,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				return false;
 			}
 
-			OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, DraggedDestIndex);
-			if (GInventoryDrag.SourceGrid != this)
+			OnItemTransferred.Broadcast(DragSourceGrid, SourceIdx, DraggedDestIndex);
+			if (DragSourceGrid != this)
 			{
-				GInventoryDrag.SourceGrid->OnItemTransferred.Broadcast(GInventoryDrag.SourceGrid, SourceIdx, DraggedDestIndex);
+				DragSourceGrid->OnItemTransferred.Broadcast(DragSourceGrid, SourceIdx, DraggedDestIndex);
 			}
-			GInventoryDrag.SourceGrid->RefreshBoundTooltip();
+			DragSourceGrid->RefreshBoundTooltip();
 		}
 	}
 	
@@ -1118,6 +1178,15 @@ void UInventoryGridWidget::CancelDrag()
 {
 	if (GInventoryDrag.bActive)
 	{
+		if (!YI_IsGlobalDragValid(GetWorld()))
+		{
+			if (!GInventoryDrag.SourceGrid.IsValid() || !GInventoryDrag.DragGI.IsValid())
+			{
+				GInventoryDrag.Reset();
+			}
+			return;
+		}
+
 		if (IsDragSoundEnabled())
 		{
 			if (USoundBase* ItemSound = ResolveItemSoundForEvent(this, GInventoryDrag.Item.Item, EYIItemSFXEvent::Cancel))
@@ -1132,9 +1201,10 @@ void UInventoryGridWidget::CancelDrag()
 
 		bool bDroppedToWorld = false;
 		// If we removed the item from its source bag at pickup, try to restore it at its original position
-		if (GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceGrid && GInventoryDrag.SourceGrid->Bag)
+		UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
+		if (GInventoryDrag.bRemovedFromSource && DragSourceGrid && DragSourceGrid->Bag)
 		{
-			UYIInventoryBag* SrcBag = GInventoryDrag.SourceGrid->Bag;
+			UYIInventoryBag* SrcBag = DragSourceGrid->Bag;
 			FYIBagItem Restore = GInventoryDrag.Item;
 
 			if (GInventoryDrag.bFromExchange)
@@ -1187,53 +1257,49 @@ void UInventoryGridWidget::CancelDrag()
 				}
 			}
 		}
-		OnItemDragCancelled.Broadcast(GInventoryDrag.SourceGrid, GInventoryDrag.Item.Item, bDroppedToWorld);
+		OnItemDragCancelled.Broadcast(GInventoryDrag.SourceGrid.Get(), GInventoryDrag.Item.Item, bDroppedToWorld);
 		GInventoryDrag.Reset();
 	}
 }
 
 bool UInventoryGridWidget::IsItemDragActive(const UWorld* ContextWorld)
 {
-	if (!GInventoryDrag.bActive)
-	{
-		return false;
-	}
-	if (ContextWorld && GInventoryDrag.DragGI.IsValid() && ContextWorld->GetGameInstance() != GInventoryDrag.DragGI.Get())
-	{
-		return false;
-	}
-	return true;
+	return YI_IsGlobalDragValid(ContextWorld);
 }
 
 bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld)
 {
-	if (!GInventoryDrag.bActive) { OutSourceBag = nullptr; return false; }
-	if (ContextWorld && GInventoryDrag.DragGI.IsValid() && ContextWorld->GetGameInstance() != GInventoryDrag.DragGI.Get())
+	if (!YI_IsGlobalDragValid(ContextWorld))
 	{
 		OutSourceBag = nullptr;
 		return false;
 	}
 	OutItem = GInventoryDrag.Item;
-	OutSourceBag = GInventoryDrag.SourceGrid ? GInventoryDrag.SourceGrid->Bag : nullptr;
+	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
+	OutSourceBag = SourceGrid ? SourceGrid->Bag : nullptr;
 	return true;
 }
 
 bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag)
 {
-	if (!EquipmentComponent || !GInventoryDrag.bActive)
+	if (!EquipmentComponent)
 	{
 		return false;
 	}
 
 	if (UWorld* World = EquipmentComponent->GetWorld())
 	{
-		if (GInventoryDrag.DragGI.IsValid() && GInventoryDrag.DragGI.Get() != World->GetGameInstance())
+		if (!YI_IsGlobalDragValid(World))
 		{
 			return false;
 		}
 	}
+	else if (!YI_IsGlobalDragValid(nullptr))
+	{
+		return false;
+	}
 
-	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid;
+	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
 	if (!SourceGrid || !SourceGrid->Bag || GInventoryDrag.SourceIndex == INDEX_NONE)
 	{
 		return false;
@@ -1328,7 +1394,7 @@ void UInventoryGridWidget::SetTradeContext(AYITradeSessionActor* InSession, ETra
 void UInventoryGridWidget::HandleCellClicked(const FIntPoint& Cell)
 {
 	// If a drag is active, attempt drop; otherwise start a drag from the clicked cell
-	if (GInventoryDrag.bActive)
+	if (YI_IsGlobalDragValid(GetWorld()))
 	{
 		// Attempt drop on this cell
 		DropDraggedItemAtCell(Cell);

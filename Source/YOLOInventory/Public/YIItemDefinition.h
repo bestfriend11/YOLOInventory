@@ -79,6 +79,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Slots occupied by this item while equipped. If empty, only requested/auto-resolved slot is occupied."))
 	FGameplayTagContainer OccupiedEquipSlots;
 
+	/** Cost consumed from the target equipment slot capacity when this item is equipped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ClampMin="1", ToolTip="How much slot capacity this item requires. Example: chest armor can use 6 while lighter armor uses 4."))
+	int32 EquipSlotCost = 1;
+
 	// Attributes defaults (legacy, not used when GAS is authoritative)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attributes", meta=(EditCondition=false, EditConditionHides, ToolTip="Legacy per-name attribute defaults; use AttributeMods/GAS for runtime values"))
 	TMap<FName,float> AttributeDefaults;
