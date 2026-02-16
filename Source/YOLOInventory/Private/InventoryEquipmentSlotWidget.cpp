@@ -256,7 +256,7 @@ FReply UInventoryEquipmentSlotWidget::HandleMouseButtonDown(const FGeometry& Geo
 			return FReply::Handled();
 		}
 
-		UInventoryGridWidget::BeginDragFromBagItem(AddedBag, AddedIndex, GetWorld());
+		UInventoryGridWidget::BeginDetachedDragFromBagItem(AddedBag, AddedIndex, GetWorld());
 		return FReply::Handled();
 	}
 

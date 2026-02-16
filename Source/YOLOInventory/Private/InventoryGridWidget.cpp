@@ -1366,6 +1366,64 @@ bool UInventoryGridWidget::BeginDragFromBagItem(UYIInventoryBag* InBag, int32 It
 	return Grid->BeginDragFromCell(InBag->Items[ItemIndex].Pos);
 }
 
+bool UInventoryGridWidget::BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld)
+{
+	if (!InBag || !InBag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	UInventoryGridWidget* Grid = FindRegisteredGridForBag(InBag, ContextWorld);
+	if (!Grid)
+	{
+		return false;
+	}
+
+	if (Grid->IsItemIndexLockedForUI(ItemIndex))
+	{
+		return false;
+	}
+
+	const FYIBagItem DraggedItem = InBag->Items[ItemIndex];
+	const FIntPoint DragSourcePos = DraggedItem.Pos;
+
+	bool bRemovedFromBag = false;
+	if (UYIInventoryComponent* OwnerComp = InBag->GetTypedOuter<UYIInventoryComponent>())
+	{
+		// Prefer authority mutation through inventory component when this bag is the active one.
+		if (OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority() && OwnerComp->GetBag() == InBag)
+		{
+			bRemovedFromBag = OwnerComp->RemoveItem(ItemIndex);
+		}
+	}
+	if (!bRemovedFromBag)
+	{
+		bRemovedFromBag = InBag->RemoveItem(ItemIndex);
+	}
+	if (!bRemovedFromBag)
+	{
+		return false;
+	}
+
+	// Only allow drag within this game instance (prevents cross-PIE bleed).
+	if (UWorld* World = Grid->GetWorld())
+	{
+		GInventoryDrag.DragGI = World->GetGameInstance();
+	}
+	GInventoryDrag.SourceGrid = Grid;
+	GInventoryDrag.SourceIndex = INDEX_NONE;
+	GInventoryDrag.SourcePos = DragSourcePos;
+	GInventoryDrag.Item = DraggedItem;
+	GInventoryDrag.bRemovedFromSource = true;
+	GInventoryDrag.bActive = true;
+	GInventoryDrag.bFromExchange = false;
+
+	Grid->OnItemDragStarted.Broadcast(Grid, INDEX_NONE);
+	Grid->SetSelectedCell(FIntPoint(-1, -1));
+	Grid->RefreshBoundTooltip();
+	return true;
+}
+
 bool UInventoryGridWidget::IsItemIndexLockedForUI(int32 ItemIndex) const
 {
 	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))

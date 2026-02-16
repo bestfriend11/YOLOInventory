@@ -234,7 +234,7 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 	}
 
 	FYIBagItem ToPlace = Src;
-	const bool bStacking = Def->bAllowStacking && Def->MaxStackCount > 1;
+	const bool bStacking = Def->IsRuntimeStackingAllowed();
 	if (bStacking && Count > 0)
 	{
 		ToPlace.Item.Count = FMath::Clamp(Count, 1, Src.Item.Count);

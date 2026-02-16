@@ -66,6 +66,9 @@ public:
 	bool bAllowStacking = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stacking", meta=(EditCondition="bAllowStacking", ClampMin="1", ToolTip="Maximum items in a single stack"))
 	int32 MaxStackCount = 99;
+	/** Explicit override for advanced users who intentionally want mutable/randomized items to stack. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stacking", AdvancedDisplay, meta=(EditCondition="bAllowStacking", ToolTip="If enabled, bypasses stack-safety validation and allows stacking even when this item has mutable/randomized state."))
+	bool bAllowUnsafeStacking = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stacking", meta=(ToolTip="If true, only a single instance of this item type may exist (unique per type)"))
 	bool bUniquePerType = false;
 
@@ -127,8 +130,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Whether this item is linked to a data source row"))
 	bool bGeneratedFromDataSource = false;
+
+	/** Returns whether this item can be safely stacked under runtime safety rules. */
+	bool IsRuntimeStackingAllowed(FString* OutReason = nullptr) const;
+
+	/** Returns true if this item has mutable/randomized state that usually should not be stacked. */
+	bool HasStackingRisk(FString* OutReason = nullptr) const;
 	// Editor safety: auto-assign unique code if zero on save (and ensure no collision)
 #if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 	virtual void PreSave(FObjectPreSaveContext SaveContext) override;
 #endif
 };

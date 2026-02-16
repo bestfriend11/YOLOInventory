@@ -229,7 +229,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		{
 			Existing = FindExistingStackIndex(Def);
 		}
-		if (Existing != INDEX_NONE && Def->bAllowStacking && Def->MaxStackCount > 1)
+		if (Existing != INDEX_NONE && Def->IsRuntimeStackingAllowed())
 		{
 			int32 Room = Def->MaxStackCount - Items[Existing].Item.Count;
 			if (Room > 0)
@@ -249,7 +249,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		Copy.Pos = Fit;
 	}
 	// Clamp count to MaxStackCount if stacking
-	if (Def->bAllowStacking && Def->MaxStackCount > 1)
+	if (Def->IsRuntimeStackingAllowed())
 	{
 		Copy.Item.Count = FMath::Clamp(Copy.Item.Count, 1, Def->MaxStackCount);
 	}
@@ -268,7 +268,7 @@ bool UYIInventoryBag::CombineStacks(int32 IndexA, int32 IndexB)
 	UYIItemDefinition* DefB = B.Item.Definition.IsValid()?B.Item.Definition.Get():B.Item.Definition.LoadSynchronous();
 	if (!DefA || !DefB) return false;
 	if (DefA != DefB) return false;
-	if (!(DefA->bAllowStacking && DefA->MaxStackCount > 1)) return false;
+	if (!DefA->IsRuntimeStackingAllowed()) return false;
 	int32 Room = DefA->MaxStackCount - A.Item.Count;
 	if (Room <= 0) return false;
 	int32 Moved = FMath::Min(Room, B.Item.Count);
@@ -293,7 +293,7 @@ int32 UYIInventoryBag::SplitStack(int32 Index, int32 Amount, const FIntPoint Pos
 	if (!Items.IsValidIndex(Index) || Amount <= 0) return INDEX_NONE;
 	FYIBagItem& Src = Items[Index];
 	UYIItemDefinition* Def = Src.Item.Definition.IsValid()?Src.Item.Definition.Get():Src.Item.Definition.LoadSynchronous();
-	if (!Def || !(Def->bAllowStacking && Def->MaxStackCount > 1)) return INDEX_NONE;
+	if (!Def || !Def->IsRuntimeStackingAllowed()) return INDEX_NONE;
 	if (Src.Item.Count <= Amount) return INDEX_NONE;
 	FYIBagItem New = Src;
 	New.Item.Count = Amount;

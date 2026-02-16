@@ -245,7 +245,7 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
     {
         FYIBagItem& DestItem = DstBag->Items[DestIdx];
         UYIItemDefinition* Def = DestItem.Item.Definition.IsValid() ? DestItem.Item.Definition.Get() : DestItem.Item.Definition.LoadSynchronous();
-        if (Def && Def->bAllowStacking && Def->MaxStackCount > 1 &&
+        if (Def && Def->IsRuntimeStackingAllowed() &&
             DestItem.Item.Definition.ToSoftObjectPath() == SrcItem.Item.Definition.ToSoftObjectPath())
         {
             const int32 Room = Def->MaxStackCount - DestItem.Item.Count;

@@ -328,6 +328,9 @@ public:
 	/** Starts drag for a specific item index from the provided bag using a registered runtime grid. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
 	static bool BeginDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld = nullptr);
+	/** Starts a detached drag by immediately removing the source item from bag and carrying it until dropped/canceled. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
+	static bool BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld = nullptr);
 
 	/** Optional: route cross-owner transfers through a trade session (server-authoritative). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
