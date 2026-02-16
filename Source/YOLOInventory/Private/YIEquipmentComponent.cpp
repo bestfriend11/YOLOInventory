@@ -553,8 +553,38 @@ bool UYIEquipmentComponent::UnequipToInventory(UYIInventoryComponent* DestInvent
 	}
 
 	FString Message;
-	const bool bSuccess = UnequipToInventoryInternal(DestInventory, SlotTag, Message);
+	const bool bSuccess = UnequipToInventoryInternal(DestInventory, SlotTag, Message, nullptr, nullptr);
 	BroadcastResult(bSuccess, SlotTag, Message);
+	return bSuccess;
+}
+
+bool UYIEquipmentComponent::UnequipToInventoryAndResolveItem(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, UYIInventoryBag*& OutBag, int32& OutItemIndex)
+{
+	OutBag = nullptr;
+	OutItemIndex = INDEX_NONE;
+
+	if (!GetOwner())
+	{
+		return false;
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		// Non-authority callers can request unequip, but deterministic source index is only known on authority.
+		return UnequipToInventory(DestInventory, SlotTag);
+	}
+
+	FString Message;
+	UYIInventoryBag* AddedBag = nullptr;
+	int32 AddedIndex = INDEX_NONE;
+	const bool bSuccess = UnequipToInventoryInternal(DestInventory, SlotTag, Message, &AddedBag, &AddedIndex);
+	BroadcastResult(bSuccess, SlotTag, Message);
+
+	if (bSuccess)
+	{
+		OutBag = AddedBag;
+		OutItemIndex = AddedIndex;
+	}
 	return bSuccess;
 }
 
@@ -849,8 +879,17 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	return true;
 }
 
-bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage)
+bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage, UYIInventoryBag** OutBag, int32* OutItemIndex)
 {
+	if (OutBag)
+	{
+		*OutBag = nullptr;
+	}
+	if (OutItemIndex)
+	{
+		*OutItemIndex = INDEX_NONE;
+	}
+
 	if (!SlotTag.IsValid())
 	{
 		OutMessage = TEXT("Unequip failed: Slot tag is invalid.");
@@ -870,6 +909,7 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	}
 	const FYIItemInstanceNet UnequippedItem = EquippedItems[EntryIndex].Item;
 	const bool bInventoryLockedGroup = EquippedItems[EntryIndex].bInventoryLocked;
+	int32 AddedItemIndex = INDEX_NONE;
 
 	UYIInventoryBag* DestBag = nullptr;
 	if (!bInventoryLockedGroup)
@@ -903,7 +943,8 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 			ToInventory.Size = FIntPoint(1, 1);
 		}
 
-		if (DestBag->AddBagItem(ToInventory) == INDEX_NONE)
+		AddedItemIndex = DestBag->AddBagItem(ToInventory);
+		if (AddedItemIndex == INDEX_NONE)
 		{
 			OutMessage = TEXT("Unequip failed: Destination bag has no room for the item.");
 			return false;
@@ -932,6 +973,50 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 		}
 	}
 
+	if (bInventoryLockedGroup)
+	{
+		// Item stayed in inventory and was unlocked; resolve its current runtime location for deterministic drag-start.
+		for (const FYIEquippedItemEntry& GroupEntry : GroupEntries)
+		{
+			if (!GroupEntry.SourceBagId.IsValid() || GroupEntry.SourceCustomStackKey == 0)
+			{
+				continue;
+			}
+
+			UYIInventoryBag* SourceBag = DestInventory->GetBagById(GroupEntry.SourceBagId);
+			if (!SourceBag)
+			{
+				continue;
+			}
+
+			const int32 SourceIdx = SourceBag->Items.IndexOfByPredicate([&GroupEntry](const FYIBagItem& Item)
+			{
+				if (Item.Item.CustomStackKey != GroupEntry.SourceCustomStackKey)
+				{
+					return false;
+				}
+				if (GroupEntry.SourceItemCode == 0)
+				{
+					return true;
+				}
+				if (UYIItemDefinition* Def = Item.Item.Definition.IsValid()
+					? Item.Item.Definition.Get()
+					: Item.Item.Definition.LoadSynchronous())
+				{
+					return Def->UniqueCode == GroupEntry.SourceItemCode;
+				}
+				return false;
+			});
+
+			if (SourceIdx != INDEX_NONE)
+			{
+				DestBag = SourceBag;
+				AddedItemIndex = SourceIdx;
+				break;
+			}
+		}
+	}
+
 	if (RemovedSlots.Num() == 0)
 	{
 		RemovedSlots.Add(SlotTag);
@@ -948,6 +1033,15 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	else
 	{
 		OutMessage = FString::Printf(TEXT("Unequipped %d slot(s) to bag '%s'."), RemovedSlots.Num(), *DestBag->GetName());
+	}
+
+	if (OutBag)
+	{
+		*OutBag = DestBag;
+	}
+	if (OutItemIndex)
+	{
+		*OutItemIndex = AddedItemIndex;
 	}
 	return true;
 }

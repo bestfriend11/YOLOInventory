@@ -7,6 +7,7 @@
 #include "YIEquipmentComponent.generated.h"
 
 class UYIInventoryComponent;
+class UYIInventoryBag;
 class UYIItemDefinition;
 class UYIEquipmentSchemaAsset;
 class USoundBase;
@@ -154,6 +155,8 @@ public:
 	/** Unequip slot back into destination inventory active bag. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net", meta=(ToolTip="Unequip item from slot back into destination inventory active bag.\nArgs:\n- DestInventory: owner inventory component that receives item.\n- SlotTag: equipped slot to remove.\nNetwork:\n- Client call sends server RPC.\n- Server mutates replicated state and broadcasts events."))
 	bool UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
+	/** Authority helper: unequip and return the exact bag/index that now contains the item. */
+	bool UnequipToInventoryAndResolveItem(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, UYIInventoryBag*& OutBag, int32& OutItemIndex);
 
 	UFUNCTION(Server, Reliable)
 	void ServerUnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
@@ -196,7 +199,7 @@ protected:
 
 private:
 	bool EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage);
-	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage);
+	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage, UYIInventoryBag** OutBag = nullptr, int32* OutItemIndex = nullptr);
 
 	int32 FindEntryIndex(FGameplayTag SlotTag) const;
 	int32 FindSlotDefinitionIndex(FGameplayTag SlotTag) const;

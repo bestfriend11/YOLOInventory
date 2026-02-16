@@ -8,6 +8,7 @@
 
 class UYIEquipmentComponent;
 class UYIInventoryComponent;
+class UYIInventoryBag;
 class UTexture2D;
 class SBorder;
 class SImage;
@@ -92,6 +93,7 @@ private:
 	void UnbindEquipmentEvents();
 	void UpdateVisualState(bool bForceInvalidTint = false);
 	void BroadcastResult(bool bSuccess, const FString& Message);
+	bool TryUnequipToInventoryResolved(UYIInventoryBag*& OutBag, int32& OutItemIndex);
 
 	FReply HandleMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& MouseEvent);
 

@@ -184,6 +184,16 @@ bool UInventoryEquipmentSlotWidget::TryEquipFromActiveDrag()
 
 bool UInventoryEquipmentSlotWidget::TryUnequipToInventory()
 {
+	UYIInventoryBag* UnusedBag = nullptr;
+	int32 UnusedIndex = INDEX_NONE;
+	return TryUnequipToInventoryResolved(UnusedBag, UnusedIndex);
+}
+
+bool UInventoryEquipmentSlotWidget::TryUnequipToInventoryResolved(UYIInventoryBag*& OutBag, int32& OutItemIndex)
+{
+	OutBag = nullptr;
+	OutItemIndex = INDEX_NONE;
+
 	if (!ResolveComponents() || !EquipmentComponent || !SlotTag.IsValid())
 	{
 		BroadcastResult(false, TEXT("Unequip failed: slot is not configured."));
@@ -203,7 +213,7 @@ bool UInventoryEquipmentSlotWidget::TryUnequipToInventory()
 		return false;
 	}
 
-	const bool bSuccess = EquipmentComponent->UnequipToInventory(InventoryComponent, SlotTag);
+	const bool bSuccess = EquipmentComponent->UnequipToInventoryAndResolveItem(InventoryComponent, SlotTag, OutBag, OutItemIndex);
 	BroadcastResult(bSuccess, bSuccess ? TEXT("Item unequipped to inventory.") : TEXT("Unequip failed."));
 	UpdateVisualState(!bSuccess);
 	return bSuccess;
@@ -225,49 +235,28 @@ FReply UInventoryEquipmentSlotWidget::HandleMouseButtonDown(const FGeometry& Geo
 			return FReply::Handled();
 		}
 
-		FYIItemInstanceNet EquippedItem;
-		if (!EquipmentComponent->GetEquippedItem(SlotTag, EquippedItem))
+		FYIItemInstanceNet IgnoredItem;
+		if (!EquipmentComponent->GetEquippedItem(SlotTag, IgnoredItem))
 		{
 			return FReply::Handled();
 		}
+		(void)IgnoredItem;
 
-		const bool bUnequipped = TryUnequipToInventory();
+		UYIInventoryBag* AddedBag = nullptr;
+		int32 AddedIndex = INDEX_NONE;
+		const bool bUnequipped = TryUnequipToInventoryResolved(AddedBag, AddedIndex);
 		if (!bUnequipped)
 		{
 			return FReply::Handled();
 		}
 
-		UYIInventoryBag* ActiveBag = InventoryComponent->EquippedBag;
-		if (!ActiveBag)
-		{
-			ActiveBag = InventoryComponent->GetBag();
-		}
-		if (!ActiveBag)
+		// For non-authority RPC flow, result index may not be available immediately.
+		if (!AddedBag || AddedIndex == INDEX_NONE)
 		{
 			return FReply::Handled();
 		}
 
-		int32 SourceIndex = INDEX_NONE;
-		if (EquippedItem.CustomStackKey != 0)
-		{
-			SourceIndex = ActiveBag->Items.IndexOfByPredicate([&EquippedItem](const FYIBagItem& Item)
-			{
-				return Item.Item.CustomStackKey == EquippedItem.CustomStackKey;
-			});
-		}
-		if (SourceIndex == INDEX_NONE)
-		{
-			SourceIndex = ActiveBag->Items.IndexOfByPredicate([&EquippedItem](const FYIBagItem& Item)
-			{
-				return Item.Item.Definition.ToSoftObjectPath() == EquippedItem.Definition.ToSoftObjectPath();
-			});
-		}
-		if (SourceIndex == INDEX_NONE)
-		{
-			return FReply::Handled();
-		}
-
-		UInventoryGridWidget::BeginDragFromBagItem(ActiveBag, SourceIndex, GetWorld());
+		UInventoryGridWidget::BeginDragFromBagItem(AddedBag, AddedIndex, GetWorld());
 		return FReply::Handled();
 	}
 
