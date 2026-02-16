@@ -5,6 +5,8 @@
 #include "GameplayTagContainer.h"
 #include "YOLOInventorySettings.generated.h"
 
+class UYIInventoryGridStyleAsset;
+
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIRarityColorEntry
 {
@@ -51,6 +53,10 @@ public:
 	/** Prefixes used by optional tag chooser helper APIs to surface common inventory tags. */
 	UPROPERTY(EditAnywhere, config, Category = "Gameplay Tags", meta=(ToolTip="Tag prefixes used by inventory tag suggestion helpers."))
 	TArray<FString> SuggestedInventoryTagPrefixes;
+
+	/** Optional default runtime grid style used when widget and bag do not specify one. */
+	UPROPERTY(EditAnywhere, config, Category = "Visuals", meta=(ToolTip="Fallback grid style for runtime inventory grids (widget override and bag style take priority)."))
+	TSoftObjectPtr<UYIInventoryGridStyleAsset> DefaultGridStyle;
 
 	/** Read-only access to settings. */
 	static const UYOLOInventorySettings& Get();

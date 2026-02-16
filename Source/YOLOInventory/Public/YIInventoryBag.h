@@ -9,6 +9,7 @@
 #include "YIInventoryBag.generated.h"
 
 class UYIItemDefinition;
+class UYIInventoryGridStyleAsset;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYIBagItem
@@ -145,6 +146,10 @@ public:
 	float MinifyScale = 1.0f;
 
 	// Grid visuals (designer selectable)
+	/** Optional grid style asset used by runtime UMG/Slate grids. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Style", meta=(ToolTip="Optional style asset for rendering this bag in runtime grids"))
+	TSoftObjectPtr<UYIInventoryGridStyleAsset> GridStyleAsset;
+
 	UPROPERTY(EditAnywhere, Category="Bag|Style", meta=(ToolTip="Color for inner grid lines")) FLinearColor GridLineColor = FLinearColor(0.1f,0.1f,0.1f,1);
 	UPROPERTY(EditAnywhere, Category="Bag|Style", meta=(ToolTip="Color for outer outline")) FLinearColor OuterLineColor = FLinearColor(0.2f,0.2f,0.2f,1);
 	UPROPERTY(EditAnywhere, Category="Bag|Style", meta=(ToolTip="Background color for cells")) FLinearColor CellBgColor = FLinearColor(0.02f,0.02f,0.02f,1);

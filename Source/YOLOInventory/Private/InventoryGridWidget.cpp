@@ -17,6 +17,8 @@
 #include "YIItemPickup.h"
 #include "YIItemSFXLibrary.h"
 #include "Engine/World.h"
+#include "YIInventoryGridStyleAsset.h"
+#include "YOLOInventorySettings.h"
 
 // Global drag state used to track click-to-pickup drags across grids
 TSet<TWeakObjectPtr<UInventoryGridWidget>> UInventoryGridWidget::GRegisteredGrids;
@@ -473,6 +475,46 @@ void UInventoryGridWidget::HandleSelectionChanged(const FIntPoint& NewCell)
 	{
 		RequestOpenActionMenu(BoundActionMenu);
 	}
+}
+
+void UInventoryGridWidget::SetGridStyleOverride(UYIInventoryGridStyleAsset* InStyle)
+{
+	GridStyleOverride = InStyle;
+	if (MySlateWidget.IsValid())
+	{
+		MySlateWidget->Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+	}
+}
+
+UYIInventoryGridStyleAsset* UInventoryGridWidget::GetResolvedGridStyleAsset() const
+{
+	auto ResolveSoftStyle = [](const TSoftObjectPtr<UYIInventoryGridStyleAsset>& StylePtr) -> UYIInventoryGridStyleAsset*
+		{
+			if (StylePtr.IsValid())
+			{
+				return StylePtr.Get();
+			}
+			if (StylePtr.ToSoftObjectPath().IsValid())
+			{
+				return StylePtr.LoadSynchronous();
+			}
+			return nullptr;
+		};
+
+	if (UYIInventoryGridStyleAsset* WidgetStyle = ResolveSoftStyle(GridStyleOverride))
+	{
+		return WidgetStyle;
+	}
+
+	if (bUseBagStyleAsset && Bag)
+	{
+		if (UYIInventoryGridStyleAsset* BagStyle = ResolveSoftStyle(Bag->GridStyleAsset))
+		{
+			return BagStyle;
+		}
+	}
+
+	return ResolveSoftStyle(UYOLOInventorySettings::Get().DefaultGridStyle);
 }
 
 bool UInventoryGridWidget::GetAvailableActionsForSelectedItem(TArray<FText>& OutActions, TArray<int32>& OutActionIds) const

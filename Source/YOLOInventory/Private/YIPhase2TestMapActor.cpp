@@ -396,6 +396,7 @@ UYIInventoryBag* AYIPhase2TestMapActor::CreateRuntimeBagFromTemplate(
 		NewBag->CellPixelSize = TemplateBag->CellPixelSize;
 		NewBag->bAllowRotation = TemplateBag->bAllowRotation;
 		NewBag->MinifyScale = TemplateBag->MinifyScale;
+		NewBag->GridStyleAsset = TemplateBag->GridStyleAsset;
 		NewBag->GridLineColor = TemplateBag->GridLineColor;
 		NewBag->OuterLineColor = TemplateBag->OuterLineColor;
 		NewBag->CellBgColor = TemplateBag->CellBgColor;

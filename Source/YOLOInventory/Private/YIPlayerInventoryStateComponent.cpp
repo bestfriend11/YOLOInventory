@@ -453,6 +453,7 @@ static void CopyBagToSnapshot(const UYIInventoryBag* Bag, FYISavedBagSnapshot& O
 	Out.CellPixelSize = Bag->CellPixelSize;
 	Out.bAllowRotation = Bag->bAllowRotation;
 	Out.MinifyScale = Bag->MinifyScale;
+	Out.GridStyleAsset = Bag->GridStyleAsset;
 	Out.GridLineColor = Bag->GridLineColor;
 	Out.OuterLineColor = Bag->OuterLineColor;
 	Out.CellBgColor = Bag->CellBgColor;
@@ -478,6 +479,7 @@ static UYIInventoryBag* SnapshotToBag(UObject* Outer, const FYISavedBagSnapshot&
 	NewBag->CellPixelSize = Snap.CellPixelSize;
 	NewBag->bAllowRotation = Snap.bAllowRotation;
 	NewBag->MinifyScale = Snap.MinifyScale;
+	NewBag->GridStyleAsset = Snap.GridStyleAsset;
 	NewBag->GridLineColor = Snap.GridLineColor;
 	NewBag->OuterLineColor = Snap.OuterLineColor;
 	NewBag->CellBgColor = Snap.CellBgColor;

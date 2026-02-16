@@ -16,6 +16,7 @@ class UYIEquipmentComponent;
 enum class ETradeSide : uint8;
 class UYIShopComponent;
 class UYIInventoryComponent;
+class UYIInventoryGridStyleAsset;
 
 /**
  * UInventoryGridWidget
@@ -82,6 +83,14 @@ public:
 	/** When true, individual grids will not draw their own drag ghost; instead, a global overlay widget should render the ghost once for the whole screen. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="If enabled, suppress per-grid ghost drawing; use a global overlay to draw drag ghost"))
 	bool bUseGlobalDragGhost = false;
+
+	/** Optional explicit style override for this grid widget instance. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Style", meta=(ToolTip="Optional visual style override for this grid widget"))
+	TSoftObjectPtr<UYIInventoryGridStyleAsset> GridStyleOverride;
+
+	/** If true, bag-level style is preferred before project default style when override is not set. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Style", meta=(ToolTip="Use bag GridStyleAsset when widget override is empty"))
+	bool bUseBagStyleAsset = true;
 
 	/** If true, the grid will track hover and draw hover highlights. Disabled by default for gamepad-first setups. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ToolTip="Enable per-cell hover tracking/highlight"))
@@ -175,6 +184,12 @@ public:
 	void SetEnableCellHover(bool bEnable);
 	UFUNCTION(BlueprintCallable, Category="Inventory|Input")
 	void SetEnableMouseSelection(bool bEnable);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Style")
+	void SetGridStyleOverride(UYIInventoryGridStyleAsset* InStyle);
+
+	/** Resolve effective style: Widget override -> Bag style (optional) -> Project settings default. */
+	UFUNCTION(BlueprintCallable, BlueprintPure = false, Category="Inventory|Style")
+	UYIInventoryGridStyleAsset* GetResolvedGridStyleAsset() const;
 	/** Set runtime context used for requirement evaluation in tooltips. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Tooltip")
 	void SetTooltipRequirementContext(class UAbilitySystemComponent* InASC, int32 InXP, const FGameplayTagContainer& InOwnedTags);

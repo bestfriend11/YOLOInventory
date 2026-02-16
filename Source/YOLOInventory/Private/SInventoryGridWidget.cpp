@@ -8,8 +8,65 @@
 #include "Engine/Texture2D.h"
 #include "YIItemDefinition.h"
 #include "Framework/Application/SlateApplication.h"
+#include "YIInventoryGridStyleAsset.h"
 
 #pragma optimize("", off)
+
+static void YI_DrawBrushSlot(
+	FSlateWindowElementList& OutDrawElements,
+	int32& LayerId,
+	const FGeometry& AllottedGeometry,
+	const FVector2D& Position,
+	const FVector2D& Size,
+	const FYIGridStyleBrushSlot& Slot,
+	const FSlateBrush* FallbackBrush)
+{
+	if (!Slot.bEnabled || Size.X <= 0.f || Size.Y <= 0.f)
+	{
+		return;
+	}
+
+	const bool bHasBrushData = Slot.Brush.DrawAs != ESlateBrushDrawType::NoDrawType;
+	const FSlateBrush* Brush = bHasBrushData ? &Slot.Brush : FallbackBrush;
+	if (!Brush)
+	{
+		return;
+	}
+
+	FSlateDrawElement::MakeBox(
+		OutDrawElements,
+		++LayerId,
+		AllottedGeometry.ToPaintGeometry(FVector2f(Size), FSlateLayoutTransform(FVector2f(Position))),
+		Brush,
+		ESlateDrawEffect::None,
+		Slot.Tint);
+}
+
+static void YI_DrawRectOutline(
+	FSlateWindowElementList& OutDrawElements,
+	int32& LayerId,
+	const FGeometry& AllottedGeometry,
+	const FVector2D& Position,
+	const FVector2D& Size,
+	const FLinearColor& Color,
+	float Thickness)
+{
+	TArray<FVector2D> Seg;
+	Seg.Add(Position);
+	Seg.Add(Position + FVector2D(Size.X, 0.f));
+	Seg.Add(Position + FVector2D(Size.X, Size.Y));
+	Seg.Add(Position + FVector2D(0.f, Size.Y));
+	Seg.Add(Position);
+	FSlateDrawElement::MakeLines(
+		OutDrawElements,
+		++LayerId,
+		AllottedGeometry.ToPaintGeometry(),
+		Seg,
+		ESlateDrawEffect::None,
+		Color,
+		true,
+		FMath::Max(0.5f, Thickness));
+}
 
 void SInventoryGridWidget::RebuildOccupancy()
 {
@@ -134,79 +191,209 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 {
 	int32 L = LayerId;
 	if (!Bag.IsValid()) return L;
+	const UInventoryGridWidget* Owner = OwnerWidget.Get();
+	const UYIInventoryGridStyleAsset* GridStyle = Owner ? Owner->GetResolvedGridStyleAsset() : nullptr;
 	const FSlateBrush* Box = FAppStyle::Get().GetBrush("WhiteBrush");
+
 	// Use explicit pixel cell size as configured (do not stretch to allotted geometry)
 	const FVector2D LocalCell = CellSize;
 	const FVector2D SizePix = FVector2D(Bag->GridSize) * LocalCell;
-	FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(SizePix), FSlateLayoutTransform()), Box, ESlateDrawEffect::None, Bag->CellBgColor);
-	// Grid lines
-	const float Half=0.5f; const float MaxX=SizePix.X-Half; const float MaxY=SizePix.Y-Half;
-	for(int x=0;x<=Bag->GridSize.X;++x){ float X=x*LocalCell.X+Half; TArray<FVector2D> Seg={FVector2D(X,Half),FVector2D(X,MaxY)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
-	for(int y=0;y<=Bag->GridSize.Y;++y){ float Y=y*LocalCell.Y+Half; TArray<FVector2D> Seg={FVector2D(Half,Y),FVector2D(MaxX,Y)}; FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Bag->GridLineColor, false, FMath::Max(1.f, Bag->GridThickness)); }
-	// Items
-	for (int32 i=0;i<Bag->Items.Num();++i)
+	const float GridLineThickness = FMath::Max(0.5f, GridStyle ? GridStyle->GridLineThickness : Bag->GridThickness);
+	const FLinearColor GridLineColor = GridStyle ? GridStyle->GridLineColor : Bag->GridLineColor;
+	const FLinearColor OuterLineColor = GridStyle ? GridStyle->GridLineColor : Bag->OuterLineColor;
+	const FLinearColor CellFillColor = GridStyle ? GridStyle->CellFill.Tint : Bag->CellBgColor;
+	const bool bShowItemIcons = Bag->bEnableThumbnails && (!GridStyle || GridStyle->bDrawItemIcon);
+
+	// Grid background / cell fill
+	if (GridStyle && GridStyle->CellFill.bEnabled)
 	{
-		const auto& It = Bag->Items[i];
-		const bool bLocked = OwnerWidget.IsValid() && OwnerWidget.Pin()->IsItemIndexLockedForUI(i);
-		FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-		FVector2D P = FVector2D(It.Pos) * LocalCell;
-		FVector2D S = FVector2D(Eff) * LocalCell;
-		FLinearColor Fill = FLinearColor(1,1,1,0.08f);
-		// Try load asset for rarity and icon later
+		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->CellFill, Box);
+	}
+	else
+	{
+		FSlateDrawElement::MakeBox(
+			OutDrawElements,
+			++L,
+			AllottedGeometry.ToPaintGeometry(FVector2f(SizePix), FSlateLayoutTransform()),
+			Box,
+			ESlateDrawEffect::None,
+			CellFillColor);
+	}
+
+	// Grid lines
+	const float Half = 0.5f;
+	const float MaxX = SizePix.X - Half;
+	const float MaxY = SizePix.Y - Half;
+	for (int x = 0; x <= Bag->GridSize.X; ++x)
+	{
+		const float X = x * LocalCell.X + Half;
+		TArray<FVector2D> Seg = { FVector2D(X, Half), FVector2D(X, MaxY) };
+		FSlateDrawElement::MakeLines(
+			OutDrawElements,
+			++L,
+			AllottedGeometry.ToPaintGeometry(),
+			Seg,
+			ESlateDrawEffect::None,
+			GridLineColor,
+			false,
+			GridLineThickness);
+	}
+	for (int y = 0; y <= Bag->GridSize.Y; ++y)
+	{
+		const float Y = y * LocalCell.Y + Half;
+		TArray<FVector2D> Seg = { FVector2D(Half, Y), FVector2D(MaxX, Y) };
+		FSlateDrawElement::MakeLines(
+			OutDrawElements,
+			++L,
+			AllottedGeometry.ToPaintGeometry(),
+			Seg,
+			ESlateDrawEffect::None,
+			GridLineColor,
+			false,
+			GridLineThickness);
+	}
+
+	// Optional outer border style; fallback to bag outer line color.
+	if (GridStyle && GridStyle->OuterBorder.bEnabled)
+	{
+		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->OuterBorder, Box);
+	}
+	else
+	{
+		YI_DrawRectOutline(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, OuterLineColor, GridLineThickness);
+	}
+
+	auto DrawItemIcon = [&](UTexture2D* IconTex, const FVector2D& ItemPos, const FVector2D& ItemSize)
+	{
+		if (!IconTex || !bShowItemIcons)
+		{
+			return;
+		}
+
+		FVector2D DrawPos = ItemPos;
+		FVector2D DrawSize = ItemSize;
+		if (GridStyle)
+		{
+			const FMargin Pad = GridStyle->ItemIconPadding;
+			DrawPos.X += Pad.Left;
+			DrawPos.Y += Pad.Top;
+			DrawSize.X -= (Pad.Left + Pad.Right);
+			DrawSize.Y -= (Pad.Top + Pad.Bottom);
+		}
+
+		if (DrawSize.X <= 0.f || DrawSize.Y <= 0.f)
+		{
+			return;
+		}
+
+		if (GridStyle && !GridStyle->bStretchItemIconToBounds)
+		{
+			const float SourceW = FMath::Max(1.f, static_cast<float>(IconTex->GetSizeX()));
+			const float SourceH = FMath::Max(1.f, static_cast<float>(IconTex->GetSizeY()));
+			const float Scale = FMath::Min(DrawSize.X / SourceW, DrawSize.Y / SourceH);
+			const FVector2D FitSize(SourceW * Scale, SourceH * Scale);
+			DrawPos += (DrawSize - FitSize) * 0.5f;
+			DrawSize = FitSize;
+		}
+
+		FSlateBrush IconBrush;
+		IconBrush.SetResourceObject(IconTex);
+		IconBrush.ImageSize = FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY());
+		IconBrush.DrawAs = ESlateBrushDrawType::Image;
+		FSlateDrawElement::MakeBox(
+			OutDrawElements,
+			++L,
+			AllottedGeometry.ToPaintGeometry(FVector2f(DrawSize), FSlateLayoutTransform(FVector2f(DrawPos))),
+			&IconBrush,
+			ESlateDrawEffect::None,
+			GridStyle ? GridStyle->ItemIconTint : FLinearColor::White);
+	};
+
+	// Items
+	for (int32 i = 0; i < Bag->Items.Num(); ++i)
+	{
+		const FYIBagItem& It = Bag->Items[i];
+		const bool bLocked = Owner && Owner->IsItemIndexLockedForUI(i);
+		const FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
+		const FVector2D P = FVector2D(It.Pos) * LocalCell;
+		const FVector2D S = FVector2D(Eff) * LocalCell;
+
 		UYIItemDefinition* Def = It.Item.Definition.IsValid() ? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
-		UTexture2D* IconTex = (Bag->bEnableThumbnails && Def) ? (Def->Icon.IsValid() ? Def->Icon.Get() : Def->Icon.LoadSynchronous()) : nullptr;
-		FLinearColor Border = FLinearColor(0.8f,0.8f,0.8f,0.5f);
-		if (Def)
+		UTexture2D* IconTex = bShowItemIcons && Def ? (Def->Icon.IsValid() ? Def->Icon.Get() : Def->Icon.LoadSynchronous()) : nullptr;
+
+		if (GridStyle && GridStyle->ItemFill.bEnabled)
 		{
-			Border.A = 0.65f; // border tint TBD (tag-based)
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFill, Box);
 		}
-		// Fill
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, Fill);
-		// Icon (centered within the item footprint)
-		if (IconTex)
+		else
 		{
-			FSlateBrush IconBrush;
-			IconBrush.SetResourceObject(IconTex);
-			IconBrush.ImageSize = FVector2D(IconTex->GetSizeX(), IconTex->GetSizeY());
-			IconBrush.DrawAs = ESlateBrushDrawType::Image;
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), &IconBrush, ESlateDrawEffect::None, FLinearColor::White);
+			FSlateDrawElement::MakeBox(
+				OutDrawElements,
+				++L,
+				AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))),
+				Box,
+				ESlateDrawEffect::None,
+				FLinearColor(1.f, 1.f, 1.f, 0.08f));
 		}
-		// Border
+
+		DrawItemIcon(IconTex, P, S);
+
+		if (GridStyle && GridStyle->ItemFrame.bEnabled)
 		{
-			TArray<FVector2D> Seg;
-			Seg.Add(P + FVector2D(0,0));
-			Seg.Add(P + FVector2D(S.X,0));
-			Seg.Add(P + FVector2D(S.X,0));
-			Seg.Add(P + FVector2D(S.X,S.Y));
-			Seg.Add(P + FVector2D(S.X,S.Y));
-			Seg.Add(P + FVector2D(0,S.Y));
-			Seg.Add(P + FVector2D(0,S.Y));
-			Seg.Add(P + FVector2D(0,0));
-			FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, Border, false, FMath::Max(1.f, Bag->GridThickness));
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFrame, Box);
 		}
-		// Stack count label (bottom-right)
+		else
+		{
+			YI_DrawRectOutline(OutDrawElements, L, AllottedGeometry, P, S, GridStyle ? GridStyle->ItemBorderColor : FLinearColor(0.8f, 0.8f, 0.8f, 0.65f), GridLineThickness);
+		}
+
 		if (It.Item.Count > 1)
 		{
-			FString CountStr = FString::FromInt(It.Item.Count);
-			FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Bold", 10);
-			FVector2D TextSize = FVector2D(40, 14);
-			FVector2D TP = P + S - TextSize - FVector2D(2,2);
-			FSlateDrawElement::MakeText(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(TextSize), FSlateLayoutTransform(FVector2f(TP))), FText::FromString(CountStr), Font, ESlateDrawEffect::None, FLinearColor::White);
+			const FString CountStr = FString::FromInt(It.Item.Count);
+			const int32 StackFontSize = GridStyle ? GridStyle->StackCountFontSize : 10;
+			const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Bold", StackFontSize);
+			const FVector2D TextSize = FVector2D(40.f, 14.f);
+			const FVector2D TP = P + S - TextSize - FVector2D(2.f, 2.f);
+			FSlateDrawElement::MakeText(
+				OutDrawElements,
+				++L,
+				AllottedGeometry.ToPaintGeometry(FVector2f(TextSize), FSlateLayoutTransform(FVector2f(TP))),
+				FText::FromString(CountStr),
+				Font,
+				ESlateDrawEffect::None,
+				GridStyle ? GridStyle->StackCountColor : FLinearColor::White);
 		}
+
 		if (bLocked)
 		{
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.16f, 0.42f, 0.9f, 0.24f));
-			const FSlateFontInfo LockFont = FCoreStyle::GetDefaultFontStyle("Bold", 9);
-			const FVector2D LockTextSize(64.f, 14.f);
+			if (GridStyle && GridStyle->LockedItemOverlay.bEnabled)
+			{
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->LockedItemOverlay, Box);
+			}
+			else
+			{
+				FSlateDrawElement::MakeBox(
+					OutDrawElements,
+					++L,
+					AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))),
+					Box,
+					ESlateDrawEffect::None,
+					FLinearColor(0.16f, 0.42f, 0.9f, 0.24f));
+			}
+
+			const FText LockText = GridStyle ? GridStyle->LockedLabel : NSLOCTEXT("YOLOInventory", "Grid_LockedBadge", "EQUIPPED");
+			const int32 LockFontSize = GridStyle ? GridStyle->LockedLabelFontSize : 9;
+			const FSlateFontInfo LockFont = FCoreStyle::GetDefaultFontStyle("Bold", LockFontSize);
+			const FVector2D LockTextSize(96.f, 14.f);
 			const FVector2D LockPos = P + FVector2D(2.f, 2.f);
 			FSlateDrawElement::MakeText(
 				OutDrawElements,
 				++L,
 				AllottedGeometry.ToPaintGeometry(FVector2f(LockTextSize), FSlateLayoutTransform(FVector2f(LockPos))),
-				NSLOCTEXT("YOLOInventory", "Grid_LockedBadge", "EQUIPPED"),
+				LockText,
 				LockFont,
 				ESlateDrawEffect::None,
-				FLinearColor(0.95f, 0.98f, 1.f, 0.95f));
+				GridStyle ? GridStyle->LockedLabelColor : FLinearColor(0.95f, 0.98f, 1.f, 0.95f));
 		}
 	}
 	// Hover highlight: only when not actively dragging a ghost, to avoid visual conflict
@@ -216,62 +403,105 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			const FVector2D P = FVector2D(HoveredItemTopLeft) * LocalCell;
 			const FVector2D S = FVector2D(HoveredItemSize) * LocalCell;
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.8f,0.2f,0.12f));
+			if (GridStyle && GridStyle->HoveredItemOverlay.bEnabled)
+			{
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->HoveredItemOverlay, Box);
+			}
+			else
+			{
+				FSlateDrawElement::MakeBox(
+					OutDrawElements,
+					++L,
+					AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))),
+					Box,
+					ESlateDrawEffect::None,
+					FLinearColor(0.1f, 0.8f, 0.2f, 0.12f));
+			}
 			// Re-draw item icon above the highlight so it stays visible
 			if (Bag->Items.IsValidIndex(HoveredItemIndex))
 			{
 				const FYIBagItem& HoverItem = Bag->Items[HoveredItemIndex];
 				UYIItemDefinition* HoverDef = HoverItem.Item.Definition.IsValid() ? HoverItem.Item.Definition.Get() : HoverItem.Item.Definition.LoadSynchronous();
-				UTexture2D* HoverIcon = HoverDef ? (HoverDef->Icon.IsValid() ? HoverDef->Icon.Get() : HoverDef->Icon.LoadSynchronous()) : nullptr;
-				if (HoverIcon)
-				{
-					FSlateBrush HoverIconBrush;
-					HoverIconBrush.SetResourceObject(HoverIcon);
-					HoverIconBrush.ImageSize = FVector2D(HoverIcon->GetSizeX(), HoverIcon->GetSizeY());
-					HoverIconBrush.DrawAs = ESlateBrushDrawType::Image;
-					FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(S), FSlateLayoutTransform(FVector2f(P))), &HoverIconBrush, ESlateDrawEffect::None, FLinearColor::White);
-				}
+				UTexture2D* HoverIcon = bShowItemIcons && HoverDef ? (HoverDef->Icon.IsValid() ? HoverDef->Icon.Get() : HoverDef->Icon.LoadSynchronous()) : nullptr;
+				DrawItemIcon(HoverIcon, P, S);
 			}
 		}
 		else
 		{
-			FVector2D P = FVector2D(HoverCell) * LocalCell;
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(LocalCell), FSlateLayoutTransform(FVector2f(P))), Box, ESlateDrawEffect::None, FLinearColor(0.1f,0.6f,1.f,0.08f));
+			const FVector2D P = FVector2D(HoverCell) * LocalCell;
+			if (GridStyle && GridStyle->HoveredCellOverlay.bEnabled)
+			{
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->HoveredCellOverlay, Box);
+			}
+			else
+			{
+				FSlateDrawElement::MakeBox(
+					OutDrawElements,
+					++L,
+					AllottedGeometry.ToPaintGeometry(FVector2f(LocalCell), FSlateLayoutTransform(FVector2f(P))),
+					Box,
+					ESlateDrawEffect::None,
+					FLinearColor(0.1f, 0.6f, 1.f, 0.08f));
+			}
 		}
 	}
 	// Selected cell cursor (thicker outline)
 	if (SelectedCell.X >= 0 && SelectedCell.Y >= 0)
 	{
-		FVector2D P = FVector2D(SelectedCell) * LocalCell;
-		TArray<FVector2D> Rect = { P, P + FVector2D(LocalCell.X, 0), P + FVector2D(LocalCell.X, LocalCell.Y), P + FVector2D(0, LocalCell.Y), P };
-		FLinearColor CursorColor = FLinearColor(0.2f, 0.6f, 1.f, 0.9f);
-		FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Rect, ESlateDrawEffect::None, CursorColor, true, 2.5f);
+		const FVector2D P = FVector2D(SelectedCell) * LocalCell;
+		if (GridStyle && GridStyle->SelectedCellOverlay.bEnabled)
+		{
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->SelectedCellOverlay, Box);
+		}
+		YI_DrawRectOutline(
+			OutDrawElements,
+			L,
+			AllottedGeometry,
+			P,
+			LocalCell,
+			GridStyle ? GridStyle->SelectedCellOutlineColor : FLinearColor(0.2f, 0.6f, 1.f, 0.9f),
+			GridStyle ? GridStyle->SelectedCellOutlineThickness : 2.5f);
 	}
 	// Ghost visual (click-to-drag without holding)
 	if (bGhostActive)
 	{
 		// Always draw the footprint highlight so users can see valid/invalid placement while dragging,
 		// even when a global ghost renderer is used.
-		const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f,0.8f,0.2f,0.18f) : FLinearColor(0.8f,0.2f,0.2f,0.18f);
 		const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
 		const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
-		FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
+		const FYIGridStyleBrushSlot* GhostSlot = nullptr;
+		if (GridStyle)
+		{
+			GhostSlot = bGhostPlacementValid ? &GridStyle->GhostPlacementValidOverlay : &GridStyle->GhostPlacementInvalidOverlay;
+		}
+		if (GhostSlot && GhostSlot->bEnabled)
+		{
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FootP, FootS, *GhostSlot, Box);
+		}
+		else
+		{
+			const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f, 0.8f, 0.2f, 0.18f) : FLinearColor(0.8f, 0.2f, 0.2f, 0.18f);
+			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
+		}
 
 		// Only draw the ghost icon locally if we are not using a global overlay ghost.
 		if (!bUseGlobalDragGhost)
 		{
 			const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
 			const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
-			const FLinearColor Tint = bGhostHasIcon ? FLinearColor(1,1,1,0.9f) : FLinearColor(1,1,1,0.18f);
+			const FLinearColor Tint = bGhostHasIcon
+				? (GridStyle ? GridStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.9f))
+				: FLinearColor(1.f, 1.f, 1.f, 0.18f);
 			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), BrushToUse, ESlateDrawEffect::None, Tint);
 			// Outline for visibility
-			TArray<FVector2D> Seg;
-			Seg.Add(P);
-			Seg.Add(P + FVector2D(GhostSize.X, 0));
-			Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
-			Seg.Add(P + FVector2D(0, GhostSize.Y));
-			Seg.Add(P);
-			FSlateDrawElement::MakeLines(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, FLinearColor(0.2f,0.8f,1.f,0.6f), true, 1.5f);
+			YI_DrawRectOutline(
+				OutDrawElements,
+				L,
+				AllottedGeometry,
+				P,
+				GhostSize,
+				GridStyle ? GridStyle->GhostOutlineColor : FLinearColor(0.2f, 0.8f, 1.f, 0.6f),
+				GridStyle ? GridStyle->GhostOutlineThickness : 1.5f);
 		}
 	}
 	return L;

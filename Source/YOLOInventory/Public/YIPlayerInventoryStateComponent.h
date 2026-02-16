@@ -12,6 +12,7 @@
 class UYIInventoryBag;
 class APawn;
 class UYIInventoryPersistenceProviderBase;
+class UYIInventoryGridStyleAsset;
 
 /** Snapshot of a bag for persistence (owner-only replicated). */
 USTRUCT(BlueprintType)
@@ -33,6 +34,9 @@ struct YOLOINVENTORY_API FYISavedBagSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	float MinifyScale = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	TSoftObjectPtr<UYIInventoryGridStyleAsset> GridStyleAsset;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FLinearColor GridLineColor = FLinearColor::White;

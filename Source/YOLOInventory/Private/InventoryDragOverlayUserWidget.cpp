@@ -10,6 +10,7 @@
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "YOLOInventorySettings.h"
+#include "YIInventoryGridStyleAsset.h"
 
 
 UInventoryDragOverlayUserWidget::UInventoryDragOverlayUserWidget(const FObjectInitializer& OI)
@@ -122,6 +123,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	});
 
 	UInventoryGridWidget* GhostScaleGrid = HoveredGrid ? HoveredGrid : SourceGrid;
+	const UYIInventoryGridStyleAsset* GhostStyle = GhostScaleGrid ? GhostScaleGrid->GetResolvedGridStyleAsset() : nullptr;
 	float GhostCellPx = (GhostScaleGrid && GhostScaleGrid->GetCellPixelSize() > 1.f)
 		? GhostScaleGrid->GetCellPixelSize()
 		: FMath::Max(1.f, FallbackGhostSize.X);
@@ -153,7 +155,9 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 
 	const FVector2D GhostSize = FVector2D(GhostFootprint) * GhostCellPx;
 	const FVector2D P = Local - (GhostSize * 0.5f);
-	const FLinearColor Tint = DragIconTexture ? FLinearColor(1.f, 1.f, 1.f, 0.90f) : FLinearColor(1.f, 1.f, 1.f, 0.18f);
+	const FLinearColor Tint = DragIconTexture
+		? (GhostStyle ? GhostStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.90f))
+		: FLinearColor(1.f, 1.f, 1.f, 0.18f);
 	const FSlateBrush* GhostBrush = FAppStyle::Get().GetBrush("WhiteBrush");
 	FSlateBrush IconBrush;
 	if (DragIconTexture)
@@ -183,7 +187,15 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
 	Seg.Add(P + FVector2D(0, GhostSize.Y));
 	Seg.Add(P);
-	FSlateDrawElement::MakeLines(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(), Seg, ESlateDrawEffect::None, FLinearColor(0.2f,0.8f,1.f,0.6f), true, 1.5f);
+	FSlateDrawElement::MakeLines(
+		OutDrawElements,
+		++LayerId,
+		AllottedGeometry.ToPaintGeometry(),
+		Seg,
+		ESlateDrawEffect::None,
+		GhostStyle ? GhostStyle->GhostOutlineColor : FLinearColor(0.2f, 0.8f, 1.f, 0.6f),
+		true,
+		GhostStyle ? GhostStyle->GhostOutlineThickness : 1.5f);
 
 	if (bShowDebug)
 	{
@@ -240,8 +252,25 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 			Debug += FString::Printf(TEXT("FootP_Grid: %s  FootS_Grid: %s  FootP_Abs: %s  FootP_Overlay: %s\n"), *V2(FootP_Grid), *V2(FootS_Grid), *V2(FootP_Abs), *V2(FootP_Overlay));
 		}
 
-		const FLinearColor GhostTint = bCan ? FLinearColor(0.2f,0.8f,0.2f,0.18f) : FLinearColor(0.8f,0.2f,0.2f,0.18f);
-		FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(FootS_Grid), FSlateLayoutTransform(FVector2f(FootP_Overlay))), FAppStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, GhostTint);
+		const UYIInventoryGridStyleAsset* GridStyle = Grid->GetResolvedGridStyleAsset();
+		const FYIGridStyleBrushSlot* OverlaySlot = GridStyle ? (bCan ? &GridStyle->GhostPlacementValidOverlay : &GridStyle->GhostPlacementInvalidOverlay) : nullptr;
+		if (OverlaySlot && OverlaySlot->bEnabled)
+		{
+			const bool bHasBrushData = OverlaySlot->Brush.DrawAs != ESlateBrushDrawType::NoDrawType;
+			const FSlateBrush* OverlayBrush = bHasBrushData ? &OverlaySlot->Brush : FAppStyle::Get().GetBrush("WhiteBrush");
+			FSlateDrawElement::MakeBox(
+				OutDrawElements,
+				++LayerId,
+				AllottedGeometry.ToPaintGeometry(FVector2f(FootS_Grid), FSlateLayoutTransform(FVector2f(FootP_Overlay))),
+				OverlayBrush,
+				ESlateDrawEffect::None,
+				OverlaySlot->Tint);
+		}
+		else
+		{
+			const FLinearColor GhostTint = bCan ? FLinearColor(0.2f, 0.8f, 0.2f, 0.18f) : FLinearColor(0.8f, 0.2f, 0.2f, 0.18f);
+			FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(FootS_Grid), FSlateLayoutTransform(FVector2f(FootP_Overlay))), FAppStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, GhostTint);
+		}
 
 		if (bShowDebug)
 		{
