@@ -1302,7 +1302,7 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* Equi
 	}
 
 	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
-	if (!SourceGrid || !SourceGrid->Bag || GInventoryDrag.SourceIndex == INDEX_NONE)
+	if (!SourceGrid || !SourceGrid->Bag)
 	{
 		return false;
 	}
@@ -1313,13 +1313,56 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* Equi
 		return false;
 	}
 
-	const bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, GInventoryDrag.SourceIndex, RequestedSlotTag);
+	int32 SourceIndexToEquip = GInventoryDrag.SourceIndex;
+	int32 TempInsertedIndex = INDEX_NONE;
+
+	// Detached drags (unequip flow) carry an item that is currently not inside the bag.
+	// Reinsert temporarily so normal equipment validation/path can consume it.
+	if (SourceIndexToEquip == INDEX_NONE && GInventoryDrag.bRemovedFromSource)
+	{
+		FYIBagItem RestoreItem = GInventoryDrag.Item;
+		RestoreItem.Pos = GInventoryDrag.SourcePos;
+
+		const bool bSavedAutoMerge = SourceGrid->Bag->bAutoMergeOnAdd;
+		SourceGrid->Bag->bAutoMergeOnAdd = false;
+		TempInsertedIndex = SourceGrid->Bag->AddBagItem(RestoreItem);
+		SourceGrid->Bag->bAutoMergeOnAdd = bSavedAutoMerge;
+		if (TempInsertedIndex == INDEX_NONE)
+		{
+			return false;
+		}
+
+		SourceIndexToEquip = TempInsertedIndex;
+	}
+
+	if (SourceIndexToEquip == INDEX_NONE)
+	{
+		return false;
+	}
+
+	const bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, SourceIndexToEquip, RequestedSlotTag);
 	if (bEquipped)
 	{
 		SourceGrid->RefreshBoundTooltip();
 		GInventoryDrag.Reset();
+		return true;
 	}
-	return bEquipped;
+
+	// Equip failed: if we reinserted a detached drag item, remove it again and keep drag active.
+	if (TempInsertedIndex != INDEX_NONE)
+	{
+		bool bRemovedRollback = false;
+		if (SourceInventory->GetOwner() && SourceInventory->GetOwner()->HasAuthority() && SourceInventory->GetBag() == SourceGrid->Bag)
+		{
+			bRemovedRollback = SourceInventory->RemoveItem(TempInsertedIndex);
+		}
+		if (!bRemovedRollback)
+		{
+			SourceGrid->Bag->RemoveItem(TempInsertedIndex);
+		}
+		SourceGrid->RefreshBoundTooltip();
+	}
+	return false;
 }
 
 UInventoryGridWidget* UInventoryGridWidget::FindRegisteredGridForBag(UYIInventoryBag* InBag, const UWorld* ContextWorld)
