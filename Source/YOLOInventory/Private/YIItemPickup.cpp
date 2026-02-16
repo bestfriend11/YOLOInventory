@@ -51,6 +51,14 @@ void AYIItemPickup::SetItemByCode(int64 InCode, int32 InCount)
 	Count = FMath::Max(1, InCount);
 	ItemInstance.Definition = Definition;
 	ItemInstance.Count = Count;
+	if (!ItemInstance.InstanceId.IsValid())
+	{
+		ItemInstance.InstanceId = FGuid::NewGuid();
+	}
+	if (!ItemInstance.StackId.IsValid())
+	{
+		ItemInstance.StackId = FGuid::NewGuid();
+	}
 	OnRep_ItemData();
 }
 

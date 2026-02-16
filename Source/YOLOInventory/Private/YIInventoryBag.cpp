@@ -8,6 +8,17 @@ void UYIInventoryBag::PostLoad()
 {
 	Super::PostLoad();
 	EnsureBagId();
+	for (FYIBagItem& ItemEntry : Items)
+	{
+		if (!ItemEntry.Item.InstanceId.IsValid())
+		{
+			ItemEntry.Item.InstanceId = FGuid::NewGuid();
+		}
+		if (!ItemEntry.Item.StackId.IsValid())
+		{
+			ItemEntry.Item.StackId = FGuid::NewGuid();
+		}
+	}
 }
 
 void UYIInventoryBag::EnsureBagId()
@@ -178,6 +189,16 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		return INDEX_NONE;
 	}
 
+	FYIBagItem NormalizedNewItem = NewItem;
+	if (!NormalizedNewItem.Item.InstanceId.IsValid())
+	{
+		NormalizedNewItem.Item.InstanceId = FGuid::NewGuid();
+	}
+	if (!NormalizedNewItem.Item.StackId.IsValid())
+	{
+		NormalizedNewItem.Item.StackId = FGuid::NewGuid();
+	}
+
 	// Enforce Dungeon Siege style uniqueness-per-type: only one stack per ItemType in this bag when flagged on the incoming item
 	if (Def->bUniquePerType)
 	{
@@ -199,9 +220,9 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	{
 		int32 Existing = INDEX_NONE;
 		// Prefer matching by per-instance stack key when present
-		if (NewItem.Item.CustomStackKey != 0)
+		if (NormalizedNewItem.Item.CustomStackKey != 0)
 		{
-			Existing = FindExistingStackIndexForItem(NewItem);
+			Existing = FindExistingStackIndexForItem(NormalizedNewItem);
 		}
 		// Fallback to legacy definition-only match if no key match
 		if (Existing == INDEX_NONE)
@@ -220,7 +241,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		}
 	}
 	// Place into grid (first-fit if needed)
-	FYIBagItem Copy = NewItem;
+	FYIBagItem Copy = NormalizedNewItem;
 	if (!CanPlaceAt(Copy.Pos, Copy.Size))
 	{
 		FIntPoint Fit;

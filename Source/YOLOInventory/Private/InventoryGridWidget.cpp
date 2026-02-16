@@ -94,6 +94,8 @@ static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 	FYIItemInstanceNet Net;
 	Net.Definition = Item.Definition;
 	Net.Count = Item.Count;
+	Net.InstanceId = Item.InstanceId;
+	Net.StackId = Item.StackId;
 	Net.CustomStackKey = Item.CustomStackKey;
 	Net.bRotated = Item.bRotated;
 	Net.Affixes = Item.Affixes;

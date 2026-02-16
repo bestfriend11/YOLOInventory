@@ -453,6 +453,8 @@ void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<F
             }
         }
         Net.Count = It.Item.Count;
+        Net.InstanceId = It.Item.InstanceId;
+        Net.StackId = It.Item.StackId;
         Net.Pos = It.Pos;
         Net.Size = It.Size;
         Net.CustomStackKey = It.Item.CustomStackKey;

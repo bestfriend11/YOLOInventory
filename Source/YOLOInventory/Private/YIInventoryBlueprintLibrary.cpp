@@ -686,6 +686,8 @@ AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		// Convert to net-safe instance
 		Pickup->ItemInstance.Definition = Instance.Definition;
 		Pickup->ItemInstance.Count = Instance.Count;
+		Pickup->ItemInstance.InstanceId = Instance.InstanceId.IsValid() ? Instance.InstanceId : FGuid::NewGuid();
+		Pickup->ItemInstance.StackId = Instance.StackId.IsValid() ? Instance.StackId : FGuid::NewGuid();
 		Pickup->ItemInstance.CustomStackKey = Instance.CustomStackKey;
 		Pickup->ItemInstance.bRotated = Instance.bRotated;
 		Pickup->ItemInstance.Affixes = Instance.Affixes;
@@ -820,6 +822,8 @@ bool UYIInventoryBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	FYIItemInstance Full;
 	Full.Definition = NetInstance.Definition;
 	Full.Count = NetInstance.Count;
+	Full.InstanceId = NetInstance.InstanceId.IsValid() ? NetInstance.InstanceId : FGuid::NewGuid();
+	Full.StackId = NetInstance.StackId.IsValid() ? NetInstance.StackId : FGuid::NewGuid();
 	Full.CustomStackKey = NetInstance.CustomStackKey;
 	Full.bRotated = NetInstance.bRotated;
 	Full.Affixes = NetInstance.Affixes;

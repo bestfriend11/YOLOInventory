@@ -79,6 +79,14 @@ UYIInventoryBag* UShopScreenWidget::BuildMirrorFromStock(const TArray<FYINetBagI
 		if (Net.Code == 0 || Net.Count <= 0) continue;
 		FYIBagItem Item;
 		Item.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Net.Code, Net.Count);
+		if (Net.InstanceId.IsValid())
+		{
+			Item.Item.InstanceId = Net.InstanceId;
+		}
+		if (Net.StackId.IsValid())
+		{
+			Item.Item.StackId = Net.StackId;
+		}
 		Item.Item.CustomStackKey = Net.CustomStackKey;
 		Item.Pos = Net.Pos;
 		Item.Size = Net.Size;

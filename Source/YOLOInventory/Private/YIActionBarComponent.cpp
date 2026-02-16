@@ -19,6 +19,8 @@ namespace YIActionBarPrivate
 		FYIItemInstanceNet Out;
 		Out.Definition = Full.Definition;
 		Out.Count = Full.Count;
+		Out.InstanceId = Full.InstanceId;
+		Out.StackId = Full.StackId;
 		Out.CustomStackKey = Full.CustomStackKey;
 		Out.bRotated = Full.bRotated;
 		Out.Affixes = Full.Affixes;

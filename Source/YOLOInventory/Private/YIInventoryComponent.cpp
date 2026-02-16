@@ -318,12 +318,8 @@ bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32
 	}
 
 	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
-	if (BagItem.Item.CustomStackKey == 0)
-	{
-		return false;
-	}
-
 	OutIdentity.BagId = Bag->BagId;
+	OutIdentity.ItemInstanceId = BagItem.Item.InstanceId;
 	OutIdentity.CustomStackKey = BagItem.Item.CustomStackKey;
 	OutIdentity.Code = 0;
 	if (UYIItemDefinition* Def = BagItem.Item.Definition.IsValid()
@@ -333,19 +329,27 @@ bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32
 		OutIdentity.Code = Def->UniqueCode;
 	}
 
-	return OutIdentity.BagId.IsValid() && OutIdentity.CustomStackKey != 0;
+	return OutIdentity.BagId.IsValid() && (OutIdentity.ItemInstanceId.IsValid() || OutIdentity.CustomStackKey != 0);
 }
 
 bool UYIInventoryComponent::IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const
 {
-	if (!Identity.BagId.IsValid() || Identity.CustomStackKey == 0)
+	if (!Identity.BagId.IsValid())
 	{
 		return false;
 	}
 
 	return LockedBagItems.ContainsByPredicate([&Identity](const FYILockedBagItemRef& Entry)
 	{
-		return Entry.BagId == Identity.BagId && Entry.CustomStackKey == Identity.CustomStackKey;
+		if (Entry.BagId != Identity.BagId)
+		{
+			return false;
+		}
+		if (Identity.ItemInstanceId.IsValid() && Entry.ItemInstanceId.IsValid())
+		{
+			return Entry.ItemInstanceId == Identity.ItemInstanceId;
+		}
+		return Identity.CustomStackKey != 0 && Entry.CustomStackKey == Identity.CustomStackKey;
 	});
 }
 
@@ -359,6 +363,14 @@ bool UYIInventoryComponent::SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemInd
 	Bag->EnsureBagId();
 
 	FYIBagItem& MutableItem = Bag->Items[ItemIndex];
+	if (!MutableItem.Item.InstanceId.IsValid())
+	{
+		MutableItem.Item.InstanceId = FGuid::NewGuid();
+	}
+	if (!MutableItem.Item.StackId.IsValid())
+	{
+		MutableItem.Item.StackId = FGuid::NewGuid();
+	}
 	if (MutableItem.Item.CustomStackKey == 0)
 	{
 		const int64 NewKey = (static_cast<int64>(FDateTime::UtcNow().GetTicks()) ^ static_cast<int64>(FMath::Rand())) & MAX_int64;
@@ -371,19 +383,36 @@ bool UYIInventoryComponent::SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemInd
 		return false;
 	}
 
-	return SetBagItemLockedByRef(Identity.BagId, Identity.CustomStackKey, Identity.Code, bLocked);
+	return SetBagItemLockedByInstanceRef(Identity.BagId, Identity.ItemInstanceId, Identity.CustomStackKey, Identity.Code, bLocked);
 }
 
 bool UYIInventoryComponent::SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked)
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || !BagId.IsValid() || CustomStackKey == 0)
+	return SetBagItemLockedByInstanceRef(BagId, FGuid(), CustomStackKey, Code, bLocked);
+}
+
+bool UYIInventoryComponent::SetBagItemLockedByInstanceRef(const FGuid& BagId, const FGuid& ItemInstanceId, int64 CustomStackKey, int64 Code, bool bLocked)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !BagId.IsValid())
+	{
+		return false;
+	}
+	if (!ItemInstanceId.IsValid() && CustomStackKey == 0)
 	{
 		return false;
 	}
 
 	const int32 ExistingIndex = LockedBagItems.IndexOfByPredicate([&](const FYILockedBagItemRef& Entry)
 	{
-		return Entry.BagId == BagId && Entry.CustomStackKey == CustomStackKey;
+		if (Entry.BagId != BagId)
+		{
+			return false;
+		}
+		if (ItemInstanceId.IsValid() && Entry.ItemInstanceId.IsValid())
+		{
+			return Entry.ItemInstanceId == ItemInstanceId;
+		}
+		return CustomStackKey != 0 && Entry.CustomStackKey == CustomStackKey;
 	});
 
 	if (bLocked)
@@ -395,6 +424,7 @@ bool UYIInventoryComponent::SetBagItemLockedByRef(const FGuid& BagId, int64 Cust
 
 		FYILockedBagItemRef NewEntry;
 		NewEntry.BagId = BagId;
+		NewEntry.ItemInstanceId = ItemInstanceId;
 		NewEntry.CustomStackKey = CustomStackKey;
 		NewEntry.Code = Code;
 		LockedBagItems.Add(NewEntry);
@@ -696,6 +726,8 @@ void UYIInventoryComponent::SyncNetState()
 				}
 			}
 			Net.Count = It.Item.Count;
+			Net.InstanceId = It.Item.InstanceId;
+			Net.StackId = It.Item.StackId;
 			Net.Pos = It.Pos;
 			Net.Size = It.Size;
 			Net.CustomStackKey = It.Item.CustomStackKey;
@@ -728,6 +760,14 @@ void UYIInventoryComponent::OnRep_NetBag()
 		if (Net.Code == 0 || Net.Count <= 0) continue;
 		FYIBagItem Item;
 		Item.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Net.Code, Net.Count);
+		if (Net.InstanceId.IsValid())
+		{
+			Item.Item.InstanceId = Net.InstanceId;
+		}
+		if (Net.StackId.IsValid())
+		{
+			Item.Item.StackId = Net.StackId;
+		}
 		Item.Item.CustomStackKey = Net.CustomStackKey;
 		Item.Pos = Net.Pos;
 		Item.Size = Net.Size;
@@ -851,6 +891,8 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	FYIItemInstanceNet Net;
 	Net.Definition = Item.Item.Definition;
 	Net.Count = Item.Item.Count;
+	Net.InstanceId = Item.Item.InstanceId;
+	Net.StackId = Item.Item.StackId;
 	Net.CustomStackKey = Item.Item.CustomStackKey;
 	Net.bRotated = Item.Item.bRotated;
 	Net.Affixes = Item.Item.Affixes;
@@ -868,6 +910,8 @@ static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
 	FYIItemInstance Out;
 	Out.Definition = Net.Definition;
 	Out.Count = Net.Count;
+	Out.InstanceId = Net.InstanceId.IsValid() ? Net.InstanceId : FGuid::NewGuid();
+	Out.StackId = Net.StackId.IsValid() ? Net.StackId : FGuid::NewGuid();
 	Out.CustomStackKey = Net.CustomStackKey;
 	Out.bRotated = Net.bRotated;
 	Out.Affixes = Net.Affixes;
@@ -951,11 +995,19 @@ void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
 
 void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 {
-	if (EquippedBag && EquippedBag->BagId.IsValid() && Item.Item.CustomStackKey != 0)
+	if (EquippedBag && EquippedBag->BagId.IsValid())
 	{
 		const int32 Removed = LockedBagItems.RemoveAllSwap([this, &Item](const FYILockedBagItemRef& Entry)
 		{
-			return EquippedBag && Entry.BagId == EquippedBag->BagId && Entry.CustomStackKey == Item.Item.CustomStackKey;
+			if (!EquippedBag || Entry.BagId != EquippedBag->BagId)
+			{
+				return false;
+			}
+			if (Entry.ItemInstanceId.IsValid() && Item.Item.InstanceId.IsValid())
+			{
+				return Entry.ItemInstanceId == Item.Item.InstanceId;
+			}
+			return Entry.CustomStackKey != 0 && Entry.CustomStackKey == Item.Item.CustomStackKey;
 		}, EAllowShrinking::No);
 		if (Removed > 0 && GetOwner() && GetOwner()->HasAuthority())
 		{

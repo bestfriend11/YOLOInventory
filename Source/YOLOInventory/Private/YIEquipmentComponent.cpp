@@ -21,6 +21,8 @@ namespace YIEquipmentPrivate
 		FYIItemInstanceNet Out;
 		Out.Definition = Full.Definition;
 		Out.Count = Full.Count;
+		Out.InstanceId = Full.InstanceId;
+		Out.StackId = Full.StackId;
 		Out.CustomStackKey = Full.CustomStackKey;
 		Out.bRotated = Full.bRotated;
 		Out.Affixes = Full.Affixes;
@@ -40,6 +42,8 @@ namespace YIEquipmentPrivate
 		FYIItemInstance Out;
 		Out.Definition = Net.Definition;
 		Out.Count = Net.Count;
+		Out.InstanceId = Net.InstanceId.IsValid() ? Net.InstanceId : FGuid::NewGuid();
+		Out.StackId = Net.StackId.IsValid() ? Net.StackId : FGuid::NewGuid();
 		Out.CustomStackKey = Net.CustomStackKey;
 		Out.bRotated = Net.bRotated;
 		Out.Affixes = Net.Affixes;
@@ -789,9 +793,15 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 			continue;
 		}
 
-		if (GroupEntry->bInventoryLocked && GroupEntry->SourceBagId.IsValid() && GroupEntry->SourceCustomStackKey != 0)
+		if (GroupEntry->bInventoryLocked && GroupEntry->SourceBagId.IsValid()
+			&& (GroupEntry->SourceInstanceId.IsValid() || GroupEntry->SourceCustomStackKey != 0))
 		{
-			SourceInventory->SetBagItemLockedByRef(GroupEntry->SourceBagId, GroupEntry->SourceCustomStackKey, GroupEntry->SourceItemCode, false);
+			SourceInventory->SetBagItemLockedByInstanceRef(
+				GroupEntry->SourceBagId,
+				GroupEntry->SourceInstanceId,
+				GroupEntry->SourceCustomStackKey,
+				GroupEntry->SourceItemCode,
+				false);
 		}
 
 		if (!bKeepInInventoryLocked && !GroupEntry->bInventoryLocked)
@@ -862,6 +872,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		if (bKeepInInventoryLocked)
 		{
 			NewEntry.SourceBagId = SourceBag->BagId;
+			NewEntry.SourceInstanceId = SourceBagItem.Item.InstanceId;
 			NewEntry.SourceCustomStackKey = SourceBagItem.Item.CustomStackKey;
 			NewEntry.SourceItemCode = Definition->UniqueCode;
 		}
@@ -967,9 +978,15 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 
 	for (const FYIEquippedItemEntry& GroupEntry : GroupEntries)
 	{
-		if (GroupEntry.bInventoryLocked && GroupEntry.SourceBagId.IsValid() && GroupEntry.SourceCustomStackKey != 0)
+		if (GroupEntry.bInventoryLocked && GroupEntry.SourceBagId.IsValid()
+			&& (GroupEntry.SourceInstanceId.IsValid() || GroupEntry.SourceCustomStackKey != 0))
 		{
-			DestInventory->SetBagItemLockedByRef(GroupEntry.SourceBagId, GroupEntry.SourceCustomStackKey, GroupEntry.SourceItemCode, false);
+			DestInventory->SetBagItemLockedByInstanceRef(
+				GroupEntry.SourceBagId,
+				GroupEntry.SourceInstanceId,
+				GroupEntry.SourceCustomStackKey,
+				GroupEntry.SourceItemCode,
+				false);
 		}
 	}
 
@@ -978,7 +995,7 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 		// Item stayed in inventory and was unlocked; resolve its current runtime location for deterministic drag-start.
 		for (const FYIEquippedItemEntry& GroupEntry : GroupEntries)
 		{
-			if (!GroupEntry.SourceBagId.IsValid() || GroupEntry.SourceCustomStackKey == 0)
+			if (!GroupEntry.SourceBagId.IsValid() || (!GroupEntry.SourceInstanceId.IsValid() && GroupEntry.SourceCustomStackKey == 0))
 			{
 				continue;
 			}
@@ -991,7 +1008,11 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 
 			const int32 SourceIdx = SourceBag->Items.IndexOfByPredicate([&GroupEntry](const FYIBagItem& Item)
 			{
-				if (Item.Item.CustomStackKey != GroupEntry.SourceCustomStackKey)
+				if (GroupEntry.SourceInstanceId.IsValid() && Item.Item.InstanceId.IsValid())
+				{
+					return Item.Item.InstanceId == GroupEntry.SourceInstanceId;
+				}
+				if (GroupEntry.SourceCustomStackKey == 0 || Item.Item.CustomStackKey != GroupEntry.SourceCustomStackKey)
 				{
 					return false;
 				}

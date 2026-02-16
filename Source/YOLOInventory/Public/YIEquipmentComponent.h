@@ -47,6 +47,10 @@ struct YOLOINVENTORY_API FYIEquippedItemEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source bag id used to unlock/reconcile the source item when unequipping locked inventory entries."))
 	FGuid SourceBagId;
 
+	/** Source item runtime identity used when bInventoryLocked is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source item runtime id used for deterministic unlock/reconcile of locked inventory entries."))
+	FGuid SourceInstanceId;
+
 	/** Source item identity used when bInventoryLocked is true. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source item key used to find the locked item inside source bag."))
 	int64 SourceCustomStackKey = 0;

@@ -41,6 +41,11 @@ struct YOLOINVENTORY_API FYILockedBagItemRef
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FGuid BagId;
 
+	/** Primary runtime identity for lock tracking. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid ItemInstanceId;
+
+	/** Legacy fallback identity (content hash). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int64 CustomStackKey = 0;
 
@@ -133,8 +138,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by bag+index.\nLocked items cannot be moved/rotated/removed."))
 	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by replicated identity reference (BagId + CustomStackKey + Code fallback)."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by identity reference (BagId + CustomStackKey + Code fallback). Prefer SetBagItemLockedByInstanceRef for deterministic identity."))
 	bool SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by deterministic runtime identity.\nArgs: BagId + ItemInstanceId (primary), with optional CustomStackKey/Code fallback for legacy items."))
+	bool SetBagItemLockedByInstanceRef(const FGuid& BagId, const FGuid& ItemInstanceId, int64 CustomStackKey, int64 Code, bool bLocked);
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified item is currently lock-protected."))
 	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;

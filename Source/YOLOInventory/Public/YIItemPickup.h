@@ -23,6 +23,10 @@ struct YOLOINVENTORY_API FYIItemInstanceNet
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TSoftObjectPtr<UYIItemDefinition> Definition;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") int32 Count = 1;
+	/** Stable runtime identity for this specific item instance. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") FGuid InstanceId;
+	/** Stack/group identity. Copies that belong to the same stack lineage share StackId. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") FGuid StackId;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") int64 CustomStackKey = 0;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") bool bRotated = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TArray<struct FYIAffixInstance> Affixes;

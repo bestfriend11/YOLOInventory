@@ -53,6 +53,14 @@ struct YOLOINVENTORY_API FYINetBagItem
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
 	int32 Count = 1;
 
+	/** Stable runtime identity for this specific item instance. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	FGuid InstanceId;
+
+	/** Stack/group identity shared by split/merged derivatives. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	FGuid StackId;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
 	FIntPoint Pos = FIntPoint::ZeroValue;
 
