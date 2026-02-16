@@ -25,9 +25,10 @@ void UInventoryDragOverlayUserWidget::NativeTick(const FGeometry& MyGeometry, fl
 
 	FYIBagItem DragItem; UYIInventoryBag* SrcBag = nullptr;
 	bShouldDraw = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
-	if (bShouldDraw && FSlateApplication::Get().GetActiveTopLevelWindow())
+	if (bShouldDraw)
 	{
-		CachedCursorSS = FSlateApplication::Get().GetCursorPos() - FSlateApplication::Get().GetActiveTopLevelWindow()->GetPositionInScreen();
+		// Keep absolute cursor coordinates; AbsoluteToLocal expects the same space.
+		CachedCursorSS = FSlateApplication::Get().GetCursorPos();
 	}
 	// Invalidate so we repaint; this widget is cheap
 	InvalidateLayoutAndVolatility();
@@ -91,6 +92,51 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		return LayerId;
 	}
 
+	// Resolve hovered/source grids first so global ghost can match in-grid ghost size/placement.
+	UInventoryGridWidget* HoveredGrid = nullptr;
+	UInventoryGridWidget* SourceGrid = nullptr;
+	FString HoverPickInfo;
+	UInventoryGridWidget::ForEachRegisteredGrid([&](UInventoryGridWidget* Grid)
+	{
+		if (!Grid || !Grid->Bag)
+		{
+			return;
+		}
+
+		if (!HoveredGrid)
+		{
+			const FGeometry GridGeomT = Grid->GetCachedGeometry();
+			const FSlateRect AbsRect = GridGeomT.GetLayoutBoundingRect();
+			const bool bHit = AbsRect.ContainsPoint(CachedCursorSS);
+			HoverPickInfo += FString::Printf(TEXT("Grid %s AbsRect: (%.1f,%.1f)-(%.1f,%.1f) hit:%s\n"), *Grid->GetName(), AbsRect.Left, AbsRect.Top, AbsRect.Right, AbsRect.Bottom, bHit?TEXT("Y"):TEXT("N"));
+			if (bHit)
+			{
+				HoveredGrid = Grid;
+			}
+		}
+
+		if (!SourceGrid && LiveSourceBag && Grid->Bag == LiveSourceBag)
+		{
+			SourceGrid = Grid;
+		}
+	});
+
+	UInventoryGridWidget* GhostScaleGrid = HoveredGrid ? HoveredGrid : SourceGrid;
+	float GhostCellPx = (GhostScaleGrid && GhostScaleGrid->GetCellPixelSize() > 1.f)
+		? GhostScaleGrid->GetCellPixelSize()
+		: FMath::Max(1.f, FallbackGhostSize.X);
+	FIntPoint GhostFootprint = LiveDragItem.Size;
+	if (GhostScaleGrid && GhostScaleGrid->Bag)
+	{
+		GhostFootprint = GhostScaleGrid->Bag->GetEffectiveSize(LiveDragItem.Size);
+	}
+	else if (LiveSourceBag)
+	{
+		GhostFootprint = LiveSourceBag->GetEffectiveSize(LiveDragItem.Size);
+	}
+	GhostFootprint.X = FMath::Max(1, GhostFootprint.X);
+	GhostFootprint.Y = FMath::Max(1, GhostFootprint.Y);
+
 	// Compute overlay-local cursor each paint using current geometry to avoid window position/DPI offsets
 	const FVector2D Local = AllottedGeometry.AbsoluteToLocal(CachedCursorSS);
 	// Prefer dragged item icon; fallback to simple white brush if icon is missing.
@@ -105,9 +151,9 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		}
 	}
 
-	const FVector2D GhostSize = FallbackGhostSize;
+	const FVector2D GhostSize = FVector2D(GhostFootprint) * GhostCellPx;
 	const FVector2D P = Local - (GhostSize * 0.5f);
-	const FLinearColor Tint(1.f, 1.f, 1.f, 0.85f);
+	const FLinearColor Tint = DragIconTexture ? FLinearColor(1.f, 1.f, 1.f, 0.90f) : FLinearColor(1.f, 1.f, 1.f, 0.18f);
 	const FSlateBrush* GhostBrush = FAppStyle::Get().GetBrush("WhiteBrush");
 	FSlateBrush IconBrush;
 	if (DragIconTexture)
@@ -122,6 +168,11 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	{
 		Debug += FString::Printf(TEXT("Local(cursor in overlay): %s\n"), *V2(Local));
 		Debug += FString::Printf(TEXT("GhostSize: %s  P(top-left): %s\n"), *V2(GhostSize), *V2(P));
+		Debug += FString::Printf(TEXT("GhostFootprint(cells): %s  CellPx: %.2f\n"), *V2i(GhostFootprint), GhostCellPx);
+		Debug += FString::Printf(TEXT("ScaleGrid: %s (hover=%s source=%s)\n"),
+			GhostScaleGrid ? *GhostScaleGrid->GetName() : TEXT("<none>"),
+			HoveredGrid ? *HoveredGrid->GetName() : TEXT("<none>"),
+			SourceGrid ? *SourceGrid->GetName() : TEXT("<none>"));
 		Debug += FString::Printf(TEXT("LayerId(start): %d\n"), LayerId);
 	}
 
@@ -138,35 +189,10 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	{
 		Debug += FString::Printf(TEXT("LayerId(after ghost): %d\n"), LayerId);
 	}
-
-	// Determine hovered grid by absolute rect containment (pick first match)
-	UInventoryGridWidget* HoveredGrid = nullptr;
-	FString HoverPickInfo;
-	UInventoryGridWidget::ForEachRegisteredGrid([&](UInventoryGridWidget* Grid)
-	{
-		if (HoveredGrid || !Grid || !Grid->Bag) return; // already found
-		const FGeometry GridGeomT = Grid->GetCachedGeometry();
-		const FSlateRect AbsRect = GridGeomT.GetLayoutBoundingRect();
-		const bool bHit = AbsRect.ContainsPoint(CachedCursorSS);
-		HoverPickInfo += FString::Printf(TEXT("Grid %s AbsRect: (%.1f,%.1f)-(%.1f,%.1f) hit:%s\n"), *Grid->GetName(), AbsRect.Left, AbsRect.Top, AbsRect.Right, AbsRect.Bottom, bHit?TEXT("Y"):TEXT("N"));
-		if (bHit)
-		{
-			HoveredGrid = Grid;
-		}
-	});
 	if (bShowDebug)
 	{
 		Debug += HoverPickInfo;
 		Debug += FString::Printf(TEXT("HoveredGrid: %s\n"), HoveredGrid ? *HoveredGrid->GetName() : TEXT("<none>"));
-	}
-	if (!HoveredGrid)
-	{
-		if (bShowDebug && GEngine)
-		{
-			static const int32 MsgKey = 0x99110001;
-			GEngine->AddOnScreenDebugMessage(MsgKey, 0.f, FColor::Yellow, Debug);
-		}
-		return LayerId;
 	}
 	// Footprint highlight under cursor on hovered grid
 	auto DrawFootprintForGrid = [&](UInventoryGridWidget* Grid)
@@ -188,7 +214,6 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		// Compute candidate footprint anchored at cursor center, clamped inside grid
 		FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr; UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
 		const FIntPoint Foot = Grid->Bag->GetEffectiveSize(DragItem.Size);
-		const FVector2D HalfFootPx = FVector2D(Foot) * CellPx * 0.5f;
 		// Determine the cell that would center under the cursor
 		const FVector2D CursorCellF = GridLocalFromScreen / CellPx; // fractional cell coords
 		FIntPoint DesiredTopLeft(
@@ -224,8 +249,11 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		}
 	};
 
-	// Draw only for hovered grid
-	DrawFootprintForGrid(HoveredGrid);
+	// Draw placement shadow only on hovered grid (same as in-grid behavior).
+	if (HoveredGrid)
+	{
+		DrawFootprintForGrid(HoveredGrid);
+	}
 
 	// Emit the debug string and a concise global drag summary so we can see what is being dragged
 	if (bShowDebug && GEngine)
