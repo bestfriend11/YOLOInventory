@@ -7,6 +7,9 @@
 #include "YIInventoryBlueprintLibrary.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Interfaces/IPluginManager.h"
+#include "Misc/Paths.h"
+#include "ShaderCore.h"
 
 DEFINE_LOG_CATEGORY(LogYOLOInventory);
 
@@ -14,6 +17,13 @@ IMPLEMENT_MODULE(FYOLOInventoryModule, YOLOInventory)
 
 void FYOLOInventoryModule::StartupModule()
 {
+	if (const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("YOLOInventory")))
+	{
+		const FString ShaderDirectory = FPaths::Combine(Plugin->GetBaseDir(), TEXT("Shaders"));
+		AddShaderSourceDirectoryMapping(TEXT("/Plugin/YOLOInventory"), ShaderDirectory);
+		bShaderDirectoryMapped = true;
+	}
+
 #if WITH_AUTOMATION_TESTS
 	// Ensure the automation tests module is loaded so headless runs discover YOLOInventory.* specs
 	FModuleManager::Get().LoadModulePtr<IModuleInterface>("YOLOInventoryTests");
@@ -32,6 +42,8 @@ void FYOLOInventoryModule::StartupModule()
 
 void FYOLOInventoryModule::ShutdownModule()
 {
+	bShaderDirectoryMapped = false;
+
 	DebugConsoleCommand.Reset();
 	AddItemConsoleCommand.Reset();
 }

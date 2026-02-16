@@ -21,4 +21,5 @@ private:
 
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> AddItemConsoleCommand;
+	bool bShaderDirectoryMapped = false;
 };

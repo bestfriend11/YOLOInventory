@@ -35,7 +35,9 @@ public class YOLOInventory : ModuleRules
 			"UMG",
 			"InputCore",
             "NetCore",
-            "Networking"
+            "Networking",
+            "RenderCore",
+            "Projects"
         });
 
         if (Target.bBuildEditor)
