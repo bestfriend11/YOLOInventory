@@ -36,6 +36,43 @@ class YOLOINVENTORY_API UYIInventoryGridStyleAsset : public UDataAsset
 public:
 	UYIInventoryGridStyleAsset();
 
+	/**
+	 * If enabled, grid widgets automatically push theme/state scalar parameters
+	 * into material brushes used by this style asset.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	bool bAutoDriveThemeMaterialParameters = true;
+
+	/** 0 = dark fantasy, 1 = sci-fi (or your own blend convention). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ThemeBlend = 0.0f;
+
+	/** Scalar parameter names expected by your UI material instances. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName ThemeBlendParameterName = TEXT("ThemeBlend");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName TimeParameterName = TEXT("Time");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName HoverAmountParameterName = TEXT("HoverAmount");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName SelectedAmountParameterName = TEXT("SelectedAmount");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName InvalidAmountParameterName = TEXT("InvalidAmount");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName MarqueeAmountParameterName = TEXT("MarqueeAmount");
+
+	/** Optional slot id scalar so one material can branch by slot role. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	bool bSetSlotStateIdParameter = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Theme Automation")
+	FName SlotStateIdParameterName = TEXT("SlotStateId");
+
 	/** Optional style label for content browser readability. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Style")
 	FText DisplayName;

@@ -7,6 +7,33 @@
 // Returns RGB tint and alpha intensity to blend in material graph.
 // ------------------------------------------------------------------
 
+float4 YI_GridTheme_DarkFantasyEx(float2 UV, float Time, float HoverAmount, float SelectedAmount, float InvalidAmount, float MarqueeAmount, float MarqueeMode);
+float4 YI_GridTheme_SciFiEx(float2 UV, float Time, float HoverAmount, float SelectedAmount, float InvalidAmount, float MarqueeAmount, float MarqueeMode);
+
+float YI_SelectMarqueeVariant(
+	float2 UV,
+	float BorderMask,
+	float Time,
+	float DotCount,
+	float DotWidth,
+	float ScrollSpeed,
+	float MarqueeMode)
+{
+	if (MarqueeMode < 0.5)
+	{
+		return YI_DottedMarqueeDiagTLToBR(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed);
+	}
+	if (MarqueeMode < 1.5)
+	{
+		return YI_DottedMarqueeDiagTRToBL(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed);
+	}
+	if (MarqueeMode < 2.5)
+	{
+		return YI_DottedMarqueeBorderClockwise(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed);
+	}
+	return YI_DottedMarqueeBorderCounterClockwise(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed);
+}
+
 float4 YI_GridTheme_DarkFantasy(
 	float2 UV,
 	float Time,
@@ -15,13 +42,25 @@ float4 YI_GridTheme_DarkFantasy(
 	float InvalidAmount,
 	float MarqueeAmount)
 {
+	return YI_GridTheme_DarkFantasyEx(UV, Time, HoverAmount, SelectedAmount, InvalidAmount, MarqueeAmount, 0.0);
+}
+
+float4 YI_GridTheme_DarkFantasyEx(
+	float2 UV,
+	float Time,
+	float HoverAmount,
+	float SelectedAmount,
+	float InvalidAmount,
+	float MarqueeAmount,
+	float MarqueeMode)
+{
 	const float3 Base = float3(0.19, 0.13, 0.10);
 	const float3 Copper = float3(0.62, 0.44, 0.27);
 	const float3 Ember = float3(0.84, 0.38, 0.18);
 
 	const float Pulse = YI_HoverPulse(Time, 0.85, 0.85, 1.15);
 	const float Border = YI_RoundedRectBorder(UV, float2(0.98, 0.98), 0.18, 0.08, 0.02);
-	const float Marquee = YI_DottedMarquee(UV, Border, Time, 22.0, 0.18, 0.45) * MarqueeAmount;
+	const float Marquee = YI_SelectMarqueeVariant(UV, Border, Time, 22.0, 0.18, 0.45, MarqueeMode) * MarqueeAmount;
 
 	float3 Color = Base;
 	Color += Copper * Border * 0.55;
@@ -42,6 +81,18 @@ float4 YI_GridTheme_SciFi(
 	float InvalidAmount,
 	float MarqueeAmount)
 {
+	return YI_GridTheme_SciFiEx(UV, Time, HoverAmount, SelectedAmount, InvalidAmount, MarqueeAmount, 0.0);
+}
+
+float4 YI_GridTheme_SciFiEx(
+	float2 UV,
+	float Time,
+	float HoverAmount,
+	float SelectedAmount,
+	float InvalidAmount,
+	float MarqueeAmount,
+	float MarqueeMode)
+{
 	const float3 Base = float3(0.05, 0.09, 0.14);
 	const float3 Cyan = float3(0.15, 0.78, 0.95);
 	const float3 Blue = float3(0.20, 0.42, 1.00);
@@ -49,7 +100,7 @@ float4 YI_GridTheme_SciFi(
 	const float Pulse = YI_HoverPulse(Time, 1.35, 0.80, 1.20);
 	const float Border = YI_RoundedRectBorder(UV, float2(0.985, 0.985), 0.10, 0.05, 0.015);
 	const float Scan = 0.5 + 0.5 * sin((UV.y + Time * 0.75) * 40.0);
-	const float Marquee = YI_DottedMarquee(UV, Border, Time, 28.0, 0.16, 0.85) * MarqueeAmount;
+	const float Marquee = YI_SelectMarqueeVariant(UV, Border, Time, 28.0, 0.16, 0.85, MarqueeMode) * MarqueeAmount;
 
 	float3 Color = Base;
 	Color += Blue * Border * 0.45;
@@ -68,4 +119,3 @@ float4 YI_GridTheme_Blend(float4 Fantasy, float4 SciFi, float SciFiWeight)
 	const float T = saturate(SciFiWeight);
 	return float4(lerp(Fantasy.rgb, SciFi.rgb, T), lerp(Fantasy.a, SciFi.a, T));
 }
-

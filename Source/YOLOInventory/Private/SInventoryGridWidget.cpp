@@ -9,6 +9,8 @@
 #include "YIItemDefinition.h"
 #include "Framework/Application/SlateApplication.h"
 #include "YIInventoryGridStyleAsset.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 #pragma optimize("", off)
 
@@ -19,7 +21,8 @@ static void YI_DrawBrushSlot(
 	const FVector2D& Position,
 	const FVector2D& Size,
 	const FYIGridStyleBrushSlot& Slot,
-	const FSlateBrush* FallbackBrush)
+	const FSlateBrush* FallbackBrush,
+	const FSlateBrush* BrushOverride = nullptr)
 {
 	if (!Slot.bEnabled || Size.X <= 0.f || Size.Y <= 0.f)
 	{
@@ -27,7 +30,7 @@ static void YI_DrawBrushSlot(
 	}
 
 	const bool bHasBrushData = Slot.Brush.DrawAs != ESlateBrushDrawType::NoDrawType;
-	const FSlateBrush* Brush = bHasBrushData ? &Slot.Brush : FallbackBrush;
+	const FSlateBrush* Brush = BrushOverride ? BrushOverride : (bHasBrushData ? &Slot.Brush : FallbackBrush);
 	if (!Brush)
 	{
 		return;
@@ -66,6 +69,86 @@ static void YI_DrawRectOutline(
 		Color,
 		true,
 		FMath::Max(0.5f, Thickness));
+}
+
+const FSlateBrush* SInventoryGridWidget::ResolveBrushForStyleSlot(
+	const UYIInventoryGridStyleAsset* GridStyle,
+	const FYIGridStyleBrushSlot& Slot,
+	int32 SlotKey,
+	float HoverAmount,
+	float SelectedAmount,
+	float InvalidAmount,
+	float MarqueeAmount) const
+{
+	if (!GridStyle || !Slot.bEnabled)
+	{
+		return nullptr;
+	}
+
+	const bool bHasBrushData = Slot.Brush.DrawAs != ESlateBrushDrawType::NoDrawType;
+	if (!bHasBrushData || !GridStyle->bAutoDriveThemeMaterialParameters)
+	{
+		return &Slot.Brush;
+	}
+
+	UMaterialInterface* SourceMaterial = Cast<UMaterialInterface>(Slot.Brush.GetResourceObject());
+	if (!SourceMaterial)
+	{
+		return &Slot.Brush;
+	}
+
+	TStrongObjectPtr<UMaterialInstanceDynamic>& MIDPtr = StyleSlotMIDs.FindOrAdd(SlotKey);
+	TWeakObjectPtr<UMaterialInterface>& CachedSourceMaterial = StyleSlotSourceMaterials.FindOrAdd(SlotKey);
+	if (!MIDPtr.IsValid() || CachedSourceMaterial.Get() != SourceMaterial)
+	{
+		MIDPtr = TStrongObjectPtr<UMaterialInstanceDynamic>(UMaterialInstanceDynamic::Create(SourceMaterial, GetTransientPackage()));
+		CachedSourceMaterial = SourceMaterial;
+		FSlateBrush& DynamicBrush = StyleSlotBrushCache.FindOrAdd(SlotKey);
+		DynamicBrush = Slot.Brush;
+		DynamicBrush.SetResourceObject(MIDPtr.Get());
+	}
+
+	UMaterialInstanceDynamic* MID = MIDPtr.Get();
+	if (!MID)
+	{
+		return &Slot.Brush;
+	}
+
+	const float WorldTime = OwnerWidget.IsValid() && OwnerWidget.Pin()->GetWorld()
+		? OwnerWidget.Pin()->GetWorld()->GetRealTimeSeconds()
+		: FPlatformTime::Seconds();
+
+	if (!GridStyle->ThemeBlendParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->ThemeBlendParameterName, GridStyle->ThemeBlend);
+	}
+	if (!GridStyle->TimeParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->TimeParameterName, WorldTime);
+	}
+	if (!GridStyle->HoverAmountParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->HoverAmountParameterName, HoverAmount);
+	}
+	if (!GridStyle->SelectedAmountParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->SelectedAmountParameterName, SelectedAmount);
+	}
+	if (!GridStyle->InvalidAmountParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->InvalidAmountParameterName, InvalidAmount);
+	}
+	if (!GridStyle->MarqueeAmountParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->MarqueeAmountParameterName, MarqueeAmount);
+	}
+	if (GridStyle->bSetSlotStateIdParameter && !GridStyle->SlotStateIdParameterName.IsNone())
+	{
+		MID->SetScalarParameterValue(GridStyle->SlotStateIdParameterName, static_cast<float>(SlotKey));
+	}
+
+	const FSlateBrush* DynamicBrushPtr = StyleSlotBrushCache.Find(SlotKey);
+	return DynamicBrushPtr ? DynamicBrushPtr : &Slot.Brush;
 }
 
 void SInventoryGridWidget::RebuildOccupancy()
@@ -194,6 +277,16 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	const UInventoryGridWidget* Owner = OwnerWidget.Get();
 	const UYIInventoryGridStyleAsset* GridStyle = Owner ? Owner->GetResolvedGridStyleAsset() : nullptr;
 	const FSlateBrush* Box = FAppStyle::Get().GetBrush("WhiteBrush");
+	const int32 SlotCellFill = 1;
+	const int32 SlotOuterBorder = 2;
+	const int32 SlotItemFill = 3;
+	const int32 SlotItemFrame = 4;
+	const int32 SlotHoveredCell = 5;
+	const int32 SlotHoveredItem = 6;
+	const int32 SlotSelectedCell = 7;
+	const int32 SlotLockedItem = 8;
+	const int32 SlotGhostValid = 9;
+	const int32 SlotGhostInvalid = 10;
 
 	// Use explicit pixel cell size as configured (do not stretch to allotted geometry)
 	const FVector2D LocalCell = CellSize;
@@ -207,7 +300,8 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	// Grid background / cell fill
 	if (GridStyle && GridStyle->CellFill.bEnabled)
 	{
-		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->CellFill, Box);
+		const FSlateBrush* CellFillBrush = ResolveBrushForStyleSlot(GridStyle, GridStyle->CellFill, SlotCellFill, 0.f, 0.f, 0.f, 0.f);
+		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->CellFill, Box, CellFillBrush);
 	}
 	else
 	{
@@ -256,7 +350,8 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	// Optional outer border style; fallback to bag outer line color.
 	if (GridStyle && GridStyle->OuterBorder.bEnabled)
 	{
-		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->OuterBorder, Box);
+		const FSlateBrush* OuterBorderBrush = ResolveBrushForStyleSlot(GridStyle, GridStyle->OuterBorder, SlotOuterBorder, 0.f, 0.f, 0.f, 0.f);
+		YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FVector2D::ZeroVector, SizePix, GridStyle->OuterBorder, Box, OuterBorderBrush);
 	}
 	else
 	{
@@ -309,6 +404,16 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			GridStyle ? GridStyle->ItemIconTint : FLinearColor::White);
 	};
 
+	const FSlateBrush* ItemFillBrush = (GridStyle && GridStyle->ItemFill.bEnabled)
+		? ResolveBrushForStyleSlot(GridStyle, GridStyle->ItemFill, SlotItemFill, 0.f, 0.f, 0.f, 0.f)
+		: nullptr;
+	const FSlateBrush* ItemFrameBrush = (GridStyle && GridStyle->ItemFrame.bEnabled)
+		? ResolveBrushForStyleSlot(GridStyle, GridStyle->ItemFrame, SlotItemFrame, 0.f, 0.f, 0.f, 0.f)
+		: nullptr;
+	const FSlateBrush* LockedItemBrush = (GridStyle && GridStyle->LockedItemOverlay.bEnabled)
+		? ResolveBrushForStyleSlot(GridStyle, GridStyle->LockedItemOverlay, SlotLockedItem, 0.15f, 0.35f, 0.f, 0.f)
+		: nullptr;
+
 	// Items
 	for (int32 i = 0; i < Bag->Items.Num(); ++i)
 	{
@@ -323,7 +428,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 
 		if (GridStyle && GridStyle->ItemFill.bEnabled)
 		{
-			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFill, Box);
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFill, Box, ItemFillBrush);
 		}
 		else
 		{
@@ -340,7 +445,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 
 		if (GridStyle && GridStyle->ItemFrame.bEnabled)
 		{
-			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFrame, Box);
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->ItemFrame, Box, ItemFrameBrush);
 		}
 		else
 		{
@@ -368,7 +473,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			if (GridStyle && GridStyle->LockedItemOverlay.bEnabled)
 			{
-				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->LockedItemOverlay, Box);
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->LockedItemOverlay, Box, LockedItemBrush);
 			}
 			else
 			{
@@ -405,7 +510,8 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			const FVector2D S = FVector2D(HoveredItemSize) * LocalCell;
 			if (GridStyle && GridStyle->HoveredItemOverlay.bEnabled)
 			{
-				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->HoveredItemOverlay, Box);
+				const FSlateBrush* HoveredItemBrush = ResolveBrushForStyleSlot(GridStyle, GridStyle->HoveredItemOverlay, SlotHoveredItem, 1.f, 0.f, 0.f, 1.f);
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, S, GridStyle->HoveredItemOverlay, Box, HoveredItemBrush);
 			}
 			else
 			{
@@ -431,7 +537,8 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			const FVector2D P = FVector2D(HoverCell) * LocalCell;
 			if (GridStyle && GridStyle->HoveredCellOverlay.bEnabled)
 			{
-				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->HoveredCellOverlay, Box);
+				const FSlateBrush* HoveredCellBrush = ResolveBrushForStyleSlot(GridStyle, GridStyle->HoveredCellOverlay, SlotHoveredCell, 1.f, 0.f, 0.f, 0.f);
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->HoveredCellOverlay, Box, HoveredCellBrush);
 			}
 			else
 			{
@@ -451,7 +558,8 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		const FVector2D P = FVector2D(SelectedCell) * LocalCell;
 		if (GridStyle && GridStyle->SelectedCellOverlay.bEnabled)
 		{
-			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->SelectedCellOverlay, Box);
+			const FSlateBrush* SelectedCellBrush = ResolveBrushForStyleSlot(GridStyle, GridStyle->SelectedCellOverlay, SlotSelectedCell, 0.f, 1.f, 0.f, 0.f);
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, P, LocalCell, GridStyle->SelectedCellOverlay, Box, SelectedCellBrush);
 		}
 		YI_DrawRectOutline(
 			OutDrawElements,
@@ -476,7 +584,16 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		if (GhostSlot && GhostSlot->bEnabled)
 		{
-			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FootP, FootS, *GhostSlot, Box);
+			const int32 GhostSlotKey = bGhostPlacementValid ? SlotGhostValid : SlotGhostInvalid;
+			const FSlateBrush* GhostStateBrush = ResolveBrushForStyleSlot(
+				GridStyle,
+				*GhostSlot,
+				GhostSlotKey,
+				bGhostPlacementValid ? 1.f : 0.f,
+				0.f,
+				bGhostPlacementValid ? 0.f : 1.f,
+				1.f);
+			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FootP, FootS, *GhostSlot, Box, GhostStateBrush);
 		}
 		else
 		{

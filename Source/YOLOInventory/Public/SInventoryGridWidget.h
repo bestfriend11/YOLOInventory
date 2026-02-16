@@ -4,6 +4,10 @@
 
 class UYIInventoryBag;
 class UInventoryGridWidget;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
+class UYIInventoryGridStyleAsset;
+struct FYIGridStyleBrushSlot;
 class YOLOINVENTORY_API SInventoryGridWidget : public SCompoundWidget
 {
 public:
@@ -141,7 +145,18 @@ private:
 	mutable FIntPoint GhostTopLeft = FIntPoint::ZeroValue;
 	mutable FSlateBrush GhostBrush;
 	mutable bool bGhostHasIcon = false;
+	mutable TMap<int32, TStrongObjectPtr<UMaterialInstanceDynamic>> StyleSlotMIDs;
+	mutable TMap<int32, TWeakObjectPtr<UMaterialInterface>> StyleSlotSourceMaterials;
+	mutable TMap<int32, FSlateBrush> StyleSlotBrushCache;
 
 	void UpdateGhostPlacement(const FVector2D& LocalCursor, const FVector2D& LocalCell);
 	bool EvaluateGhostPlacement(const FIntPoint& TopLeft, int32& OutOverlapIdx) const;
+	const FSlateBrush* ResolveBrushForStyleSlot(
+		const UYIInventoryGridStyleAsset* GridStyle,
+		const FYIGridStyleBrushSlot& Slot,
+		int32 SlotKey,
+		float HoverAmount,
+		float SelectedAmount,
+		float InvalidAmount,
+		float MarqueeAmount) const;
 };

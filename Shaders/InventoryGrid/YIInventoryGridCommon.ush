@@ -50,6 +50,96 @@ float YI_DottedMarquee(float2 UV, float BorderMask, float Time, float DotCount, 
 	return BorderMask * Dot;
 }
 
+// Directional dotted marquee where Direction controls travel axis.
+// Example directions:
+//  TL->BR: float2( 1,  1)
+//  TR->BL: float2(-1,  1)
+float YI_DottedMarqueeDirectional(
+	float2 UV,
+	float BorderMask,
+	float Time,
+	float DotCount,
+	float DotWidth,
+	float ScrollSpeed,
+	float2 Direction)
+{
+	const float DirLen = max(length(Direction), 0.001);
+	const float2 Dir = Direction / DirLen;
+	const float Axis = dot(UV, Dir);
+	const float U = frac(Axis + Time * ScrollSpeed);
+	const float DotIndex = frac(U * DotCount);
+	const float Dot = 1.0 - smoothstep(DotWidth, DotWidth + 0.08, DotIndex);
+	return BorderMask * Dot;
+}
+
+float YI_DottedMarqueeDiagTLToBR(float2 UV, float BorderMask, float Time, float DotCount, float DotWidth, float ScrollSpeed)
+{
+	return YI_DottedMarqueeDirectional(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed, float2(1.0, 1.0));
+}
+
+float YI_DottedMarqueeDiagTRToBL(float2 UV, float BorderMask, float Time, float DotCount, float DotWidth, float ScrollSpeed)
+{
+	return YI_DottedMarqueeDirectional(UV, BorderMask, Time, DotCount, DotWidth, ScrollSpeed, float2(-1.0, 1.0));
+}
+
+// Perimeter coordinate in [0..1) moving clockwise around rectangle border.
+// Start point is near top-left corner.
+float YI_RectPerimeterCoordClockwise(float2 UV)
+{
+	// Project UV from rectangle interior onto a square border first.
+	// This removes corner clamping/sticking artifacts that happen when
+	// selecting edges by nearest distance.
+	const float2 P = (UV - 0.5) * 2.0; // [-1..1]
+	const float Den = max(max(abs(P.x), abs(P.y)), 0.0001);
+	const float2 Q = P / Den; // lies on square border (or very close)
+
+	// Pick side in a stable clockwise order. Corners map to exact joint values.
+	if (Q.y <= -0.9999) // top: left -> right
+	{
+		return frac((Q.x + 1.0) * 0.125); // 0..0.25
+	}
+	if (Q.x >= 0.9999) // right: top -> bottom
+	{
+		return frac(0.25 + (Q.y + 1.0) * 0.125); // 0.25..0.5
+	}
+	if (Q.y >= 0.9999) // bottom: right -> left
+	{
+		return frac(0.50 + (1.0 - Q.x) * 0.125); // 0.5..0.75
+	}
+	// left: bottom -> top
+	return frac(0.75 + (1.0 - Q.y) * 0.125); // 0.75..1.0
+}
+
+float YI_DottedMarqueeBorderClockwise(
+	float2 UV,
+	float BorderMask,
+	float Time,
+	float DotCount,
+	float DotWidth,
+	float ScrollSpeed)
+{
+	const float Perim = YI_RectPerimeterCoordClockwise(UV);
+	const float U = frac(Perim + Time * ScrollSpeed);
+	const float DotIndex = frac(U * DotCount);
+	const float Dot = 1.0 - smoothstep(DotWidth, DotWidth + 0.08, DotIndex);
+	return BorderMask * Dot;
+}
+
+float YI_DottedMarqueeBorderCounterClockwise(
+	float2 UV,
+	float BorderMask,
+	float Time,
+	float DotCount,
+	float DotWidth,
+	float ScrollSpeed)
+{
+	const float Perim = YI_RectPerimeterCoordClockwise(UV);
+	const float U = frac(Perim - Time * ScrollSpeed);
+	const float DotIndex = frac(U * DotCount);
+	const float Dot = 1.0 - smoothstep(DotWidth, DotWidth + 0.08, DotIndex);
+	return BorderMask * Dot;
+}
+
 // Convenience: rounded-rectangle border mask in local UV.
 float YI_RoundedRectBorder(float2 UV, float2 HalfSize, float Radius, float Thickness, float EdgeSoftness)
 {
@@ -60,4 +150,3 @@ float YI_RoundedRectBorder(float2 UV, float2 HalfSize, float Radius, float Thick
 	const float InnerMask = YI_AAMaskFromSdf(InnerSdf, EdgeSoftness);
 	return saturate(OuterMask - InnerMask);
 }
-
