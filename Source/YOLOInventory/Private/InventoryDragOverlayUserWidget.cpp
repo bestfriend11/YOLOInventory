@@ -93,10 +93,30 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 
 	// Compute overlay-local cursor each paint using current geometry to avoid window position/DPI offsets
 	const FVector2D Local = AllottedGeometry.AbsoluteToLocal(CachedCursorSS);
-	// TODO: Enhance to use item icon texture/brush; fallback to simple box for now
+	// Prefer dragged item icon; fallback to simple white brush if icon is missing.
+	const UTexture2D* DragIconTexture = nullptr;
+	if (bHasLiveDrag)
+	{
+		if (UYIItemDefinition* Def = LiveDragItem.Item.Definition.IsValid()
+			? LiveDragItem.Item.Definition.Get()
+			: LiveDragItem.Item.Definition.LoadSynchronous())
+		{
+			DragIconTexture = Def->Icon.IsValid() ? Def->Icon.Get() : Def->Icon.LoadSynchronous();
+		}
+	}
+
 	const FVector2D GhostSize = FallbackGhostSize;
 	const FVector2D P = Local - (GhostSize * 0.5f);
 	const FLinearColor Tint(1.f, 1.f, 1.f, 0.85f);
+	const FSlateBrush* GhostBrush = FAppStyle::Get().GetBrush("WhiteBrush");
+	FSlateBrush IconBrush;
+	if (DragIconTexture)
+	{
+		IconBrush.SetResourceObject(const_cast<UTexture2D*>(DragIconTexture));
+		IconBrush.ImageSize = FVector2D(DragIconTexture->GetSizeX(), DragIconTexture->GetSizeY());
+		IconBrush.DrawAs = ESlateBrushDrawType::Image;
+		GhostBrush = &IconBrush;
+	}
 
 	if (bShowDebug)
 	{
@@ -105,7 +125,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		Debug += FString::Printf(TEXT("LayerId(start): %d\n"), LayerId);
 	}
 
-	FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), FAppStyle::Get().GetBrush("WhiteBrush"), ESlateDrawEffect::None, Tint);
+	FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), GhostBrush, ESlateDrawEffect::None, Tint);
 	TArray<FVector2D> Seg;
 	Seg.Add(P);
 	Seg.Add(P + FVector2D(GhostSize.X, 0));

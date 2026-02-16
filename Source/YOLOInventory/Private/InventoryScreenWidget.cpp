@@ -13,6 +13,7 @@
 #include "InventoryActionMenuWidget.h"
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
+#include "InventoryDragOverlayUserWidget.h"
 #include "InventoryEquipmentSlotWidget.h"
 #include "Components/GridPanel.h"
 #include "Components/GridSlot.h"
@@ -20,6 +21,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Overlay.h"
 #include "Components/PanelWidget.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetTree.h"
@@ -170,6 +172,10 @@ void UInventoryScreenWidget::AutoResolveWidgetReferences()
 	{
 		EquipmentSlotsCanvasPanel = YIInventoryScreenPrivate::FindWidgetByNameOrType<UCanvasPanel>(WidgetTree, TEXT("EquipmentSlotsCanvasPanel"));
 	}
+	if (!DragOverlay)
+	{
+		DragOverlay = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryDragOverlayUserWidget>(WidgetTree, TEXT("DragOverlay"));
+	}
 }
 
 void UInventoryScreenWidget::EnsureMinimalDefaultLayout()
@@ -237,6 +243,74 @@ void UInventoryScreenWidget::EnsureMinimalDefaultLayout()
 	}
 }
 
+void UInventoryScreenWidget::EnsureGlobalDragOverlay()
+{
+	if (!WidgetTree)
+	{
+		return;
+	}
+
+	if (!bEnableGlobalDragOverlay)
+	{
+		if (DragOverlay)
+		{
+			DragOverlay->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		if (Grid)
+		{
+			Grid->SetUseGlobalDragGhost(false);
+		}
+		if (SpellbookGrid)
+		{
+			SpellbookGrid->SetUseGlobalDragGhost(false);
+		}
+		return;
+	}
+
+	if (!DragOverlay && bAutoCreateDragOverlay)
+	{
+		UPanelWidget* RootPanel = Cast<UPanelWidget>(WidgetTree->RootWidget);
+		if (RootPanel)
+		{
+			UClass* OverlayClass = DragOverlayClass ? DragOverlayClass.Get() : UInventoryDragOverlayUserWidget::StaticClass();
+			DragOverlay = WidgetTree->ConstructWidget<UInventoryDragOverlayUserWidget>(OverlayClass, TEXT("DragOverlay_Auto"));
+			if (DragOverlay)
+			{
+				if (UCanvasPanel* CanvasRoot = Cast<UCanvasPanel>(RootPanel))
+				{
+					if (UCanvasPanelSlot* CanvasSlot = CanvasRoot->AddChildToCanvas(DragOverlay))
+					{
+						CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+						CanvasSlot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+						CanvasSlot->SetZOrder(9999);
+					}
+				}
+				else
+				{
+					RootPanel->AddChild(DragOverlay);
+				}
+			}
+		}
+	}
+
+	if (DragOverlay)
+	{
+		DragOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+		DragOverlay->LeftGrid = Grid;
+		DragOverlay->RightGrid = SpellbookGrid;
+	}
+
+	const bool bHasOverlay = (DragOverlay != nullptr);
+	if (Grid)
+	{
+		Grid->SetUseGlobalDragGhost(bHasOverlay);
+	}
+	if (SpellbookGrid)
+	{
+		SpellbookGrid->SetUseGlobalDragGhost(bHasOverlay);
+	}
+}
+
 bool UInventoryScreenWidget::ResolveRuntimeComponents(UYIInventoryComponent*& OutInventory, UYIEquipmentComponent*& OutEquipment) const
 {
 	OutInventory = nullptr;
@@ -267,6 +341,7 @@ bool UInventoryScreenWidget::AutoWireScreen(bool bRebuildEquipmentPane)
 {
 	EnsureMinimalDefaultLayout();
 	AutoResolveWidgetReferences();
+	EnsureGlobalDragOverlay();
 
 	UYIInventoryComponent* InventoryComp = nullptr;
 	UYIEquipmentComponent* EquipmentComp = nullptr;

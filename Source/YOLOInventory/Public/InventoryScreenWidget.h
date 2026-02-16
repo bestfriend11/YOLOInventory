@@ -125,6 +125,22 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category="Inventory|Equipment", meta=(BindWidgetOptional))
 	class UCanvasPanel* EquipmentSlotsCanvasPanel;
 
+	/** Optional global drag overlay. When present, drag ghost stays visible outside grid widgets (equipment slots/panels). */
+	UPROPERTY(BlueprintReadOnly, Category="Inventory|Drag", meta=(BindWidgetOptional))
+	class UInventoryDragOverlayUserWidget* DragOverlay = nullptr;
+
+	/** Enable global drag ghost rendering so dragging stays visible when cursor leaves the grid area. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Drag")
+	bool bEnableGlobalDragOverlay = true;
+
+	/** Auto-create drag overlay at runtime if no bound DragOverlay widget exists in UMG. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Drag")
+	bool bAutoCreateDragOverlay = true;
+
+	/** Optional class override used for auto-created drag overlay. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Drag")
+	TSubclassOf<class UInventoryDragOverlayUserWidget> DragOverlayClass;
+
 	/** Debounce window (seconds) to ignore duplicate confirm/open events fired in quick succession (prevents immediate open+confirm when same key is bound for both). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Input", meta=(ToolTip="Seconds to ignore duplicate Confirm/Open events fired quickly"))
 	float ConfirmOpenDebounceSeconds = 0.20f;
@@ -193,6 +209,7 @@ protected:
 private:
 	void AutoResolveWidgetReferences();
 	void EnsureMinimalDefaultLayout();
+	void EnsureGlobalDragOverlay();
 	bool ResolveRuntimeComponents(class UYIInventoryComponent*& OutInventory, class UYIEquipmentComponent*& OutEquipment) const;
 	void StartAutoWireRetry();
 	void StopAutoWireRetry();
