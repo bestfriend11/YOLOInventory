@@ -3,7 +3,6 @@
 #include "GameFramework/Pawn.h"
 #include "YIActionBarComponent.h"
 #include "YIEquipmentComponent.h"
-#include "YIEquipmentLayoutAsset.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
 
@@ -249,59 +248,6 @@ bool UYIInventoryGameplaySetupLibrary::ApplySpellbookActionPreset(
 	Options.AutoBindRules.Add(Rule);
 
 	return EnsurePawnInventoryGameplaySetup(Pawn, Options, OutResult);
-}
-
-bool UYIInventoryGameplaySetupLibrary::SyncEquipmentLayoutFromComponentSlots(UYIEquipmentComponent* EquipmentComp, UYIEquipmentLayoutAsset* LayoutAsset, bool bClearExisting)
-{
-	if (!EquipmentComp || !LayoutAsset)
-	{
-		return false;
-	}
-
-	if (bClearExisting)
-	{
-		LayoutAsset->Slots.Reset();
-	}
-
-	TSet<FGameplayTag> ExistingTags;
-	for (const FYIEquipmentSlotLayoutEntry& Existing : LayoutAsset->Slots)
-	{
-		if (Existing.SlotTag.IsValid())
-		{
-			ExistingTags.Add(Existing.SlotTag);
-		}
-	}
-
-	int32 SortBase = LayoutAsset->Slots.Num();
-	for (const FYIEquipmentSlotDefinition& SlotDef : EquipmentComp->SlotDefinitions)
-	{
-		if (!SlotDef.SlotTag.IsValid() || ExistingTags.Contains(SlotDef.SlotTag))
-		{
-			continue;
-		}
-
-		FYIEquipmentSlotLayoutEntry Entry;
-		Entry.SlotTag = SlotDef.SlotTag;
-
-		const FString TagString = SlotDef.SlotTag.ToString();
-		int32 LastDotIndex = INDEX_NONE;
-		if (TagString.FindLastChar('.', LastDotIndex) && LastDotIndex >= 0 && LastDotIndex + 1 < TagString.Len())
-		{
-			Entry.DisplayName = FText::FromString(TagString.RightChop(LastDotIndex + 1));
-		}
-		else
-		{
-			Entry.DisplayName = FText::FromString(TagString);
-		}
-
-		Entry.SortOrder = SortBase++;
-		LayoutAsset->Slots.Add(Entry);
-		ExistingTags.Add(SlotDef.SlotTag);
-	}
-
-	LayoutAsset->SortSlotsByOrder();
-	LayoutAsset->MarkPackageDirty();
-	return true;
 }
 
 bool UYIInventoryGameplaySetupLibrary::EnsureItemSupportsEquipSlot(UYIItemDefinition* ItemDef, FGameplayTag SlotTag, bool bSetItemTypeToSlotTag, bool bAddToOccupiedSlots)

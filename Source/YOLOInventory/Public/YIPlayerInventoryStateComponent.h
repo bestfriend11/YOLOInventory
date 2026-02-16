@@ -184,114 +184,114 @@ public:
 	UYIPlayerInventoryStateComponent();
 
 	// Shared stash bags (owner-only replicated). Soft references survive travel.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_SharedBags, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_SharedBags, Category="Inventory", meta=(ToolTip="Owner-only replicated shared stash bag refs persisted at player-state scope."))
 	TArray<TSoftObjectPtr<UYIInventoryBag>> SharedBags;
 
 	// Party members (hirelings/pets/mules). Owner-only replicated.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_Party, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_Party, Category="Inventory", meta=(ToolTip="Owner-only replicated party member inventory bindings."))
 	TArray<FYIPartyMemberEntry> PartyMembers;
 
 	// Generic resources/currencies (owner-only replicated). Designer adds any key (Gold/Silver/Iron/Oil/etc.).
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_Resources, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_Resources, Category="Inventory", meta=(ToolTip="Owner-only replicated resource wallet (currencies/materials)."))
 	FYIResourceWallet Resources;
 
 	/** Add a shared stash bag (server only). Returns index or -1. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: append shared stash bag reference. Returns inserted index or -1."))
 	int32 AddSharedBag(UYIInventoryBag* Bag);
 
 	/** Add a party member entry with a bag (server only). Returns index or -1. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: add party member entry (pawn class + bag). Returns inserted index or -1."))
 	int32 AddPartyMember(const FYIPartyMemberEntry& Entry);
 
 	/** Assign a party member's bag to a pawn's inventory component (server only). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: assign PartyMembers[PartyIndex].InventoryBag to Pawn inventory component and open it as active bag."))
 	bool AssignInventoryToPawn(APawn* Pawn, int32 PartyIndex);
 
 	/** Add or subtract a resource amount (server only). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: add/subtract resource amount.\nDelta may be negative. Value is clamped to >= 0."))
 	void AddResource(FName ResourceName, int64 Delta);
 
 	/** Try to consume a resource amount (server only). Returns success. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: consume resource amount. Returns false when insufficient balance."))
 	bool ConsumeResource(FName ResourceName, int64 Amount);
 
 	/** Get a resource amount (pure, reads replicated wallet). */
-	UFUNCTION(BlueprintPure, Category="YOLOInventory|PlayerState")
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|PlayerState", meta=(ToolTip="Read replicated resource balance by name. Returns 0 when resource key is missing."))
 	int64 GetResourceAmount(FName ResourceName) const;
 
 	/** Server: save the currently equipped runtime bag from a pawn into owner-only replicated snapshot. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: capture pawn active bag runtime state into SavedBags snapshot payload."))
 	bool SaveCurrentPawnInventory(APawn* Pawn);
 
 	/** Server: restore the saved snapshot into the pawn's inventory component (runtime bag clone). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|PlayerState", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only: restore SavedBags snapshot into pawn inventory runtime bag clone."))
 	bool RestoreInventoryToPawn(APawn* Pawn);
 
 	/** Auto-save toggle (server only). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save", meta=(ToolTip="Enable/disable automatic persistence saves on observed bag changes."))
 	bool bEnableAutoSave = true;
 
 	/** Save slot/user for autosave (PIE/editor safe). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save", meta=(ToolTip="Base save slot name used by persistence provider (or SaveGame provider by default)."))
 	FString SaveSlotName = TEXT("YOLOInventory_Autosave");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save", meta=(ToolTip="Save user index used by SaveGame-style providers."))
 	int32 SaveUserIndex = 0;
 
 	/** Append PlayerState identity to slot name to prevent collisions in multiplayer sessions. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save", meta=(ToolTip="Append player identity to save slot to avoid collisions in multiplayer sessions."))
 	bool bUsePerPlayerSaveSlot = true;
 
 	/** Verbose runtime diagnostics for save/load flow. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Enable verbose runtime save/load diagnostics logging."))
 	bool bEnableSaveDiagnostics = true;
 
 	/** Draw save/load diagnostics on screen (useful during integration/testing). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Show save/load diagnostics on screen in addition to log output."))
 	bool bShowSaveDiagnosticsOnScreen = true;
 
 	/** Keep diagnostic message pinned for a long duration instead of short fadeouts. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Keep diagnostics pinned longer on screen for debugging sessions."))
 	bool bKeepDiagnosticsPinnedOnScreen = true;
 
 	/** Duration for on-screen diagnostic messages when pinning is disabled. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ClampMin="1.0", ClampMax="600.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ClampMin="1.0", ClampMax="600.0", ToolTip="On-screen diagnostic duration when pinning is disabled."))
 	float SaveDiagnosticOnScreenSeconds = 4.0f;
 
 	/** Fired when async save starts. */
-	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events", meta=(ToolTip="Event fired when asynchronous/manual save starts."))
 	FYIInventoryPersistenceEvent OnSaveStarted;
 
 	/** Fired when async save completes. */
-	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events", meta=(ToolTip="Event fired when save finishes. Args: bSuccess + message."))
 	FYIInventoryPersistenceResultEvent OnSaveFinished;
 
 	/** Fired when load starts. */
-	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events", meta=(ToolTip="Event fired when load starts."))
 	FYIInventoryPersistenceEvent OnLoadStarted;
 
 	/** Fired when load completes or is skipped. */
-	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events")
+	UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Save|Events", meta=(ToolTip="Event fired when load completes or is skipped. Args: bSuccess + message."))
 	FYIInventoryPersistenceResultEvent OnLoadFinished;
 
 	/** Manual save helper for debugging/tools (server only). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only manual save trigger (diagnostic/tooling helper)."))
 	void SaveNow();
 
 	/** Manual load helper for debugging/tools (server only). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly)
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save", BlueprintAuthorityOnly, meta=(ToolTip="Authority-only manual load trigger (diagnostic/tooling helper)."))
 	void LoadNow();
 
 	/** Returns whether persistence setup is valid on this instance and why. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Validate persistence setup and return human-readable status in OutMessage."))
 	bool DiagnoseSaveSetup(FString& OutMessage) const;
 
 	/** Runtime preflight for inventory/equipment/action-bar wiring on a pawn. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics")
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Run runtime preflight against pawn inventory/equipment/action-bar wiring.\nReturns true when no blocking issues are found."))
 	bool RunRuntimePreflight(APawn* Pawn, TArray<FString>& OutBlockingIssues, TArray<FString>& OutWarnings) const;
 
 	/** Persistence backend provider abstraction (SaveGame by default, DB provider later). */
-	UPROPERTY(EditAnywhere, Instanced, BlueprintReadOnly, Category="YOLOInventory|Save")
+	UPROPERTY(EditAnywhere, Instanced, BlueprintReadOnly, Category="YOLOInventory|Save", meta=(ToolTip="Persistence backend provider abstraction.\nDefaults to SaveGame provider; can be swapped later for DB/provider implementation."))
 	TObjectPtr<UYIInventoryPersistenceProviderBase> PersistenceProvider;
 
 protected:
@@ -312,7 +312,7 @@ protected:
 	void OnRep_SavedBags() {}
 
 	/** Owner-only replicated snapshot(s) of saved pawn inventory bags. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_SavedBags, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing=OnRep_SavedBags, Category="Inventory", meta=(ToolTip="Owner-only replicated saved bag snapshots used for restore flows."))
 	TArray<FYISavedBagSnapshot> SavedBags;
 
 private:

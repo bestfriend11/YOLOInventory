@@ -6,7 +6,6 @@
 #include "YIInventoryGameplaySetupLibrary.generated.h"
 
 class APawn;
-class UYIEquipmentLayoutAsset;
 class UYIEquipmentComponent;
 class UYIItemDefinition;
 
@@ -91,10 +90,6 @@ public:
 	/** Convenience preset for spellbook slot -> action bar slot mapping. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup", meta=(BlueprintAuthorityOnly="true"))
 	static bool ApplySpellbookActionPreset(APawn* Pawn, FGameplayTag SpellbookEquipSlotTag, int32 ActionSlotIndex, FYIInventoryGameplaySetupResult& OutResult);
-
-	/** Build/update an equipment layout asset directly from equipment slot definitions (single source of truth). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup|Equipment")
-	static bool SyncEquipmentLayoutFromComponentSlots(UYIEquipmentComponent* EquipmentComp, UYIEquipmentLayoutAsset* LayoutAsset, bool bClearExisting = true);
 
 	/** Make an item explicitly support a slot tag so equip checks pass consistently. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Setup|Equipment")

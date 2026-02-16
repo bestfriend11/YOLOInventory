@@ -56,128 +56,128 @@ public:
 	UYIInventoryComponent();
 
 	// Currently equipped (open) bag
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inventory", meta=(ToolTip="Runtime active bag for this inventory component.\nServer is authoritative; owning client receives mirrored active context."))
 	TObjectPtr<UYIInventoryBag> EquippedBag;
 
 	// All bags owned by this component
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inventory")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inventory", meta=(ToolTip="Runtime bags owned by this component. Mutate on server for authoritative gameplay state."))
 	TArray<TObjectPtr<UYIInventoryBag>> Bags;
 
 	// Events
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBagOpened, UYIInventoryBag*, Bag);
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBagClosed, UYIInventoryBag*, Bag);
 
-	UPROPERTY(BlueprintAssignable, Category="Inventory")
+	UPROPERTY(BlueprintAssignable, Category="Inventory", meta=(ToolTip="Fires when a bag becomes active/open on this instance."))
 	FOnBagOpened OnBagOpened;
 
-	UPROPERTY(BlueprintAssignable, Category="Inventory")
+	UPROPERTY(BlueprintAssignable, Category="Inventory", meta=(ToolTip="Fires when an active bag is closed on this instance."))
 	FOnBagClosed OnBagClosed;
 
 	// Create a new bag (owned by this component)
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Create a runtime bag owned by this component.\nArgs:\n- BagName: display/name identifier.\n- GridSize: columns/rows.\nReturns created bag or null."))
 	UYIInventoryBag* CreateBag(FName BagName, FIntPoint GridSize);
 
 	// Open/close bag (fire events)
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active bag context and broadcast OnBagOpened."))
 	void OpenBag(UYIInventoryBag* Bag);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Close active bag context and broadcast OnBagClosed for Bag."))
 	void CloseBag(UYIInventoryBag* Bag);
 
 	// Quick accessors
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get currently active bag pointer for this instance."))
 	UYIInventoryBag* GetBag() const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Find bag by BagId. Returns null when missing."))
 	UYIInventoryBag* GetBagById(const FGuid& BagId) const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Find first bag by role tag."))
 	UYIInventoryBag* GetBagByRoleTag(FGameplayTag BagRoleTag) const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Find bag by display/name id."))
 	UYIInventoryBag* GetBagByDisplayName(FName BagName) const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active bag id for owner UI context wiring."))
 	FGuid GetActiveBagId() const { return ActiveBagId; }
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active spellbook bag id for owner UI context wiring."))
 	FGuid GetActiveSpellbookBagId() const { return ActiveSpellbookBagId; }
 
-	UFUNCTION(BlueprintPure, Category="Inventory")
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Resolve active spellbook bag pointer from replicated spellbook context."))
 	UYIInventoryBag* GetActiveSpellbookBag() const;
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active bag by BagId. Returns true on success."))
 	bool SetActiveBagById(const FGuid& InBagId);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active bag by role tag. Returns true on success."))
 	bool SetActiveBagByRoleTag(FGameplayTag InBagRoleTag);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active spellbook bag by BagId. Returns true on success."))
 	bool SetActiveSpellbookBagById(const FGuid& InBagId);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active spellbook bag by role tag. Returns true on success."))
 	bool SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRoleTag);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Copy replicated bag descriptors for owner UI listing."))
 	void GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const;
 
 	// Add an item to a bag; returns success
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Add item definition to target bag.\nServer-authoritative mutation helper."))
 	bool AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<class UYIItemDefinition> ItemDef, int32 Count = 1);
 
 	// Remove a bag owned by this component
-	UFUNCTION(BlueprintCallable, Category="Inventory")
+	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Remove bag from this component. Returns false if invalid/not owned/in use."))
 	bool RemoveBag(UYIInventoryBag* Bag);
 
 	/** Runtime lock used by keep-in-inventory equip mode. Locked items cannot be moved/rotated/removed. */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by bag+index.\nLocked items cannot be moved/rotated/removed."))
 	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by replicated identity reference (BagId + CustomStackKey + Code fallback)."))
 	bool SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked);
 
-	UFUNCTION(BlueprintPure, Category="Inventory|Equipment")
+	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified item is currently lock-protected."))
 	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
 
 	/** Server-only: push current bag state into net mirror to replicate to owning client. */
 	void SyncNetState();
 
 	// --------- Authority-safe inventory mutations (RPC-backed) ----------
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Move item within active bag.\nClient calls forward to ServerMoveItem RPC."))
 	bool MoveItem(int32 Index, FIntPoint NewPos);
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItem(int32 Index, FIntPoint NewPos);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item in active bag.\nClient calls forward to ServerRotateItem RPC."))
 	bool RotateItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRotateItem(int32 Index);
 
 	/** Add an already-built bag item (e.g., from drag/drop). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Add an already-built bag item into active bag.\nClient calls forward to ServerAddBagItem RPC.\nReturns inserted index or INDEX_NONE."))
 	int32 AddBagItem(const FYIBagItem& Item);
 	UFUNCTION(Server, Reliable)
 	void ServerAddBagItem(const struct FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Remove item by index from active bag.\nClient calls forward to ServerRemoveItem RPC."))
 	bool RemoveItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(int32 Index);
 
 	/** Drop an item instance to the world (server authoritative). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net")
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Drop item payload to world on server.\nClient calls forward to ServerDropItemToWorld RPC."))
 	bool DropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
 	UFUNCTION(Server, Reliable)
 	void ServerDropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
 
 	/** Soft class references so designers can assign widgets once and call the helpers below. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Inventory screen widget class used by OpenInventoryScreen on owning client."))
 	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Trade screen widget class used by OpenTradeScreen on owning client."))
 	TSoftClassPtr<UTradingScreenWidget> TradingScreenClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Shop screen widget class used by OpenShopScreen on owning client."))
 	TSoftClassPtr<UShopScreenWidget> ShopScreenClass;
 
 	/** Optional per-inventory SFX library for item-driven UI sounds. */
@@ -189,7 +189,7 @@ public:
 	bool bEnableInventorySounds = true;
 
 	/** Debug: print on-screen messages for inventory actions (add/move/drop/transfer). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Debug")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Debug", meta=(ToolTip="Enable runtime debug prints for inventory actions."))
 	bool bDebugInventoryActions = false;
 
 	// -------- Inventory action delegates (designer-friendly) ----------
@@ -200,49 +200,49 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnInventoryItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemDroppedToWorld, const FYIItemInstanceNet&, Item, const FTransform&, SpawnTransform);
 
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is added to bag on this instance."))
 	FOnInventoryItemAdded OnInventoryItemAdded;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is removed from bag on this instance."))
 	FOnInventoryItemRemoved OnInventoryItemRemoved;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item position changes in bag on this instance."))
 	FOnInventoryItemMoved OnInventoryItemMoved;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is rotated in bag on this instance."))
 	FOnInventoryItemRotated OnInventoryItemRotated;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item transfers between bags."))
 	FOnInventoryItemTransferred OnInventoryItemTransferred;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events")
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item payload is dropped/spawned to world."))
 	FOnInventoryItemDroppedToWorld OnInventoryItemDroppedToWorld;
 
 	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper.\nOpen inventory screen and bind to current active bag context."))
 	UInventoryScreenWidget* OpenInventoryScreen();
 
 	/** Close and remove the inventory screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close inventory screen if open."))
 	void CloseInventoryScreen();
 
 	/** Open a trading screen for an existing session (client-side). LocalBag can be left null to auto-use GetBag(). */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper to open trade screen for Session.\nLocalBag optional; null auto-resolves from active bag."))
 	UTradingScreenWidget* OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag = nullptr);
 
 	/** Close the trading screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close trade screen if open."))
 	void CloseTradeScreen();
 
 	/** Open a shop screen for a shop component (client-side). */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Open shop UI using provided replicated stock snapshot."))
 	UShopScreenWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
 
 	/** Update the shop screen if it is already open (no-op if closed). */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Refresh currently open shop UI snapshot."))
 	void UpdateShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
 
 	/** Close the shop screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close shop screen if open."))
 	void CloseShopScreen();
 
 	/** Close all inventory-related screens (inventory/trade/shop). */
-	UFUNCTION(BlueprintCallable, Category="UI")
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close all inventory/trade/shop screens."))
 	void CloseAllScreens();
 
 protected:

@@ -4,7 +4,6 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
-#include "YIEquipmentLayoutAsset.h"
 #include "YIEquipmentSchemaAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIItemSFXLibrary.h"
@@ -468,35 +467,6 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 			OutBlockingIssues.Add(FString::Printf(TEXT("SlotDefinitions has duplicate slot '%s'."), *SlotDef.SlotTag.ToString()));
 		}
 		SeenSlotDefs.Add(SlotDef.SlotTag);
-	}
-
-	if (!DefaultEquipmentLayoutAsset.IsNull())
-	{
-		if (const UYIEquipmentLayoutAsset* Layout = DefaultEquipmentLayoutAsset.LoadSynchronous())
-		{
-			TSet<FGameplayTag> LayoutSlots;
-			for (const FYIEquipmentSlotLayoutEntry& LayoutEntry : Layout->Slots)
-			{
-				if (!LayoutEntry.SlotTag.IsValid())
-				{
-					OutWarnings.Add(FString::Printf(TEXT("Layout '%s' has an entry with invalid SlotTag."), *Layout->GetName()));
-					continue;
-				}
-				LayoutSlots.Add(LayoutEntry.SlotTag);
-			}
-
-			for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)
-			{
-				if (SlotDef.SlotTag.IsValid() && !LayoutSlots.Contains(SlotDef.SlotTag))
-				{
-					OutWarnings.Add(FString::Printf(TEXT("Layout '%s' missing slot '%s' defined on equipment component."), *Layout->GetName(), *SlotDef.SlotTag.ToString()));
-				}
-			}
-		}
-		else
-		{
-			OutWarnings.Add(TEXT("DefaultEquipmentLayoutAsset is set but failed to load."));
-		}
 	}
 
 	TSet<FGameplayTag> SeenSlots;

@@ -67,59 +67,59 @@ public:
     UYIShopComponent();
 
     /** Stock mode determines whether the shop is shared or per-player. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="How stock is owned at runtime:\nSharedStock = one stock for all players.\nPerPlayerStock = separate stock per player.\nLocalOnly = local/testing mode."))
     EYIShopStockMode StockMode = EYIShopStockMode::SharedStock;
 
     /** Template bag asset used to seed stock on BeginPlay (server only). */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Template bag used by server to seed runtime shop stock on BeginPlay/restock."))
     TSoftObjectPtr<UYIInventoryBag> StockTemplate;
 
     /** Optional explicit listings (override price/stock). If empty, stock is free/infinite. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Optional explicit per-item listings.\nIf missing for an item, pricing/stock behavior falls back to component rules."))
     TArray<FYIShopListing> Listings;
 
     /** Allow players to sell items into the shop. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Allow players to sell items into shop stock."))
     bool bAllowSelling = true;
 
     /** Auto-pack stock after buy/sell to keep it tidy. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Auto tidy/pack stock after buy/sell operations."))
     bool bAutoSortStock = true;
 
     /** Sell price multiplier applied to listing prices (e.g. 0.5 = 50% of buy price). */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ClampMin="0.0", ClampMax="1.0"))
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ClampMin="0.0", ClampMax="1.0", ToolTip="Multiplier applied to buy price when player sells to shop (0.5 = 50%)."))
     float SellPriceMultiplier = 0.5f;
 
     /** If true, items without a listing can still be sold (price = 0). */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="If true, unlisted items can still be sold (typically for zero/derived price)."))
     bool bAllowSellingUnlisted = true;
 
     /** Debug: print on-screen messages for shop actions. */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop|Debug")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop|Debug", meta=(ToolTip="Print runtime debug messages for buy/sell/stock actions."))
     bool bDebugShopActions = false;
 
     // Shop action events (designer-friendly)
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnShopPurchase, APlayerState*, Buyer, int64, ItemCode, int32, Count, bool, bSuccess);
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnShopSale, APlayerState*, Seller, int64, ItemCode, int32, Count, bool, bSuccess);
 
-    UPROPERTY(BlueprintAssignable, Category="Shop|Events")
+    UPROPERTY(BlueprintAssignable, Category="Shop|Events", meta=(ToolTip="Server-side purchase event.\nArgs: Buyer, ItemCode, Count, bSuccess."))
     FOnShopPurchase OnShopPurchase;
-    UPROPERTY(BlueprintAssignable, Category="Shop|Events")
+    UPROPERTY(BlueprintAssignable, Category="Shop|Events", meta=(ToolTip="Server-side sale event.\nArgs: Seller, ItemCode, Count, bSuccess."))
     FOnShopSale OnShopSale;
 
     /** Auto-restock from template every interval (seconds). 0 disables. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Server restock interval in seconds.\n0 disables timed restock."))
     float RestockInterval = 0.f;
 
     /** Runtime stock bag (server authoritative). */
-    UPROPERTY(Transient, BlueprintReadOnly, Category="Shop")
+    UPROPERTY(Transient, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Server-authoritative runtime stock bag (not directly replicated)."))
     TObjectPtr<UYIInventoryBag> RuntimeStock = nullptr;
 
     /** Minimal replicated view of stock for UI. */
-    UPROPERTY(ReplicatedUsing=OnRep_StockMirror)
+    UPROPERTY(ReplicatedUsing=OnRep_StockMirror, meta=(ToolTip="Replicated minimal stock snapshot for client UI."))
     TArray<FYINetBagItem> StockMirror;
 
-    UPROPERTY(ReplicatedUsing=OnRep_StockMirror)
+    UPROPERTY(ReplicatedUsing=OnRep_StockMirror, meta=(ToolTip="Replicated stock snapshot grid size for client UI."))
     FIntPoint StockMirrorSize = FIntPoint(0,0);
 
     UFUNCTION()
@@ -127,7 +127,7 @@ public:
 
     /** Client UI hook when stock mirror changes. */
     DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStockMirrorUpdated);
-    UPROPERTY(BlueprintAssignable, Category="Shop|Events")
+    UPROPERTY(BlueprintAssignable, Category="Shop|Events", meta=(ToolTip="Client UI event fired when replicated stock mirror updates."))
     FOnStockMirrorUpdated OnStockMirrorUpdated;
 
     /** Server: attempt to buy a slot from this shop into buyer's inventory component. */
@@ -139,10 +139,10 @@ public:
     void ServerSellItem(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
     /** Blueprint helper to get listing info for UI (works on client). */
-    UFUNCTION(BlueprintPure, Category="Shop")
+    UFUNCTION(BlueprintPure, Category="Shop", meta=(ToolTip="Client-safe getter for current replicated stock mirror items."))
     TArray<FYINetBagItem> GetStockMirror() const { return StockMirror; }
 
-    UFUNCTION(BlueprintPure, Category="Shop")
+    UFUNCTION(BlueprintPure, Category="Shop", meta=(ToolTip="Client-safe getter for current replicated stock mirror size."))
     FIntPoint GetStockMirrorSize() const { return StockMirrorSize; }
 
     /** Build a stock mirror for a specific player (used for per-player stock mode). */

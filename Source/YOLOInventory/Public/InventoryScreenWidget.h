@@ -93,11 +93,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	bool bAutoBindEquipmentSlots = true;
 
-	/** Optional layout asset used to auto-generate equipment slot widgets into EquipmentSlotsPanel. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
-	TSoftObjectPtr<class UYIEquipmentLayoutAsset> EquipmentLayoutAsset;
-
-	/** If true and EquipmentSlotsPanel + EquipmentLayoutAsset are set, slot widgets are generated on construct (optional; UMG-authored slot widgets are preferred). */
+	/** If true, slot widgets can be generated on construct from equipment slot definitions (optional; UMG-authored slot widgets are preferred). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	bool bAutoGenerateEquipmentSlotPane = false;
 
@@ -105,7 +101,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
 	bool bAutoResolveWidgetReferences = true;
 
-	/** If true and EquipmentLayoutAsset is empty, the screen derives slot UI from UYIEquipmentComponent::SlotDefinitions. */
+	/** If true, the screen derives slot UI from UYIEquipmentComponent::SlotDefinitions. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
 	bool bAutoResolveLayoutFromEquipmentComponent = true;
 
@@ -201,7 +197,6 @@ private:
 	void StartAutoWireRetry();
 	void StopAutoWireRetry();
 	void HandleAutoWireRetry();
-	void BuildFallbackSlotLayoutFromDefinitions(const class UYIEquipmentComponent* EquipmentComp, TArray<struct FYIEquipmentSlotLayoutEntry>& OutSlots) const;
 
 	FTimerHandle AutoWireRetryTimer;
 	float AutoWireRetryStartTime = 0.f;

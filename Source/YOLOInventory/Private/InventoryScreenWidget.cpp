@@ -14,7 +14,6 @@
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
 #include "InventoryEquipmentSlotWidget.h"
-#include "YIEquipmentLayoutAsset.h"
 #include "Components/GridPanel.h"
 #include "Components/GridSlot.h"
 #include "Components/CanvasPanel.h"
@@ -29,6 +28,18 @@
 
 namespace YIInventoryScreenPrivate
 {
+	struct FYIAutoEquipmentSlotEntry
+	{
+		FGameplayTag SlotTag;
+		FText DisplayName;
+		int32 SortOrder = 0;
+		int32 Row = -1;
+		int32 Column = -1;
+		int32 RowSpan = 1;
+		int32 ColumnSpan = 1;
+		FVector2D IconSize = FVector2D(56.f, 56.f);
+	};
+
 	template<typename TWidgetType>
 	TWidgetType* FindWidgetByNameOrType(UWidgetTree* WidgetTree, const TCHAR* PreferredName, const TSet<UWidget*>& ExcludedWidgets = TSet<UWidget*>())
 	{
@@ -62,6 +73,38 @@ namespace YIInventoryScreenPrivate
 			}
 		}
 		return nullptr;
+	}
+
+	static void BuildAutoSlotEntriesFromDefinitions(const UYIEquipmentComponent* EquipmentComp, TArray<FYIAutoEquipmentSlotEntry>& OutSlots)
+	{
+		OutSlots.Reset();
+		if (!EquipmentComp)
+		{
+			return;
+		}
+
+		for (const FYIEquipmentSlotDefinition& SlotDef : EquipmentComp->SlotDefinitions)
+		{
+			if (!SlotDef.SlotTag.IsValid())
+			{
+				continue;
+			}
+
+			FYIAutoEquipmentSlotEntry Entry;
+			Entry.SlotTag = SlotDef.SlotTag;
+			const FString SlotName = SlotDef.SlotTag.ToString();
+			int32 LastDotIndex = INDEX_NONE;
+			if (SlotName.FindLastChar('.', LastDotIndex) && LastDotIndex >= 0 && LastDotIndex + 1 < SlotName.Len())
+			{
+				Entry.DisplayName = FText::FromString(SlotName.RightChop(LastDotIndex + 1));
+			}
+			else
+			{
+				Entry.DisplayName = FText::FromString(SlotName);
+			}
+			Entry.SortOrder = OutSlots.Num();
+			OutSlots.Add(Entry);
+		}
 	}
 }
 
@@ -220,38 +263,6 @@ bool UInventoryScreenWidget::ResolveRuntimeComponents(UYIInventoryComponent*& Ou
 	return OutInventory != nullptr || OutEquipment != nullptr;
 }
 
-void UInventoryScreenWidget::BuildFallbackSlotLayoutFromDefinitions(const UYIEquipmentComponent* EquipmentComp, TArray<FYIEquipmentSlotLayoutEntry>& OutSlots) const
-{
-	OutSlots.Reset();
-	if (!EquipmentComp)
-	{
-		return;
-	}
-
-	for (const FYIEquipmentSlotDefinition& SlotDef : EquipmentComp->SlotDefinitions)
-	{
-		if (!SlotDef.SlotTag.IsValid())
-		{
-			continue;
-		}
-
-		FYIEquipmentSlotLayoutEntry Entry;
-		Entry.SlotTag = SlotDef.SlotTag;
-		const FString SlotName = SlotDef.SlotTag.ToString();
-		int32 LastDotIndex = INDEX_NONE;
-		if (SlotName.FindLastChar('.', LastDotIndex) && LastDotIndex >= 0 && LastDotIndex + 1 < SlotName.Len())
-		{
-			Entry.DisplayName = FText::FromString(SlotName.RightChop(LastDotIndex + 1));
-		}
-		else
-		{
-			Entry.DisplayName = FText::FromString(SlotName);
-		}
-		Entry.SortOrder = OutSlots.Num();
-		OutSlots.Add(Entry);
-	}
-}
-
 bool UInventoryScreenWidget::AutoWireScreen(bool bRebuildEquipmentPane)
 {
 	EnsureMinimalDefaultLayout();
@@ -274,10 +285,6 @@ bool UInventoryScreenWidget::AutoWireScreen(bool bRebuildEquipmentPane)
 
 	if (bAutoGenerateEquipmentSlotPane && bRebuildEquipmentPane)
 	{
-		if (!EquipmentLayoutAsset.IsValid() && EquipmentComp && bAutoResolveLayoutFromEquipmentComponent)
-		{
-			EquipmentLayoutAsset = EquipmentComp->DefaultEquipmentLayoutAsset;
-		}
 		RebuildEquipmentSlotPaneFromLayout();
 	}
 
@@ -483,15 +490,6 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 	UYIEquipmentComponent* EquipmentComp = nullptr;
 	ResolveRuntimeComponents(InventoryComp, EquipmentComp);
 
-	if (!EquipmentLayoutAsset.IsValid() && EquipmentComp && bAutoResolveLayoutFromEquipmentComponent)
-	{
-		EquipmentLayoutAsset = EquipmentComp->DefaultEquipmentLayoutAsset;
-	}
-
-	UYIEquipmentLayoutAsset* Layout = EquipmentLayoutAsset.IsValid()
-		? EquipmentLayoutAsset.Get()
-		: EquipmentLayoutAsset.LoadSynchronous();
-
 	if (EquipmentSlotsPanel)
 	{
 		EquipmentSlotsPanel->ClearChildren();
@@ -501,33 +499,32 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 		EquipmentSlotsCanvasPanel->ClearChildren();
 	}
 
-	const bool bUseCanvasLayout = Layout ? (Layout->LayoutMode == EYIEquipmentLayoutMode::Canvas) : false;
-	UGridPanel* TargetGridPanel = bUseCanvasLayout ? nullptr : EquipmentSlotsPanel;
-	UCanvasPanel* TargetCanvasPanel = bUseCanvasLayout ? EquipmentSlotsCanvasPanel : nullptr;
+	UGridPanel* TargetGridPanel = EquipmentSlotsPanel;
+	UCanvasPanel* TargetCanvasPanel = EquipmentSlotsCanvasPanel;
+	if (TargetGridPanel && TargetCanvasPanel)
+	{
+		TargetCanvasPanel = nullptr; // Prefer grid panel when both are present.
+	}
 	if (!TargetGridPanel && !TargetCanvasPanel)
 	{
 		return;
 	}
 
-	TArray<FYIEquipmentSlotLayoutEntry> SortedSlots;
-	if (Layout)
+	TArray<YIInventoryScreenPrivate::FYIAutoEquipmentSlotEntry> SortedSlots;
+	if (bAutoResolveLayoutFromEquipmentComponent)
 	{
-		Layout->GetSortedSlots(SortedSlots);
-	}
-	else if (bAutoResolveLayoutFromEquipmentComponent)
-	{
-		BuildFallbackSlotLayoutFromDefinitions(EquipmentComp, SortedSlots);
+		YIInventoryScreenPrivate::BuildAutoSlotEntriesFromDefinitions(EquipmentComp, SortedSlots);
 	}
 	if (SortedSlots.Num() == 0)
 	{
 		return;
 	}
 
-	const int32 AutoColumns = FMath::Max(1, Layout ? Layout->AutoColumnCount : 4);
-	const float SlotPadding = Layout ? Layout->SlotPadding : 4.f;
+	const int32 AutoColumns = 4;
+	const float SlotPadding = 4.f;
 	int32 AutoPlacementIndex = 0;
 
-	for (const FYIEquipmentSlotLayoutEntry& SlotEntry : SortedSlots)
+	for (const YIInventoryScreenPrivate::FYIAutoEquipmentSlotEntry& SlotEntry : SortedSlots)
 	{
 		if (!SlotEntry.SlotTag.IsValid())
 		{
@@ -578,17 +575,12 @@ void UInventoryScreenWidget::RebuildEquipmentSlotPaneFromLayout()
 				(float)(Column * AutoCellSize.X) + SlotPadding,
 				(float)(Row * AutoCellSize.Y) + SlotPadding);
 
-			const FVector2D CanvasPos = SlotEntry.bUseCanvasPosition ? SlotEntry.CanvasPosition : AutoPos;
-			const FVector2D CanvasSize(
-				FMath::Max(8.f, SlotEntry.CanvasSize.X),
-				FMath::Max(8.f, SlotEntry.CanvasSize.Y));
-
 			UCanvasPanelSlot* CanvasSlot = TargetCanvasPanel->AddChildToCanvas(SlotWidget);
 			if (CanvasSlot)
 			{
 				CanvasSlot->SetAutoSize(false);
-				CanvasSlot->SetPosition(CanvasPos);
-				CanvasSlot->SetSize(CanvasSize);
+				CanvasSlot->SetPosition(AutoPos);
+				CanvasSlot->SetSize(FVector2D(96.f, 96.f));
 			}
 		}
 	}
