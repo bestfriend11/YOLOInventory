@@ -573,37 +573,36 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 	// Ghost visual (click-to-drag without holding)
 	if (bGhostActive)
 	{
-		// Always draw the footprint highlight so users can see valid/invalid placement while dragging,
-		// even when a global ghost renderer is used.
-		const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
-		const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
-		const FYIGridStyleBrushSlot* GhostSlot = nullptr;
-		if (GridStyle)
-		{
-			GhostSlot = bGhostPlacementValid ? &GridStyle->GhostPlacementValidOverlay : &GridStyle->GhostPlacementInvalidOverlay;
-		}
-		if (GhostSlot && GhostSlot->bEnabled)
-		{
-			const int32 GhostSlotKey = bGhostPlacementValid ? SlotGhostValid : SlotGhostInvalid;
-			const FSlateBrush* GhostStateBrush = ResolveBrushForStyleSlot(
-				GridStyle,
-				*GhostSlot,
-				GhostSlotKey,
-				bGhostPlacementValid ? 1.f : 0.f,
-				0.f,
-				bGhostPlacementValid ? 0.f : 1.f,
-				1.f);
-			YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FootP, FootS, *GhostSlot, Box, GhostStateBrush);
-		}
-		else
-		{
-			const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f, 0.8f, 0.2f, 0.18f) : FLinearColor(0.8f, 0.2f, 0.2f, 0.18f);
-			FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
-		}
-
-		// Only draw the ghost icon locally if we are not using a global overlay ghost.
+		// When a global drag overlay is active, it owns both ghost icon and placement highlight
+		// so the local grid does not draw a second highlight on top.
 		if (!bUseGlobalDragGhost)
 		{
+			const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
+			const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
+			const FYIGridStyleBrushSlot* GhostSlot = nullptr;
+			if (GridStyle)
+			{
+				GhostSlot = bGhostPlacementValid ? &GridStyle->GhostPlacementValidOverlay : &GridStyle->GhostPlacementInvalidOverlay;
+			}
+			if (GhostSlot && GhostSlot->bEnabled)
+			{
+				const int32 GhostSlotKey = bGhostPlacementValid ? SlotGhostValid : SlotGhostInvalid;
+				const FSlateBrush* GhostStateBrush = ResolveBrushForStyleSlot(
+					GridStyle,
+					*GhostSlot,
+					GhostSlotKey,
+					bGhostPlacementValid ? 1.f : 0.f,
+					0.f,
+					bGhostPlacementValid ? 0.f : 1.f,
+					1.f);
+				YI_DrawBrushSlot(OutDrawElements, L, AllottedGeometry, FootP, FootS, *GhostSlot, Box, GhostStateBrush);
+			}
+			else
+			{
+				const FLinearColor GhostTint = bGhostPlacementValid ? FLinearColor(0.2f, 0.8f, 0.2f, 0.18f) : FLinearColor(0.8f, 0.2f, 0.2f, 0.18f);
+				FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
+			}
+
 			const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
 			const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
 			const FLinearColor Tint = bGhostHasIcon

@@ -26,11 +26,6 @@ void UInventoryDragOverlayUserWidget::NativeTick(const FGeometry& MyGeometry, fl
 
 	FYIBagItem DragItem; UYIInventoryBag* SrcBag = nullptr;
 	bShouldDraw = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
-	if (bShouldDraw)
-	{
-		// Keep absolute cursor coordinates; AbsoluteToLocal expects the same space.
-		CachedCursorSS = FSlateApplication::Get().GetCursorPos();
-	}
 	// Invalidate so we repaint; this widget is cheap
 	InvalidateLayoutAndVolatility();
 }
@@ -40,6 +35,9 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 {
 	LayerId = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
+	// Re-sample the cursor during paint to avoid stale coordinates during window resize.
+	CachedCursorSS = FSlateApplication::Get().GetCursorPos();
+
 	// Build a debug string for on-screen display every frame
 	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
 	const bool bShowDebug = Settings.bShowDebug
@@ -48,6 +46,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		&& Settings.IsDebugChannelEnabled(EYIDebugChannel::Grid);
 	FYIBagItem LiveDragItem; UYIInventoryBag* LiveSourceBag = nullptr;
 	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag, GetWorld());
+	bShouldDraw = bHasLiveDrag;
 	FString Debug;
 	auto V2 = [](const FVector2D& V){ return FString::Printf(TEXT("(%.1f, %.1f)"), V.X, V.Y); };
 	auto V2i = [](const FIntPoint& P){ return FString::Printf(TEXT("(%d, %d)"), P.X, P.Y); };

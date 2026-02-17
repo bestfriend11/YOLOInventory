@@ -296,6 +296,12 @@ void UInventoryScreenWidget::EnsureGlobalDragOverlay()
 
 	if (DragOverlay)
 	{
+		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(DragOverlay->Slot))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			CanvasSlot->SetOffsets(FMargin(0.f, 0.f, 0.f, 0.f));
+			CanvasSlot->SetZOrder(9999);
+		}
 		DragOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
 		DragOverlay->LeftGrid = Grid;
 		DragOverlay->RightGrid = SpellbookGrid;
