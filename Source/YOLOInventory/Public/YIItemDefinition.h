@@ -13,6 +13,7 @@
 #include "YIItemDefinition.generated.h"
 
 class UYIDataTableItemSource;
+class UYIInventoryBag;
 
 /**
  * Primary item definition. Each definition must have a globally-unique numeric code.
@@ -77,6 +78,18 @@ public:
 	FIntPoint DefaultSize = FIntPoint(1,1);
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout", meta=(ToolTip="Whether the item can be rotated in grid-based inventories"))
 	bool bAllowRotation = true;
+
+	/** When enabled, each runtime instance of this item owns an inner bag (container-in-container). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(ToolTip="If true, this item behaves as a container and gets a nested runtime bag instance."))
+	bool bIsContainerItem = false;
+
+	/** Optional template bag used to initialize nested container layout/content. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", ToolTip="Optional template bag cloned when this container item instance is first initialized."))
+	TSoftObjectPtr<UYIInventoryBag> ContainerTemplateBag;
+
+	/** Default nested bag size when no container template is provided. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", ClampMin="1", ToolTip="Default nested bag grid size for container items without a template."))
+	FIntPoint ContainerDefaultGridSize = FIntPoint(6, 8);
 
 	/** If set, item will occupy all these equipment slots when equipped (multi-slot items such as two-handed weapons). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Slots occupied by this item while equipped. If empty, only requested/auto-resolved slot is occupied."))

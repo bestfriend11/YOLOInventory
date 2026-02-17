@@ -10,6 +10,7 @@
 #include "UILayerSubsystem.h"
 
 #include "YIInventoryBag.h"
+#include "YIItemDefinition.h"
 #include "InventoryActionMenuWidget.h"
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
@@ -446,6 +447,20 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 		OnItemSold(ItemIdx);
 		OnItemSoldEvent.Broadcast(ItemIdx);
 		break;
+	case 6: // Open Container
+	{
+		if (APlayerController* PC = GetOwningPlayer())
+		{
+			if (APawn* Pawn = PC->GetPawn())
+			{
+				if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+				{
+					InventoryComp->OpenContainedBagAtIndex(ItemIdx);
+				}
+			}
+		}
+		break;
+	}
 	case 7: // Equip
 	{
 		bool bSuccess = false;
@@ -488,6 +503,18 @@ void UInventoryScreenWidget::EvaluateActionsForIndex(int32 Index, TArray<FText>&
 
 	// Drop
 	OutActions.Add(NSLOCTEXT("YOLOInventory", "DropAction", "Drop")); OutActionIds.Add(2);
+
+	// Open container when this item carries a nested bag (or can become one by definition).
+	const FYIBagItem& SelectedItem = Grid->Bag->Items[Index];
+	UYIItemDefinition* Definition = SelectedItem.Item.Definition.IsValid()
+		? SelectedItem.Item.Definition.Get()
+		: SelectedItem.Item.Definition.LoadSynchronous();
+	const bool bCanOpenContainer = SelectedItem.Item.ContainedBagId.IsValid() || (Definition && Definition->bIsContainerItem);
+	if (bCanOpenContainer)
+	{
+		OutActions.Add(NSLOCTEXT("YOLOInventory", "OpenContainerAction", "Open"));
+		OutActionIds.Add(6);
+	}
 
 	// Combine if there is another existing stack
 	int32 Found = Grid->Bag->FindExistingStackIndexForItem(Grid->Bag->Items[Index]);
@@ -843,6 +870,19 @@ bool UInventoryScreenWidget::HandleConfirm()
 bool UInventoryScreenWidget::HandleCancel()
 {
 	if (ActionMenu && ActionMenu->IsVisible()) { ActionMenu->HideActions(); return true; }
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+			{
+				if (InventoryComp->OpenParentBag())
+				{
+					return true;
+				}
+			}
+		}
+	}
 	return false; // default: let caller (e.g., top-level game) handle screen close
 }
 
@@ -899,6 +939,19 @@ void UInventoryScreenWidget::OnConfirmAction(const FInputActionValue& Value)
 void UInventoryScreenWidget::OnCancelAction(const FInputActionValue& Value)
 {
 	if (ActionMenu && ActionMenu->IsVisible()) { ActionMenu->HideActions(); return; }
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
+			{
+				if (InventoryComp->OpenParentBag())
+				{
+					return;
+				}
+			}
+		}
+	}
 	// by default do nothing; Blueprint can override to close the screen
 }
 

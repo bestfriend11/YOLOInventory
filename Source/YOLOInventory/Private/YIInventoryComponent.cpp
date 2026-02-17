@@ -16,6 +16,7 @@
 #include "Net/UnrealNetwork.h"
 #include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
 #include "YIShopComponent.h"
+#include "YIDebugLibrary.h"
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -213,6 +214,12 @@ bool UYIInventoryComponent::SetActiveBagById(const FGuid& InBagId)
 		return false;
 	}
 
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		ServerSetActiveBagById(InBagId);
+		return true;
+	}
+
 	if (UYIInventoryBag* Bag = GetBagById(InBagId))
 	{
 		OpenBag(Bag);
@@ -235,11 +242,69 @@ bool UYIInventoryComponent::SetActiveBagByRoleTag(FGameplayTag InBagRoleTag)
 	return false;
 }
 
+bool UYIInventoryComponent::OpenContainedBagAtIndex(int32 ItemIndex)
+{
+	UYIInventoryBag* ActiveBag = GetBag();
+	if (!ActiveBag || !ActiveBag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		const FYIBagItem& Item = ActiveBag->Items[ItemIndex];
+		if (!Item.Item.InstanceId.IsValid())
+		{
+			return false;
+		}
+		const FGuid ParentBagId = ActiveBag->BagId.IsValid() ? ActiveBag->BagId : ActiveBagId;
+		ServerOpenContainedBagByInstance(ParentBagId, Item.Item.InstanceId);
+		return true;
+	}
+
+	return TryOpenContainedBagInternal(ActiveBag, ItemIndex);
+}
+
+bool UYIInventoryComponent::OpenParentBag()
+{
+	UYIInventoryBag* ActiveBag = GetBag();
+	if (!ActiveBag)
+	{
+		return false;
+	}
+
+	const FGuid ChildBagId = ActiveBag->BagId;
+	if (!ChildBagId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		ServerOpenParentBag(ChildBagId);
+		return true;
+	}
+
+	FGuid ParentBagId;
+	FGuid ParentItemId;
+	if (!FindContainerParentForBag(ChildBagId, ParentBagId, ParentItemId))
+	{
+		return false;
+	}
+	return SetActiveBagById(ParentBagId);
+}
+
 bool UYIInventoryComponent::SetActiveSpellbookBagById(const FGuid& InBagId)
 {
 	if (!InBagId.IsValid())
 	{
 		return false;
+	}
+
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		ServerSetActiveSpellbookBagById(InBagId);
+		return true;
 	}
 
 	if (UYIInventoryBag* Bag = GetBagById(InBagId))
@@ -273,6 +338,49 @@ bool UYIInventoryComponent::SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRol
 		return true;
 	}
 	return false;
+}
+
+void UYIInventoryComponent::ServerSetActiveBagById_Implementation(const FGuid& InBagId)
+{
+	SetActiveBagById(InBagId);
+}
+
+void UYIInventoryComponent::ServerSetActiveSpellbookBagById_Implementation(const FGuid& InBagId)
+{
+	SetActiveSpellbookBagById(InBagId);
+}
+
+void UYIInventoryComponent::ServerOpenContainedBagByInstance_Implementation(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId)
+{
+	if (!ParentBagId.IsValid() || !ParentItemInstanceId.IsValid())
+	{
+		return;
+	}
+
+	UYIInventoryBag* ParentBag = GetBagById(ParentBagId);
+	if (!ParentBag)
+	{
+		return;
+	}
+
+	int32 ItemIndex = INDEX_NONE;
+	if (!FindItemIndexByInstanceId(ParentBag, ParentItemInstanceId, ItemIndex))
+	{
+		return;
+	}
+
+	TryOpenContainedBagInternal(ParentBag, ItemIndex);
+}
+
+void UYIInventoryComponent::ServerOpenParentBag_Implementation(const FGuid& ChildBagId)
+{
+	FGuid ParentBagId;
+	FGuid ParentItemId;
+	if (!FindContainerParentForBag(ChildBagId, ParentBagId, ParentItemId))
+	{
+		return;
+	}
+	SetActiveBagById(ParentBagId);
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBagByRoleTag(FGameplayTag BagRoleTag) const
@@ -456,6 +564,168 @@ bool UYIInventoryComponent::IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemInde
 	return IsBagItemLockedByIdentity(Identity);
 }
 
+bool UYIInventoryComponent::FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const
+{
+	OutIndex = INDEX_NONE;
+	if (!Bag || !InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
+	{
+		if (Bag->Items[Index].Item.InstanceId == InstanceId)
+		{
+			OutIndex = Index;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UYIInventoryComponent::FindContainerParentForBag(const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId) const
+{
+	OutParentBagId.Invalidate();
+	OutParentItemInstanceId.Invalidate();
+	if (!ChildBagId.IsValid())
+	{
+		return false;
+	}
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+		Bag->EnsureBagId();
+		for (const FYIBagItem& Item : Bag->Items)
+		{
+			if (Item.Item.ContainedBagId == ChildBagId)
+			{
+				OutParentBagId = Bag->BagId;
+				OutParentItemInstanceId = Item.Item.InstanceId;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool UYIInventoryComponent::IsBagDescendantOf(const FGuid& CandidateBagId, const FGuid& PotentialAncestorBagId) const
+{
+	if (!CandidateBagId.IsValid() || !PotentialAncestorBagId.IsValid())
+	{
+		return false;
+	}
+	if (CandidateBagId == PotentialAncestorBagId)
+	{
+		return true;
+	}
+
+	FGuid Current = CandidateBagId;
+	for (int32 Depth = 0; Depth < 32; ++Depth)
+	{
+		FGuid ParentBagId;
+		FGuid ParentItemId;
+		if (!FindContainerParentForBag(Current, ParentBagId, ParentItemId) || !ParentBagId.IsValid())
+		{
+			return false;
+		}
+		if (ParentBagId == PotentialAncestorBagId)
+		{
+			return true;
+		}
+		Current = ParentBagId;
+	}
+	return false;
+}
+
+UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag)
+{
+	(void)ParentBag;
+	UYIItemDefinition* Definition = InOutItem.Item.Definition.IsValid()
+		? InOutItem.Item.Definition.Get()
+		: InOutItem.Item.Definition.LoadSynchronous();
+	if (!Definition || !Definition->bIsContainerItem)
+	{
+		return nullptr;
+	}
+
+	if (InOutItem.Item.ContainedBagId.IsValid())
+	{
+		if (UYIInventoryBag* Existing = GetBagById(InOutItem.Item.ContainedBagId))
+		{
+			return Existing;
+		}
+	}
+
+	UYIInventoryBag* ChildBag = nullptr;
+	if (const UYIInventoryBag* TemplateBag = Definition->ContainerTemplateBag.LoadSynchronous())
+	{
+		ChildBag = CloneBagTemplate(TemplateBag);
+	}
+	else
+	{
+		ChildBag = NewObject<UYIInventoryBag>(this);
+		if (ChildBag)
+		{
+			ChildBag->EnsureBagId();
+			ChildBag->DisplayName = Definition->DisplayName.IsEmpty()
+				? FText::FromString(TEXT("Container"))
+				: Definition->DisplayName;
+			const FIntPoint DefaultGrid = Definition->ContainerDefaultGridSize;
+			ChildBag->GridSize = FIntPoint(
+				FMath::Max(1, DefaultGrid.X),
+				FMath::Max(1, DefaultGrid.Y));
+			ChildBag->bAllowRotation = true;
+		}
+	}
+
+	if (!ChildBag)
+	{
+		return nullptr;
+	}
+
+	ChildBag->EnsureBagId();
+	if (!Bags.Contains(ChildBag))
+	{
+		Bags.Add(ChildBag);
+	}
+	InOutItem.Item.ContainedBagId = ChildBag->BagId;
+	InOutItem.Item.Count = 1; // container items are always non-stackable runtime instances
+	return ChildBag;
+}
+
+bool UYIInventoryComponent::TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex)
+{
+	if (!ParentBag || !ParentBag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	FYIBagItem& Item = ParentBag->Items[ItemIndex];
+	UYIInventoryBag* ChildBag = EnsureContainedBagForItem(Item, ParentBag);
+	if (!ChildBag)
+	{
+		return false;
+	}
+
+	if (!ChildBag->BagId.IsValid())
+	{
+		ChildBag->EnsureBagId();
+	}
+
+	// Prevent cycles: destination child bag can never be parent/ancestor of its current parent.
+	if (ParentBag->BagId.IsValid() && IsBagDescendantOf(ParentBag->BagId, ChildBag->BagId))
+	{
+		return false;
+	}
+
+	OpenBag(ChildBag);
+	return true;
+}
+
 void UYIInventoryComponent::GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const
 {
 	OutDescriptors = NetBagDescriptors;
@@ -528,7 +798,15 @@ bool UYIInventoryComponent::AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<UY
 	New.Item.Definition = ItemDef;
 	New.Item.Count = FMath::Max(1, Count);
 	New.Size = Def->DefaultSize;
+	if (Def->bIsContainerItem)
+	{
+		New.Item.Count = 1;
+	}
 	int32 Idx = Bag->AddBagItem(New);
+	if (Idx != INDEX_NONE && Bag->Items.IsValidIndex(Idx))
+	{
+		EnsureContainedBagForItem(Bag->Items[Idx], Bag);
+	}
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
 		SyncNetState();
@@ -706,6 +984,10 @@ void UYIInventoryComponent::SyncNetState()
 		Desc.DisplayName = Bag->DisplayName;
 		Desc.BagRoleTag = Bag->BagRoleTag;
 		Desc.GridSize = Bag->GridSize;
+		Desc.ItemCount = Bag->Items.Num();
+		Desc.ParentBagId.Invalidate();
+		Desc.ParentItemInstanceId.Invalidate();
+		Desc.bIsNestedContainer = FindContainerParentForBag(Bag->BagId, Desc.ParentBagId, Desc.ParentItemInstanceId);
 		Desc.bIsActive = (Bag->BagId == ActiveBagId);
 		NetBagDescriptors.Add(Desc);
 	}
@@ -732,6 +1014,7 @@ void UYIInventoryComponent::SyncNetState()
 			Net.Pos = It.Pos;
 			Net.Size = It.Size;
 			Net.CustomStackKey = It.Item.CustomStackKey;
+			Net.ContainedBagId = It.Item.ContainedBagId;
 			NetBagItems.Add(Net);
 		}
 	}
@@ -753,6 +1036,7 @@ void UYIInventoryComponent::OnRep_NetBag()
 	}
 
 	ClientPreviewBag->GridSize = NetBagGridSize;
+	ClientPreviewBag->BagId = ActiveBagId;
 
 	ClientPreviewBag->Items.Reset();
 
@@ -770,6 +1054,7 @@ void UYIInventoryComponent::OnRep_NetBag()
 			Item.Item.StackId = Net.StackId;
 		}
 		Item.Item.CustomStackKey = Net.CustomStackKey;
+		Item.Item.ContainedBagId = Net.ContainedBagId;
 		Item.Pos = Net.Pos;
 		Item.Size = Net.Size;
 		ClientPreviewBag->Items.Add(Item);
@@ -882,8 +1167,30 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	{
 		if (EquippedBag)
 		{
-			int32 Idx = EquippedBag->AddBagItem(Item);
-			if (Idx != INDEX_NONE) { SyncNetState(); }
+			FYIBagItem MutableItem = Item;
+			if (UYIItemDefinition* Def = MutableItem.Item.Definition.IsValid()
+				? MutableItem.Item.Definition.Get()
+				: MutableItem.Item.Definition.LoadSynchronous())
+			{
+				if (Def->bIsContainerItem)
+				{
+					MutableItem.Item.Count = 1;
+				}
+			}
+
+			if (MutableItem.Item.ContainedBagId.IsValid() &&
+				EquippedBag->BagId.IsValid() &&
+				IsBagDescendantOf(EquippedBag->BagId, MutableItem.Item.ContainedBagId))
+			{
+				return INDEX_NONE;
+			}
+
+			int32 Idx = EquippedBag->AddBagItem(MutableItem);
+			if (Idx != INDEX_NONE && EquippedBag->Items.IsValidIndex(Idx))
+			{
+				EnsureContainedBagForItem(EquippedBag->Items[Idx], EquippedBag);
+				SyncNetState();
+			}
 			return Idx;
 		}
 		return INDEX_NONE;
@@ -895,6 +1202,7 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	Net.InstanceId = Item.Item.InstanceId;
 	Net.StackId = Item.Item.StackId;
 	Net.CustomStackKey = Item.Item.CustomStackKey;
+	Net.ContainedBagId = Item.Item.ContainedBagId;
 	Net.bRotated = Item.Item.bRotated;
 	Net.Affixes = Item.Item.Affixes;
 	Net.Attributes.Reset();
@@ -914,6 +1222,7 @@ static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
 	Out.InstanceId = Net.InstanceId.IsValid() ? Net.InstanceId : FGuid::NewGuid();
 	Out.StackId = Net.StackId.IsValid() ? Net.StackId : FGuid::NewGuid();
 	Out.CustomStackKey = Net.CustomStackKey;
+	Out.ContainedBagId = Net.ContainedBagId;
 	Out.bRotated = Net.bRotated;
 	Out.Affixes = Net.Affixes;
 	Out.Attributes.Reset();
@@ -968,11 +1277,17 @@ bool UYIInventoryComponent::DropItemToWorld(const FYIItemInstanceNet& NetItem, c
 		FYIItemInstance Full = NetToFull(NetItem);
 		UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(GetOwner(), Full, SpawnTransform);
 		OnInventoryItemDroppedToWorld.Broadcast(NetItem, SpawnTransform);
-		if (bDebugInventoryActions && GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
-				FString::Printf(TEXT("[Inventory] Dropped to world (%d)"), NetItem.Count));
-		}
+		UYIDebugLibrary::EmitDebugMessage(
+			this,
+			EYIDebugChannel::Inventory,
+			FString::Printf(TEXT("Dropped to world (count=%d)"), NetItem.Count),
+			FLinearColor(FColor::Cyan),
+			bDebugInventoryActions,
+			bDebugInventoryActions,
+			2.0f,
+			false,
+			false,
+			TEXT("InventoryComponent"));
 		return true;
 	}
 	ServerDropItemToWorld(NetItem, SpawnTransform);
@@ -987,11 +1302,17 @@ void UYIInventoryComponent::ServerDropItemToWorld_Implementation(const FYIItemIn
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
 {
 	OnInventoryItemAdded.Broadcast(EquippedBag, Index, Item);
-	if (bDebugInventoryActions && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
-			FString::Printf(TEXT("[Inventory] Added idx %d x%d"), Index, Item.Item.Count));
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		this,
+		EYIDebugChannel::Inventory,
+		FString::Printf(TEXT("Added idx=%d count=%d"), Index, Item.Item.Count),
+		FLinearColor(FColor::Green),
+		bDebugInventoryActions,
+		bDebugInventoryActions,
+		2.0f,
+		false,
+		false,
+		TEXT("InventoryComponent"));
 }
 
 void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
@@ -1017,41 +1338,65 @@ void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 	}
 
 	OnInventoryItemRemoved.Broadcast(EquippedBag, Index, Item);
-	if (bDebugInventoryActions && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange,
-			FString::Printf(TEXT("[Inventory] Removed idx %d"), Index));
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		this,
+		EYIDebugChannel::Inventory,
+		FString::Printf(TEXT("Removed idx=%d"), Index),
+		FLinearColor(FColor::Orange),
+		bDebugInventoryActions,
+		bDebugInventoryActions,
+		2.0f,
+		false,
+		false,
+		TEXT("InventoryComponent"));
 }
 
 void UYIInventoryComponent::HandleBagItemMoved(int32 Index, FIntPoint NewPos)
 {
 	OnInventoryItemMoved.Broadcast(EquippedBag, Index, NewPos);
-	if (bDebugInventoryActions && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
-			FString::Printf(TEXT("[Inventory] Moved idx %d -> (%d,%d)"), Index, NewPos.X, NewPos.Y));
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		this,
+		EYIDebugChannel::Inventory,
+		FString::Printf(TEXT("Moved idx=%d to (%d,%d)"), Index, NewPos.X, NewPos.Y),
+		FLinearColor(FColor::Cyan),
+		bDebugInventoryActions,
+		bDebugInventoryActions,
+		2.0f,
+		false,
+		false,
+		TEXT("InventoryComponent"));
 }
 
 void UYIInventoryComponent::HandleBagItemRotated(int32 Index)
 {
 	OnInventoryItemRotated.Broadcast(EquippedBag, Index);
-	if (bDebugInventoryActions && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
-			FString::Printf(TEXT("[Inventory] Rotated idx %d"), Index));
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		this,
+		EYIDebugChannel::Inventory,
+		FString::Printf(TEXT("Rotated idx=%d"), Index),
+		FLinearColor(FColor::Yellow),
+		bDebugInventoryActions,
+		bDebugInventoryActions,
+		2.0f,
+		false,
+		false,
+		TEXT("InventoryComponent"));
 }
 
 void UYIInventoryComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx)
 {
 	OnInventoryItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
-	if (bDebugInventoryActions && GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::White,
-			FString::Printf(TEXT("[Inventory] Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx));
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		this,
+		EYIDebugChannel::Inventory,
+		FString::Printf(TEXT("Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx),
+		FLinearColor(FColor::White),
+		bDebugInventoryActions,
+		bDebugInventoryActions,
+		2.0f,
+		false,
+		false,
+		TEXT("InventoryComponent"));
 }
 
 // -------- UI helpers --------

@@ -33,6 +33,10 @@ struct FYIItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
 	int64 CustomStackKey = 0;
 
+	// Optional nested-container linkage. When valid, this item points to a runtime bag instance.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item|Container")
+	FGuid ContainedBagId;
+
 	// Rotated layout flag for grid containers (size is derived from the Definition->DefaultSize)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout")
 	bool bRotated = false; 

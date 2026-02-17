@@ -88,6 +88,7 @@ UYIInventoryBag* UShopScreenWidget::BuildMirrorFromStock(const TArray<FYINetBagI
 			Item.Item.StackId = Net.StackId;
 		}
 		Item.Item.CustomStackKey = Net.CustomStackKey;
+		Item.Item.ContainedBagId = Net.ContainedBagId;
 		Item.Pos = Net.Pos;
 		Item.Size = Net.Size;
 		Bag->Items.Add(Item);

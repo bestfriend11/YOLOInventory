@@ -53,6 +53,7 @@ static void CopyBagToNetView(const UYIInventoryComponent* Inv, TArray<FYINetBagI
             Net.Pos = It.Pos;
             Net.Size = It.Size;
             Net.CustomStackKey = It.Item.CustomStackKey;
+            Net.ContainedBagId = It.Item.ContainedBagId;
             Out.Add(Net);
         }
     }
@@ -143,6 +144,7 @@ void AYITradeSessionActor::ServerAddItem_Implementation(ETradeSide Side, UYIInve
     Net.Pos = SrcItem.Pos;
     Net.Size = SrcItem.Size;
     Net.CustomStackKey = SrcItem.Item.CustomStackKey;
+    Net.ContainedBagId = SrcItem.Item.ContainedBagId;
 
     FYITradeOffer& Offer = GetOffer(Side);
     TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);

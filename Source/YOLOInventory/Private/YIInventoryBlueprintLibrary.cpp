@@ -689,6 +689,7 @@ AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		Pickup->ItemInstance.InstanceId = Instance.InstanceId.IsValid() ? Instance.InstanceId : FGuid::NewGuid();
 		Pickup->ItemInstance.StackId = Instance.StackId.IsValid() ? Instance.StackId : FGuid::NewGuid();
 		Pickup->ItemInstance.CustomStackKey = Instance.CustomStackKey;
+		Pickup->ItemInstance.ContainedBagId = Instance.ContainedBagId;
 		Pickup->ItemInstance.bRotated = Instance.bRotated;
 		Pickup->ItemInstance.Affixes = Instance.Affixes;
 		Pickup->ItemInstance.Attributes.Reset();
@@ -825,6 +826,7 @@ bool UYIInventoryBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	Full.InstanceId = NetInstance.InstanceId.IsValid() ? NetInstance.InstanceId : FGuid::NewGuid();
 	Full.StackId = NetInstance.StackId.IsValid() ? NetInstance.StackId : FGuid::NewGuid();
 	Full.CustomStackKey = NetInstance.CustomStackKey;
+	Full.ContainedBagId = NetInstance.ContainedBagId;
 	Full.bRotated = NetInstance.bRotated;
 	Full.Affixes = NetInstance.Affixes;
 	for (const FYIAttributeKV& KV : NetInstance.Attributes)

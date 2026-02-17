@@ -248,15 +248,15 @@ public:
 
 	/** Verbose runtime diagnostics for save/load flow. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Enable verbose runtime save/load diagnostics logging."))
-	bool bEnableSaveDiagnostics = true;
+	bool bEnableSaveDiagnostics = false;
 
 	/** Draw save/load diagnostics on screen (useful during integration/testing). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Show save/load diagnostics on screen in addition to log output."))
-	bool bShowSaveDiagnosticsOnScreen = true;
+	bool bShowSaveDiagnosticsOnScreen = false;
 
 	/** Keep diagnostic message pinned for a long duration instead of short fadeouts. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ToolTip="Keep diagnostics pinned longer on screen for debugging sessions."))
-	bool bKeepDiagnosticsPinnedOnScreen = true;
+	bool bKeepDiagnosticsPinnedOnScreen = false;
 
 	/** Duration for on-screen diagnostic messages when pinning is disabled. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Save|Diagnostics", meta=(ClampMin="1.0", ClampMax="600.0", ToolTip="On-screen diagnostic duration when pinning is disabled."))

@@ -11,6 +11,7 @@
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "Algo/Unique.h"
+#include "YIDebugLibrary.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIEquipment, Log, All);
 
@@ -24,6 +25,7 @@ namespace YIEquipmentPrivate
 		Out.InstanceId = Full.InstanceId;
 		Out.StackId = Full.StackId;
 		Out.CustomStackKey = Full.CustomStackKey;
+		Out.ContainedBagId = Full.ContainedBagId;
 		Out.bRotated = Full.bRotated;
 		Out.Affixes = Full.Affixes;
 		Out.Attributes.Reset();
@@ -45,6 +47,7 @@ namespace YIEquipmentPrivate
 		Out.InstanceId = Net.InstanceId.IsValid() ? Net.InstanceId : FGuid::NewGuid();
 		Out.StackId = Net.StackId.IsValid() ? Net.StackId : FGuid::NewGuid();
 		Out.CustomStackKey = Net.CustomStackKey;
+		Out.ContainedBagId = Net.ContainedBagId;
 		Out.bRotated = Net.bRotated;
 		Out.Affixes = Net.Affixes;
 		Out.Attributes.Reset();
@@ -332,14 +335,17 @@ int32 UYIEquipmentComponent::GetEntryGroupIdForIndex(int32 EntryIndex) const
 
 void UYIEquipmentComponent::EmitEquipmentMessage(const FString& Message, const FColor& Color) const
 {
-	UE_LOG(LogYIEquipment, Log, TEXT("%s"), *Message);
-	if (bDebugEquipment && GEngine)
-	{
-		const float Duration = bPinDebugMessages ? 20.0f : 4.0f;
-		const uint32 Hash = GetTypeHash(Message);
-		const uint64 Key = 0x5949455100000000ULL | static_cast<uint64>(Hash); // "YIEQ"
-		GEngine->AddOnScreenDebugMessage(Key, Duration, Color, Message);
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		const_cast<UYIEquipmentComponent*>(this),
+		EYIDebugChannel::Equipment,
+		Message,
+		FLinearColor(Color),
+		bDebugEquipment,
+		bDebugEquipment,
+		4.0f,
+		bPinDebugMessages,
+		false,
+		TEXT("Equipment"));
 }
 
 void UYIEquipmentComponent::BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message)

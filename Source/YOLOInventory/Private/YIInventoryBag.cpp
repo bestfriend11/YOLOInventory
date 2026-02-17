@@ -190,6 +190,10 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	}
 
 	FYIBagItem NormalizedNewItem = NewItem;
+	if (Def->bIsContainerItem)
+	{
+		NormalizedNewItem.Item.Count = 1;
+	}
 	if (!NormalizedNewItem.Item.InstanceId.IsValid())
 	{
 		NormalizedNewItem.Item.InstanceId = FGuid::NewGuid();
@@ -216,7 +220,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	}
 
 	// Stacking logic: if enabled and there is an existing stack and stacking allowed, try to merge; otherwise create another stack
-	if (bAutoMergeOnAdd)
+	if (bAutoMergeOnAdd && !Def->bIsContainerItem)
 	{
 		int32 Existing = INDEX_NONE;
 		// Prefer matching by per-instance stack key when present

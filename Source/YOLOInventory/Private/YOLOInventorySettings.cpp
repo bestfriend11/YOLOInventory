@@ -48,6 +48,23 @@ UYOLOInventorySettings& UYOLOInventorySettings::GetMutable()
 	return *GetMutableDefault<UYOLOInventorySettings>();
 }
 
+bool UYOLOInventorySettings::IsDebugChannelEnabled(EYIDebugChannel Channel) const
+{
+	switch (Channel)
+	{
+	case EYIDebugChannel::General: return bDebugChannelGeneral;
+	case EYIDebugChannel::Persistence: return bDebugChannelPersistence;
+	case EYIDebugChannel::Inventory: return bDebugChannelInventory;
+	case EYIDebugChannel::Equipment: return bDebugChannelEquipment;
+	case EYIDebugChannel::ActionBar: return bDebugChannelActionBar;
+	case EYIDebugChannel::Trade: return bDebugChannelTrade;
+	case EYIDebugChannel::Shop: return bDebugChannelShop;
+	case EYIDebugChannel::Grid: return bDebugChannelGrid;
+	case EYIDebugChannel::Phase2: return bDebugChannelPhase2;
+	default: return true;
+	}
+}
+
 #if WITH_EDITOR
 FName UYOLOInventorySettings::GetCategoryName() const
 {

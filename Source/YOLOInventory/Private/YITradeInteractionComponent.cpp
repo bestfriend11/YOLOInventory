@@ -13,6 +13,7 @@
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
 #include "YIInventoryComponent.h"
+#include "YIDebugLibrary.h"
 
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
@@ -365,10 +366,17 @@ void UYITradeInteractionComponent::Client_TradeSessionStarted_Implementation(AYI
 void UYITradeInteractionComponent::Client_TradeSessionFailed_Implementation(const FText& Reason)
 {
     OnTradeFailed.Broadcast(Reason);
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Red, Reason.ToString());
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        Reason.ToString(),
+        FLinearColor(FColor::Red),
+        true,
+        true,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
 }
 
 void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopComponent* Shop, const TArray<FYINetBagItem>& Stock, FIntPoint Size)
@@ -431,11 +439,17 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
 void UYITradeInteractionComponent::Client_ShopActionResult_Implementation(UYIShopComponent* Shop, bool bSuccess, const FText& Reason)
 {
     OnShopActionResult.Broadcast(Shop, bSuccess, Reason);
-    if (bDebugTradeInteraction && GEngine)
-    {
-        const FColor Color = bSuccess ? FColor::Green : FColor::Red;
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, Color, Reason.ToString());
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Shop,
+        Reason.ToString(),
+        FLinearColor(bSuccess ? FColor::Green : FColor::Red),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
 }
 
 APlayerController* UYITradeInteractionComponent::GetOwningPC() const
@@ -571,51 +585,81 @@ void UYITradeInteractionComponent::OnPossessedPawnChanged(APawn* OldPawn, APawn*
 
 void UYITradeInteractionComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
 {
-    if (bDebugTradeInteraction && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
-            FString::Printf(TEXT("[TradeInt] Added idx %d count %d"), Index, Item.Item.Count));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        FString::Printf(TEXT("Added idx=%d count=%d"), Index, Item.Item.Count),
+        FLinearColor(FColor::Green),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
     OnBagItemAdded.Broadcast(Index, Item);
 }
 
 void UYITradeInteractionComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 {
-    if (bDebugTradeInteraction && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Orange,
-            FString::Printf(TEXT("[TradeInt] Removed idx %d"), Index));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        FString::Printf(TEXT("Removed idx=%d"), Index),
+        FLinearColor(FColor::Orange),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
     OnBagItemRemoved.Broadcast(Index, Item);
 }
 
 void UYITradeInteractionComponent::HandleBagItemMoved(int32 Index, FIntPoint NewPos)
 {
-    if (bDebugTradeInteraction && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Cyan,
-            FString::Printf(TEXT("[TradeInt] Moved idx %d -> (%d,%d)"), Index, NewPos.X, NewPos.Y));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        FString::Printf(TEXT("Moved idx=%d to (%d,%d)"), Index, NewPos.X, NewPos.Y),
+        FLinearColor(FColor::Cyan),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
     OnBagItemMoved.Broadcast(Index, NewPos);
 }
 
 void UYITradeInteractionComponent::HandleBagItemRotated(int32 Index)
 {
-    if (bDebugTradeInteraction && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
-            FString::Printf(TEXT("[TradeInt] Rotated idx %d"), Index));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        FString::Printf(TEXT("Rotated idx=%d"), Index),
+        FLinearColor(FColor::Yellow),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
     OnBagItemRotated.Broadcast(Index);
 }
 
 void UYITradeInteractionComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx)
 {
-    if (bDebugTradeInteraction && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::White,
-            FString::Printf(TEXT("[TradeInt] Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Trade,
+        FString::Printf(TEXT("Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx),
+        FLinearColor(FColor::White),
+        bDebugTradeInteraction,
+        bDebugTradeInteraction,
+        2.0f,
+        false,
+        false,
+        TEXT("Trade"));
     OnBagItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
 }
 

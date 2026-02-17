@@ -9,6 +9,7 @@
 #include "YIItemDefinition.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
+#include "YIDebugLibrary.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIActionBar, Log, All);
 
@@ -22,6 +23,7 @@ namespace YIActionBarPrivate
 		Out.InstanceId = Full.InstanceId;
 		Out.StackId = Full.StackId;
 		Out.CustomStackKey = Full.CustomStackKey;
+		Out.ContainedBagId = Full.ContainedBagId;
 		Out.bRotated = Full.bRotated;
 		Out.Affixes = Full.Affixes;
 		Out.Attributes.Reset();
@@ -389,14 +391,17 @@ FGameplayTag UYIActionBarComponent::ResolveActionTagFromDefinition(const UYIItem
 
 void UYIActionBarComponent::EmitActionMessage(const FString& Message, const FColor& Color) const
 {
-	UE_LOG(LogYIActionBar, Log, TEXT("%s"), *Message);
-	if (bDebugActionBar && GEngine)
-	{
-		const float Duration = bPinDebugMessages ? 20.0f : 4.0f;
-		const uint32 Hash = GetTypeHash(Message);
-		const uint64 Key = 0x5949414300000000ULL | static_cast<uint64>(Hash); // "YIAC"
-		GEngine->AddOnScreenDebugMessage(Key, Duration, Color, Message);
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		const_cast<UYIActionBarComponent*>(this),
+		EYIDebugChannel::ActionBar,
+		Message,
+		FLinearColor(Color),
+		bDebugActionBar,
+		bDebugActionBar,
+		4.0f,
+		bPinDebugMessages,
+		false,
+		TEXT("ActionBar"));
 }
 
 void UYIActionBarComponent::RecordInvocation(int32 SlotIndex, FGameplayTag ActionTag, bool bSuccess, const FString& Message)

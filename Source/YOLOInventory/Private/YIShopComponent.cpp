@@ -9,6 +9,7 @@
 #include "YIItemDefinition.h"
 #include "YIItemBlueprintLibrary.h"
 #include "YITradeInteractionComponent.h"
+#include "YIDebugLibrary.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
 
@@ -218,11 +219,17 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
 
     OnShopPurchase.Broadcast(BuyerPS, Code, Count, true);
     NotifyShopActionResult(BuyerPS, this, true, NSLOCTEXT("YOLOInventory", "Shop_Buy_Success", "Purchased"));
-    if (bDebugShopActions && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Green,
-            FString::Printf(TEXT("[Shop] Buy code=%lld x%d"), Code, Count));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Shop,
+        FString::Printf(TEXT("Buy code=%lld x%d"), Code, Count),
+        FLinearColor(FColor::Green),
+        bDebugShopActions,
+        bDebugShopActions,
+        2.0f,
+        false,
+        false,
+        TEXT("Shop"));
 }
 
 bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
@@ -347,11 +354,17 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
 
     OnShopSale.Broadcast(SellerPS, Code, Count, true);
     NotifyShopActionResult(SellerPS, this, true, NSLOCTEXT("YOLOInventory", "Shop_Sell_Success", "Sold"));
-    if (bDebugShopActions && GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(INDEX_NONE, 2.f, FColor::Yellow,
-            FString::Printf(TEXT("[Shop] Sell code=%lld x%d"), Code, Count));
-    }
+    UYIDebugLibrary::EmitDebugMessage(
+        this,
+        EYIDebugChannel::Shop,
+        FString::Printf(TEXT("Sell code=%lld x%d"), Code, Count),
+        FLinearColor(FColor::Yellow),
+        bDebugShopActions,
+        bDebugShopActions,
+        2.0f,
+        false,
+        false,
+        TEXT("Shop"));
 }
 
 bool UYIShopComponent::ServerSellItem_Validate(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
@@ -458,6 +471,7 @@ void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<F
         Net.Pos = It.Pos;
         Net.Size = It.Size;
         Net.CustomStackKey = It.Item.CustomStackKey;
+        Net.ContainedBagId = It.Item.ContainedBagId;
         OutItems.Add(Net);
     }
 }

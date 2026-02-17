@@ -71,6 +71,10 @@ struct YOLOINVENTORY_API FYINetBagItem
 	/** CustomStackKey to distinguish rolled variants without sending full affix data. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
 	int64 CustomStackKey = 0;
+
+	/** Optional nested container linkage (bag-in-bag). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag")
+	FGuid ContainedBagId;
 };
 
 /**

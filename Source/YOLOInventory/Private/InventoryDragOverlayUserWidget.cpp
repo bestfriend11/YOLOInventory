@@ -41,7 +41,11 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	LayerId = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
 	// Build a debug string for on-screen display every frame
-	const bool bShowDebug = UYOLOInventorySettings::Get().bShowDebug;
+	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
+	const bool bShowDebug = Settings.bShowDebug
+		&& Settings.bEnableDebugPipeline
+		&& Settings.bDebugOutputToScreen
+		&& Settings.IsDebugChannelEnabled(EYIDebugChannel::Grid);
 	FYIBagItem LiveDragItem; UYIInventoryBag* LiveSourceBag = nullptr;
 	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag, GetWorld());
 	FString Debug;

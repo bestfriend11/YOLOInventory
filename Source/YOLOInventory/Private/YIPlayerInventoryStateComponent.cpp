@@ -12,6 +12,8 @@
 #include "Engine/World.h"
 #include "Misc/Crc.h"
 #include "TimerManager.h"
+#include "YIDebugLibrary.h"
+#include "YOLOInventorySettings.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIInventoryPersistence, Log, All);
 
@@ -31,21 +33,23 @@ UYIInventoryPersistenceProviderBase* UYIPlayerInventoryStateComponent::GetOrCrea
 
 void UYIPlayerInventoryStateComponent::EmitSaveDiagnostic(const FString& Message, const FColor& Color, bool bForceOnScreen) const
 {
-	UE_LOG(LogYIInventoryPersistence, Log, TEXT("%s"), *Message);
-
-	if (!bEnableSaveDiagnostics && !bForceOnScreen)
+	const UYOLOInventorySettings& GlobalDebugSettings = UYOLOInventorySettings::Get();
+	if (!bEnableSaveDiagnostics && !(bForceOnScreen && GlobalDebugSettings.bAllowForcedDebugMessages))
 	{
 		return;
 	}
 
-	if ((bShowSaveDiagnosticsOnScreen || bForceOnScreen) && GEngine)
-	{
-		const uint32 MessageHash = FCrc::StrCrc32(*Message);
-		const uint64 PersistentMessageKey = 0x5949000000000000ULL | static_cast<uint64>(MessageHash); // "YI" namespace + message hash
-		const float DisplaySeconds = bKeepDiagnosticsPinnedOnScreen ? 1800.0f : SaveDiagnosticOnScreenSeconds;
-		const uint64 ScreenKey = bKeepDiagnosticsPinnedOnScreen ? PersistentMessageKey : static_cast<uint64>(-1);
-		GEngine->AddOnScreenDebugMessage(ScreenKey, DisplaySeconds, Color, Message);
-	}
+	UYIDebugLibrary::EmitDebugMessage(
+		const_cast<UYIPlayerInventoryStateComponent*>(this),
+		EYIDebugChannel::Persistence,
+		Message,
+		FLinearColor(Color),
+		(bShowSaveDiagnosticsOnScreen || bForceOnScreen),
+		true,
+		SaveDiagnosticOnScreenSeconds,
+		bKeepDiagnosticsPinnedOnScreen,
+		bForceOnScreen,
+		TEXT("PlayerInventoryState"));
 }
 
 bool UYIPlayerInventoryStateComponent::DiagnoseSaveSetup(FString& OutMessage) const

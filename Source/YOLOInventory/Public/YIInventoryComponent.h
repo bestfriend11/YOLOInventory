@@ -30,6 +30,18 @@ struct YOLOINVENTORY_API FYINetBagDescriptor
 	FIntPoint GridSize = FIntPoint(0, 0);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	int32 ItemCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid ParentBagId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid ParentItemInstanceId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	bool bIsNestedContainer = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	bool bIsActive = false;
 };
 
@@ -117,6 +129,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active bag by role tag. Returns true on success."))
 	bool SetActiveBagByRoleTag(FGameplayTag InBagRoleTag);
 
+	/** Open nested container bag from item index in active bag. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Open nested container bag from item in current active bag. Server-authoritative in multiplayer."))
+	bool OpenContainedBagAtIndex(int32 ItemIndex);
+
+	/** Navigate back to parent bag when active bag is nested. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Open parent bag for current nested active bag. Returns false if current bag has no parent."))
+	bool OpenParentBag();
+
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active spellbook bag by BagId. Returns true on success."))
 	bool SetActiveSpellbookBagById(const FGuid& InBagId);
 
@@ -177,6 +197,18 @@ public:
 	bool DropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
 	UFUNCTION(Server, Reliable)
 	void ServerDropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetActiveBagById(const FGuid& InBagId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetActiveSpellbookBagById(const FGuid& InBagId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerOpenContainedBagByInstance(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerOpenParentBag(const FGuid& ChildBagId);
 
 	/** Soft class references so designers can assign widgets once and call the helpers below. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Inventory screen widget class used by OpenInventoryScreen on owning client."))
@@ -315,4 +347,9 @@ private:
 
 	bool GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYILockedBagItemRef& OutIdentity) const;
 	bool IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const;
+	bool FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const;
+	bool FindContainerParentForBag(const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId) const;
+	bool IsBagDescendantOf(const FGuid& CandidateBagId, const FGuid& PotentialAncestorBagId) const;
+	UYIInventoryBag* EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag);
+	bool TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex);
 };

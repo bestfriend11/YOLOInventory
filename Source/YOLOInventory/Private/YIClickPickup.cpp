@@ -62,6 +62,7 @@ void AYIClickPickup::ServerPickup_Implementation(APlayerController* PC)
 	Full.InstanceId = ItemInstance.InstanceId.IsValid() ? ItemInstance.InstanceId : FGuid::NewGuid();
 	Full.StackId = ItemInstance.StackId.IsValid() ? ItemInstance.StackId : FGuid::NewGuid();
 	Full.CustomStackKey = ItemInstance.CustomStackKey;
+	Full.ContainedBagId = ItemInstance.ContainedBagId;
 	Full.bRotated = ItemInstance.bRotated;
 	Full.Affixes = ItemInstance.Affixes;
 	for (const FYIAttributeKV& KV : ItemInstance.Attributes)

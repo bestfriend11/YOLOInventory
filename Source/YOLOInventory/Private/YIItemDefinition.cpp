@@ -38,6 +38,11 @@ bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 		Reasons.Add(TEXT("template affixes (instance data can diverge after runtime changes)"));
 	}
 
+	if (bIsContainerItem)
+	{
+		Reasons.Add(TEXT("container item (bag-in-bag instances must not stack)"));
+	}
+
 	for (const TPair<FName, float>& Entry : AttributeDefaults)
 	{
 		const FString KeyLower = Entry.Key.ToString().ToLower();
@@ -73,6 +78,15 @@ bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 
 bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 {
+	if (bIsContainerItem)
+	{
+		if (OutReason)
+		{
+			*OutReason = TEXT("container items are non-stackable");
+		}
+		return false;
+	}
+
 	if (!bAllowStacking || MaxStackCount <= 1)
 	{
 		if (OutReason)
@@ -123,6 +137,8 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ItemType)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, AttributeDefaults)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateAffixes)
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, bIsContainerItem)
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ContainerTemplateBag)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, bAllowUnsafeStacking);
 	if (!bStackRelevantChange || bAllowUnsafeStacking)
 	{
@@ -184,6 +200,13 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 		MaxStackCount = 1;
 		UE_LOG(LogTemp, Warning, TEXT("UYIItemDefinition '%s': stacking auto-disabled due to risk (%s). Enable bAllowUnsafeStacking to override."),
 			*GetName(), *RiskReason);
+	}
+
+	// Container items are always non-stackable runtime instances.
+	if (bIsContainerItem)
+	{
+		bAllowStacking = false;
+		MaxStackCount = 1;
 	}
 }
 #endif

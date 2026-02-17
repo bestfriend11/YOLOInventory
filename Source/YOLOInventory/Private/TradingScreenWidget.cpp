@@ -130,6 +130,7 @@ UYIInventoryBag* UTradingScreenWidget::BuildMirrorFromOffer(const FYITradeOffer&
             Item.Item.StackId = Net.StackId;
         }
         Item.Item.CustomStackKey = Net.CustomStackKey;
+        Item.Item.ContainedBagId = Net.ContainedBagId;
         Item.Pos = Net.Pos;
         Item.Size = Net.Size;
         Bag->Items.Add(Item);
@@ -156,6 +157,7 @@ UYIInventoryBag* UTradingScreenWidget::BuildMirrorFromInventory(const TArray<FYI
             Item.Item.StackId = Net.StackId;
         }
         Item.Item.CustomStackKey = Net.CustomStackKey;
+        Item.Item.ContainedBagId = Net.ContainedBagId;
         Item.Pos = Net.Pos;
         Item.Size = Net.Size;
         Bag->Items.Add(Item);

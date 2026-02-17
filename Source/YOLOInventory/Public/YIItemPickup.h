@@ -28,6 +28,7 @@ struct YOLOINVENTORY_API FYIItemInstanceNet
 	/** Stack/group identity. Copies that belong to the same stack lineage share StackId. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") FGuid StackId;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") int64 CustomStackKey = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") FGuid ContainedBagId;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") bool bRotated = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TArray<struct FYIAffixInstance> Affixes;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item") TArray<FYIAttributeKV> Attributes;

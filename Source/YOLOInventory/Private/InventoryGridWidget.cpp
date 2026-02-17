@@ -99,6 +99,7 @@ static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 	Net.InstanceId = Item.InstanceId;
 	Net.StackId = Item.StackId;
 	Net.CustomStackKey = Item.CustomStackKey;
+	Net.ContainedBagId = Item.ContainedBagId;
 	Net.bRotated = Item.bRotated;
 	Net.Affixes = Item.Affixes;
 	Net.Attributes.Reset();

@@ -8,6 +8,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "InventoryScreenWidget.h"
+#include "YIDebugLibrary.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIInventoryGameplaySetupLibrary.h"
@@ -473,14 +474,17 @@ void AYIPhase2TestMapActor::SeedStarterItems(UYIInventoryBag* MainBag, UYIInvent
 
 void AYIPhase2TestMapActor::EmitSetupMessage(const FString& Message, const FColor& Color) const
 {
-	UE_LOG(LogTemp, Display, TEXT("[YI Phase2 TestMap] %s"), *Message);
-	if (!bShowScreenMessages || !GEngine)
-	{
-		return;
-	}
-
-	const uint64 Key = GetTypeHash(Message);
-	GEngine->AddOnScreenDebugMessage((int32)(Key & 0x7fffffff), 10.f, Color, Message);
+	UYIDebugLibrary::EmitDebugMessage(
+		const_cast<AYIPhase2TestMapActor*>(this),
+		EYIDebugChannel::Phase2,
+		Message,
+		FLinearColor(Color),
+		bShowScreenMessages,
+		true,
+		10.0f,
+		true,
+		false,
+		TEXT("Phase2TestMap"));
 }
 
 void AYIPhase2TestMapActor::RetrySetupIfNeeded()
