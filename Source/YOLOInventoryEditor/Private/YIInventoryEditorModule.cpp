@@ -40,8 +40,11 @@
 #include "YIAffixPoolAsset.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardEditor.h"
+#include "YIAutoPickupDropActorDetails.h"
+#include "YIAutoPickupDropActor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
+#include "PropertyEditorModule.h"
 
 TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
@@ -205,6 +208,14 @@ void FYOLOInventoryEditorModule::StartupModule()
 
 	FEdGraphUtilities::RegisterVisualNodeFactory(GYOLONodeFactory);
 
+	{
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.RegisterCustomClassLayout(
+			AYIAutoPickupDropActor::StaticClass()->GetFName(),
+			FOnGetDetailCustomizationInstance::CreateStatic(&FYIAutoPickupDropActorDetails::MakeInstance));
+		PropertyEditorModule.NotifyCustomizationModuleChanged();
+	}
+
 	// Register Window -> YOLO Inventory menu and toolbar buttons
 	static bool bYOLOMenusExtended = false;
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateLambda([]()
@@ -291,6 +302,12 @@ void FYOLOInventoryEditorModule::StartupModule()
 void FYOLOInventoryEditorModule::ShutdownModule()
 {
 	DashboardEditor.Reset();
+	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+	{
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.UnregisterCustomClassLayout(AYIAutoPickupDropActor::StaticClass()->GetFName());
+		PropertyEditorModule.NotifyCustomizationModuleChanged();
+	}
 	UnregisterAssetTypeActions();
 	if (GYOLONodeFactory.IsValid())
 	{
