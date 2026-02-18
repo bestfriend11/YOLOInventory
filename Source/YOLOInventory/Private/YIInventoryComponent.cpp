@@ -1196,17 +1196,19 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 		return INDEX_NONE;
 	}
 	// Client: send net-safe version
+	FYIItemInstance RuntimeItem = Item.Item;
+	RuntimeItem.SyncCoreFragmentsToLegacy();
 	FYIItemInstanceNet Net;
-	Net.Definition = Item.Item.Definition;
-	Net.Count = Item.Item.Count;
-	Net.InstanceId = Item.Item.InstanceId;
-	Net.StackId = Item.Item.StackId;
-	Net.CustomStackKey = Item.Item.CustomStackKey;
-	Net.ContainedBagId = Item.Item.ContainedBagId;
-	Net.bRotated = Item.Item.bRotated;
-	Net.Affixes = Item.Item.Affixes;
+	Net.Definition = RuntimeItem.Definition;
+	Net.Count = RuntimeItem.Count;
+	Net.InstanceId = RuntimeItem.InstanceId;
+	Net.StackId = RuntimeItem.StackId;
+	Net.CustomStackKey = RuntimeItem.CustomStackKey;
+	Net.ContainedBagId = RuntimeItem.ContainedBagId;
+	Net.bRotated = RuntimeItem.bRotated;
+	Net.Affixes = RuntimeItem.Affixes;
 	Net.Attributes.Reset();
-	for (const TPair<FName, float>& KV : Item.Item.Attributes)
+	for (const TPair<FName, float>& KV : RuntimeItem.Attributes)
 	{
 		FYIAttributeKV OutKV; OutKV.Name = KV.Key; OutKV.Value = KV.Value; Net.Attributes.Add(OutKV);
 	}
@@ -1230,6 +1232,7 @@ static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
 	{
 		Out.Attributes.Add(KV.Name, KV.Value);
 	}
+	Out.SyncLegacyToCoreFragments();
 	return Out;
 }
 

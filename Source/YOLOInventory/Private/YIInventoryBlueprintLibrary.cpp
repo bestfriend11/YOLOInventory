@@ -81,6 +81,7 @@ bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsse
 	NewInst.ConflictGroupCache = Affix->ConflictGroup;
 	NewInst.DisplayNameCache = Affix->DisplayName;
 	Item.Item.Affixes.Add(NewInst);
+	Item.Item.SyncLegacyToCoreFragments();
 	// Update stacking key to reflect new affix set
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Item.Item);
 	OutRolledValue = Rolled;
@@ -127,6 +128,7 @@ int32 UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(const UYIItem
 			++Added;
 		}
 	}
+	Instance.SyncLegacyToCoreFragments();
 	// Recompute custom stack key after applying templates
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Instance);
 	return Added;
@@ -366,15 +368,28 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	const FYIBagItem& It = Bag->Items[Index];
 	UYIItemDefinition* Def = It.Item.Definition.IsValid()? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
 	if (!Def) return false;
+
+	const TArray<FYIAffixInstance>* RuntimeAffixes = &It.Item.Affixes;
+	if (const FYIItemAffixesFragment* AffixFragment = It.Item.GetAffixesFragment())
+	{
+		RuntimeAffixes = &AffixFragment->Values;
+	}
+
+	const TMap<FName, float>* RuntimeAttributes = &It.Item.Attributes;
+	if (const FYIItemAttributesFragment* AttrFragment = It.Item.GetAttributesFragment())
+	{
+		RuntimeAttributes = &AttrFragment->Values;
+	}
+
 	OutData.NameBase = Def->DisplayName;
 	OutData.Title = Def->DisplayName;
 	// Simple prefix/suffix extraction from affixes (best-effort)
-	if (It.Item.Affixes.Num() > 0)
+	if (RuntimeAffixes->Num() > 0)
 	{
-		OutData.NamePrefix = It.Item.Affixes[0].DisplayNameCache;
-		if (It.Item.Affixes.Num() > 1)
+		OutData.NamePrefix = (*RuntimeAffixes)[0].DisplayNameCache;
+		if (RuntimeAffixes->Num() > 1)
 		{
-			OutData.NameSuffix = It.Item.Affixes.Last().DisplayNameCache;
+			OutData.NameSuffix = RuntimeAffixes->Last().DisplayNameCache;
 		}
 	}
 	// Build combined name
@@ -410,7 +425,7 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 		}
 	}
 	// 2) Rolled affixes on instance
-	for (const FYIAffixInstance& A : It.Item.Affixes)
+	for (const FYIAffixInstance& A : *RuntimeAffixes)
 	{
 		UYIAffixAsset* Src = A.Source.IsValid() ? A.Source.Get() : A.Source.LoadSynchronous();
 		if (Src)
@@ -439,16 +454,16 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	OutData.bAllRequirementsMet = true;
 
 	// Attributes (raw key/value from instance attributes map)
-	for (const TPair<FName,float>& Pair : It.Item.Attributes)
+	for (const TPair<FName,float>& Pair : *RuntimeAttributes)
 	{
 		FYITooltipAttributeLine Line; Line.Label = FText::FromName(Pair.Key); Line.Value = Pair.Value;
 		OutData.AttributeLines.Add(Line);
 	}
 
 	// Durability heuristics: look for keys in attributes
-	auto TryFindAttr = [&It](const FName& Key, float& OutVal)->bool
+	auto TryFindAttr = [&RuntimeAttributes](const FName& Key, float& OutVal)->bool
 	{
-		if (const float* V = It.Item.Attributes.Find(Key)) { OutVal = *V; return true; }
+		if (const float* V = RuntimeAttributes->Find(Key)) { OutVal = *V; return true; }
 		return false;
 	};
 	float Cur=0.f, Max=0.f;
@@ -515,9 +530,23 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 		if (Instance.bRotated) Sz = FIntPoint(Sz.Y, Sz.X);
 	}
 	Desc += FString::Printf(TEXT("|S%d,%d"), Sz.X, Sz.Y);
+	const TArray<FYIAffixInstance>* AffixSource = &Instance.Affixes;
+	TArray<FYIAffixInstance> AffixScratch;
+	if (const FYIItemAffixesFragment* AffixFragment = Instance.GetAffixesFragment())
+	{
+		AffixSource = &AffixFragment->Values;
+	}
+	else if (!Instance.Fragments.IsEmpty())
+	{
+		FYIItemInstance Copy = Instance;
+		Copy.SyncCoreFragmentsToLegacy();
+		AffixScratch = MoveTemp(Copy.Affixes);
+		AffixSource = &AffixScratch;
+	}
+
 	TArray<FString> Parts;
-	Parts.Reserve(Instance.Affixes.Num());
-	for (const FYIAffixInstance& A : Instance.Affixes)
+	Parts.Reserve(AffixSource->Num());
+	for (const FYIAffixInstance& A : *AffixSource)
 	{
 		FString Src = A.Source.ToSoftObjectPath().ToString();
 		FString Val = FString::Printf(TEXT("%.4f"), A.RolledValue);
@@ -525,6 +554,39 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 	}
 	Parts.Sort();
 	for (const FString& P : Parts) Desc += TEXT("|") + P;
+
+	const TMap<FName, float>* AttrSource = &Instance.Attributes;
+	TMap<FName, float> AttrScratch;
+	if (const FYIItemAttributesFragment* AttrFragment = Instance.GetAttributesFragment())
+	{
+		AttrSource = &AttrFragment->Values;
+	}
+	else if (!Instance.Fragments.IsEmpty())
+	{
+		FYIItemInstance Copy = Instance;
+		Copy.SyncCoreFragmentsToLegacy();
+		AttrScratch = MoveTemp(Copy.Attributes);
+		AttrSource = &AttrScratch;
+	}
+
+	TArray<FName> AttrKeys;
+	AttrSource->GetKeys(AttrKeys);
+	AttrKeys.Sort([](const FName& A, const FName& B)
+	{
+		return A.LexicalLess(B);
+	});
+	for (const FName& Key : AttrKeys)
+	{
+		if (const float* Val = AttrSource->Find(Key))
+		{
+			Desc += FString::Printf(TEXT("|A:%s=%.4f"), *Key.ToString(), *Val);
+		}
+	}
+
+	if (const FYIItemDurabilityFragment* Dur = Instance.GetDurabilityFragment())
+	{
+		Desc += FString::Printf(TEXT("|D:%d:%.4f:%.4f"), Dur->bEnabled ? 1 : 0, Dur->Current, Dur->Max);
+	}
 	uint32 H = GetTypeHash(Desc);
 	return static_cast<int64>(H);
 }
@@ -532,6 +594,50 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 void UYIInventoryBlueprintLibrary::UpdateCustomStackKey(FYIItemInstance& Instance)
 {
 	Instance.CustomStackKey = ComputeCustomStackKey(Instance);
+}
+
+void UYIInventoryBlueprintLibrary::InitializeFragmentsFromLegacy(FYIItemInstance& Instance)
+{
+	Instance.SyncLegacyToCoreFragments();
+}
+
+void UYIInventoryBlueprintLibrary::SyncLegacyFromFragments(FYIItemInstance& Instance)
+{
+	Instance.SyncCoreFragmentsToLegacy();
+}
+
+bool UYIInventoryBlueprintLibrary::GetItemDurability(const FYIItemInstance& Instance, float& OutCurrent, float& OutMax)
+{
+	OutCurrent = 0.f;
+	OutMax = 0.f;
+
+	if (const FYIItemDurabilityFragment* Dur = Instance.GetDurabilityFragment())
+	{
+		if (!Dur->bEnabled)
+		{
+			return false;
+		}
+		OutCurrent = Dur->Current;
+		OutMax = Dur->Max;
+		return true;
+	}
+	return false;
+}
+
+void UYIInventoryBlueprintLibrary::SetItemDurability(FYIItemInstance& Instance, float Current, float Max, bool bEnabled)
+{
+	if (FYIItemDurabilityFragment* Dur = Instance.GetMutableDurabilityFragment(true))
+	{
+		Dur->bEnabled = bEnabled;
+		Dur->Current = FMath::Max(0.f, Current);
+		Dur->Max = FMath::Max(0.f, Max);
+	}
+
+	// Legacy mirror for compatibility with existing tooltips/editor code paths.
+	Instance.Attributes.Add(TEXT("Durability"), FMath::Max(0.f, Current));
+	Instance.Attributes.Add(TEXT("DurabilityMax"), FMath::Max(0.f, Max));
+	Instance.SyncLegacyToCoreFragments();
+	UpdateCustomStackKey(Instance);
 }
 
 UYIItemDefinition* UYIInventoryBlueprintLibrary::FindItemDefinitionByTemplateId(const FString& TemplateId)
@@ -659,14 +765,17 @@ AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		return nullptr;
 	}
 
+	FYIItemInstance LocalInstance = Instance;
+	LocalInstance.SyncCoreFragmentsToLegacy();
+
 	int64 Code = 0;
-	if (Instance.Definition.IsValid())
+	if (LocalInstance.Definition.IsValid())
 	{
-		Code = Instance.Definition.Get()->UniqueCode;
+		Code = LocalInstance.Definition.Get()->UniqueCode;
 	}
-	else if (Instance.Definition.ToSoftObjectPath().IsValid())
+	else if (LocalInstance.Definition.ToSoftObjectPath().IsValid())
 	{
-		if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Instance.Definition.LoadSynchronous()))
+		if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(LocalInstance.Definition.LoadSynchronous()))
 		{
 			Code = Def->UniqueCode;
 		}
@@ -682,18 +791,18 @@ AYIItemPickup* UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 	if (Pickup)
 	{
 		Pickup->ItemCode = Code;
-		Pickup->Count = Instance.Count;
+		Pickup->Count = LocalInstance.Count;
 		// Convert to net-safe instance
-		Pickup->ItemInstance.Definition = Instance.Definition;
-		Pickup->ItemInstance.Count = Instance.Count;
-		Pickup->ItemInstance.InstanceId = Instance.InstanceId.IsValid() ? Instance.InstanceId : FGuid::NewGuid();
-		Pickup->ItemInstance.StackId = Instance.StackId.IsValid() ? Instance.StackId : FGuid::NewGuid();
-		Pickup->ItemInstance.CustomStackKey = Instance.CustomStackKey;
-		Pickup->ItemInstance.ContainedBagId = Instance.ContainedBagId;
-		Pickup->ItemInstance.bRotated = Instance.bRotated;
-		Pickup->ItemInstance.Affixes = Instance.Affixes;
+		Pickup->ItemInstance.Definition = LocalInstance.Definition;
+		Pickup->ItemInstance.Count = LocalInstance.Count;
+		Pickup->ItemInstance.InstanceId = LocalInstance.InstanceId.IsValid() ? LocalInstance.InstanceId : FGuid::NewGuid();
+		Pickup->ItemInstance.StackId = LocalInstance.StackId.IsValid() ? LocalInstance.StackId : FGuid::NewGuid();
+		Pickup->ItemInstance.CustomStackKey = LocalInstance.CustomStackKey;
+		Pickup->ItemInstance.ContainedBagId = LocalInstance.ContainedBagId;
+		Pickup->ItemInstance.bRotated = LocalInstance.bRotated;
+		Pickup->ItemInstance.Affixes = LocalInstance.Affixes;
 		Pickup->ItemInstance.Attributes.Reset();
-		for (const TPair<FName, float>& Pair : Instance.Attributes)
+		for (const TPair<FName, float>& Pair : LocalInstance.Attributes)
 		{
 			FYIAttributeKV KV; KV.Name = Pair.Key; KV.Value = Pair.Value;
 			Pickup->ItemInstance.Attributes.Add(KV);
@@ -800,6 +909,7 @@ bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, co
 	}
 	FYIBagItem NewItem;
 	NewItem.Item = Instance;
+	NewItem.Item.SyncLegacyToCoreFragments();
 	NewItem.Size = Def->DefaultSize;
 	int32 AddedIdx = Bag->AddBagItem(NewItem);
 	return AddedIdx != INDEX_NONE;
@@ -833,6 +943,7 @@ bool UYIInventoryBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	{
 		Full.Attributes.Add(KV.Name, KV.Value);
 	}
+	Full.SyncLegacyToCoreFragments();
 
 	if (AddItemInstanceToBag(Bag, Full))
 	{

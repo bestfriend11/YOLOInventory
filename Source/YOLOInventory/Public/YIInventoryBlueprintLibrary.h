@@ -97,6 +97,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Stack")
 	static void UpdateCustomStackKey(struct FYIItemInstance& Instance);
 
+	/** Migrates legacy Affixes/Attributes fields into fragment payloads. Safe to call repeatedly. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Fragments")
+	static void InitializeFragmentsFromLegacy(UPARAM(ref) FYIItemInstance& Instance);
+
+	/** Writes fragment payloads back to legacy fields for compatibility with old integrations. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Fragments")
+	static void SyncLegacyFromFragments(UPARAM(ref) FYIItemInstance& Instance);
+
+	/** Reads durability fragment (returns false if no durability fragment exists or it is disabled). */
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Fragments")
+	static bool GetItemDurability(const FYIItemInstance& Instance, float& OutCurrent, float& OutMax);
+
+	/** Sets/creates durability fragment and mirrors values to legacy attribute keys. */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Fragments")
+	static void SetItemDurability(UPARAM(ref) FYIItemInstance& Instance, float Current, float Max, bool bEnabled = true);
+
 	// Capability helpers (Evolution)
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Capabilities")
 	static bool HasEvolutionCapability(const UYIItemDefinition* Definition);

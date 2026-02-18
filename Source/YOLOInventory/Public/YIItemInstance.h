@@ -2,13 +2,15 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "YIAffix.h"
+#include "StructUtils/InstancedStruct.h"
+#include "YIItemFragments.h"
 #include "YIItemInstance.generated.h"
 
 class UYIItemDefinition;
 
 // Runtime representation of an item stack/instance
 USTRUCT(BlueprintType)
-struct FYIItemInstance
+struct YOLOINVENTORY_API FYIItemInstance
 {
 	GENERATED_BODY()
 
@@ -49,6 +51,13 @@ struct FYIItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affixes")
 	TArray<FYIAffixInstance> Affixes;
 
+	/**
+	 * Modular runtime payloads (fragment-style), using FInstancedStruct to avoid UObject-per-item overhead.
+	 * Authoring stays in shared data assets; only per-instance mutable payload lives here.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventory.YIItemFragmentBase", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Fragments;
+
 	// Runtime capability states (if needed by systems)
 	UPROPERTY(EditAnywhere, Category="Capabilities")
 	// Deprecated legacy runtime cap payload removed; blueprint capabilities should manage their own runtime state
@@ -59,4 +68,19 @@ struct FYIItemInstance
 		InstanceId = FGuid::NewGuid();
 		StackId = FGuid::NewGuid();
 	}
+
+	/** Copies legacy Affixes/Attributes into fragment payloads (non-destructive). */
+	void SyncLegacyToCoreFragments();
+
+	/** Copies fragment payloads back into legacy Affixes/Attributes for compatibility with old code paths. */
+	void SyncCoreFragmentsToLegacy();
+
+	const FYIItemAffixesFragment* GetAffixesFragment() const;
+	FYIItemAffixesFragment* GetMutableAffixesFragment(bool bCreateIfMissing);
+
+	const FYIItemAttributesFragment* GetAttributesFragment() const;
+	FYIItemAttributesFragment* GetMutableAttributesFragment(bool bCreateIfMissing);
+
+	const FYIItemDurabilityFragment* GetDurabilityFragment() const;
+	FYIItemDurabilityFragment* GetMutableDurabilityFragment(bool bCreateIfMissing);
 };

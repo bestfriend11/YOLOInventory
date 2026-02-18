@@ -69,6 +69,7 @@ void AYIClickPickup::ServerPickup_Implementation(APlayerController* PC)
 	{
 		Full.Attributes.Add(KV.Name, KV.Value);
 	}
+	Full.SyncLegacyToCoreFragments();
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(InvComp->EquippedBag, Full))
 	{
