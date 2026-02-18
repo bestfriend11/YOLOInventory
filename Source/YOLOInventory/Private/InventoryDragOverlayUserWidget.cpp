@@ -1,12 +1,12 @@
 #include "InventoryDragOverlayUserWidget.h"
 #include "InventoryGridWidget.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
 #include "Slate/SlateBrushAsset.h"
 #include "Rendering/DrawElements.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Layout/SlateRect.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "YOLOInventorySettings.h"
@@ -35,8 +35,14 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 {
 	LayerId = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
-	// Re-sample the cursor during paint to avoid stale coordinates during window resize.
-	CachedCursorSS = FSlateApplication::Get().GetCursorPos();
+	// Convert desktop cursor to viewport space first; this removes window-origin offsets
+	// in PIE windowed mode and keeps drag ghost aligned after viewport resize/move.
+	const FVector2D CursorDesktop = FSlateApplication::Get().GetCursorPos();
+	FVector2D CursorViewportPixels = FVector2D::ZeroVector;
+	FVector2D CursorViewportLocal = FVector2D::ZeroVector;
+	USlateBlueprintLibrary::AbsoluteToViewport(this, CursorDesktop, CursorViewportPixels, CursorViewportLocal);
+	CachedCursorLocal = CursorViewportLocal;
+	CachedCursorSS = AllottedGeometry.LocalToAbsolute(CachedCursorLocal);
 
 	// Build a debug string for on-screen display every frame
 	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
@@ -142,8 +148,8 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	GhostFootprint.X = FMath::Max(1, GhostFootprint.X);
 	GhostFootprint.Y = FMath::Max(1, GhostFootprint.Y);
 
-	// Compute overlay-local cursor each paint using current geometry to avoid window position/DPI offsets
-	const FVector2D Local = AllottedGeometry.AbsoluteToLocal(CachedCursorSS);
+	// Cursor local to this overlay (resolved from desktop/viewport sources above).
+	const FVector2D Local = CachedCursorLocal;
 	// Prefer dragged item icon; fallback to simple white brush if icon is missing.
 	const UTexture2D* DragIconTexture = nullptr;
 	if (bHasLiveDrag)
@@ -183,33 +189,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		Debug += FString::Printf(TEXT("LayerId(start): %d\n"), LayerId);
 	}
 
-	FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), GhostBrush, ESlateDrawEffect::None, Tint);
-	TArray<FVector2D> Seg;
-	Seg.Add(P);
-	Seg.Add(P + FVector2D(GhostSize.X, 0));
-	Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
-	Seg.Add(P + FVector2D(0, GhostSize.Y));
-	Seg.Add(P);
-	FSlateDrawElement::MakeLines(
-		OutDrawElements,
-		++LayerId,
-		AllottedGeometry.ToPaintGeometry(),
-		Seg,
-		ESlateDrawEffect::None,
-		GhostStyle ? GhostStyle->GhostOutlineColor : FLinearColor(0.2f, 0.8f, 1.f, 0.6f),
-		true,
-		GhostStyle ? GhostStyle->GhostOutlineThickness : 1.5f);
-
-	if (bShowDebug)
-	{
-		Debug += FString::Printf(TEXT("LayerId(after ghost): %d\n"), LayerId);
-	}
-	if (bShowDebug)
-	{
-		Debug += HoverPickInfo;
-		Debug += FString::Printf(TEXT("HoveredGrid: %s\n"), HoveredGrid ? *HoveredGrid->GetName() : TEXT("<none>"));
-	}
-	// Footprint highlight under cursor on hovered grid
+	// Footprint highlight under cursor on hovered grid (draw first so drag ghost stays visually on top).
 	auto DrawFootprintForGrid = [&](UInventoryGridWidget* Grid)
 	{
 		if (!Grid || !Grid->Bag) return;
@@ -285,6 +265,30 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	if (HoveredGrid)
 	{
 		DrawFootprintForGrid(HoveredGrid);
+	}
+
+	FSlateDrawElement::MakeBox(OutDrawElements, ++LayerId, AllottedGeometry.ToPaintGeometry(FVector2f(GhostSize), FSlateLayoutTransform(FVector2f(P))), GhostBrush, ESlateDrawEffect::None, Tint);
+	TArray<FVector2D> Seg;
+	Seg.Add(P);
+	Seg.Add(P + FVector2D(GhostSize.X, 0));
+	Seg.Add(P + FVector2D(GhostSize.X, GhostSize.Y));
+	Seg.Add(P + FVector2D(0, GhostSize.Y));
+	Seg.Add(P);
+	FSlateDrawElement::MakeLines(
+		OutDrawElements,
+		++LayerId,
+		AllottedGeometry.ToPaintGeometry(),
+		Seg,
+		ESlateDrawEffect::None,
+		GhostStyle ? GhostStyle->GhostOutlineColor : FLinearColor(0.2f, 0.8f, 1.f, 0.6f),
+		true,
+		GhostStyle ? GhostStyle->GhostOutlineThickness : 1.5f);
+
+	if (bShowDebug)
+	{
+		Debug += FString::Printf(TEXT("LayerId(after ghost): %d\n"), LayerId);
+		Debug += HoverPickInfo;
+		Debug += FString::Printf(TEXT("HoveredGrid: %s\n"), HoveredGrid ? *HoveredGrid->GetName() : TEXT("<none>"));
 	}
 
 	// Emit the debug string and a concise global drag summary so we can see what is being dragged
