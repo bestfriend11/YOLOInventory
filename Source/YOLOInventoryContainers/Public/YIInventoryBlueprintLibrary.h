@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GameplayTagContainer.h"
@@ -15,7 +15,7 @@ class UYIItemSFXLibrary;
 class USoundBase;
 
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYITooltipRequirementLine
+struct YOLOINVENTORYCONTAINERS_API FYITooltipRequirementLine
 {
 	GENERATED_BODY()
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") FText Text;
@@ -23,7 +23,7 @@ struct YOLOINVENTORY_API FYITooltipRequirementLine
 };
 
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYITooltipAttributeLine
+struct YOLOINVENTORYCONTAINERS_API FYITooltipAttributeLine
 {
 	GENERATED_BODY()
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") FText Label;
@@ -31,7 +31,7 @@ struct YOLOINVENTORY_API FYITooltipAttributeLine
 };
 
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYITooltipData
+struct YOLOINVENTORYCONTAINERS_API FYITooltipData
 {
 	GENERATED_BODY()
 public:
@@ -75,7 +75,7 @@ public:
 };
 
 UCLASS()
-class YOLOINVENTORY_API UYIInventoryBlueprintLibrary : public UBlueprintFunctionLibrary
+class YOLOINVENTORYCONTAINERS_API UYIInventoryBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:
@@ -183,3 +183,4 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Tags")
 	static void GetSuggestedInventoryGameplayTagsByPrefixes(const TArray<FString>& Prefixes, TArray<FGameplayTag>& OutTags, bool bSortLexical = true);
 };
+

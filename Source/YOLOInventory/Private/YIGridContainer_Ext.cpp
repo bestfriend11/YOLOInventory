@@ -1,6 +1,5 @@
 #include "YIGridContainer.h"
 #include "YIItemDefinition.h"
-#include "YIInventoryBlueprintLibrary.h"
 
 static FIntPoint Local_GetSize(const FYIItemInstance& I)
 {
@@ -49,8 +48,7 @@ bool UYIGridContainer::RotateItem(const FGuid& InstanceId)
 			Items.Insert(Saved, i);
 			if (!bOk) return false;
 			E.Instance.bRotated = !E.Instance.bRotated;
-			// Update key after rotation
-			UYIInventoryBlueprintLibrary::UpdateCustomStackKey(E.Instance);
+			// Rotation changes shape only; keep stack key unchanged in grid container mode.
 			return true;
 		}
 	}

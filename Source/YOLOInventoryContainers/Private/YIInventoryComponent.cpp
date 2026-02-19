@@ -692,7 +692,7 @@ UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& In
 	}
 
 	UYIInventoryBag* ChildBag = nullptr;
-	if (const UYIInventoryBag* TemplateBag = Definition->ContainerTemplateBag.LoadSynchronous())
+	if (const UYIInventoryBag* TemplateBag = Cast<UYIInventoryBag>(Definition->ContainerTemplateBag.LoadSynchronous()))
 	{
 		ChildBag = CloneBagTemplate(TemplateBag);
 	}

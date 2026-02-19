@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
@@ -8,7 +8,7 @@ class UYIInventoryBag;
 class UYIItemDefinition;
 
 UCLASS(Blueprintable)
-class YOLOINVENTORY_API AYIInventoryDemoActor : public AActor
+class YOLOINVENTORYCONTAINERS_API AYIInventoryDemoActor : public AActor
 {
 	GENERATED_BODY()
 public:
@@ -40,3 +40,4 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Demo")
 	void AutoPackB();
 };
+

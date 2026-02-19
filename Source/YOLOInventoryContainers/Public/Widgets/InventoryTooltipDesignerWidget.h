@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "YIInventoryBlueprintLibrary.h"
@@ -9,10 +9,11 @@
  * Extend this in UMG and implement OnTooltipDataUpdated to drive your own layout.
  */
 UCLASS(Abstract, Blueprintable)
-class YOLOINVENTORY_API UInventoryTooltipDesignerWidget : public UUserWidget
+class YOLOINVENTORYCONTAINERS_API UInventoryTooltipDesignerWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:
 	UFUNCTION(BlueprintImplementableEvent, Category="Tooltip")
 	void OnTooltipDataUpdated(const FYITooltipData& Data);
 };
+

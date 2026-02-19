@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
@@ -11,7 +11,7 @@ class UYIInventoryBag;
 class UUserWidget;
 
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYINetBagDescriptor
+struct YOLOINVENTORYCONTAINERS_API FYINetBagDescriptor
 {
 	GENERATED_BODY()
 
@@ -44,7 +44,7 @@ struct YOLOINVENTORY_API FYINetBagDescriptor
 };
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
-class YOLOINVENTORY_API UYIInventoryComponent : public UActorComponent
+class YOLOINVENTORYCONTAINERS_API UYIInventoryComponent : public UActorComponent
 {
 	GENERATED_BODY()
 public:
@@ -298,3 +298,4 @@ private:
 	bool TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex);
 	bool SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked);
 };
+

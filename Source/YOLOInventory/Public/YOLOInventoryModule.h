@@ -25,7 +25,6 @@ private:
 	void HandleDebugHistoryConsoleCommand(const TArray<FString>& Args, UWorld* World);
 	void HandleDebugStatusConsoleCommand(const TArray<FString>& Args, UWorld* World);
 	void HandleDebugProfileConsoleCommand(const TArray<FString>& Args, UWorld* World);
-	void HandleAddItemConsoleCommand(const TArray<FString>& Args, UWorld* World);
 
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugScreenConsoleCommand;
@@ -36,6 +35,5 @@ private:
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugHistoryConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugStatusConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugProfileConsoleCommand;
-	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> AddItemConsoleCommand;
 	bool bShaderDirectoryMapped = false;
 };

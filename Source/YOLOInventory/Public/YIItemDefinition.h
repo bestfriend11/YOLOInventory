@@ -16,7 +16,6 @@
 #include "YIItemDefinition.generated.h"
 
 class UYIDataTableItemSource;
-class UYIInventoryBag;
 class UTexture2D;
 class UScriptStruct;
 
@@ -88,9 +87,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(ToolTip="If true, this item behaves as a container and gets a nested runtime bag instance."))
 	bool bIsContainerItem = false;
 
-	/** Optional template bag used to initialize nested container layout/content. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", ToolTip="Optional template bag cloned when this container item instance is first initialized."))
-	TSoftObjectPtr<UYIInventoryBag> ContainerTemplateBag;
+	/** Optional template bag asset used to initialize nested container layout/content. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", AllowedClasses="/Script/YOLOInventoryContainers.YIInventoryBag", ToolTip="Optional template bag cloned when this container item instance is first initialized."))
+	TSoftObjectPtr<UObject> ContainerTemplateBag;
 
 	/** Default nested bag size when no container template is provided. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", ClampMin="1", ToolTip="Default nested bag grid size for container items without a template."))

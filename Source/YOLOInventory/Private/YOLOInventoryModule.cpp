@@ -3,10 +3,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Modules/ModuleManager.h"
 #include "YOLOInventorySettings.h"
-#include "YIInventoryComponent.h"
-#include "YIInventoryBlueprintLibrary.h"
 #include "Engine/World.h"
-#include "GameFramework/PlayerController.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
 #include "ShaderCore.h"
@@ -118,10 +115,6 @@ void FYOLOInventoryModule::StartupModule()
 		TEXT("Apply debug profile. Usage: YOLOInventory.Debug.Profile <off|minimal|normal|verbose>"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateRaw(this, &FYOLOInventoryModule::HandleDebugProfileConsoleCommand));
 
-	AddItemConsoleCommand = MakeUnique<FAutoConsoleCommandWithWorldAndArgs>(
-		TEXT("yi.additem"),
-		TEXT("Give item to first player's active bag. Usage: yi.additem <code> [count]"),
-		FConsoleCommandWithWorldAndArgsDelegate::CreateRaw(this, &FYOLOInventoryModule::HandleAddItemConsoleCommand));
 }
 
 void FYOLOInventoryModule::ShutdownModule()
@@ -137,7 +130,6 @@ void FYOLOInventoryModule::ShutdownModule()
 	DebugHistoryConsoleCommand.Reset();
 	DebugStatusConsoleCommand.Reset();
 	DebugProfileConsoleCommand.Reset();
-	AddItemConsoleCommand.Reset();
 }
 
 void FYOLOInventoryModule::HandleDebugConsoleCommand(const TArray<FString>& Args, UWorld* /*World*/)
@@ -377,46 +369,4 @@ void FYOLOInventoryModule::HandleDebugProfileConsoleCommand(const TArray<FString
 
 	Settings.SaveConfig();
 	UE_LOG(LogYOLOInventory, Display, TEXT("YOLOInventory debug profile set to '%s'."), *Profile);
-}
-
-void FYOLOInventoryModule::HandleAddItemConsoleCommand(const TArray<FString>& Args, UWorld* World)
-{
-	if (!World || World->GetNetMode() == NM_Client)
-	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: must run on server/authority"));
-		return;
-	}
-
-	if (Args.Num() < 1)
-	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: Usage yi.additem <code> [count]"));
-		return;
-	}
-
-	int64 Code = FCString::Atoi64(*Args[0]);
-	int32 Count = (Args.Num() > 1) ? FCString::Atoi(*Args[1]) : 1;
-	Count = FMath::Max(1, Count);
-
-	APawn* Pawn = World->GetFirstPlayerController() ? World->GetFirstPlayerController()->GetPawn() : nullptr;
-	if (!Pawn)
-	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: no pawn found for first player"));
-		return;
-	}
-
-	UYIInventoryComponent* InvComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
-	if (!InvComp || !InvComp->EquippedBag)
-	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: pawn has no inventory component or bag"));
-		return;
-	}
-
-	if (UYIInventoryBlueprintLibrary::AddItemToBagByCode(InvComp->EquippedBag, Code, Count))
-	{
-		UE_LOG(LogYOLOInventory, Display, TEXT("yi.additem: added code %lld x%d"), (long long)Code, Count);
-	}
-	else
-	{
-		UE_LOG(LogYOLOInventory, Warning, TEXT("yi.additem: failed to add code %lld"), (long long)Code);
-	}
 }

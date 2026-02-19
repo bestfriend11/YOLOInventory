@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Delegates/DelegateCombinations.h"
@@ -11,7 +11,7 @@
 class UYIItemDefinition;
 
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYIBagItem
+struct YOLOINVENTORYCONTAINERS_API FYIBagItem
 {
 	GENERATED_BODY()
 public:
@@ -43,7 +43,7 @@ protected:
 
 /** Minimal replicated view of a bag item to keep network footprint low. */
 USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYINetBagItem
+struct YOLOINVENTORYCONTAINERS_API FYINetBagItem
 {
 	GENERATED_BODY()
 
@@ -86,7 +86,7 @@ struct YOLOINVENTORY_API FYINetBagItem
  * - Use bAutoMergeOnAdd to control whether the editor/runtime merges stacks automatically when new items are added.
  */
 UCLASS(BlueprintType)
-class YOLOINVENTORY_API UYIInventoryBag : public UObject
+class YOLOINVENTORYCONTAINERS_API UYIInventoryBag : public UObject
 {
 	GENERATED_BODY()
 public:
@@ -271,3 +271,4 @@ protected:
 
 	virtual void PostLoad() override;
 };
+
