@@ -6,10 +6,9 @@
 #include "UObject/Package.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
-#include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
+#include "YIItemNetTypes.h"
 #include "YIDebugLibrary.h"
 
 namespace YIInventoryComponentUIBindings
@@ -1297,39 +1296,6 @@ bool UYIInventoryComponent::RemoveItem(int32 Index)
 void UYIInventoryComponent::ServerRemoveItem_Implementation(int32 Index)
 {
 	RemoveItem(Index);
-}
-
-bool UYIInventoryComponent::DropItemToWorld(const FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform)
-{
-	if (!GetOwner())
-	{
-		return false;
-	}
-	if (GetOwner()->HasAuthority())
-	{
-		FYIItemInstance Full = NetToFull(NetItem);
-		UYIInventoryBlueprintLibrary::SpawnItemPickupFromInstance(GetOwner(), Full, SpawnTransform);
-		OnInventoryItemDroppedToWorld.Broadcast(NetItem, SpawnTransform);
-		UYIDebugLibrary::EmitDebugMessage(
-			this,
-			EYIDebugChannel::Inventory,
-			FString::Printf(TEXT("Dropped to world (count=%d)"), NetItem.Count),
-			FLinearColor(FColor::Cyan),
-			bDebugInventoryActions,
-			bDebugInventoryActions,
-			2.0f,
-			false,
-			false,
-			TEXT("InventoryComponent"));
-		return true;
-	}
-	ServerDropItemToWorld(NetItem, SpawnTransform);
-	return true;
-}
-
-void UYIInventoryComponent::ServerDropItemToWorld_Implementation(const FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform)
-{
-	DropItemToWorld(NetItem, SpawnTransform);
 }
 
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)

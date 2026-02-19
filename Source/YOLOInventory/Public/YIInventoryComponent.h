@@ -3,6 +3,7 @@
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryCoreTypes.h"
+#include "YIItemNetTypes.h"
 #include "UObject/SoftObjectPtr.h"
 #include "YIInventoryComponent.generated.h"
 
@@ -172,12 +173,6 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(int32 Index);
 
-	/** Drop an item instance to the world (server authoritative). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Drop item payload to world on server.\nClient calls forward to ServerDropItemToWorld RPC."))
-	bool DropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
-	UFUNCTION(Server, Reliable)
-	void ServerDropItemToWorld(const struct FYIItemInstanceNet& NetItem, const FTransform& SpawnTransform);
-
 	UFUNCTION(Server, Reliable)
 	void ServerSetActiveBagById(const FGuid& InBagId);
 
@@ -212,7 +207,6 @@ public:
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemMoved, UYIInventoryBag*, Bag, int32, Index, FIntPoint, NewPos);
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemRotated, UYIInventoryBag*, Bag, int32, Index);
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnInventoryItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemDroppedToWorld, const FYIItemInstanceNet&, Item, const FTransform&, SpawnTransform);
 
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is added to bag on this instance."))
 	FOnInventoryItemAdded OnInventoryItemAdded;
@@ -224,8 +218,6 @@ public:
 	FOnInventoryItemRotated OnInventoryItemRotated;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item transfers between bags."))
 	FOnInventoryItemTransferred OnInventoryItemTransferred;
-	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item payload is dropped/spawned to world."))
-	FOnInventoryItemDroppedToWorld OnInventoryItemDroppedToWorld;
 
 	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper.\nOpen inventory screen and bind to current active bag context."))
