@@ -16,8 +16,7 @@ public class YOLOInventory : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
-            "Projects",
-            "RenderCore"
+            "Projects"
         });
     }
 }

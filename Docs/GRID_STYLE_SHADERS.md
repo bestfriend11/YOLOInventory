@@ -1,14 +1,15 @@
 # Inventory Grid Shader Library
 
-This plugin now registers a shader source mapping:
+`YOLOInventoryGrid` now registers shader source mappings:
 
-- Virtual path: `/Plugin/YOLOInventory`
-- Physical path: `Plugins/YOLOInventory/Shaders`
+- Canonical virtual path: `/Plugin/YOLOInventoryGrid`
+- Backward-compatible virtual path: `/Plugin/YOLOInventory`
+- Physical path: `Plugins/YOLO/YOLOInventoryGrid/Shaders`
 
 Shader files:
 
-- `/Plugin/YOLOInventory/InventoryGrid/YIInventoryGridCommon.ush`
-- `/Plugin/YOLOInventory/InventoryGrid/YIInventoryGridThemes.ush`
+- `/Plugin/YOLOInventoryGrid/InventoryGrid/YIInventoryGridCommon.ush`
+- `/Plugin/YOLOInventoryGrid/InventoryGrid/YIInventoryGridThemes.ush`
 
 ## Designer workflow (fast setup)
 
@@ -16,7 +17,8 @@ Shader files:
 2. Add a **Custom** node.
 3. In the Custom node:
    - Add include path:
-     - `/Plugin/YOLOInventory/InventoryGrid/YIInventoryGridThemes.ush`
+     - `/Plugin/YOLOInventoryGrid/InventoryGrid/YIInventoryGridThemes.ush`
+     - (or legacy) `/Plugin/YOLOInventory/InventoryGrid/YIInventoryGridThemes.ush`
    - Add inputs:
      - `UV` (`float2`)
      - `Time` (`float`)

@@ -35,5 +35,4 @@ private:
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugHistoryConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugStatusConsoleCommand;
 	TUniquePtr<FAutoConsoleCommandWithWorldAndArgs> DebugProfileConsoleCommand;
-	bool bShaderDirectoryMapped = false;
 };
