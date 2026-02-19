@@ -7,7 +7,6 @@
 
 #include "AssetTypeActions_Base.h"
 #include "YIItemDefinitionFactory.h"
-#include "AssetTypeActions_YIInventoryBag.h"
 #include "AssetTypeActions_YIAffix.h"
 #include "AssetTypeActions_YIAttributeDef.h"
 #include "AssetTypeActions_YIAttributeMod.h"
@@ -21,7 +20,6 @@
 #include "AssetTypeActions_YILootTable.h"
 #include "AssetTypeActions_YIItemGenerator.h"
 #include "AssetTypeActions_YIEquipmentSchema.h"
-#include "YIInventoryBagFactory.h"
 #include "YILootTableFactory.h"
 #include "YIRarityProfileFactory.h"
 #include "YIItemGeneratorFactory.h"
@@ -319,11 +317,6 @@ void FYOLOInventoryEditorModule::ShutdownModule()
 void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
 {
 	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	{
-		TSharedRef<FAssetTypeActions_YIInventoryBag> Action = MakeShared<FAssetTypeActions_YIInventoryBag>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
 	{
 		TSharedRef<FAssetTypeActions_YIItemDefinition> Action = MakeShared<FAssetTypeActions_YIItemDefinition>();
 		AssetTools.RegisterAssetTypeActions(Action);

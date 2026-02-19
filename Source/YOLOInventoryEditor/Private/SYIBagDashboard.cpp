@@ -4,7 +4,9 @@
 #include "YIItemDefinition.h"
 #include "YIEquipmentSchemaAsset.h"
 #include "YIBagItemDetailsProxy.h"
-#include "YIInventoryGameplaySetupLibrary.h"
+#include "YIInventoryComponent.h"
+#include "YIEquipmentComponent.h"
+#include "YIActionBarComponent.h"
 #include "YIInventoryBagFactory.h"
 #include "YIEquipmentSchemaAssetFactory.h"
 #include "PropertyEditorModule.h"
@@ -79,6 +81,85 @@ static APawn* YIBagDash_ResolveRuntimePawn()
 	}
 
 	return nullptr;
+}
+
+static void YIBagDash_BuildRuntimeValidationSummary(
+	APawn* Pawn,
+	TArray<FString>& OutBlockingIssues,
+	TArray<FString>& OutWarnings,
+	FString& OutSummary)
+{
+	if (!Pawn)
+	{
+		OutBlockingIssues.Add(TEXT("Pawn is null."));
+		OutSummary = TEXT("Setup FAILED. Blocking=1 Warnings=0");
+		return;
+	}
+
+	UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
+	UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+	UYIActionBarComponent* ActionBarComp = Pawn->FindComponentByClass<UYIActionBarComponent>();
+
+	if (!InventoryComp)
+	{
+		OutBlockingIssues.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIInventoryComponent."), *Pawn->GetName()));
+	}
+	else
+	{
+		const bool bHasActiveBag = InventoryComp->GetBag() != nullptr || InventoryComp->EquippedBag != nullptr;
+		if (!bHasActiveBag && InventoryComp->Bags.Num() == 0)
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("Pawn '%s' has no active bag and Bags array is empty."), *Pawn->GetName()));
+		}
+		else if (!bHasActiveBag)
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' has Bags entries but no active opened bag."), *Pawn->GetName()));
+		}
+	}
+
+	if (!EquipmentComp)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIEquipmentComponent."), *Pawn->GetName()));
+	}
+	else
+	{
+		TArray<FString> EquipmentBlocking;
+		TArray<FString> EquipmentWarnings;
+		EquipmentComp->ValidateEquipmentSetup(EquipmentBlocking, EquipmentWarnings);
+		for (const FString& Issue : EquipmentBlocking)
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("Equipment setup: %s"), *Issue));
+		}
+		for (const FString& Warning : EquipmentWarnings)
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Equipment setup: %s"), *Warning));
+		}
+	}
+
+	if (!ActionBarComp)
+	{
+		OutWarnings.Add(FString::Printf(TEXT("Pawn '%s' is missing UYIActionBarComponent."), *Pawn->GetName()));
+	}
+	else
+	{
+		TArray<FString> ActionBlocking;
+		TArray<FString> ActionWarnings;
+		ActionBarComp->ValidateActionBindings(ActionBlocking, ActionWarnings);
+		for (const FString& Issue : ActionBlocking)
+		{
+			OutBlockingIssues.Add(FString::Printf(TEXT("Action bar setup: %s"), *Issue));
+		}
+		for (const FString& Warning : ActionWarnings)
+		{
+			OutWarnings.Add(FString::Printf(TEXT("Action bar setup: %s"), *Warning));
+		}
+	}
+
+	OutSummary = FString::Printf(
+		TEXT("Setup %s. Blocking=%d Warnings=%d"),
+		OutBlockingIssues.Num() == 0 ? TEXT("OK") : TEXT("FAILED"),
+		OutBlockingIssues.Num(),
+		OutWarnings.Num());
 }
 }
 
@@ -396,17 +477,51 @@ void SYIBagDashboard::ApplyRuntimeSpellbookPresetFromToolbar()
 		return;
 	}
 
-	FYIInventoryGameplaySetupResult SetupResult;
-	const bool bOk = UYIInventoryGameplaySetupLibrary::ApplySpellbookActionPreset(
-		Pawn,
-		RuntimeSpellbookSlotTag,
-		RuntimeSpellbookActionSlotIndex,
-		SetupResult);
-
-	StatusText = FText::FromString(SetupResult.Summary);
-	if (!bOk && SetupResult.BlockingIssues.Num() > 0)
+	UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>();
+	UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>();
+	UYIActionBarComponent* ActionBarComp = Pawn->FindComponentByClass<UYIActionBarComponent>();
+	if (!InventoryComp || !EquipmentComp || !ActionBarComp)
 	{
-		StatusText = FText::FromString(SetupResult.BlockingIssues[0]);
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_Runtime_PresetMissingComponents", "Runtime preset failed: pawn is missing required inventory/equipment/actionbar components.");
+		return;
+	}
+
+	if (!Pawn->HasAuthority())
+	{
+		StatusText = NSLOCTEXT("YOLOInventory", "BagDash_Runtime_PresetNoAuthority", "Runtime preset must run on authority (server or single-player PIE).");
+		return;
+	}
+
+	if (InventoryComp->Bags.Num() == 0)
+	{
+		InventoryComp->CreateBag(TEXT("Inventory"), FIntPoint(10, 6));
+	}
+	if (!InventoryComp->GetBag() && InventoryComp->Bags.Num() > 0)
+	{
+		InventoryComp->OpenBag(InventoryComp->Bags[0]);
+	}
+
+	FYIEquipmentActionAutoBindRule Rule;
+	Rule.bEnabled = true;
+	Rule.EquipSlotTag = RuntimeSpellbookSlotTag;
+	Rule.ActionSlotIndex = FMath::Max(0, RuntimeSpellbookActionSlotIndex);
+	Rule.bAllowOverrideExistingBinding = true;
+	Rule.bClearWhenUnequipped = true;
+
+	ActionBarComp->InitializeActionSlots(FMath::Max(RuntimeSpellbookActionSlotIndex + 1, 1));
+	ActionBarComp->bAutoBindFromEquipment = true;
+	ActionBarComp->AutoBindRules.Reset();
+	ActionBarComp->AutoBindRules.Add(Rule);
+	ActionBarComp->RebuildAutoBindingsFromEquipment(EquipmentComp);
+
+	TArray<FString> BlockingIssues;
+	TArray<FString> Warnings;
+	FString Summary;
+	YIBagDash_BuildRuntimeValidationSummary(Pawn, BlockingIssues, Warnings, Summary);
+	StatusText = FText::FromString(Summary);
+	if (BlockingIssues.Num() > 0)
+	{
+		StatusText = FText::FromString(BlockingIssues[0]);
 	}
 }
 
@@ -419,12 +534,14 @@ void SYIBagDashboard::ValidateRuntimeSetupFromToolbar()
 		return;
 	}
 
-	FYIInventoryGameplaySetupResult ValidateResult;
-	const bool bOk = UYIInventoryGameplaySetupLibrary::ValidatePawnInventoryGameplaySetup(Pawn, ValidateResult);
-	StatusText = FText::FromString(ValidateResult.Summary);
-	if (!bOk && ValidateResult.BlockingIssues.Num() > 0)
+	TArray<FString> BlockingIssues;
+	TArray<FString> Warnings;
+	FString Summary;
+	YIBagDash_BuildRuntimeValidationSummary(Pawn, BlockingIssues, Warnings, Summary);
+	StatusText = FText::FromString(Summary);
+	if (BlockingIssues.Num() > 0)
 	{
-		StatusText = FText::FromString(ValidateResult.BlockingIssues[0]);
+		StatusText = FText::FromString(BlockingIssues[0]);
 	}
 }
 

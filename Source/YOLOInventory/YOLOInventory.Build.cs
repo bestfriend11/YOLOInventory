@@ -15,8 +15,7 @@ public class YOLOInventory : ModuleRules
             "Niagara",
             "PhysicsCore",
             "GameplayTags",
-            "EnhancedInput",
-            "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore", "UILayered",
+            "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore",
             "CSVItemBuilder",
             "YOLOInventoryCore",
             "YOLOInventorySchema"
