@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraphSchema.h"
@@ -6,13 +6,13 @@
 #include "YIInventoryGraphSchema.generated.h"
 
 USTRUCT()
-struct YOLOINVENTORY_API FYIInventoryPinType
+struct YOLOINVENTORYEDITOR_API FYIInventoryPinType
 {
 	GENERATED_BODY()
 };
 
 UCLASS()
-class YOLOINVENTORY_API UYIInventoryGraphSchema : public UEdGraphSchema
+class YOLOINVENTORYEDITOR_API UYIInventoryGraphSchema : public UEdGraphSchema
 {
 	GENERATED_BODY()
 public:
@@ -28,3 +28,4 @@ public:
 	virtual void GetContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const override;
 #endif
 };
+

@@ -12,42 +12,18 @@ public class YOLOInventory : ModuleRules
             "CoreUObject",
             "Engine",
             "DeveloperSettings",
-            "Niagara",
-            "PhysicsCore",
             "GameplayTags",
-            "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore",
+            "GameplayAbilities",
+            "PhysicsCore",
             "CSVItemBuilder",
-            "YOLOInventoryCore",
             "YOLOInventorySchema"
         });
 
-        if (Target.bBuildEditor)
-        {
-            PrivateDependencyModuleNames.AddRange(new string[]
-            {
-                "ToolMenus"
-            });
-        }
-
         PrivateDependencyModuleNames.AddRange(new string[]
         {
-            "Slate",
-            "SlateCore",
-			"UMG",
-			"InputCore",
-            "NetCore",
-            "Networking",
+            "AssetRegistry",
             "RenderCore",
             "Projects"
         });
-
-        if (Target.bBuildEditor)
-        {
-            PrivateDependencyModuleNames.AddRange(new string[]
-            {
-                "UnrealEd"
-            });
-        }
-
     }
 }

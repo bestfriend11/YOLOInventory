@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "YINode_Base.h"
@@ -8,7 +8,7 @@
 
 
 UCLASS()
-class YOLOINVENTORY_API UYINode_Item : public UYINode_Base
+class YOLOINVENTORYEDITOR_API UYINode_Item : public UYINode_Base
 {
 	GENERATED_BODY()
 public:
@@ -30,3 +30,4 @@ public:
 	// Notify helpers
 	UFUNCTION() void RefreshGraph();
 };
+

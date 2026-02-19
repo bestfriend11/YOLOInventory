@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraphNode.h"
 #include "YINode_Base.generated.h"
 
 UCLASS(Abstract)
-class YOLOINVENTORY_API UYINode_Base : public UEdGraphNode
+class YOLOINVENTORYEDITOR_API UYINode_Base : public UEdGraphNode
 {
 	GENERATED_BODY()
 public:
@@ -19,3 +19,4 @@ public:
 	UPROPERTY(EditAnywhere, Category="YOLO")
 	FText Title;
 };
+

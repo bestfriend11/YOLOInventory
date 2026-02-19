@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "YINode_Base.h"
 #include "YINode_Attribute.generated.h"
 
 UCLASS()
-class YOLOINVENTORY_API UYINode_Attribute : public UYINode_Base
+class YOLOINVENTORYEDITOR_API UYINode_Attribute : public UYINode_Base
 {
 	GENERATED_BODY()
 public:
@@ -15,3 +15,4 @@ public:
 	UPROPERTY(EditAnywhere, Instanced, Category="Attribute")
 	class UYIItemAttribute* Attribute;
 };
+

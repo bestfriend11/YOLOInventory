@@ -1,11 +1,11 @@
-#pragma once
+﻿#pragma once
 
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraphSchema.h"
 #include "YIScriptGraphSchema.generated.h"
 
 UCLASS()
-class YOLOINVENTORY_API UYIScriptGraphSchema : public UEdGraphSchema
+class YOLOINVENTORYEDITOR_API UYIScriptGraphSchema : public UEdGraphSchema
 {
 	GENERATED_BODY()
 public:
@@ -13,3 +13,4 @@ public:
 	virtual const FPinConnectionResponse CanCreateConnection(const UEdGraphPin* A, const UEdGraphPin* B) const override;
 	virtual void CreateDefaultNodesForGraph(UEdGraph& Graph) const override;
 };
+

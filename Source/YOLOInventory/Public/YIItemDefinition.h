@@ -9,7 +9,6 @@
 #include "YIRequirement.h"
 #include "YIEvolutionPath.h"
 #include "YIItemVariant.h"
-#include "YIScriptGraph.h"
 #include "YIItemSFXLibrary.h"
 #include "YIItemFragments.h"
 #include "YIItemSchemaTypes.h"

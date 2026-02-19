@@ -39,6 +39,7 @@ public class YOLOInventoryEditor : ModuleRules
         PublicDependencyModuleNames.AddRange(new string[]
         {
             "YOLOInventoryContainers",
+            "YOLOInventorySchema",
             "YOLOInventory",
             "YOLOInventoryWorld"
         });

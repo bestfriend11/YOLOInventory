@@ -13,6 +13,7 @@ public class YOLOInventoryTests : ModuleRules
             "Engine",
             "GameplayTags",
             "YOLOInventoryContainers",
+            "YOLOInventorySchema",
             "YOLOInventory",
             "UnrealEd"
         });
