@@ -33,7 +33,9 @@ public class YOLOInventoryEditor : ModuleRules
             "GameplayTags",
             "DataTableEditor",
             "CSVItemBuilder",
-            "YOLOInventoryEditorCore"
+            "YOLOInventoryEditorCore",
+            "YOLOInventoryLoot",
+            "YOLOInventoryEquipment"
         });
 
         PublicDependencyModuleNames.AddRange(new string[]
