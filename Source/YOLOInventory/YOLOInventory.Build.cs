@@ -11,20 +11,13 @@ public class YOLOInventory : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "DeveloperSettings",
-            "GameplayTags",
-            "GameplayAbilities",
-            "PhysicsCore",
-            "CSVItemBuilder",
-            "YOLOInventoryCore",
-            "YOLOInventorySchema"
+            "YOLOInventoryCore"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
-            "AssetRegistry",
-            "RenderCore",
-            "Projects"
+            "Projects",
+            "RenderCore"
         });
     }
 }

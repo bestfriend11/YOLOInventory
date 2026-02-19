@@ -38,7 +38,8 @@
     { "Name": "YOLOInventorySchema", "Enabled": true },
     { "Name": "YOLOInventoryEditorCore", "Enabled": true },
     { "Name": "YOLOInventoryContainers", "Enabled": true },
-    { "Name": "YOLOInventoryWorld", "Enabled": true }
+    { "Name": "YOLOInventoryWorld", "Enabled": true },
+    { "Name": "YOLOInventoryLegacyBridge", "Enabled": true }
   ],
   "SupportedTargetPlatforms": [
     "Win64"

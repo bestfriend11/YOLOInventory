@@ -40,7 +40,7 @@ public class YOLOInventoryEditor : ModuleRules
         {
             "YOLOInventoryContainers",
             "YOLOInventorySchema",
-            "YOLOInventory",
+            "YOLOInventoryLegacyBridge",
             "YOLOInventoryWorld"
         });
     }

@@ -14,7 +14,7 @@ public class YOLOInventoryTests : ModuleRules
             "GameplayTags",
             "YOLOInventoryContainers",
             "YOLOInventorySchema",
-            "YOLOInventory",
+            "YOLOInventoryLegacyBridge",
             "UnrealEd"
         });
     }
