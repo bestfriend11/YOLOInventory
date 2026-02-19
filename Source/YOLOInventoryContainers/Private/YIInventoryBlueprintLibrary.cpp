@@ -10,7 +10,6 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "YIItemBlueprintLibrary.h"
 #include "Modules/ModuleManager.h"
 #include "YOLOInventorySettings.h"
 #include "YIRequirement.h"
@@ -26,6 +25,7 @@
 #include "YIItemInstance.h"
 
 static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code);
+static FYIItemInstance YI_MakeItemInstanceByCode(int64 Code, int32 Count);
 
 namespace
 {
@@ -487,7 +487,7 @@ bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int6
 	}
 
 	FYIBagItem NewItem;
-	NewItem.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Code, Count);
+	NewItem.Item = YI_MakeItemInstanceByCode(Code, Count);
 	NewItem.Size = Def->GetEffectiveDefaultSize();
 	int32 NewIdx = Bag->AddBagItem(NewItem);
 	return NewIdx != INDEX_NONE;
@@ -848,7 +848,7 @@ FYIItemInstance UYIInventoryBlueprintLibrary::MakeItemInstanceByTemplateId(const
 {
 	UYIItemDefinition* Def = FindItemDefinitionByTemplateId(TemplateId);
 	if (!Def) return FYIItemInstance();
-	return UYIItemBlueprintLibrary::MakeItemInstanceByCode(Def->UniqueCode, Count);
+	return YI_MakeItemInstanceByCode(Def->UniqueCode, Count);
 }
 
 static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code)
@@ -886,6 +886,14 @@ bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, co
 	NewItem.Size = Def->GetEffectiveDefaultSize();
 	int32 AddedIdx = Bag->AddBagItem(NewItem);
 	return AddedIdx != INDEX_NONE;
+}
+
+static FYIItemInstance YI_MakeItemInstanceByCode(int64 Code, int32 Count)
+{
+	FYIItemInstance Out;
+	Out.Count = Count;
+	Out.Definition = YI_FindDefinitionByCode(Code);
+	return Out;
 }
 
 const UYIItemSFXProfile* UYIInventoryBlueprintLibrary::ResolveItemSFXProfile(const UYIItemDefinition* Definition, const UYIItemSFXLibrary* Library)

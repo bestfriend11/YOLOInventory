@@ -2,12 +2,13 @@
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "Net/UnrealNetwork.h"
-#include "YIItemBlueprintLibrary.h"
+#include "YIItemRegistrySubsystem.h"
 #include "UObject/Package.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/Engine.h"
 #include "YIItemNetTypes.h"
 #include "YIDebugLibrary.h"
 
@@ -35,6 +36,25 @@ namespace YIInventoryComponentUIBindings
 }
 
 using namespace YIInventoryComponentUIBindings;
+
+namespace
+{
+	static FYIItemInstance YIInventoryComp_MakeItemInstanceByCode(int64 Code, int32 Count)
+	{
+		FYIItemInstance Out;
+		Out.Count = Count;
+		if (Code == 0 || !GEngine)
+		{
+			return Out;
+		}
+
+		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+		{
+			Out.Definition = Registry->GetByCode(Code);
+		}
+		return Out;
+	}
+}
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -1073,7 +1093,7 @@ void UYIInventoryComponent::OnRep_NetBag()
 	{
 		if (Net.Code == 0 || Net.Count <= 0) continue;
 		FYIBagItem Item;
-		Item.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Net.Code, Net.Count);
+		Item.Item = YIInventoryComp_MakeItemInstanceByCode(Net.Code, Net.Count);
 		if (Net.InstanceId.IsValid())
 		{
 			Item.Item.InstanceId = Net.InstanceId;

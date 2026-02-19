@@ -20,8 +20,7 @@ public class YOLOInventoryContainers : ModuleRules
             "SlateCore",
             "UMG",
             "YOLOInventoryCore",
-            "YOLOInventorySchema",
-            "YOLOInventory"
+            "YOLOInventorySchema"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]

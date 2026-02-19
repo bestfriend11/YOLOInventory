@@ -16,6 +16,7 @@ public class YOLOInventory : ModuleRules
             "GameplayAbilities",
             "PhysicsCore",
             "CSVItemBuilder",
+            "YOLOInventoryCore",
             "YOLOInventorySchema"
         });
 
