@@ -13,6 +13,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GameplayTagContainer.h"
 #include "Engine/Texture.h"
+#include "YIInlineMappingResolvers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIItemRegistry, Log, All);
 
@@ -731,43 +732,33 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
 	{
-		if (Mapping.TargetProperty.IsNone())
+		FYIResolvedMappingTarget ResolvedTarget;
+		if (!YIResolveMappingTarget(Def, Mapping, ResolvedTarget, nullptr))
 		{
 			continue;
 		}
 
-		FProperty* SourceProp = nullptr;
+		const FProperty* SourceProp = nullptr;
+		const uint8* SrcPtr = nullptr;
 		if (!Mapping.bUseStaticValue)
 		{
-			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
-			{
-				if (It->GetAuthoredName().Equals(Mapping.SourceField.ToString(), ESearchCase::IgnoreCase))
-				{
-					SourceProp = *It;
-					break;
-				}
-			}
-			if (!SourceProp)
+			if (!YIResolveMappingSource(DataTable->RowStruct, RowPtr, Mapping.SourceField, SourceProp, SrcPtr, nullptr))
 			{
 				continue;
 			}
 		}
 
-		FProperty* DestProp = nullptr;
-		for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
-		{
-			if (It->GetAuthoredName().Equals(Mapping.TargetProperty.ToString(), ESearchCase::IgnoreCase))
-			{
-				DestProp = *It;
-				break;
-			}
-		}
+		FProperty* DestProp = ResolvedTarget.Property;
 		if (!DestProp)
 		{
 			continue;
 		}
 
-		uint8* DestPtr = DestProp->ContainerPtrToValuePtr<uint8>(Def);
+		uint8* DestPtr = ResolvedTarget.ValuePtr;
+		if (!DestPtr)
+		{
+			continue;
+		}
 
 		if (Mapping.bUseStaticValue)
 		{
@@ -778,23 +769,15 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		if (Mapping.Conversion == EYIFieldMappingConversion::Vector2DFromXY)
 		{
 			if (Mapping.SourceFieldB.IsNone())
 			{
 				continue;
 			}
-			FProperty* SourcePropB = nullptr;
-			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
-			{
-				if (It->GetAuthoredName().Equals(Mapping.SourceFieldB.ToString(), ESearchCase::IgnoreCase))
-				{
-					SourcePropB = *It;
-					break;
-				}
-			}
-			if (!SourcePropB)
+			const FProperty* SourcePropB = nullptr;
+			const uint8* SrcPtrB = nullptr;
+			if (!YIResolveMappingSource(DataTable->RowStruct, RowPtr, Mapping.SourceFieldB, SourcePropB, SrcPtrB, nullptr))
 			{
 				continue;
 			}
@@ -807,7 +790,6 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 			}
 
 			const double X = NumA->IsFloatingPoint() ? NumA->GetFloatingPointPropertyValue(SrcPtr) : (double)NumA->GetSignedIntPropertyValue(SrcPtr);
-			const uint8* SrcPtrB = SourcePropB->ContainerPtrToValuePtr<uint8>(RowPtr);
 			const double Y = NumB->IsFloatingPoint() ? NumB->GetFloatingPointPropertyValue(SrcPtrB) : (double)NumB->GetSignedIntPropertyValue(SrcPtrB);
 
 			if (const FStructProperty* DestStruct = CastField<FStructProperty>(DestProp))

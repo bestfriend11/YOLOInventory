@@ -18,22 +18,253 @@ namespace
 			|| LowerName.Contains(TEXT("uses"))
 			|| LowerName.Contains(TEXT("current"));
 	}
+
+	template<typename TFragment>
+	static const TFragment* YI_FindDefinitionFragment(const TArray<FInstancedStruct>& Fragments)
+	{
+		for (const FInstancedStruct& Fragment : Fragments)
+		{
+			if (const TFragment* Value = Fragment.GetPtr<TFragment>())
+			{
+				return Value;
+			}
+		}
+		return nullptr;
+	}
+}
+
+const FYIItemUIDefinitionFragment* UYIItemDefinition::GetUIDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemUIDefinitionFragment>(DefinitionFragments);
+}
+
+const FYIItemPickupDefinitionFragment* UYIItemDefinition::GetPickupDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemPickupDefinitionFragment>(DefinitionFragments);
+}
+
+const FYIItemEquipmentDefinitionFragment* UYIItemDefinition::GetEquipmentDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemEquipmentDefinitionFragment>(DefinitionFragments);
+}
+
+const FYIItemAffixDefinitionFragment* UYIItemDefinition::GetAffixDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemAffixDefinitionFragment>(DefinitionFragments);
+}
+
+const FYIItemLayoutDefinitionFragment* UYIItemDefinition::GetLayoutDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemLayoutDefinitionFragment>(DefinitionFragments);
+}
+
+void UYIItemDefinition::GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const
+{
+	OutDisplayName = DisplayName;
+	OutDescription = Description;
+	OutIcon = Icon;
+
+	if (const FYIItemUIDefinitionFragment* UI = GetUIDefinitionFragment())
+	{
+		if (!UI->DisplayName.IsEmpty())
+		{
+			OutDisplayName = UI->DisplayName;
+		}
+		if (!UI->Description.IsEmpty())
+		{
+			OutDescription = UI->Description;
+		}
+		if (UI->Icon.ToSoftObjectPath().IsValid())
+		{
+			OutIcon = UI->Icon;
+		}
+	}
+}
+
+FGameplayTag UYIItemDefinition::GetEffectivePrimaryEquipSlotTag() const
+{
+	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
+	{
+		if (Equip->PrimaryEquipSlot.IsValid())
+		{
+			return Equip->PrimaryEquipSlot;
+		}
+	}
+	return FGameplayTag();
+}
+
+void UYIItemDefinition::GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const
+{
+	OutOccupiedSlots.Reset();
+	OutOccupiedSlots.AppendTags(OccupiedEquipSlots);
+
+	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
+	{
+		OutOccupiedSlots.AppendTags(Equip->OccupiedSlots);
+	}
+}
+
+const FInstancedStruct* UYIItemDefinition::FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
+{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
+	for (const FInstancedStruct& Fragment : DefinitionFragments)
+	{
+		if (Fragment.GetScriptStruct() == FragmentStruct)
+		{
+			return &Fragment;
+		}
+	}
+	return nullptr;
+}
+
+FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
+	for (FInstancedStruct& Fragment : DefinitionFragments)
+	{
+		if (Fragment.GetScriptStruct() == FragmentStruct)
+		{
+			return &Fragment;
+		}
+	}
+
+	FInstancedStruct& NewFragment = DefinitionFragments.AddDefaulted_GetRef();
+	NewFragment.InitializeAs(FragmentStruct);
+	return &NewFragment;
+}
+
+const FYIItemStackingDefinitionFragment* UYIItemDefinition::GetStackingDefinitionFragment() const
+{
+	return YI_FindDefinitionFragment<FYIItemStackingDefinitionFragment>(DefinitionFragments);
+}
+
+void UYIItemDefinition::GetEffectiveAffixDefinition(
+	TArray<TSoftObjectPtr<UYIAffixAsset>>& OutTemplateAffixes,
+	int32& OutMinRandomModifiers,
+	int32& OutMaxRandomModifiers,
+	TSoftObjectPtr<UYIAffixPoolAsset>& OutPrefixPool,
+	TSoftObjectPtr<UYIAffixPoolAsset>& OutSuffixPool) const
+{
+	OutTemplateAffixes = TemplateAffixes;
+	OutMinRandomModifiers = MinRandomModifiers;
+	OutMaxRandomModifiers = MaxRandomModifiers;
+	OutPrefixPool = PrefixPool;
+	OutSuffixPool = SuffixPool;
+
+	if (const FYIItemAffixDefinitionFragment* AffixDef = GetAffixDefinitionFragment())
+	{
+		if (AffixDef->bOverrideLegacyAffixFields)
+		{
+			OutTemplateAffixes = AffixDef->TemplateAffixes;
+			OutMinRandomModifiers = AffixDef->MinRandomModifiers;
+			OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
+			OutPrefixPool = AffixDef->PrefixPool;
+			OutSuffixPool = AffixDef->SuffixPool;
+			return;
+		}
+
+		for (const TSoftObjectPtr<UYIAffixAsset>& Affix : AffixDef->TemplateAffixes)
+		{
+			OutTemplateAffixes.AddUnique(Affix);
+		}
+		OutMinRandomModifiers = AffixDef->MinRandomModifiers;
+		OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
+		if (AffixDef->PrefixPool.ToSoftObjectPath().IsValid())
+		{
+			OutPrefixPool = AffixDef->PrefixPool;
+		}
+		if (AffixDef->SuffixPool.ToSoftObjectPath().IsValid())
+		{
+			OutSuffixPool = AffixDef->SuffixPool;
+		}
+	}
+}
+
+void UYIItemDefinition::GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const
+{
+	OutDefaultSize = DefaultSize;
+	bOutAllowRotation = bAllowRotation;
+
+	if (const FYIItemLayoutDefinitionFragment* Layout = GetLayoutDefinitionFragment())
+	{
+		if (Layout->bOverrideLegacyLayoutFields)
+		{
+			OutDefaultSize = Layout->DefaultSize;
+			bOutAllowRotation = Layout->bAllowRotation;
+		}
+	}
+
+	OutDefaultSize.X = FMath::Max(1, OutDefaultSize.X);
+	OutDefaultSize.Y = FMath::Max(1, OutDefaultSize.Y);
+}
+
+FIntPoint UYIItemDefinition::GetEffectiveDefaultSize() const
+{
+	FIntPoint Size = FIntPoint(1, 1);
+	bool bRotationAllowed = true;
+	GetEffectiveLayoutData(Size, bRotationAllowed);
+	return Size;
+}
+
+bool UYIItemDefinition::IsEffectiveRotationAllowed() const
+{
+	FIntPoint Size = FIntPoint(1, 1);
+	bool bRotationAllowed = true;
+	GetEffectiveLayoutData(Size, bRotationAllowed);
+	return bRotationAllowed;
+}
+
+void UYIItemDefinition::GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const
+{
+	bOutAllowStacking = bAllowStacking;
+	OutMaxStackCount = MaxStackCount;
+	bOutUseRiskChecks = true;
+
+	if (const FYIItemStackingDefinitionFragment* Stacking = GetStackingDefinitionFragment())
+	{
+		if (Stacking->bOverrideLegacyStackingFields)
+		{
+			bOutAllowStacking = Stacking->bAllowStacking;
+			OutMaxStackCount = Stacking->MaxStackCount;
+			bOutUseRiskChecks = Stacking->bUseRiskChecks;
+		}
+	}
 }
 
 bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 {
 	TArray<FString> Reasons;
 
-	const bool bHasRandomRollSetup = MinRandomModifiers > 0
-		|| MaxRandomModifiers > 0
-		|| PrefixPool.ToSoftObjectPath().IsValid()
-		|| SuffixPool.ToSoftObjectPath().IsValid();
+	TArray<TSoftObjectPtr<UYIAffixAsset>> EffectiveTemplateAffixes;
+	int32 EffectiveMinRandomModifiers = 0;
+	int32 EffectiveMaxRandomModifiers = 0;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
+	GetEffectiveAffixDefinition(
+		EffectiveTemplateAffixes,
+		EffectiveMinRandomModifiers,
+		EffectiveMaxRandomModifiers,
+		EffectivePrefixPool,
+		EffectiveSuffixPool);
+
+	const bool bHasRandomRollSetup = EffectiveMinRandomModifiers > 0
+		|| EffectiveMaxRandomModifiers > 0
+		|| EffectivePrefixPool.ToSoftObjectPath().IsValid()
+		|| EffectiveSuffixPool.ToSoftObjectPath().IsValid();
 	if (bHasRandomRollSetup)
 	{
 		Reasons.Add(TEXT("randomized affix rolls/pools"));
 	}
 
-	if (TemplateAffixes.Num() > 0)
+	if (EffectiveTemplateAffixes.Num() > 0)
 	{
 		Reasons.Add(TEXT("template affixes (instance data can diverge after runtime changes)"));
 	}
@@ -78,6 +309,11 @@ bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 
 bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 {
+	bool bEffectiveAllowStacking = false;
+	int32 EffectiveMaxStackCount = 1;
+	bool bUseRiskChecks = true;
+	GetEffectiveStackingRules(bEffectiveAllowStacking, EffectiveMaxStackCount, bUseRiskChecks);
+
 	if (bIsContainerItem)
 	{
 		if (OutReason)
@@ -87,7 +323,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 		return false;
 	}
 
-	if (!bAllowStacking || MaxStackCount <= 1)
+	if (!bEffectiveAllowStacking || EffectiveMaxStackCount <= 1)
 	{
 		if (OutReason)
 		{
@@ -98,7 +334,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 
 	FString RiskReason;
 	const bool bHasRisk = HasStackingRisk(&RiskReason);
-	if (bHasRisk && !bAllowUnsafeStacking)
+	if (bHasRisk && !bAllowUnsafeStacking && bUseRiskChecks)
 	{
 		if (OutReason)
 		{
@@ -137,6 +373,7 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ItemType)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, AttributeDefaults)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateAffixes)
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, DefinitionFragments)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, bIsContainerItem)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ContainerTemplateBag)
 		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, bAllowUnsafeStacking);
@@ -194,7 +431,11 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 
 	// Safety net: if risky state is detected and override is not set, prevent accidental stack merges.
 	FString RiskReason;
-	if (bAllowStacking && !bAllowUnsafeStacking && HasStackingRisk(&RiskReason))
+	bool bEffectiveAllowStacking = false;
+	int32 EffectiveMaxStackCount = 1;
+	bool bUseRiskChecks = true;
+	GetEffectiveStackingRules(bEffectiveAllowStacking, EffectiveMaxStackCount, bUseRiskChecks);
+	if (bEffectiveAllowStacking && EffectiveMaxStackCount > 1 && !bAllowUnsafeStacking && bUseRiskChecks && HasStackingRisk(&RiskReason))
 	{
 		bAllowStacking = false;
 		MaxStackCount = 1;

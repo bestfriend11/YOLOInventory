@@ -13,6 +13,7 @@
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
 #include "SYIItemDashboard.h"
+#include "YIInlineMappingResolvers.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "ContentBrowserModule.h"
@@ -48,6 +49,88 @@
 #include "Widgets/Images/SImage.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "GameplayTagsManager.h"
+#include "UObject/UObjectIterator.h"
+
+static FProperty* FindPropertyByAuthoredNameAffixEditor(const UStruct* OwnerStruct, FName FieldName)
+{
+	if (!OwnerStruct || FieldName.IsNone())
+	{
+		return nullptr;
+	}
+
+	const FString FieldNameString = FieldName.ToString();
+	for (TFieldIterator<FProperty> It(OwnerStruct); It; ++It)
+	{
+		FProperty* Property = *It;
+		if (Property && Property->GetAuthoredName().Equals(FieldNameString, ESearchCase::IgnoreCase))
+		{
+			return Property;
+		}
+	}
+	return nullptr;
+}
+
+static UScriptStruct* ResolveStructFromPathStringAffixEditor(const FString& StructPath)
+{
+	if (StructPath.IsEmpty())
+	{
+		return nullptr;
+	}
+
+	if (UScriptStruct* Found = FindObject<UScriptStruct>(nullptr, *StructPath))
+	{
+		return Found;
+	}
+	return LoadObject<UScriptStruct>(nullptr, *StructPath);
+}
+
+static void CollectFragmentStructOptionsAffixEditor(const UScriptStruct* BaseStruct, TArray<TSharedPtr<FString>>& OutOptions)
+{
+	OutOptions.Reset();
+	if (!BaseStruct)
+	{
+		return;
+	}
+
+	TArray<FString> Paths;
+	for (TObjectIterator<UScriptStruct> It; It; ++It)
+	{
+		UScriptStruct* ScriptStruct = *It;
+		if (!ScriptStruct || !ScriptStruct->IsChildOf(BaseStruct) || ScriptStruct == BaseStruct)
+		{
+			continue;
+		}
+		Paths.Add(ScriptStruct->GetPathName());
+	}
+	Paths.Sort();
+	for (const FString& Path : Paths)
+	{
+		OutOptions.Add(MakeShared<FString>(Path));
+	}
+}
+
+static void CollectStructFieldOptionsAffixEditor(const UStruct* OwnerStruct, TArray<TSharedPtr<FString>>& OutOptions)
+{
+	OutOptions.Reset();
+	if (!OwnerStruct)
+	{
+		return;
+	}
+
+	TArray<FString> Names;
+	for (TFieldIterator<FProperty> It(OwnerStruct); It; ++It)
+	{
+		if (FProperty* Property = *It)
+		{
+			Names.Add(Property->GetAuthoredName());
+		}
+	}
+	Names.Sort();
+	for (const FString& Name : Names)
+	{
+		OutOptions.Add(MakeShared<FString>(Name));
+	}
+}
 
 static bool YIAffixDash_PromptSavePackages(const TArray<UObject*>& ObjectsToSave, int32& OutRequestedCount)
 {
@@ -2038,6 +2121,16 @@ static EYIFieldMappingConversion GuessConversionForPropsAffix(const FProperty* S
 	return EYIFieldMappingConversion::None;
 }
 
+static bool HasMappingTargetV2Affix(const FYIFieldMapping& Mapping)
+{
+	if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+	{
+		return !Mapping.TargetProperty.IsNone();
+	}
+
+	return Mapping.TargetFragmentStruct != nullptr && !YIGetResolvedTargetFieldName(Mapping).IsNone();
+}
+
 static bool GetTransformFunctionPropsAffix(UFunction* Function, FProperty*& OutInput, FProperty*& OutOutput)
 {
 	OutInput = nullptr;
@@ -2174,32 +2267,28 @@ static bool ApplyInlineMappingsAffix(const UYIDataTableAffixSource* Source, cons
 
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
 	{
-		if (Mapping.TargetProperty.IsNone())
-		{
-			continue;
-		}
-
 		const FProperty* SourceProp = nullptr;
+		const uint8* SrcPtr = nullptr;
 		if (!Mapping.bUseStaticValue)
 		{
-			for (TFieldIterator<FProperty> It(DataTable->RowStruct); It; ++It)
+			if (!YIResolveMappingSource(DataTable->RowStruct, RowPtr, Mapping.SourceField, SourceProp, SrcPtr, nullptr))
 			{
-				if ((*It)->GetAuthoredName() == Mapping.SourceField)
-				{
-					SourceProp = *It;
-					break;
-				}
+				continue;
 			}
 		}
 
-		FProperty* TargetProp = FindFProperty<FProperty>(UYIAffixAsset::StaticClass(), Mapping.TargetProperty);
+		FYIResolvedMappingTarget ResolvedTarget;
+		if (!YIResolveMappingTarget(Affix, Mapping, ResolvedTarget, nullptr))
+		{
+			continue;
+		}
+		FProperty* TargetProp = ResolvedTarget.Property;
+		uint8* DstPtr = ResolvedTarget.ValuePtr;
 
 		if (!TargetProp || (!SourceProp && !Mapping.bUseStaticValue))
 		{
 			continue;
 		}
-
-		uint8* DstPtr = TargetProp->ContainerPtrToValuePtr<uint8>(Affix);
 
 		if (Mapping.bUseStaticValue)
 		{
@@ -2210,7 +2299,6 @@ static bool ApplyInlineMappingsAffix(const UYIDataTableAffixSource* Source, cons
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr);
 		bool bConverted = CopyValueBetweenPropertiesAffix(SourceProp, SrcPtr, TargetProp, DstPtr, Mapping.Conversion);
 		if (bConverted && !Mapping.TransformFunction.IsNone())
 		{
@@ -2925,7 +3013,7 @@ TSharedRef<SWidget> SYIAffixDashboard::BuildMappingPanelWidget()
 										for (const FYIFieldMapping& M : CurrentSource->InlineMappings)
 										{
 											const bool bHasSource = !M.SourceField.IsNone();
-											const bool bHasTarget = !M.TargetProperty.IsNone();
+											const bool bHasTarget = HasMappingTargetV2Affix(M);
 											if (bHasSource && bHasTarget) { ++Ready; }
 											else { ++NeedsFix; }
 										}
@@ -3184,16 +3272,32 @@ void SYIAffixDashboard::RefreshMappingPreview()
 		return;
 	}
 
+	UYIAffixAsset* PreviewAffix = NewObject<UYIAffixAsset>();
+
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
 	{
 		TSharedPtr<FYIMappingPreviewRow> Row = MakeShared<FYIMappingPreviewRow>();
 		Row->SourceField = Mapping.SourceField;
-		Row->TargetProperty = Mapping.TargetProperty;
+		Row->TargetProperty = YIGetResolvedTargetFieldName(Mapping);
 
-		const FProperty* SourceProp = Mapping.SourceField.IsNone() ? nullptr : SourceFieldPropCache.FindRef(Mapping.SourceField);
-		FProperty* TargetProp = Mapping.TargetProperty.IsNone() ? nullptr : TargetFieldPropCache.FindRef(Mapping.TargetProperty);
+		const FProperty* SourceProp = nullptr;
+		const uint8* SrcPtr = nullptr;
+		if (!Mapping.bUseStaticValue)
+		{
+			YIResolveMappingSource(Table->RowStruct, RowPtr, Mapping.SourceField, SourceProp, SrcPtr, nullptr);
+		}
 
-		if (!TargetProp || (!SourceProp && !Mapping.bUseStaticValue))
+		FYIResolvedMappingTarget ResolvedTarget;
+		FProperty* TargetProp = nullptr;
+		uint8* TargetPtr = nullptr;
+		if (PreviewAffix)
+		{
+			YIResolveMappingTarget(PreviewAffix, Mapping, ResolvedTarget, nullptr);
+			TargetProp = ResolvedTarget.Property;
+			TargetPtr = ResolvedTarget.ValuePtr;
+		}
+
+		if (!TargetProp || !TargetPtr || (!SourceProp && !Mapping.bUseStaticValue))
 		{
 			Row->Status = NSLOCTEXT("YOLOInventory", "AffixDash_PreviewMissing", "Missing field.");
 			Row->StatusColor = FLinearColor(1.f, 0.25f, 0.2f);
@@ -3201,7 +3305,6 @@ void SYIAffixDashboard::RefreshMappingPreview()
 			continue;
 		}
 
-		const uint8* SrcPtr = SourceProp ? SourceProp->ContainerPtrToValuePtr<uint8>(RowPtr) : nullptr;
 		Row->SourceValue = Mapping.bUseStaticValue
 			? Mapping.StaticValue
 			: ExportPropertyValueToStringAffix(SourceProp, SrcPtr);
@@ -3209,6 +3312,7 @@ void SYIAffixDashboard::RefreshMappingPreview()
 		TArray<uint8> Temp;
 		Temp.SetNumZeroed(TargetProp->GetSize());
 		TargetProp->InitializeValue(Temp.GetData());
+		TargetProp->CopyCompleteValue(Temp.GetData(), TargetPtr);
 
 		bool bWarn = false;
 		bool bConverted = false;
@@ -3234,7 +3338,9 @@ void SYIAffixDashboard::RefreshMappingPreview()
 			}
 			else
 			{
-				const FProperty* SourcePropB = SourceFieldPropCache.FindRef(Mapping.SourceFieldB);
+				const FProperty* SourcePropB = nullptr;
+				const uint8* SrcPtrB = nullptr;
+				YIResolveMappingSource(Table->RowStruct, RowPtr, Mapping.SourceFieldB, SourcePropB, SrcPtrB, nullptr);
 				const FNumericProperty* NumA = CastField<FNumericProperty>(SourceProp);
 				const FNumericProperty* NumB = CastField<FNumericProperty>(SourcePropB);
 				if (!SourcePropB || !NumA || !NumB)
@@ -3244,7 +3350,6 @@ void SYIAffixDashboard::RefreshMappingPreview()
 				}
 				else if (const FStructProperty* DestStruct = CastField<FStructProperty>(TargetProp))
 				{
-					const uint8* SrcPtrB = SourcePropB->ContainerPtrToValuePtr<uint8>(RowPtr);
 					const double X = NumA->IsFloatingPoint() ? NumA->GetFloatingPointPropertyValue(SrcPtr) : (double)NumA->GetSignedIntPropertyValue(SrcPtr);
 					const double Y = NumB->IsFloatingPoint() ? NumB->GetFloatingPointPropertyValue(SrcPtrB) : (double)NumB->GetSignedIntPropertyValue(SrcPtrB);
 
@@ -3257,8 +3362,8 @@ void SYIAffixDashboard::RefreshMappingPreview()
 					}
 					else if (DestStruct->Struct == TBaseStructure<FIntPoint>::Get())
 					{
-						FIntPoint* Pt = reinterpret_cast<FIntPoint*>(Temp.GetData());
-						*Pt = FIntPoint((int32)X, (int32)Y);
+						FIntPoint* Point = reinterpret_cast<FIntPoint*>(Temp.GetData());
+						*Point = FIntPoint((int32)X, (int32)Y);
 						bConverted = true;
 						Row->ConvertedValue = ExportPropertyValueToStringAffix(TargetProp, Temp.GetData());
 					}
@@ -3478,16 +3583,25 @@ void SYIAffixDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 
 	for (FYIFieldMapping& M : Source->InlineMappings)
 	{
-		if (M.bUseStaticValue || M.TargetProperty.IsNone() || !M.SourceField.IsNone())
+		const FName TargetField = YIGetResolvedTargetFieldName(M);
+		if (M.bUseStaticValue || TargetField.IsNone() || !M.SourceField.IsNone())
 		{
 			continue;
 		}
-		const FName Match = FindBestMatch(M.TargetProperty);
+		const FName Match = FindBestMatch(TargetField);
 		if (!Match.IsNone())
 		{
 			M.SourceField = Match;
 			const FProperty* SourceProp = SourceFieldPropCache.FindRef(Match);
-			const FProperty* TargetProp = TargetFieldPropCache.FindRef(M.TargetProperty);
+			const FProperty* TargetProp = nullptr;
+			if (M.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+			{
+				TargetProp = TargetFieldPropCache.FindRef(TargetField);
+			}
+			else if (const UScriptStruct* FragmentStruct = M.TargetFragmentStruct.Get())
+			{
+				TargetProp = FindPropertyByAuthoredNameAffixEditor(FragmentStruct, TargetField);
+			}
 			M.Conversion = GuessConversionForPropsAffix(SourceProp, TargetProp);
 			bChanged = true;
 			++MatchCount;
@@ -3600,9 +3714,31 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 
 	auto GetTargetProp = [this, Mapping]() -> FProperty*
 	{
-		if (!Mapping.IsValid() || Mapping->TargetProperty.IsNone()) return nullptr;
-		if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty)) return *Found;
-		return nullptr;
+		if (!Mapping.IsValid())
+		{
+			return nullptr;
+		}
+
+		if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+		{
+			if (Mapping->TargetProperty.IsNone())
+			{
+				return nullptr;
+			}
+			if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty))
+			{
+				return *Found;
+			}
+			return nullptr;
+		}
+
+		const UScriptStruct* FragmentStruct = Mapping->TargetFragmentStruct.Get();
+		if (!FragmentStruct)
+		{
+			return nullptr;
+		}
+
+		return FindPropertyByAuthoredNameAffixEditor(FragmentStruct, YIGetResolvedTargetFieldName(*Mapping));
 	};
 
 	auto IsStaticMapping = [Mapping]() -> bool
@@ -3702,6 +3838,64 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 		for (const FGameplayTag& Tag : TagArray)
 		{
 			StaticGameplayTagOptions->Add(MakeShared<FString>(Tag.ToString()));
+		}
+	};
+
+	TSharedPtr<TArray<TSharedPtr<FString>>> TargetLayerOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	TSharedPtr<TArray<TSharedPtr<FString>>> TargetFragmentStructOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	TSharedPtr<TArray<TSharedPtr<FString>>> TargetFragmentFieldOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+
+	auto GetTargetLayerLabel = [](EYIFieldMappingTargetLayer Layer) -> FString
+	{
+		switch (Layer)
+		{
+		case EYIFieldMappingTargetLayer::StaticDefinitionFragment:
+			return TEXT("Static Fragment");
+		case EYIFieldMappingTargetLayer::DynamicInstanceFragment:
+			return TEXT("Dynamic Fragment");
+		case EYIFieldMappingTargetLayer::LegacyProperty:
+		default:
+			return TEXT("Legacy");
+		}
+	};
+
+	auto RefreshTargetLayerOptions = [TargetLayerOptions]()
+	{
+		TargetLayerOptions->Reset();
+		TargetLayerOptions->Add(MakeShared<FString>(TEXT("Legacy")));
+		TargetLayerOptions->Add(MakeShared<FString>(TEXT("Static Fragment")));
+	};
+
+	auto RefreshTargetFragmentStructOptions = [TargetFragmentStructOptions]()
+	{
+		CollectFragmentStructOptionsAffixEditor(FYIAffixDefinitionFragmentBase::StaticStruct(), *TargetFragmentStructOptions);
+	};
+
+	auto RefreshTargetFragmentFieldOptions = [Mapping, TargetFragmentFieldOptions]()
+	{
+		TargetFragmentFieldOptions->Reset();
+		if (!Mapping.IsValid())
+		{
+			return;
+		}
+		const UScriptStruct* FragmentStruct = Mapping->TargetFragmentStruct.Get();
+		if (!FragmentStruct)
+		{
+			return;
+		}
+		CollectStructFieldOptionsAffixEditor(FragmentStruct, *TargetFragmentFieldOptions);
+	};
+
+	auto PersistCurrentMapping = [this, Mapping]()
+	{
+		if (!CurrentSource.IsValid() || !Mapping.IsValid())
+		{
+			return;
+		}
+		const int32 Index = MappingRows.Find(Mapping);
+		if (Index != INDEX_NONE)
+		{
+			CurrentSource->InlineMappings[Index] = *Mapping;
 		}
 	};
 
@@ -4305,91 +4499,287 @@ TSharedRef<ITableRow> SYIAffixDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappi
 							]
 					]
 			]
-			+ SHorizontalBox::Slot().FillWidth(0.22f).Padding(2)
+			+ SHorizontalBox::Slot().FillWidth(0.30f).Padding(2)
 			[
-				SNew(SComboBox<TSharedPtr<FString>>)
-					.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->TargetPropertyOptions)
-					.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
-						{
-							const FName FieldName = InItem.IsValid() ? FName(**InItem) : NAME_None;
-							FString Label;
-							FLinearColor Color;
-							FProperty* Prop = nullptr;
-							if (FieldName != NAME_None)
-							{
-								if (FProperty** Found = const_cast<SYIAffixDashboard*>(this)->TargetFieldPropCache.Find(FieldName))
-								{
-									Prop = *Found;
-								}
-							}
-							GetTypeInfo(Prop, Label, Color);
-							return SNew(SHorizontalBox)
-								+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
-								[
-									SNew(SBorder)
-										.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
-										.Padding(FMargin(3, 1))
-										.BorderBackgroundColor(Color)
-										[
-											SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
-										]
-								]
-								+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
-								[
-									SNew(STextBlock).Text(DropdownText(InItem))
-								];
-						})
-					.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
-						{
-							if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
-							{
-								CurrentSource->Modify();
-								Mapping->TargetProperty = FName(**NewItem);
-								if (Mapping->Conversion == EYIFieldMappingConversion::None)
-								{
-									const FProperty* SourceProp = GetSourceProp();
-									const FProperty* TargetProp = GetTargetProp();
-									const EYIFieldMappingConversion Guess = GuessConversionForPropsAffix(SourceProp, TargetProp);
-									Mapping->Conversion = Guess;
-								}
-								const int32 Index = MappingRows.Find(Mapping);
-								if (Index != INDEX_NONE)
-								{
-									CurrentSource->InlineMappings[Index].TargetProperty = Mapping->TargetProperty;
-									CurrentSource->InlineMappings[Index].Conversion = Mapping->Conversion;
-								}
-								RefreshMappingUi();
-							}
-						})
-					.InitiallySelectedItem([this, Mapping]()
-						{
-							if (!Mapping.IsValid()) return TSharedPtr<FString>();
-							if (const TSharedPtr<FString>* FoundPtr = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
-								{
-									return Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
-								}))
-							{
-								return *FoundPtr;
-							}
-							return TSharedPtr<FString>();
-						}())
-					.Content()
+				SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(0.36f).Padding(0, 0, 4, 0)
 					[
-						SNew(SHorizontalBox)
-							+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
-							[
-								MakeTypeBadgeDynamic(GetTargetProp)
-							]
-							+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
-							[
-								SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+						SNew(SComboBox<TSharedPtr<FString>>)
+							.OptionsSource(TargetLayerOptions.Get())
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+								})
+							.OnComboBoxOpening_Lambda([RefreshTargetLayerOptions]()
+								{
+									RefreshTargetLayerOptions();
+								})
+							.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshTargetFragmentStructOptions, RefreshTargetFragmentFieldOptions, TargetFragmentStructOptions, TargetFragmentFieldOptions, PersistCurrentMapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+								{
+									if (!CurrentSource.IsValid() || !Mapping.IsValid() || !NewItem.IsValid())
 									{
-										const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+										return;
+									}
+
+									CurrentSource->Modify();
+									Mapping->TargetLayer = (*NewItem == TEXT("Static Fragment"))
+										? EYIFieldMappingTargetLayer::StaticDefinitionFragment
+										: EYIFieldMappingTargetLayer::LegacyProperty;
+
+									if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+									{
+										if (Mapping->TargetProperty.IsNone())
+										{
+											const FName ResolvedField = YIGetResolvedTargetFieldName(*Mapping);
+											if (!ResolvedField.IsNone())
 											{
-												return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
-											});
-										return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
+												Mapping->TargetProperty = ResolvedField;
+											}
+										}
+									}
+									else
+									{
+										if (!Mapping->TargetFragmentStruct)
+										{
+											RefreshTargetFragmentStructOptions();
+											if (TargetFragmentStructOptions->Num() > 0 && (*TargetFragmentStructOptions)[0].IsValid())
+											{
+												Mapping->TargetFragmentStruct = ResolveStructFromPathStringAffixEditor(**(*TargetFragmentStructOptions)[0]);
+											}
+										}
+										RefreshTargetFragmentFieldOptions();
+										if (Mapping->TargetFragmentField.IsNone() && !Mapping->TargetProperty.IsNone())
+										{
+											Mapping->TargetFragmentField = Mapping->TargetProperty;
+										}
+										if (Mapping->TargetFragmentField.IsNone() && TargetFragmentFieldOptions->Num() > 0 && (*TargetFragmentFieldOptions)[0].IsValid())
+										{
+											Mapping->TargetFragmentField = FName(**(*TargetFragmentFieldOptions)[0]);
+										}
+										Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
+									}
+
+									if (Mapping->Conversion == EYIFieldMappingConversion::None)
+									{
+										const FProperty* SourceProp = GetSourceProp();
+										const FProperty* TargetProp = GetTargetProp();
+										Mapping->Conversion = GuessConversionForPropsAffix(SourceProp, TargetProp);
+									}
+									PersistCurrentMapping();
+									RefreshMappingUi();
+								})
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([Mapping, GetTargetLayerLabel]()
+									{
+										return Mapping.IsValid()
+											? FText::FromString(GetTargetLayerLabel(Mapping->TargetLayer))
+											: FText::FromString(TEXT("Legacy"));
 									})
+							]
+					]
+					+ SHorizontalBox::Slot().FillWidth(0.64f)
+					[
+						SNew(SWidgetSwitcher)
+							.WidgetIndex_Lambda([Mapping]()
+								{
+									if (!Mapping.IsValid())
+									{
+										return 0;
+									}
+									return (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty) ? 0 : 1;
+								})
+							+ SWidgetSwitcher::Slot()
+							[
+								SNew(SComboBox<TSharedPtr<FString>>)
+									.OptionsSource(&const_cast<SYIAffixDashboard*>(this)->TargetPropertyOptions)
+									.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
+										{
+											const FName FieldName = InItem.IsValid() ? FName(**InItem) : NAME_None;
+											FString Label;
+											FLinearColor Color;
+											FProperty* Prop = nullptr;
+											if (FieldName != NAME_None)
+											{
+												if (FProperty** Found = const_cast<SYIAffixDashboard*>(this)->TargetFieldPropCache.Find(FieldName))
+												{
+													Prop = *Found;
+												}
+											}
+											GetTypeInfo(Prop, Label, Color);
+											return SNew(SHorizontalBox)
+												+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+												[
+													SNew(SBorder)
+														.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
+														.Padding(FMargin(3, 1))
+														.BorderBackgroundColor(Color)
+														[
+															SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FSlateColor(FLinearColor::Black))
+														]
+												]
+												+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
+												[
+													SNew(STextBlock).Text(DropdownText(InItem))
+												];
+										})
+									.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, PersistCurrentMapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+										{
+											if (CurrentSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
+											{
+												CurrentSource->Modify();
+												Mapping->TargetProperty = FName(**NewItem);
+												if (Mapping->Conversion == EYIFieldMappingConversion::None)
+												{
+													const FProperty* SourceProp = GetSourceProp();
+													const FProperty* TargetProp = GetTargetProp();
+													const EYIFieldMappingConversion Guess = GuessConversionForPropsAffix(SourceProp, TargetProp);
+													Mapping->Conversion = Guess;
+												}
+												PersistCurrentMapping();
+												RefreshMappingUi();
+											}
+										})
+									.InitiallySelectedItem([this, Mapping]()
+										{
+											if (!Mapping.IsValid()) return TSharedPtr<FString>();
+											if (const TSharedPtr<FString>* FoundPtr = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+												{
+													return Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+												}))
+											{
+												return *FoundPtr;
+											}
+											return TSharedPtr<FString>();
+										}())
+									.Content()
+									[
+										SNew(SHorizontalBox)
+											+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+											[
+												MakeTypeBadgeDynamic(GetTargetProp)
+											]
+											+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
+											[
+												SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+													{
+														const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+															{
+																return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
+															});
+														return Found ? DropdownText(*Found) : FText::FromString(Mapping.IsValid() ? Mapping->TargetProperty.ToString() : TEXT(""));
+													})
+											]
+									]
+							]
+							+ SWidgetSwitcher::Slot()
+							[
+								SNew(SHorizontalBox)
+									+ SHorizontalBox::Slot().FillWidth(0.56f).Padding(0, 0, 4, 0)
+									[
+										SNew(SComboBox<TSharedPtr<FString>>)
+											.OptionsSource(TargetFragmentStructOptions.Get())
+											.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+												{
+													return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+												})
+											.OnComboBoxOpening_Lambda([RefreshTargetFragmentStructOptions]()
+												{
+													RefreshTargetFragmentStructOptions();
+												})
+											.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, RefreshTargetFragmentFieldOptions, TargetFragmentFieldOptions, PersistCurrentMapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+												{
+													if (!CurrentSource.IsValid() || !Mapping.IsValid() || !NewItem.IsValid())
+													{
+														return;
+													}
+
+													CurrentSource->Modify();
+													Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+													Mapping->TargetFragmentStruct = ResolveStructFromPathStringAffixEditor(**NewItem);
+													Mapping->TargetFragmentField = NAME_None;
+													RefreshTargetFragmentFieldOptions();
+													if (TargetFragmentFieldOptions->Num() > 0 && (*TargetFragmentFieldOptions)[0].IsValid())
+													{
+														Mapping->TargetFragmentField = FName(**(*TargetFragmentFieldOptions)[0]);
+													}
+													Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
+													if (Mapping->Conversion == EYIFieldMappingConversion::None)
+													{
+														const FProperty* SourceProp = GetSourceProp();
+														const FProperty* TargetProp = GetTargetProp();
+														Mapping->Conversion = GuessConversionForPropsAffix(SourceProp, TargetProp);
+													}
+													PersistCurrentMapping();
+													RefreshMappingUi();
+												})
+											.Content()
+											[
+												SNew(STextBlock).Text_Lambda([Mapping]()
+													{
+														if (!Mapping.IsValid() || !Mapping->TargetFragmentStruct)
+														{
+															return NSLOCTEXT("YOLOInventory", "AffixDash_TargetFragmentStructHint", "Select fragment");
+														}
+														return FText::FromString(Mapping->TargetFragmentStruct->GetPathName());
+													})
+											]
+									]
+									+ SHorizontalBox::Slot().FillWidth(0.44f)
+									[
+										SNew(SComboBox<TSharedPtr<FString>>)
+											.OptionsSource(TargetFragmentFieldOptions.Get())
+											.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+												{
+													return SNew(STextBlock).Text(DropdownText(InItem));
+												})
+											.OnComboBoxOpening_Lambda([RefreshTargetFragmentFieldOptions]()
+												{
+													RefreshTargetFragmentFieldOptions();
+												})
+											.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, PersistCurrentMapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+												{
+													if (!CurrentSource.IsValid() || !Mapping.IsValid() || !NewItem.IsValid())
+													{
+														return;
+													}
+
+													CurrentSource->Modify();
+													Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+													Mapping->TargetFragmentField = FName(**NewItem);
+													Mapping->TargetProperty = Mapping->TargetFragmentField;
+													if (Mapping->Conversion == EYIFieldMappingConversion::None)
+													{
+														const FProperty* SourceProp = GetSourceProp();
+														const FProperty* TargetProp = GetTargetProp();
+														Mapping->Conversion = GuessConversionForPropsAffix(SourceProp, TargetProp);
+													}
+													PersistCurrentMapping();
+													RefreshMappingUi();
+												})
+											.Content()
+											[
+												SNew(SHorizontalBox)
+													+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+													[
+														MakeTypeBadgeDynamic(GetTargetProp)
+													]
+													+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
+													[
+														SNew(STextBlock).Text_Lambda([Mapping]()
+															{
+																if (!Mapping.IsValid())
+																{
+																	return FText::GetEmpty();
+																}
+																const FName ResolvedField = YIGetResolvedTargetFieldName(*Mapping);
+																return ResolvedField.IsNone()
+																	? NSLOCTEXT("YOLOInventory", "AffixDash_TargetFragmentFieldHint", "Select field")
+																	: FText::FromName(ResolvedField);
+															})
+													]
+											]
+									]
 							]
 					]
 			]

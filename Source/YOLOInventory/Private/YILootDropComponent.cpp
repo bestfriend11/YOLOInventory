@@ -319,7 +319,7 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 		FYIBagItem Item;
 		Item.Item.Definition = Def;
 		Item.Item.Count = Count;
-		Item.Size = Def->DefaultSize;
+		Item.Size = Def->GetEffectiveDefaultSize();
 		Item.Pos = FIntPoint::ZeroValue;
 
 		if (RouteItem(Item))
@@ -365,7 +365,7 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 				{
 					Item.Item.Definition = Def;
 					Item.Item.Count = FMath::Max(1, RolledCount);
-					Item.Size = Def->DefaultSize;
+					Item.Size = Def->GetEffectiveDefaultSize();
 					Item.Pos = FIntPoint::ZeroValue;
 					bProduced = true;
 				}
@@ -404,4 +404,3 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 
 	return Result;
 }
-

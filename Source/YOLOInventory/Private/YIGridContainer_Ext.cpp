@@ -6,7 +6,7 @@ static FIntPoint Local_GetSize(const FYIItemInstance& I)
 {
 	if (UYIItemDefinition* Def = I.Definition.LoadSynchronous())
 	{
-		FIntPoint S = Def->DefaultSize;
+		FIntPoint S = Def->GetEffectiveDefaultSize();
 		if (I.bRotated) S = FIntPoint(S.Y, S.X);
 		return S;
 	}
@@ -39,7 +39,7 @@ bool UYIGridContainer::RotateItem(const FGuid& InstanceId)
 		if (E.Instance.InstanceId == InstanceId)
 		{
 			UYIItemDefinition* Def = E.Instance.Definition.LoadSynchronous();
-			if (!Def || !Def->bAllowRotation) return false;
+			if (!Def || !Def->IsEffectiveRotationAllowed()) return false;
 			// Toggle rotation and validate placement using the definition-derived size
 			FYIItemInstance Tmp = E.Instance;
 			Tmp.bRotated = !E.Instance.bRotated;

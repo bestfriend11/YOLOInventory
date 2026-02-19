@@ -797,7 +797,7 @@ bool UYIInventoryComponent::AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<UY
 	FYIBagItem New;
 	New.Item.Definition = ItemDef;
 	New.Item.Count = FMath::Max(1, Count);
-	New.Size = Def->DefaultSize;
+	New.Size = Def->GetEffectiveDefaultSize();
 	if (Def->bIsContainerItem)
 	{
 		New.Item.Count = 1;

@@ -460,7 +460,7 @@ void AYIPhase2TestMapActor::SeedStarterItems(UYIInventoryBag* MainBag, UYIInvent
 		FYIBagItem NewItem;
 		NewItem.Item.Definition = Def;
 		NewItem.Item.Count = FMath::Max(1, Entry.Count);
-		NewItem.Size = Def->DefaultSize;
+		NewItem.Size = Def->GetEffectiveDefaultSize();
 		NewItem.Pos = FIntPoint::ZeroValue;
 
 		const int32 NewIndex = TargetBag->AddBagItem(NewItem);

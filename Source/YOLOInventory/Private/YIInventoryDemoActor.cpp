@@ -30,11 +30,12 @@ int32 AYIInventoryDemoActor::AddItemToBag(UYIInventoryBag* Bag, UYIItemDefinitio
 {
 	if (!Bag || !Definition) return INDEX_NONE;
 	FIntPoint Pos;
-	if (!Bag->FindFirstFit(Definition->DefaultSize, Pos)) return INDEX_NONE;
+	const FIntPoint ItemSize = Definition->GetEffectiveDefaultSize();
+	if (!Bag->FindFirstFit(ItemSize, Pos)) return INDEX_NONE;
 	FYIBagItem NewItem;
 	NewItem.Item.Definition = TSoftObjectPtr<UYIItemDefinition>(Definition);
 	NewItem.Item.Count = FMath::Max(1, Count);
-	NewItem.Size = Definition->DefaultSize;
+	NewItem.Size = ItemSize;
 	NewItem.Pos = Pos;
 	return Bag->AddBagItem(NewItem);
 }

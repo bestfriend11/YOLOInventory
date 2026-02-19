@@ -364,7 +364,7 @@ bool UYIInventoryBag::RotateItem(int32 Index)
 	// Respect per-item rotation rule if available on the asset
 	const FYIBagItem& Cur = Items[Index];
 	UYIItemDefinition* Def = Cur.Item.Definition.IsValid() ? Cur.Item.Definition.Get() : Cur.Item.Definition.LoadSynchronous();
-	if (Def && !Def->bAllowRotation)
+	if (Def && !Def->IsEffectiveRotationAllowed())
 	{
 		return false;
 	}

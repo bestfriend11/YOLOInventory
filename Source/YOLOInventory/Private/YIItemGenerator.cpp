@@ -49,7 +49,10 @@ bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const U
 		return false;
 	}
 
-	if (Affix->Kind != ExpectedKind)
+	FYIAffixResolvedDefinitionData AffixData;
+	Affix->GetEffectiveDefinitionData(AffixData);
+
+	if (AffixData.Kind != ExpectedKind)
 	{
 		return false;
 	}
@@ -58,7 +61,7 @@ bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const U
 	{
 		const int32 MinTier = FMath::Min(Criteria.MinTier, Criteria.MaxTier);
 		const int32 MaxTier = FMath::Max(Criteria.MinTier, Criteria.MaxTier);
-		if (Affix->Tier < MinTier || Affix->Tier > MaxTier)
+		if (AffixData.Tier < MinTier || AffixData.Tier > MaxTier)
 		{
 			return false;
 		}
@@ -78,12 +81,12 @@ bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const U
 			MaxPower = FMath::Max(0, FMath::Max(Criteria.MinPowerLevel, Criteria.MaxPowerLevel));
 		}
 
-		if (Affix->PowerLevel < MinPower || Affix->PowerLevel > MaxPower)
+		if (AffixData.PowerLevel < MinPower || AffixData.PowerLevel > MaxPower)
 		{
 			return false;
 		}
 
-		const uint8 AffixQuality = static_cast<uint8>(Affix->Quality);
+		const uint8 AffixQuality = static_cast<uint8>(AffixData.Quality);
 		const uint8 MinQuality = static_cast<uint8>(Criteria.MinQuality);
 		const uint8 MaxQuality = static_cast<uint8>(Criteria.MaxQuality);
 		const uint8 QualityLow = FMath::Min(MinQuality, MaxQuality);
@@ -103,14 +106,14 @@ bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const U
 			return false;
 		}
 
-		if (!Affix->ConflictGroup.IsNone() && Criteria.BlockedConflictGroups.Contains(Affix->ConflictGroup))
+		if (!AffixData.ConflictGroup.IsNone() && Criteria.BlockedConflictGroups.Contains(AffixData.ConflictGroup))
 		{
 			return false;
 		}
 	}
 
 	// Respect item compatibility tags before trying to add.
-	if (ItemDef && !Affix->AllowedItemTags.IsEmpty() && !ItemDef->Tags.HasAny(Affix->AllowedItemTags))
+	if (ItemDef && !AffixData.AllowedItemTags.IsEmpty() && !ItemDef->Tags.HasAny(AffixData.AllowedItemTags))
 	{
 		return false;
 	}
@@ -144,7 +147,9 @@ int32 UYIItemGenerator::RollAffixesFromPool(UYIAffixPoolAsset* Pool, const UYIIt
 		{
 			continue;
 		}
-		if (static_cast<uint8>(Affix->Quality) < static_cast<uint8>(Entry.MinQuality))
+		FYIAffixResolvedDefinitionData AffixData;
+		Affix->GetEffectiveDefinitionData(AffixData);
+		if (static_cast<uint8>(AffixData.Quality) < static_cast<uint8>(Entry.MinQuality))
 		{
 			continue;
 		}
@@ -225,7 +230,7 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 
 	OutItem.Item.Definition = DefSoft;
 	OutItem.Item.Count = FMath::Max(1, Count);
-	OutItem.Size = Def->DefaultSize;
+	OutItem.Size = Def->GetEffectiveDefaultSize();
 
 	if (bApplyTemplateAffixes)
 	{
@@ -249,10 +254,25 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 
 	if (bGenerateRandomAffixes && (OutPrefixes > 0 || OutSuffixes > 0))
 	{
+		TArray<TSoftObjectPtr<UYIAffixAsset>> UnusedTemplateAffixes;
+		int32 UnusedMinMods = 0;
+		int32 UnusedMaxMods = 0;
+		TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
+		TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
+		Def->GetEffectiveAffixDefinition(
+			UnusedTemplateAffixes,
+			UnusedMinMods,
+			UnusedMaxMods,
+			EffectivePrefixPool,
+			EffectiveSuffixPool);
+		(void)UnusedTemplateAffixes;
+		(void)UnusedMinMods;
+		(void)UnusedMaxMods;
+
 		const TSoftObjectPtr<UYIAffixPoolAsset> PrefixPoolSoft =
-			ResolvePoolOverride(RarityRule.PrefixPoolOverride, PrefixPoolOverride, Def->PrefixPool, bUseDefinitionAffixPools);
+			ResolvePoolOverride(RarityRule.PrefixPoolOverride, PrefixPoolOverride, EffectivePrefixPool, bUseDefinitionAffixPools);
 		const TSoftObjectPtr<UYIAffixPoolAsset> SuffixPoolSoft =
-			ResolvePoolOverride(RarityRule.SuffixPoolOverride, SuffixPoolOverride, Def->SuffixPool, bUseDefinitionAffixPools);
+			ResolvePoolOverride(RarityRule.SuffixPoolOverride, SuffixPoolOverride, EffectiveSuffixPool, bUseDefinitionAffixPools);
 
 		FRandomStream RNG(Seed ^ 0x1234);
 		UYIAffixPoolAsset* PrefixPool = PrefixPoolSoft.IsValid() ? PrefixPoolSoft.Get() : PrefixPoolSoft.LoadSynchronous();

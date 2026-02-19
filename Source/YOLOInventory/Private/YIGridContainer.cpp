@@ -7,7 +7,7 @@ static FIntPoint GetSize(const FYIItemInstance& I)
 	// Size is derived from the definition's DefaultSize; take rotation into account
 	if (UYIItemDefinition* Def = I.Definition.LoadSynchronous())
 	{
-		FIntPoint S = Def->DefaultSize;
+		FIntPoint S = Def->GetEffectiveDefaultSize();
 		if (I.bRotated) { S = FIntPoint(S.Y, S.X); }
 		return S;
 	}

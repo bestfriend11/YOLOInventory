@@ -115,7 +115,25 @@ void AYIItemPickup::RefreshVisuals()
 		{
 			ItemInstance.Definition = Definition;
 		}
-		// If definition provides display info (future), hook mesh/icon here.
+
+		if (const FYIItemPickupDefinitionFragment* PickupFragment = Def->GetPickupDefinitionFragment())
+		{
+			if (UStaticMesh* DropMesh = PickupFragment->WorldMesh.IsValid()
+				? PickupFragment->WorldMesh.Get()
+				: PickupFragment->WorldMesh.LoadSynchronous())
+			{
+				MeshComponent->SetStaticMesh(DropMesh);
+			}
+
+			MeshComponent->SetRelativeScale3D(PickupFragment->MeshScale);
+
+			if (!PickupFragment->CollisionProfile.IsNone())
+			{
+				MeshComponent->SetCollisionProfileName(PickupFragment->CollisionProfile);
+			}
+
+			MeshComponent->SetSimulatePhysics(PickupFragment->bSimulatePhysicsOnDrop);
+		}
 	}
 
 	// Apply a lightweight color cue based on code for visual variety

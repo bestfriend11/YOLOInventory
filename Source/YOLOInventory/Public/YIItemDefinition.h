@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
+#include "StructUtils/InstancedStruct.h"
 // #include "YIUnlock.h" // unlock removed
 // #include "YICapabilities.h" // removed capabilities
 #include "YICapability.h"
@@ -10,10 +11,13 @@
 #include "YIItemVariant.h"
 #include "YIScriptGraph.h"
 #include "YIItemSFXLibrary.h"
+#include "YIItemFragments.h"
 #include "YIItemDefinition.generated.h"
 
 class UYIDataTableItemSource;
 class UYIInventoryBag;
+class UTexture2D;
+class UScriptStruct;
 
 /**
  * Primary item definition. Each definition must have a globally-unique numeric code.
@@ -143,6 +147,63 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Whether this item is linked to a data source row"))
 	bool bGeneratedFromDataSource = false;
+
+	/** Shared static fragments for this definition (loaded once and shared by all instances). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventory.YIItemDefinitionFragmentBase", ExcludeBaseStruct))
+	TArray<FInstancedStruct> DefinitionFragments;
+
+	/** Returns UI definition fragment if present. */
+	const FYIItemUIDefinitionFragment* GetUIDefinitionFragment() const;
+
+	/** Returns pickup definition fragment if present. */
+	const FYIItemPickupDefinitionFragment* GetPickupDefinitionFragment() const;
+
+	/** Returns equipment definition fragment if present. */
+	const FYIItemEquipmentDefinitionFragment* GetEquipmentDefinitionFragment() const;
+
+	/** Returns affix definition fragment if present. */
+	const FYIItemAffixDefinitionFragment* GetAffixDefinitionFragment() const;
+
+	/** Returns layout definition fragment if present. */
+	const FYIItemLayoutDefinitionFragment* GetLayoutDefinitionFragment() const;
+
+	/** Resolve display fields from static UI fragment with fallback to legacy fields. */
+	void GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const;
+
+	/** Resolve preferred equip slot from static equipment fragment with fallback to tag-based legacy resolution. */
+	FGameplayTag GetEffectivePrimaryEquipSlotTag() const;
+
+	/** Resolve occupied equip slots from static equipment fragment with fallback to legacy OccupiedEquipSlots. */
+	void GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const;
+
+	/** Find static definition fragment by script struct (exact type). */
+	const FInstancedStruct* FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+
+	/** Find or add static definition fragment by script struct (exact type). */
+	FInstancedStruct* FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
+
+	/** Returns stacking definition fragment if present. */
+	const FYIItemStackingDefinitionFragment* GetStackingDefinitionFragment() const;
+
+	/** Resolve effective affix generation data from legacy fields + optional static fragment override. */
+	void GetEffectiveAffixDefinition(
+		TArray<TSoftObjectPtr<class UYIAffixAsset>>& OutTemplateAffixes,
+		int32& OutMinRandomModifiers,
+		int32& OutMaxRandomModifiers,
+		TSoftObjectPtr<class UYIAffixPoolAsset>& OutPrefixPool,
+		TSoftObjectPtr<class UYIAffixPoolAsset>& OutSuffixPool) const;
+
+	/** Resolve effective layout rules from legacy fields + optional static fragment override. */
+	void GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const;
+
+	/** Effective default size helper. */
+	FIntPoint GetEffectiveDefaultSize() const;
+
+	/** Effective rotation policy helper. */
+	bool IsEffectiveRotationAllowed() const;
+
+	/** Resolve effective stacking rules from legacy fields + optional static fragment override. */
+	void GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const;
 
 	/** Returns whether this item can be safely stacked under runtime safety rules. */
 	bool IsRuntimeStackingAllowed(FString* OutReason = nullptr) const;

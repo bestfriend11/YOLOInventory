@@ -7,6 +7,7 @@
 #include "YIDataTableItemSource.generated.h"
 
 class UBlueprintFunctionLibrary;
+class UScriptStruct;
 UENUM(BlueprintType)
 enum class EYIFieldMappingConversion : uint8
 {
@@ -32,6 +33,14 @@ enum class EYITransformMode : uint8
 	HybridTransformerThenInline UMETA(DisplayName="Transformer then Inline")
 };
 
+UENUM(BlueprintType)
+enum class EYIFieldMappingTargetLayer : uint8
+{
+	LegacyProperty UMETA(DisplayName="Legacy Property"),
+	StaticDefinitionFragment UMETA(DisplayName="Static Definition Fragment"),
+	DynamicInstanceFragment UMETA(DisplayName="Dynamic Instance Fragment")
+};
+
 USTRUCT(BlueprintType)
 struct FYIFieldMapping
 {
@@ -52,6 +61,18 @@ struct FYIFieldMapping
 	/** Property name on the target item definition to write into. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")
 	FName TargetProperty;
+
+	/** Select where target writes are applied. Legacy keeps existing behavior. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2")
+	EYIFieldMappingTargetLayer TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
+
+	/** Fragment struct used when TargetLayer is a fragment layer. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty"))
+	TObjectPtr<UScriptStruct> TargetFragmentStruct = nullptr;
+
+	/** Field inside the fragment struct. Falls back to TargetProperty when empty. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty"))
+	FName TargetFragmentField = NAME_None;
 
 	/** Optional conversion applied before assigning to the target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")

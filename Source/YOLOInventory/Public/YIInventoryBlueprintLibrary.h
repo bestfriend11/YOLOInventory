@@ -83,6 +83,15 @@ class YOLOINVENTORY_API UYIInventoryBlueprintLibrary : public UBlueprintFunction
 public:
 	// Affix helpers
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Affixes")
+	static bool BuildAffixSnapshot(const class UYIAffixAsset* Affix, int32 Level, int32 Seed, bool bRollValue, struct FYIAffixInstance& OutSnapshot);
+
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Affixes")
+	static bool ValidateAffixSnapshot(const struct FYIAffixInstance& Snapshot, int32 Level, float Tolerance = 0.05f);
+
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Affixes")
+	static bool ApplyAffixSnapshot(UPARAM(ref) struct FYIBagItem& Item, const struct FYIAffixInstance& Snapshot, bool bValidateAgainstSource, int32 Level);
+
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Affixes")
 	static bool AddRolledAffix(struct FYIBagItem& Item, class UYIAffixAsset* Affix, int32 Level, int32 Seed, float& OutRolledValue);
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Affixes")
 	static int32 ApplyTemplateAffixesToInstance(const class UYIItemDefinition* Definition, struct FYIItemInstance& Instance);

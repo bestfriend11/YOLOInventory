@@ -19,17 +19,20 @@ namespace YIEquipmentPrivate
 {
 	static FYIItemInstanceNet FullToNet(const FYIItemInstance& Full)
 	{
+		FYIItemInstance Runtime = Full;
+		Runtime.SyncCoreFragmentsToLegacy();
+
 		FYIItemInstanceNet Out;
-		Out.Definition = Full.Definition;
-		Out.Count = Full.Count;
-		Out.InstanceId = Full.InstanceId;
-		Out.StackId = Full.StackId;
-		Out.CustomStackKey = Full.CustomStackKey;
-		Out.ContainedBagId = Full.ContainedBagId;
-		Out.bRotated = Full.bRotated;
-		Out.Affixes = Full.Affixes;
+		Out.Definition = Runtime.Definition;
+		Out.Count = Runtime.Count;
+		Out.InstanceId = Runtime.InstanceId;
+		Out.StackId = Runtime.StackId;
+		Out.CustomStackKey = Runtime.CustomStackKey;
+		Out.ContainedBagId = Runtime.ContainedBagId;
+		Out.bRotated = Runtime.bRotated;
+		Out.Affixes = Runtime.Affixes;
 		Out.Attributes.Reset();
-		for (const TPair<FName, float>& KV : Full.Attributes)
+		for (const TPair<FName, float>& KV : Runtime.Attributes)
 		{
 			FYIAttributeKV OutKV;
 			OutKV.Name = KV.Key;
@@ -55,6 +58,7 @@ namespace YIEquipmentPrivate
 		{
 			Out.Attributes.Add(KV.Name, KV.Value);
 		}
+		Out.SyncLegacyToCoreFragments();
 		return Out;
 	}
 }
@@ -228,6 +232,11 @@ FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDe
 		return FGameplayTag();
 	}
 
+	if (const FGameplayTag FragmentSlot = Definition->GetEffectivePrimaryEquipSlotTag(); FragmentSlot.IsValid())
+	{
+		return FragmentSlot;
+	}
+
 	TArray<FGameplayTag> ItemTags;
 	Definition->Tags.GetGameplayTagArray(ItemTags);
 	if (Definition->ItemType.IsValid())
@@ -265,6 +274,18 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 	{
 		// Support exact slot matches and child slots (e.g. item tag Equip.Slot.Chest matches Equip.Slot.Chest.01).
 		if (ResolvedSlot == SlotTag || SlotTag.MatchesTag(ResolvedSlot) || ResolvedSlot.MatchesTag(SlotTag))
+		{
+			return true;
+		}
+	}
+
+	FGameplayTagContainer OccupiedSlots;
+	Definition->GetEffectiveOccupiedEquipSlots(OccupiedSlots);
+	TArray<FGameplayTag> OccupiedSlotArray;
+	OccupiedSlots.GetGameplayTagArray(OccupiedSlotArray);
+	for (const FGameplayTag& OccupiedSlot : OccupiedSlotArray)
+	{
+		if (OccupiedSlot == SlotTag || SlotTag.MatchesTag(OccupiedSlot) || OccupiedSlot.MatchesTag(SlotTag))
 		{
 			return true;
 		}
@@ -728,6 +749,59 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	TArray<FGameplayTag> TargetSlots;
 	TargetSlots.Add(SlotTag);
 
+	FGameplayTagContainer OccupiedSlots;
+	Definition->GetEffectiveOccupiedEquipSlots(OccupiedSlots);
+	TArray<FGameplayTag> OccupiedSlotArray;
+	OccupiedSlots.GetGameplayTagArray(OccupiedSlotArray);
+	for (const FGameplayTag& OccupiedSlot : OccupiedSlotArray)
+	{
+		if (OccupiedSlot.IsValid())
+		{
+			TargetSlots.Add(OccupiedSlot);
+		}
+	}
+
+	auto ResolveToAllowedSlot = [this](FGameplayTag InSlot) -> FGameplayTag
+	{
+		if (IsAllowedSlot(InSlot))
+		{
+			return InSlot;
+		}
+		if (SlotDefinitions.Num() > 0)
+		{
+			for (const FYIEquipmentSlotDefinition& SlotDef : SlotDefinitions)
+			{
+				if (!SlotDef.SlotTag.IsValid())
+				{
+					continue;
+				}
+				if (SlotDef.SlotTag == InSlot || SlotDef.SlotTag.MatchesTag(InSlot) || InSlot.MatchesTag(SlotDef.SlotTag))
+				{
+					return SlotDef.SlotTag;
+				}
+			}
+		}
+		return InSlot;
+	};
+
+	for (FGameplayTag& TargetSlot : TargetSlots)
+	{
+		TargetSlot = ResolveToAllowedSlot(TargetSlot);
+	}
+
+	{
+		TSet<FGameplayTag> UniqueSlots;
+		TargetSlots = TargetSlots.FilterByPredicate([&UniqueSlots](const FGameplayTag& InTag)
+		{
+			if (!InTag.IsValid() || UniqueSlots.Contains(InTag))
+			{
+				return false;
+			}
+			UniqueSlots.Add(InTag);
+			return true;
+		});
+	}
+
 	for (const FGameplayTag& OccupiedSlot : TargetSlots)
 	{
 		if (!IsAllowedSlot(OccupiedSlot))
@@ -818,7 +892,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 				? ReturnItem.Item.Definition.Get()
 				: ReturnItem.Item.Definition.LoadSynchronous())
 			{
-				const FIntPoint BaseSize = ExistingDef->DefaultSize;
+				const FIntPoint BaseSize = ExistingDef->GetEffectiveDefaultSize();
 				ReturnItem.Size = ReturnItem.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
 			}
 			else
@@ -952,7 +1026,7 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 			? ToInventory.Item.Definition.Get()
 			: ToInventory.Item.Definition.LoadSynchronous())
 		{
-			const FIntPoint BaseSize = Def->DefaultSize;
+			const FIntPoint BaseSize = Def->GetEffectiveDefaultSize();
 			ToInventory.Size = ToInventory.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
 		}
 		else

@@ -29,6 +29,163 @@
 
 static UYIItemDefinition* YI_FindDefinitionByCode(int64 Code);
 
+namespace
+{
+	static void YI_GetEffectiveAffixDefinitionData(
+		const UYIItemDefinition* Definition,
+		TArray<TSoftObjectPtr<UYIAffixAsset>>& OutTemplateAffixes,
+		int32& OutMinRandomModifiers,
+		int32& OutMaxRandomModifiers,
+		TSoftObjectPtr<UYIAffixPoolAsset>& OutPrefixPool,
+		TSoftObjectPtr<UYIAffixPoolAsset>& OutSuffixPool)
+	{
+		OutTemplateAffixes.Reset();
+		OutMinRandomModifiers = 0;
+		OutMaxRandomModifiers = 0;
+		OutPrefixPool = nullptr;
+		OutSuffixPool = nullptr;
+
+		if (!Definition)
+		{
+			return;
+		}
+
+		Definition->GetEffectiveAffixDefinition(
+			OutTemplateAffixes,
+			OutMinRandomModifiers,
+			OutMaxRandomModifiers,
+			OutPrefixPool,
+			OutSuffixPool);
+	}
+}
+
+bool UYIInventoryBlueprintLibrary::BuildAffixSnapshot(const UYIAffixAsset* Affix, int32 Level, int32 Seed, bool bRollValue, FYIAffixInstance& OutSnapshot)
+{
+	OutSnapshot = FYIAffixInstance();
+	if (!Affix)
+	{
+		return false;
+	}
+
+	FYIAffixResolvedDefinitionData Effective;
+	Affix->GetEffectiveDefinitionData(Effective);
+
+	OutSnapshot.Source = const_cast<UYIAffixAsset*>(Affix);
+	OutSnapshot.SourceCode = Affix->UniqueCode;
+	OutSnapshot.SourceTemplateId = Affix->TemplateId;
+	OutSnapshot.TierRolled = FMath::Max(1, Effective.Tier);
+	OutSnapshot.Seed = Seed;
+	OutSnapshot.ConflictGroupCache = Effective.ConflictGroup;
+	OutSnapshot.DisplayNameCache = Effective.DisplayName;
+	OutSnapshot.KindCache = Effective.Kind;
+
+	float Rolled = Effective.MinValue;
+	if (bRollValue)
+	{
+		if (!FMath::IsNearlyEqual(Effective.MinValue, Effective.MaxValue))
+		{
+			FRandomStream Stream(Seed);
+			Rolled = Stream.FRandRange(Effective.MinValue, Effective.MaxValue);
+		}
+		if (Effective.ValueByLevel.GetRichCurveConst())
+		{
+			Rolled *= Effective.ValueByLevel.GetRichCurveConst()->Eval(Level, 1.f);
+		}
+		Rolled *= FMath::Max(1, Effective.PowerLevel);
+	}
+
+	OutSnapshot.RolledValue = Rolled;
+	return true;
+}
+
+bool UYIInventoryBlueprintLibrary::ValidateAffixSnapshot(const FYIAffixInstance& Snapshot, int32 Level, float Tolerance)
+{
+	UYIAffixAsset* Affix = Snapshot.Source.IsValid() ? Snapshot.Source.Get() : Snapshot.Source.LoadSynchronous();
+	if (!Affix)
+	{
+		return false;
+	}
+	if (Snapshot.SourceCode != 0 && Affix->UniqueCode != Snapshot.SourceCode)
+	{
+		return false;
+	}
+
+	FYIAffixResolvedDefinitionData Effective;
+	Affix->GetEffectiveDefinitionData(Effective);
+
+	if (!Snapshot.ConflictGroupCache.IsNone() && Snapshot.ConflictGroupCache != Effective.ConflictGroup)
+	{
+		return false;
+	}
+	if (Snapshot.TierRolled < 1)
+	{
+		return false;
+	}
+
+	if (Snapshot.Seed != 0)
+	{
+		FYIAffixInstance Expected;
+		if (!BuildAffixSnapshot(Affix, Level, Snapshot.Seed, true, Expected))
+		{
+			return false;
+		}
+		if (!FMath::IsNearlyEqual(Expected.RolledValue, Snapshot.RolledValue, Tolerance))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool UYIInventoryBlueprintLibrary::ApplyAffixSnapshot(FYIBagItem& Item, const FYIAffixInstance& Snapshot, bool bValidateAgainstSource, int32 Level)
+{
+	UYIAffixAsset* Affix = Snapshot.Source.IsValid() ? Snapshot.Source.Get() : Snapshot.Source.LoadSynchronous();
+	if (!Affix)
+	{
+		return false;
+	}
+
+	// Validate AllowedItemTags against the item's definition tags.
+	UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
+	if (!Def)
+	{
+		return false;
+	}
+
+	FYIAffixResolvedDefinitionData Effective;
+	Affix->GetEffectiveDefinitionData(Effective);
+
+	if (!Effective.AllowedItemTags.IsEmpty() && !Def->Tags.HasAny(Effective.AllowedItemTags))
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("ApplyAffixSnapshot: affix '%s' not allowed on item '%s' by tags"), *Affix->GetName(), *Def->GetName());
+		return false;
+	}
+
+	if (!Snapshot.ConflictGroupCache.IsNone())
+	{
+		for (const FYIAffixInstance& Existing : Item.Item.Affixes)
+		{
+			if (Existing.ConflictGroupCache == Snapshot.ConflictGroupCache)
+			{
+				UE_LOG(LogTemp, Verbose, TEXT("ApplyAffixSnapshot: affix '%s' conflicts with group '%s'"), *Affix->GetName(), *Snapshot.ConflictGroupCache.ToString());
+				return false;
+			}
+		}
+	}
+
+	if (bValidateAgainstSource && !ValidateAffixSnapshot(Snapshot, Level))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("ApplyAffixSnapshot: validation failed for affix '%s'."), *Affix->GetName());
+		return false;
+	}
+
+	Item.Item.Affixes.Add(Snapshot);
+	Item.Item.SyncLegacyToCoreFragments();
+	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Item.Item);
+	return true;
+}
+
 bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsset* Affix, int32 Level, int32 Seed, float& OutRolledValue)
 {
 	OutRolledValue = 0.f;
@@ -36,55 +193,16 @@ bool UYIInventoryBlueprintLibrary::AddRolledAffix(FYIBagItem& Item, UYIAffixAsse
 	{
 		return false;
 	}
-	// Validate AllowedItemTags against the item's definition tags
-	UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
-	if (!Def)
+	FYIAffixInstance Snapshot;
+	if (!BuildAffixSnapshot(Affix, Level, Seed, true, Snapshot))
 	{
 		return false;
 	}
-	if (!Affix->AllowedItemTags.IsEmpty() && !Def->Tags.HasAny(Affix->AllowedItemTags))
+	if (!ApplyAffixSnapshot(Item, Snapshot, true, Level))
 	{
-		// Affix not allowed on this item
-		UE_LOG(LogTemp, Verbose, TEXT("AddRolledAffix: affix '%s' not allowed on item '%s' by tags"), *Affix->GetName(), *Def->GetName());
 		return false;
 	}
-	// Check conflict group (avoid adding duplicates)
-	if (!Affix->ConflictGroup.IsNone())
-	{
-		for (const FYIAffixInstance& Existing : Item.Item.Affixes)
-		{
-			if (Existing.ConflictGroupCache == Affix->ConflictGroup)
-			{
-				UE_LOG(LogTemp, Verbose, TEXT("AddRolledAffix: affix '%s' conflicts with existing affix group '%s'"), *Affix->GetName(), *Affix->ConflictGroup.ToString());
-				return false;
-			}
-		}
-	}
-
-	FRandomStream Stream(Seed);
-	float Rolled = Affix->MinValue;
-	if (!FMath::IsNearlyEqual(Affix->MinValue, Affix->MaxValue))
-	{
-		Rolled = Stream.FRandRange(Affix->MinValue, Affix->MaxValue);
-	}
-	if (Affix->ValueByLevel.GetRichCurveConst())
-	{
-		Rolled *= Affix->ValueByLevel.GetRichCurveConst()->Eval(Level, 1.f);
-	}
-	// Apply affix power level as an additional multiplier
-	Rolled *= FMath::Max(1, Affix->PowerLevel);
-	FYIAffixInstance NewInst;
-	NewInst.Source = Affix;
-	NewInst.TierRolled = FMath::Max(1, Affix->Tier);
-	NewInst.RolledValue = Rolled;
-	NewInst.Seed = Seed;
-	NewInst.ConflictGroupCache = Affix->ConflictGroup;
-	NewInst.DisplayNameCache = Affix->DisplayName;
-	Item.Item.Affixes.Add(NewInst);
-	Item.Item.SyncLegacyToCoreFragments();
-	// Update stacking key to reflect new affix set
-	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Item.Item);
-	OutRolledValue = Rolled;
+	OutRolledValue = Snapshot.RolledValue;
 	return true;
 }
 
@@ -94,37 +212,46 @@ int32 UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(const UYIItem
 	{
 		return 0;
 	}
+
+	TArray<TSoftObjectPtr<UYIAffixAsset>> EffectiveTemplateAffixes;
+	int32 EffectiveMin = 0;
+	int32 EffectiveMax = 0;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
+	YI_GetEffectiveAffixDefinitionData(Definition, EffectiveTemplateAffixes, EffectiveMin, EffectiveMax, EffectivePrefixPool, EffectiveSuffixPool);
+
 	int32 Added = 0;
-	for (const TSoftObjectPtr<UYIAffixAsset>& TmplSoft : Definition->TemplateAffixes)
+	for (const TSoftObjectPtr<UYIAffixAsset>& TmplSoft : EffectiveTemplateAffixes)
 	{
 		UYIAffixAsset* A = TmplSoft.IsValid() ? TmplSoft.Get() : TmplSoft.LoadSynchronous();
 		if (A)
 		{
+			FYIAffixResolvedDefinitionData EffectiveAffixData;
+			A->GetEffectiveDefinitionData(EffectiveAffixData);
+
 			// Validate allowed tags on definition
-			if (!A->AllowedItemTags.IsEmpty() && !Definition->Tags.HasAny(A->AllowedItemTags))
+			if (!EffectiveAffixData.AllowedItemTags.IsEmpty() && !Definition->Tags.HasAny(EffectiveAffixData.AllowedItemTags))
 			{
 				UE_LOG(LogTemp, Verbose, TEXT("ApplyTemplateAffixesToInstance: skipping affix '%s' due to AllowedItemTags"), *A->GetName());
 				continue;
 			}
 			// Skip if conflict group already present
-			if (!A->ConflictGroup.IsNone())
+			if (!EffectiveAffixData.ConflictGroup.IsNone())
 			{
 				bool bFound = false;
 				for (const FYIAffixInstance& Existing : Instance.Affixes)
 				{
-					if (Existing.ConflictGroupCache == A->ConflictGroup) { bFound = true; break; }
+					if (Existing.ConflictGroupCache == EffectiveAffixData.ConflictGroup) { bFound = true; break; }
 				}
 				if (bFound) { UE_LOG(LogTemp, Verbose, TEXT("ApplyTemplateAffixesToInstance: skipping affix '%s' due to ConflictGroup"), *A->GetName()); continue; }
 			}
 
-			FYIAffixInstance NewInst;
-			NewInst.Source = A;
-			NewInst.TierRolled = FMath::Max(1, A->Tier);
-			NewInst.RolledValue = 0.f; // templates carry fixed text/effects; no roll
-			NewInst.Seed = 0;
-			NewInst.ConflictGroupCache = A->ConflictGroup;
-			NewInst.DisplayNameCache = A->DisplayName;
-			Instance.Affixes.Add(NewInst);
+			FYIAffixInstance Snapshot;
+			if (!BuildAffixSnapshot(A, 1, 0, false, Snapshot))
+			{
+				continue;
+			}
+			Instance.Affixes.Add(Snapshot);
 			++Added;
 		}
 	}
@@ -145,11 +272,18 @@ bool UYIInventoryBlueprintLibrary::GenerateAffixesForInstance(FYIBagItem& Item, 
 {
 	// If caller didn't specify counts, use definition's Min/MaxRandomModifiers to derive totals
 	UYIItemDefinition* DefForCounts = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
+	TArray<TSoftObjectPtr<UYIAffixAsset>> EffectiveTemplateAffixes;
+	int32 EffectiveMinMods = 0;
+	int32 EffectiveMaxMods = 0;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
+	YI_GetEffectiveAffixDefinitionData(DefForCounts, EffectiveTemplateAffixes, EffectiveMinMods, EffectiveMaxMods, EffectivePrefixPool, EffectiveSuffixPool);
+
 	if (DefForCounts && NumPrefixes <= 0 && NumSuffixes <= 0)
 	{
 		FRandomStream CStream(Seed ^ 0x5F3759DF);
-		const int32 MinMods = FMath::Max(0, DefForCounts->MinRandomModifiers);
-		const int32 MaxMods = FMath::Max(MinMods, DefForCounts->MaxRandomModifiers);
+		const int32 MinMods = FMath::Max(0, EffectiveMinMods);
+		const int32 MaxMods = FMath::Max(MinMods, EffectiveMaxMods);
 		const int32 TotalMods = (MaxMods > MinMods) ? CStream.RandRange(MinMods, MaxMods) : MinMods;
 		// Split approximately half/half between prefix/suffix, bias prefix when odd
 		NumPrefixes = TotalMods / 2 + (TotalMods & 1);
@@ -182,8 +316,8 @@ bool UYIInventoryBlueprintLibrary::GenerateAffixesForInstance(FYIBagItem& Item, 
 		return Got;
 	};
 
-	SampleFromPool(Def->PrefixPool, NumPrefixes);
-	SampleFromPool(Def->SuffixPool, NumSuffixes);
+	SampleFromPool(EffectivePrefixPool, NumPrefixes);
+	SampleFromPool(EffectiveSuffixPool, NumSuffixes);
 
 	return Added > 0;
 }
@@ -337,7 +471,7 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 bool UYIInventoryBlueprintLibrary::GetFirstEmptyPosForItem(const UYIInventoryBag* Bag, const UYIItemDefinition* Definition, FIntPoint& OutPos)
 {
 	if (!Bag || !Definition) return false;
-	return Bag->FindFirstFit(Definition->DefaultSize, OutPos);
+	return Bag->FindFirstFit(Definition->GetEffectiveDefaultSize(), OutPos);
 }
 
 bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int64 Code, int32 Count)
@@ -356,7 +490,7 @@ bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int6
 
 	FYIBagItem NewItem;
 	NewItem.Item = UYIItemBlueprintLibrary::MakeItemInstanceByCode(Code, Count);
-	NewItem.Size = Def->DefaultSize;
+	NewItem.Size = Def->GetEffectiveDefaultSize();
 	int32 NewIdx = Bag->AddBagItem(NewItem);
 	return NewIdx != INDEX_NONE;
 }
@@ -381,8 +515,13 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 		RuntimeAttributes = &AttrFragment->Values;
 	}
 
-	OutData.NameBase = Def->DisplayName;
-	OutData.Title = Def->DisplayName;
+	FText EffectiveDisplayName;
+	FText EffectiveDescription;
+	TSoftObjectPtr<UTexture2D> EffectiveIcon;
+	Def->GetEffectiveDisplayData(EffectiveDisplayName, EffectiveDescription, EffectiveIcon);
+
+	OutData.NameBase = EffectiveDisplayName;
+	OutData.Title = EffectiveDisplayName;
 	// Simple prefix/suffix extraction from affixes (best-effort)
 	if (RuntimeAffixes->Num() > 0)
 	{
@@ -410,17 +549,26 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	OutData.RarityColor = UYIInventoryBlueprintLibrary::GetColorForRarityTag(Def->RarityTag);
 	// Peek at a UI stack entry if present for description and icon
 	// We do not keep a runtime merged stack list here; just use asset fields if available
-	OutData.Description = Def->Description;
-	OutData.Icon = Def->Icon;
+	OutData.Description = EffectiveDescription;
+	OutData.Icon = EffectiveIcon;
 	// Affix preview lines
 	OutData.AffixLines.Reset();
 	// 1) Template affixes from definition
-	for (const TSoftObjectPtr<UYIAffixAsset>& TmplSoft : Def->TemplateAffixes)
+	TArray<TSoftObjectPtr<UYIAffixAsset>> EffectiveTemplateAffixes;
+	int32 EffectiveMinMods = 0;
+	int32 EffectiveMaxMods = 0;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
+	TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
+	YI_GetEffectiveAffixDefinitionData(Def, EffectiveTemplateAffixes, EffectiveMinMods, EffectiveMaxMods, EffectivePrefixPool, EffectiveSuffixPool);
+
+	for (const TSoftObjectPtr<UYIAffixAsset>& TmplSoft : EffectiveTemplateAffixes)
 	{
 		UYIAffixAsset* Src = TmplSoft.IsValid() ? TmplSoft.Get() : TmplSoft.LoadSynchronous();
 		if (Src)
 		{
-			FText Line = !Src->TooltipFormat.IsEmpty() ? Src->TooltipFormat : Src->DisplayName;
+			FYIAffixResolvedDefinitionData AffixData;
+			Src->GetEffectiveDefinitionData(AffixData);
+			FText Line = !AffixData.TooltipFormat.IsEmpty() ? AffixData.TooltipFormat : AffixData.DisplayName;
 			OutData.AffixLines.Add(Line);
 		}
 	}
@@ -430,13 +578,15 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 		UYIAffixAsset* Src = A.Source.IsValid() ? A.Source.Get() : A.Source.LoadSynchronous();
 		if (Src)
 		{
+			FYIAffixResolvedDefinitionData AffixData;
+			Src->GetEffectiveDefinitionData(AffixData);
 			// Format using TooltipFormat if provided; fallback to DisplayName
 			FText Line;
-			if (!Src->TooltipFormat.IsEmpty())
+			if (!AffixData.TooltipFormat.IsEmpty())
 			{
 				// One-arg replacement: {0}
 				FFormatNamedArguments Args; Args.Add(TEXT("0"), FText::AsNumber(A.RolledValue));
-				Line = FText::Format(Src->TooltipFormat, Args);
+				Line = FText::Format(AffixData.TooltipFormat, Args);
 			}
 			else if (!A.DisplayNameCache.IsEmpty())
 			{
@@ -444,7 +594,7 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 			}
 			else
 			{
-				Line = Src->DisplayName;
+				Line = AffixData.DisplayName;
 			}
 			OutData.AffixLines.Add(Line);
 		}
@@ -526,7 +676,7 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 	FIntPoint Sz(1,1);
 	if (UYIItemDefinition* Def = Instance.Definition.IsValid() ? Instance.Definition.Get() : Instance.Definition.LoadSynchronous())
 	{
-		Sz = Def->DefaultSize;
+		Sz = Def->GetEffectiveDefaultSize();
 		if (Instance.bRotated) Sz = FIntPoint(Sz.Y, Sz.X);
 	}
 	Desc += FString::Printf(TEXT("|S%d,%d"), Sz.X, Sz.Y);
@@ -548,9 +698,11 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 	Parts.Reserve(AffixSource->Num());
 	for (const FYIAffixInstance& A : *AffixSource)
 	{
-		FString Src = A.Source.ToSoftObjectPath().ToString();
-		FString Val = FString::Printf(TEXT("%.4f"), A.RolledValue);
-		Parts.Add(Src + TEXT(":") + Val);
+		const FString Src = (A.SourceCode != 0)
+			? FString::Printf(TEXT("Code:%lld"), (long long)A.SourceCode)
+			: A.Source.ToSoftObjectPath().ToString();
+		const FString Val = FString::Printf(TEXT("%.4f"), A.RolledValue);
+		Parts.Add(FString::Printf(TEXT("%s:%d:%s"), *Src, (int32)A.KindCache, *Val));
 	}
 	Parts.Sort();
 	for (const FString& P : Parts) Desc += TEXT("|") + P;
@@ -910,7 +1062,7 @@ bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, co
 	FYIBagItem NewItem;
 	NewItem.Item = Instance;
 	NewItem.Item.SyncLegacyToCoreFragments();
-	NewItem.Size = Def->DefaultSize;
+	NewItem.Size = Def->GetEffectiveDefaultSize();
 	int32 AddedIdx = Bag->AddBagItem(NewItem);
 	return AddedIdx != INDEX_NONE;
 }
