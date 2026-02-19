@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
+#include "YIGeneratorDashboardBridge.h"
 
 class SYIItemDashboard;
 class SYIAffixDashboard;
-class SYIGeneratorDashboard;
 class SYIUnifiedHelpPanel;
 
 enum class EYIUnifiedDashboardTab : uint8
@@ -35,7 +35,7 @@ private:
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
-	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
+	TSharedPtr<IYIGeneratorDashboardBridge> GeneratorDashboard;
 
 	EYIUnifiedDashboardTab GetActiveTab() const { return ActiveTab; }
 	void HandleTabChanged(EYIUnifiedDashboardTab NewTab);

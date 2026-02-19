@@ -7,12 +7,9 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Kismet/GameplayStatics.h"
-#include "YITradeSessionActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "Net/UnrealNetwork.h"
 #include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
-#include "YIShopComponent.h"
 #include "YIDebugLibrary.h"
 
 namespace YIInventoryComponentUIBindings

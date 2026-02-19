@@ -18,8 +18,7 @@ public class YOLOInventory : ModuleRules
             "NiagaraCore", "GameplayAbilities", "GameplayTasks", "Slate", "SlateCore",
             "CSVItemBuilder",
             "YOLOInventoryCore",
-            "YOLOInventorySchema",
-            "YOLOInventoryEquipment"
+            "YOLOInventorySchema"
         });
 
         if (Target.bBuildEditor)
@@ -50,9 +49,5 @@ public class YOLOInventory : ModuleRules
             });
         }
 
-        CircularlyReferencedDependentModules.AddRange(new string[]
-        {
-            "YOLOInventoryEquipment"
-        });
     }
 }

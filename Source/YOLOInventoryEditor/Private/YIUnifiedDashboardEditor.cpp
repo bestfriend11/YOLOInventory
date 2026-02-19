@@ -1,7 +1,6 @@
 #include "YIUnifiedDashboardEditor.h"
 #include "SYIItemDashboard.h"
 #include "SYIAffixDashboard.h"
-#include "SYIGeneratorDashboard.h"
 #include "SYICraftingDashboard.h"
 #include "SYICatalogDashboard.h"
 #include "SYIUnifiedDashboard.h"
@@ -14,16 +13,14 @@
 #include "Engine/DataTable.h"
 #include "YIAffixAsset.h"
 #include "YIAffixPoolAsset.h"
-#include "YILootTable.h"
-#include "YIRarityProfile.h"
-#include "YIItemGenerator.h"
 #include "YIInventoryBag.h"
-#include "YIEquipmentSchemaAsset.h"
 #include "Widgets/Docking/SDockTab.h"
+#include "Widgets/Text/STextBlock.h"
 #include "Framework/Docking/TabManager.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "Styling/AppStyle.h"
 #include "FileHelpers.h"
+#include "UObject/UObjectGlobals.h"
 
 static const FName Tab_Dashboard_Items(TEXT("YOLOInventory_Dashboard_Items"));
 static const FName Tab_Dashboard_Catalog(TEXT("YOLOInventory_Dashboard_Catalog"));
@@ -52,6 +49,43 @@ static bool YIUnifiedDashboard_ShouldPanelStealMode(EYIUnifiedDashboardTab Activ
 	(void)ActiveTab;
 	// Mode changes are explicit via mode controls, not by activating helper panels.
 	return false;
+}
+
+namespace
+{
+	static UClass* YIUnifiedDashboard_LoadOptionalClass(const TCHAR* ClassPath)
+	{
+		if (!ClassPath || !*ClassPath)
+		{
+			return nullptr;
+		}
+		return LoadObject<UClass>(nullptr, ClassPath);
+	}
+
+	static bool YIUnifiedDashboard_IsAssetOfOptionalClass(UObject* Asset, const TCHAR* ClassPath)
+	{
+		if (!Asset)
+		{
+			return false;
+		}
+		if (UClass* OptionalClass = YIUnifiedDashboard_LoadOptionalClass(ClassPath))
+		{
+			return Asset->IsA(OptionalClass);
+		}
+		return false;
+	}
+
+	static bool YIUnifiedDashboard_IsLootAsset(UObject* Asset)
+	{
+		return YIUnifiedDashboard_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YILootTable"))
+			|| YIUnifiedDashboard_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIRarityProfile"))
+			|| YIUnifiedDashboard_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIItemGenerator"));
+	}
+
+	static bool YIUnifiedDashboard_IsEquipmentSchemaAsset(UObject* Asset)
+	{
+		return YIUnifiedDashboard_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryEquipment.YIEquipmentSchemaAsset"));
+	}
 }
 
 void FYIUnifiedDashboardEditor::InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, UObject* AssetToFocus)
@@ -485,7 +519,14 @@ void FYIUnifiedDashboardEditor::CreateWidgetsIfNeeded()
 	}
 	if (!GeneratorDashboard.IsValid())
 	{
-		GeneratorDashboard = SNew(SYIGeneratorDashboard).LayoutMode(EYIGeneratorDashboardLayout::AssetListOnly);
+		if (IYOLOInventoryEditorCoreModule::IsAvailable())
+		{
+			IYOLOInventoryEditorCoreModule& EditorCoreModule = IYOLOInventoryEditorCoreModule::Get();
+			if (EditorCoreModule.HasGeneratorDashboardFactory())
+			{
+				GeneratorDashboard = EditorCoreModule.CreateGeneratorDashboardBridge();
+			}
+		}
 	}
 	if (!CraftingDashboard.IsValid())
 	{
@@ -558,7 +599,9 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnGeneratorsTab(const FSpawnT
 	TSharedRef<SDockTab> Tab = SNew(SDockTab)
 		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabGeneratorsLabel", "Generators"))
 		[
-			GeneratorDashboard.ToSharedRef()
+			GeneratorDashboard.IsValid()
+				? GeneratorDashboard->GetRootWidget()
+				: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "GeneratorDashboardMissing", "YOLOInventoryEditorLoot plugin is not enabled."))
 		];
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{
@@ -790,7 +833,9 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnGeneratorDetailsTab(const F
 	TSharedRef<SDockTab> Tab = SNew(SDockTab)
 		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabGeneratorDetailsLabel", "Generator Details"))
 		[
-			GeneratorDashboard->GetDetailsPanelWidget()
+			GeneratorDashboard.IsValid()
+				? GeneratorDashboard->GetDetailsPanelWidget()
+				: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "GeneratorDashboardDetailsMissing", "Generator dashboard unavailable."))
 		];
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{
@@ -808,7 +853,9 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnGeneratorTestTab(const FSpa
 	TSharedRef<SDockTab> Tab = SNew(SDockTab)
 		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabGeneratorTestLabel", "Generator Test"))
 		[
-			GeneratorDashboard->GetTestPanelWidget()
+			GeneratorDashboard.IsValid()
+				? GeneratorDashboard->GetTestPanelWidget()
+				: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "GeneratorDashboardTestMissing", "Generator dashboard unavailable."))
 		];
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{
@@ -1086,9 +1133,9 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 	}
 
 	// In Bags/Crafting modes, keep focus there for item selection workflows.
-	if (ActiveTab == EYIUnifiedDashboardTab::Bags && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIEquipmentSchemaAsset>()))
+	if (ActiveTab == EYIUnifiedDashboardTab::Bags && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || YIUnifiedDashboard_IsEquipmentSchemaAsset(Asset)))
 	{
-		if (Asset->IsA<UYIEquipmentSchemaAsset>())
+		if (YIUnifiedDashboard_IsEquipmentSchemaAsset(Asset))
 		{
 			SetActiveTab(EYIUnifiedDashboardTab::Equipment);
 			if (BagDashboard.IsValid())
@@ -1103,7 +1150,7 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 		}
 		return;
 	}
-	if (ActiveTab == EYIUnifiedDashboardTab::Equipment && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIEquipmentSchemaAsset>()))
+	if (ActiveTab == EYIUnifiedDashboardTab::Equipment && (Asset->IsA<UYIInventoryBag>() || Asset->IsA<UYIItemDefinition>() || YIUnifiedDashboard_IsEquipmentSchemaAsset(Asset)))
 	{
 		if (BagDashboard.IsValid())
 		{
@@ -1144,7 +1191,7 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 		return;
 	}
 
-	if (Asset->IsA<UYILootTable>() || Asset->IsA<UYIRarityProfile>() || Asset->IsA<UYIItemGenerator>())
+	if (YIUnifiedDashboard_IsLootAsset(Asset))
 	{
 		SetActiveTab(EYIUnifiedDashboardTab::Generators);
 		if (GeneratorDashboard.IsValid())
@@ -1168,7 +1215,7 @@ void FYIUnifiedDashboardEditor::OpenAsset(UObject* Asset)
 		return;
 	}
 
-	if (Asset->IsA<UYIEquipmentSchemaAsset>())
+	if (YIUnifiedDashboard_IsEquipmentSchemaAsset(Asset))
 	{
 		SetActiveTab(EYIUnifiedDashboardTab::Equipment);
 		if (BagDashboard.IsValid())

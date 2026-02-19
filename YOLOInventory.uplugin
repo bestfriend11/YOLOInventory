@@ -36,9 +36,7 @@
     { "Name": "CSVItemBuilder", "Enabled": true },
     { "Name": "YOLOInventoryCore", "Enabled": true },
     { "Name": "YOLOInventorySchema", "Enabled": true },
-    { "Name": "YOLOInventoryEditorCore", "Enabled": true },
-    { "Name": "YOLOInventoryLoot", "Enabled": true },
-    { "Name": "YOLOInventoryEquipment", "Enabled": true }
+    { "Name": "YOLOInventoryEditorCore", "Enabled": true }
   ],
   "SupportedTargetPlatforms": [
     "Win64"

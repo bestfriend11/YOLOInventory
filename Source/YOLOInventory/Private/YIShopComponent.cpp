@@ -5,13 +5,113 @@
 #include "Engine/World.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
-#include "YIPlayerInventoryStateComponent.h"
 #include "YIItemDefinition.h"
 #include "YIItemBlueprintLibrary.h"
 #include "YITradeInteractionComponent.h"
 #include "YIDebugLibrary.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/ActorComponent.h"
+
+namespace YIShopPrivate
+{
+	static UObject* ResolveResourceProvider(APlayerState* PlayerState)
+	{
+		if (!PlayerState)
+		{
+			return nullptr;
+		}
+
+		TInlineComponentArray<UActorComponent*> Components(PlayerState);
+		for (UActorComponent* Component : Components)
+		{
+			if (!Component)
+			{
+				continue;
+			}
+			if (Component->FindFunction(TEXT("GetResourceAmount")) &&
+				Component->FindFunction(TEXT("ConsumeResource")) &&
+				Component->FindFunction(TEXT("AddResource")))
+			{
+				return Component;
+			}
+		}
+
+		return nullptr;
+	}
+
+	static int64 GetResourceAmount(UObject* Provider, FName ResourceName)
+	{
+		if (!Provider)
+		{
+			return 0;
+		}
+
+		struct FGetResourceAmountParams
+		{
+			FName InResourceName = NAME_None;
+			int64 ReturnValue = 0;
+		};
+
+		if (UFunction* Fn = Provider->FindFunction(TEXT("GetResourceAmount")))
+		{
+			FGetResourceAmountParams Params;
+			Params.InResourceName = ResourceName;
+			Provider->ProcessEvent(Fn, &Params);
+			return Params.ReturnValue;
+		}
+
+		return 0;
+	}
+
+	static bool ConsumeResource(UObject* Provider, FName ResourceName, int64 Amount)
+	{
+		if (!Provider)
+		{
+			return false;
+		}
+
+		struct FConsumeResourceParams
+		{
+			FName InResourceName = NAME_None;
+			int64 InAmount = 0;
+			bool ReturnValue = false;
+		};
+
+		if (UFunction* Fn = Provider->FindFunction(TEXT("ConsumeResource")))
+		{
+			FConsumeResourceParams Params;
+			Params.InResourceName = ResourceName;
+			Params.InAmount = Amount;
+			Provider->ProcessEvent(Fn, &Params);
+			return Params.ReturnValue;
+		}
+
+		return false;
+	}
+
+	static void AddResource(UObject* Provider, FName ResourceName, int64 Delta)
+	{
+		if (!Provider)
+		{
+			return;
+		}
+
+		struct FAddResourceParams
+		{
+			FName InResourceName = NAME_None;
+			int64 InDelta = 0;
+		};
+
+		if (UFunction* Fn = Provider->FindFunction(TEXT("AddResource")))
+		{
+			FAddResourceParams Params;
+			Params.InResourceName = ResourceName;
+			Params.InDelta = Delta;
+			Provider->ProcessEvent(Fn, &Params);
+		}
+	}
+}
 
 static void NotifyShopActionResult(APlayerState* PlayerState, UYIShopComponent* Shop, bool bSuccess, const FText& Reason)
 {
@@ -74,16 +174,16 @@ const FYIShopListing* UYIShopComponent::FindListing(int64 ItemCode) const
     return Listings.FindByPredicate([&](const FYIShopListing& L){ return L.ItemCode == ItemCode; });
 }
 
-bool UYIShopComponent::ConsumePrice(UYIPlayerInventoryStateComponent* BuyerState, int64 ItemCode, int32 Count)
+bool UYIShopComponent::ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count)
 {
-    if (!BuyerState) return false;
+    if (!ResourceProvider) return false;
     const FYIShopListing* Listing = FindListing(ItemCode);
     if (!Listing) return true; // free
 
     // Check first
     for (const FYIShopPrice& Price : Listing->Prices)
     {
-        if (BuyerState->GetResourceAmount(Price.Resource) < Price.Amount * Count)
+        if (YIShopPrivate::GetResourceAmount(ResourceProvider, Price.Resource) < Price.Amount * Count)
         {
             return false;
         }
@@ -91,7 +191,7 @@ bool UYIShopComponent::ConsumePrice(UYIPlayerInventoryStateComponent* BuyerState
     // Consume
     for (const FYIShopPrice& Price : Listing->Prices)
     {
-        BuyerState->ConsumeResource(Price.Resource, Price.Amount * Count);
+        YIShopPrivate::ConsumeResource(ResourceProvider, Price.Resource, Price.Amount * Count);
     }
     return true;
 }
@@ -106,7 +206,7 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     {
         BuyerPS = BuyerPawn->GetController()->PlayerState;
     }
-    UYIPlayerInventoryStateComponent* BuyerState = BuyerPS ? BuyerPS->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
+    UObject* BuyerResourceProvider = YIShopPrivate::ResolveResourceProvider(BuyerPS);
     UYIInventoryBag* StockBag = GetStockForPlayer(BuyerPS);
     if (!StockBag)
     {
@@ -149,7 +249,7 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
         }
     }
 
-    if (!ConsumePrice(BuyerState, Code, Count))
+    if (!ConsumePrice(BuyerResourceProvider, Code, Count))
     {
         OnShopPurchase.Broadcast(BuyerPS, Code, Count, false);
         NotifyShopActionResult(BuyerPS, this, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoFunds", "Not enough resources"));
@@ -181,14 +281,14 @@ void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Coun
     if (Added == INDEX_NONE)
     {
         // refund resources
-        if (BuyerState)
+        if (BuyerResourceProvider)
         {
             const FYIShopListing* Listing = FindListing(Code);
             if (Listing)
             {
                 for (const FYIShopPrice& Price : Listing->Prices)
                 {
-                    BuyerState->AddResource(Price.Resource, Price.Amount * Count);
+                    YIShopPrivate::AddResource(BuyerResourceProvider, Price.Resource, Price.Amount * Count);
                 }
             }
         }
@@ -247,7 +347,7 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
     {
         SellerPS = SellerPawn->GetController()->PlayerState;
     }
-    UYIPlayerInventoryStateComponent* SellerState = SellerPS ? SellerPS->FindComponentByClass<UYIPlayerInventoryStateComponent>() : nullptr;
+    UObject* SellerResourceProvider = YIShopPrivate::ResolveResourceProvider(SellerPS);
 
     UYIInventoryBag* SellerBag = SellerInv->GetBag();
     if (!SellerBag || !SellerBag->Items.IsValidIndex(SourceIndex))
@@ -325,14 +425,14 @@ void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Co
     }
 
     // Pay seller if listing exists.
-    if (SellerState && Listing)
+    if (SellerResourceProvider && Listing)
     {
         for (const FYIShopPrice& Price : Listing->Prices)
         {
             const int64 Pay = static_cast<int64>(Price.Amount * Count * SellPriceMultiplier);
             if (Pay > 0)
             {
-                SellerState->AddResource(Price.Resource, Pay);
+                YIShopPrivate::AddResource(SellerResourceProvider, Price.Resource, Pay);
             }
         }
     }

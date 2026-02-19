@@ -3,7 +3,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "YIInventoryTypes.h"
-#include "YIPlayerInventoryStateComponent.h" // for FYIResourceWallet
+#include "YIInventoryBag.h"
+#include "YIResourceWalletTypes.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "YITradeSessionActor.generated.h"

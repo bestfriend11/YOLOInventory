@@ -4,10 +4,10 @@
 #include "WorkflowOrientedApp/WorkflowCentricApplication.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardContext.h"
+#include "YIGeneratorDashboardBridge.h"
 
 class SYIItemDashboard;
 class SYIAffixDashboard;
-class SYIGeneratorDashboard;
 class SYICraftingDashboard;
 class SYICatalogDashboard;
 class SYIUnifiedHelpPanel;
@@ -70,7 +70,7 @@ private:
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
 	TSharedPtr<SYICatalogDashboard> CatalogDashboard;
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
-	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
+	TSharedPtr<IYIGeneratorDashboardBridge> GeneratorDashboard;
 	TSharedPtr<SYICraftingDashboard> CraftingDashboard;
 	TSharedPtr<IYIBagDashboardBridge> BagDashboard;
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;

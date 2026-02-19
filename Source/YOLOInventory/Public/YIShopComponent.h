@@ -7,7 +7,6 @@
 
 class UYIInventoryBag;
 class UYIInventoryComponent;
-class UYIPlayerInventoryStateComponent;
 class UYIItemDefinition;
 class APlayerState;
 
@@ -155,7 +154,7 @@ protected:
 private:
     void BuildRuntimeStock();
     void RefreshMirror();
-    bool ConsumePrice(UYIPlayerInventoryStateComponent* BuyerState, int64 ItemCode, int32 Count);
+    bool ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count);
     const FYIShopListing* FindListing(int64 ItemCode) const;
     UYIInventoryBag* CreateStockInstance() const;
     UYIInventoryBag* GetStockForPlayer(APlayerState* PlayerState);

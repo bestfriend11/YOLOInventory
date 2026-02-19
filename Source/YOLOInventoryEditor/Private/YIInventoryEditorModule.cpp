@@ -12,16 +12,10 @@
 #include "AssetTypeActions_YIAttributeMod.h"
 #include "AssetTypeActions_YIItemVariant.h"
 #include "AssetTypeActions_YIRarityPalette.h"
-#include "AssetTypeActions_YIRarityProfile.h"
 #include "AssetTypeActions_YIEvolutionPath.h"
 #include "AssetTypeActions_YIItemSFXProfile.h"
 #include "AssetTypeActions_YIItemSFXLibrary.h"
 #include "AssetTypeActions_YIDataTableItemSource.h"
-#include "AssetTypeActions_YILootTable.h"
-#include "AssetTypeActions_YIItemGenerator.h"
-#include "YILootTableFactory.h"
-#include "YIRarityProfileFactory.h"
-#include "YIItemGeneratorFactory.h"
 #include "ToolMenus.h"
 // #include "YIInventoryAssetEditor.h" // legacy editor removed
 
@@ -347,21 +341,6 @@ void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
 	}
 	{
 		TSharedRef<FAssetTypeActions_YIRarityPalette> Action = MakeShared<FAssetTypeActions_YIRarityPalette>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIRarityProfile> Action = MakeShared<FAssetTypeActions_YIRarityProfile>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YILootTable> Action = MakeShared<FAssetTypeActions_YILootTable>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIItemGenerator> Action = MakeShared<FAssetTypeActions_YIItemGenerator>();
 		AssetTools.RegisterAssetTypeActions(Action);
 		RegisteredAssetTypeActions.Add(Action);
 	}

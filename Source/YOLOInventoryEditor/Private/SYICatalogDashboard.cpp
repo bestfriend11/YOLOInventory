@@ -5,9 +5,6 @@
 #include "Data/YIDataTableAffixSource.h"
 #include "YIAffixAsset.h"
 #include "YIAffixPoolAsset.h"
-#include "YILootTable.h"
-#include "YIRarityProfile.h"
-#include "YIItemGenerator.h"
 #include "YIInventoryBag.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -23,9 +20,63 @@
 #include "Widgets/Views/SListView.h"
 #include "Widgets/Views/SHeaderRow.h"
 #include "Styling/AppStyle.h"
+#include "UObject/UObjectGlobals.h"
+#include "UObject/UnrealType.h"
 
 namespace
 {
+static UClass* YICatalog_LoadOptionalClass(const TCHAR* ClassPath)
+{
+	if (!ClassPath || !*ClassPath)
+	{
+		return nullptr;
+	}
+	return LoadObject<UClass>(nullptr, ClassPath);
+}
+
+static int32 YICatalog_GetArrayPropertyNum(const UObject* Object, const FName PropertyName)
+{
+	if (!Object)
+	{
+		return 0;
+	}
+
+	const FArrayProperty* ArrayProperty = FindFProperty<FArrayProperty>(Object->GetClass(), PropertyName);
+	if (!ArrayProperty)
+	{
+		return 0;
+	}
+
+	const void* ArrayData = ArrayProperty->ContainerPtrToValuePtr<void>(Object);
+	FScriptArrayHelper Helper(ArrayProperty, ArrayData);
+	return Helper.Num();
+}
+
+static bool YICatalog_GetSoftObjectPathProperty(const UObject* Object, const FName PropertyName, FSoftObjectPath& OutPath)
+{
+	OutPath.Reset();
+	if (!Object)
+	{
+		return false;
+	}
+
+	const FSoftObjectProperty* SoftObjectProperty = FindFProperty<FSoftObjectProperty>(Object->GetClass(), PropertyName);
+	if (!SoftObjectProperty)
+	{
+		return false;
+	}
+
+	const void* ValuePtr = SoftObjectProperty->ContainerPtrToValuePtr<void>(Object);
+	if (!ValuePtr)
+	{
+		return false;
+	}
+
+	const FSoftObjectPtr SoftObject = SoftObjectProperty->GetPropertyValue(ValuePtr);
+	OutPath = SoftObject.ToSoftObjectPath();
+	return OutPath.IsValid();
+}
+
 static FString YICatalogFilterToLabel(EYICatalogFilter Filter)
 {
 	switch (Filter)
@@ -247,27 +298,32 @@ void SYICatalogDashboard::Refresh()
 	AddEntriesForClass(UYIAffixPoolAsset::StaticClass(), TEXT("Affixes"), TEXT("Affix Pool"),
 		[](UObject*, FYICatalogEntry&) {});
 
-	AddEntriesForClass(UYILootTable::StaticClass(), TEXT("Generators"), TEXT("Loot Table"),
-		[](UObject* Object, FYICatalogEntry& Entry)
-		{
-			if (const UYILootTable* LootTable = Cast<UYILootTable>(Object))
+	if (UClass* LootTableClass = YICatalog_LoadOptionalClass(TEXT("/Script/YOLOInventoryLoot.YILootTable")))
+	{
+		AddEntriesForClass(LootTableClass, TEXT("Generators"), TEXT("Loot Table"),
+			[](UObject* Object, FYICatalogEntry& Entry)
 			{
-				Entry.Status = LootTable->Entries.Num() > 0 ? TEXT("Configured") : TEXT("Empty");
-				Entry.LinkedCount = LootTable->Entries.Num();
-			}
-		});
+				const int32 EntriesNum = YICatalog_GetArrayPropertyNum(Object, TEXT("Entries"));
+				Entry.Status = EntriesNum > 0 ? TEXT("Configured") : TEXT("Empty");
+				Entry.LinkedCount = EntriesNum;
+			});
+	}
 
-	AddEntriesForClass(UYIRarityProfile::StaticClass(), TEXT("Generators"), TEXT("Rarity Profile"),
-		[](UObject*, FYICatalogEntry&) {});
+	if (UClass* RarityProfileClass = YICatalog_LoadOptionalClass(TEXT("/Script/YOLOInventoryLoot.YIRarityProfile")))
+	{
+		AddEntriesForClass(RarityProfileClass, TEXT("Generators"), TEXT("Rarity Profile"),
+			[](UObject*, FYICatalogEntry&) {});
+	}
 
-	AddEntriesForClass(UYIItemGenerator::StaticClass(), TEXT("Generators"), TEXT("Item Generator"),
-		[](UObject* Object, FYICatalogEntry& Entry)
-		{
-			if (const UYIItemGenerator* Generator = Cast<UYIItemGenerator>(Object))
+	if (UClass* ItemGeneratorClass = YICatalog_LoadOptionalClass(TEXT("/Script/YOLOInventoryLoot.YIItemGenerator")))
+	{
+		AddEntriesForClass(ItemGeneratorClass, TEXT("Generators"), TEXT("Item Generator"),
+			[](UObject* Object, FYICatalogEntry& Entry)
 			{
-				Entry.Status = Generator->LootTable.ToSoftObjectPath().IsValid() ? TEXT("Configured") : TEXT("Missing Loot");
-			}
-		});
+				FSoftObjectPath LootTablePath;
+				Entry.Status = YICatalog_GetSoftObjectPathProperty(Object, TEXT("LootTable"), LootTablePath) ? TEXT("Configured") : TEXT("Missing Loot");
+			});
+	}
 
 	AddEntriesForClass(UYIInventoryBag::StaticClass(), TEXT("Bags"), TEXT("Bag"),
 		[](UObject*, FYICatalogEntry&) {});

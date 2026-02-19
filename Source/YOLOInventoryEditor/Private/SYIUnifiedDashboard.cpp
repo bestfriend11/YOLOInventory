@@ -1,20 +1,15 @@
 #include "SYIUnifiedDashboard.h"
 #include "SYIItemDashboard.h"
 #include "SYIAffixDashboard.h"
-#include "SYIGeneratorDashboard.h"
 #include "YIItemDefinition.h"
 #include "Data/YIDataTableItemSource.h"
 #include "YIAffixAsset.h"
 #include "YIAffixPoolAsset.h"
 #include "YIAffixFactory.h"
 #include "YIAffixPoolFactory.h"
-#include "YILootTable.h"
-#include "YIRarityProfile.h"
-#include "YIItemGenerator.h"
-#include "YILootTableFactory.h"
-#include "YIRarityProfileFactory.h"
-#include "YIItemGeneratorFactory.h"
+#include "IYOLOInventoryEditorCoreModule.h"
 #include "Factories/DataAssetFactory.h"
+#include "Factories/Factory.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "Misc/PackageName.h"
@@ -31,12 +26,54 @@
 #include "Widgets/Input/SButton.h"
 #include "Styling/AppStyle.h"
 #include "YIInventoryEditorModule.h"
+#include "UObject/UObjectGlobals.h"
+
+namespace
+{
+static UClass* YIUnified_LoadOptionalClass(const TCHAR* ClassPath)
+{
+	if (!ClassPath || !*ClassPath)
+	{
+		return nullptr;
+	}
+
+	return LoadObject<UClass>(nullptr, ClassPath);
+}
+
+static bool YIUnified_IsAssetOfOptionalClass(UObject* Asset, const TCHAR* ClassPath)
+{
+	if (!Asset)
+	{
+		return false;
+	}
+
+	if (UClass* OptionalClass = YIUnified_LoadOptionalClass(ClassPath))
+	{
+		return Asset->IsA(OptionalClass);
+	}
+
+	return false;
+}
+
+static UFactory* YIUnified_CreateFactoryFromClassPath(const TCHAR* FactoryClassPath)
+{
+	UClass* FactoryClass = LoadClass<UFactory>(nullptr, FactoryClassPath);
+	return FactoryClass ? NewObject<UFactory>(GetTransientPackage(), FactoryClass) : nullptr;
+}
+}
 
 void SYIUnifiedDashboard::Construct(const FArguments& InArgs)
 {
 	ItemDashboard = SNew(SYIItemDashboard);
 	AffixDashboard = SNew(SYIAffixDashboard);
-	GeneratorDashboard = SNew(SYIGeneratorDashboard);
+	if (IYOLOInventoryEditorCoreModule::IsAvailable())
+	{
+		IYOLOInventoryEditorCoreModule& EditorCoreModule = IYOLOInventoryEditorCoreModule::Get();
+		if (EditorCoreModule.HasGeneratorDashboardFactory())
+		{
+			GeneratorDashboard = EditorCoreModule.CreateGeneratorDashboardBridge();
+		}
+	}
 
 	ChildSlot
 	[
@@ -72,7 +109,9 @@ void SYIUnifiedDashboard::Construct(const FArguments& InArgs)
 					]
 					+ SWidgetSwitcher::Slot()
 					[
-						GeneratorDashboard.ToSharedRef()
+						GeneratorDashboard.IsValid()
+							? GeneratorDashboard->GetRootWidget()
+							: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "UnifiedDash_NoGeneratorPlugin", "YOLOInventoryEditorLoot plugin is not enabled."))
 					]
 				]
 				+ SSplitter::Slot().Value(0.30f)
@@ -155,7 +194,9 @@ void SYIUnifiedDashboard::OpenAsset(UObject* Asset)
 		return;
 	}
 
-	if (Asset->IsA<UYILootTable>() || Asset->IsA<UYIRarityProfile>() || Asset->IsA<UYIItemGenerator>())
+	if (YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YILootTable"))
+		|| YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIRarityProfile"))
+		|| YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIItemGenerator")))
 	{
 		SetActiveTab(EYIUnifiedDashboardTab::Generators);
 		if (GeneratorDashboard.IsValid())
@@ -492,15 +533,15 @@ void SYIUnifiedHelpPanel::CreateAffixPool()
 
 void SYIUnifiedHelpPanel::CreateLootTable()
 {
-	CreateAssetWithFactory(NewObject<UYILootTableFactory>(), TEXT("/Game/YOLOInventory/Loot"), TEXT("LootTable"));
+	CreateAssetWithFactory(YIUnified_CreateFactoryFromClassPath(TEXT("/Script/YOLOInventoryEditorLoot.YILootTableFactory")), TEXT("/Game/YOLOInventory/Loot"), TEXT("LootTable"));
 }
 
 void SYIUnifiedHelpPanel::CreateRarityProfile()
 {
-	CreateAssetWithFactory(NewObject<UYIRarityProfileFactory>(), TEXT("/Game/YOLOInventory/Rarity"), TEXT("RarityProfile"));
+	CreateAssetWithFactory(YIUnified_CreateFactoryFromClassPath(TEXT("/Script/YOLOInventoryEditorLoot.YIRarityProfileFactory")), TEXT("/Game/YOLOInventory/Rarity"), TEXT("RarityProfile"));
 }
 
 void SYIUnifiedHelpPanel::CreateItemGenerator()
 {
-	CreateAssetWithFactory(NewObject<UYIItemGeneratorFactory>(), TEXT("/Game/YOLOInventory/Generators"), TEXT("ItemGenerator"));
+	CreateAssetWithFactory(YIUnified_CreateFactoryFromClassPath(TEXT("/Script/YOLOInventoryEditorLoot.YIItemGeneratorFactory")), TEXT("/Game/YOLOInventory/Generators"), TEXT("ItemGenerator"));
 }
