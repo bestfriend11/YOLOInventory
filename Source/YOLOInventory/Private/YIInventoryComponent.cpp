@@ -19,21 +19,6 @@ namespace YIInventoryComponentUIBindings
 		UYIInventoryComponent* InInventoryComponent = nullptr;
 	};
 
-	struct FYITradeScreenBindParams
-	{
-		AYITradeSessionActor* InSession = nullptr;
-		UYIInventoryBag* LocalPlayerBag = nullptr;
-		UYIInventoryBag* OtherPartyBag = nullptr;
-	};
-
-	struct FYIShopScreenBindParams
-	{
-		UYIShopComponent* InShop = nullptr;
-		UYIInventoryBag* LocalPlayerBag = nullptr;
-		TArray<FYINetBagItem> Stock;
-		FIntPoint StockSize = FIntPoint::ZeroValue;
-	};
-
 	static void YIInventoryComp_BindInventoryScreenWidget(UUserWidget* Widget, UYIInventoryComponent* InventoryComponent)
 	{
 		if (!Widget || !InventoryComponent)
@@ -45,41 +30,6 @@ namespace YIInventoryComponentUIBindings
 		{
 			YIInventoryComponentUIBindings::FYIInventoryScreenBindParams Params;
 			Params.InInventoryComponent = InventoryComponent;
-			Widget->ProcessEvent(Fn, &Params);
-		}
-	}
-
-	static void YIInventoryComp_BindTradeScreenWidget(UUserWidget* Widget, AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
-	{
-		if (!Widget || !Session)
-		{
-			return;
-		}
-
-		if (UFunction* Fn = Widget->FindFunction(TEXT("SetSession")))
-		{
-			YIInventoryComponentUIBindings::FYITradeScreenBindParams Params;
-			Params.InSession = Session;
-			Params.LocalPlayerBag = LocalBag;
-			Params.OtherPartyBag = nullptr;
-			Widget->ProcessEvent(Fn, &Params);
-		}
-	}
-
-	static void YIInventoryComp_BindShopScreenWidget(UUserWidget* Widget, UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
-	{
-		if (!Widget || !Shop)
-		{
-			return;
-		}
-
-		if (UFunction* Fn = Widget->FindFunction(TEXT("SetShop")))
-		{
-			YIInventoryComponentUIBindings::FYIShopScreenBindParams Params;
-			Params.InShop = Shop;
-			Params.LocalPlayerBag = LocalBag;
-			Params.Stock = Stock;
-			Params.StockSize = StockSize;
 			Widget->ProcessEvent(Fn, &Params);
 		}
 	}
@@ -1020,8 +970,6 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 		BagEventSource = nullptr;
 	}
 	CloseInventoryScreen();
-	CloseTradeScreen();
-	CloseShopScreen();
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
@@ -1531,108 +1479,7 @@ void UYIInventoryComponent::CloseInventoryScreen()
 	}
 }
 
-UUserWidget* UYIInventoryComponent::OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
-{
-	if (!Session) return nullptr;
-	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
-	if (ActiveTradeScreen.IsValid())
-	{
-		YIInventoryComp_BindTradeScreenWidget(ActiveTradeScreen.Get(), Session, LocalBag ? LocalBag : GetBag());
-		return ActiveTradeScreen.Get();
-	}
-
-	if (!TradingScreenClass.IsNull())
-	{
-		TradingScreenClass.LoadSynchronous();
-	}
-	if (!TradingScreenClass.IsValid()) return nullptr;
-
-	APlayerController* PC = nullptr;
-	if (APawn* Pawn = Cast<APawn>(GetOwner()))
-	{
-		PC = Cast<APlayerController>(Pawn->GetController());
-	}
-	else
-	{
-		PC = Cast<APlayerController>(GetOwner());
-	}
-	if (!PC || !PC->IsLocalController()) return nullptr;
-
-	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, TradingScreenClass.Get());
-	if (!Screen) return nullptr;
-
-	YIInventoryComp_BindTradeScreenWidget(Screen, Session, LocalBag ? LocalBag : GetBag());
-	Screen->AddToViewport();
-	ActiveTradeScreen = Screen;
-	return Screen;
-}
-
-void UYIInventoryComponent::CloseTradeScreen()
-{
-	if (ActiveTradeScreen.IsValid())
-	{
-		ActiveTradeScreen->RemoveFromParent();
-		ActiveTradeScreen.Reset();
-	}
-}
-
-UUserWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
-{
-	if (!Shop) return nullptr;
-	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
-	if (ActiveShopScreen.IsValid())
-	{
-		YIInventoryComp_BindShopScreenWidget(ActiveShopScreen.Get(), Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
-		return ActiveShopScreen.Get();
-	}
-
-	if (!ShopScreenClass.IsNull())
-	{
-		ShopScreenClass.LoadSynchronous();
-	}
-	if (!ShopScreenClass.IsValid()) return nullptr;
-
-	APlayerController* PC = nullptr;
-	if (APawn* Pawn = Cast<APawn>(GetOwner()))
-	{
-		PC = Cast<APlayerController>(Pawn->GetController());
-	}
-	else
-	{
-		PC = Cast<APlayerController>(GetOwner());
-	}
-	if (!PC || !PC->IsLocalController()) return nullptr;
-
-	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, ShopScreenClass.Get());
-	if (!Screen) return nullptr;
-
-	YIInventoryComp_BindShopScreenWidget(Screen, Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
-	Screen->AddToViewport();
-	ActiveShopScreen = Screen;
-	return Screen;
-}
-
-void UYIInventoryComponent::UpdateShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
-{
-	if (!Shop) return;
-	if (ActiveShopScreen.IsValid())
-	{
-		YIInventoryComp_BindShopScreenWidget(ActiveShopScreen.Get(), Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
-	}
-}
-
-void UYIInventoryComponent::CloseShopScreen()
-{
-	if (ActiveShopScreen.IsValid())
-	{
-		ActiveShopScreen->RemoveFromParent();
-		ActiveShopScreen.Reset();
-	}
-}
-
 void UYIInventoryComponent::CloseAllScreens()
 {
 	CloseInventoryScreen();
-	CloseTradeScreen();
-	CloseShopScreen();
 }

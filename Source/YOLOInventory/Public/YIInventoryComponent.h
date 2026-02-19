@@ -8,8 +8,6 @@
 
 class UYIInventoryBag;
 class UUserWidget;
-class AYITradeSessionActor;
-class UYIShopComponent;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORY_API FYINetBagDescriptor
@@ -196,12 +194,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Inventory screen widget class used by OpenInventoryScreen on owning client."))
 	TSoftClassPtr<UUserWidget> InventoryScreenClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Trade screen widget class used by OpenTradeScreen on owning client."))
-	TSoftClassPtr<UUserWidget> TradingScreenClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Shop screen widget class used by OpenShopScreen on owning client."))
-	TSoftClassPtr<UUserWidget> ShopScreenClass;
-
 	/** Optional per-inventory SFX library for item-driven UI sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Optional per-inventory SFX library for item-driven UI sounds"))
 	TSoftObjectPtr<class UYIItemSFXLibrary> ItemSFXLibrary;
@@ -243,28 +235,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close inventory screen if open."))
 	void CloseInventoryScreen();
 
-	/** Open a trading screen for an existing session (client-side). LocalBag can be left null to auto-use GetBag(). */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper to open trade screen for Session.\nLocalBag optional; null auto-resolves from active bag."))
-	UUserWidget* OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag = nullptr);
-
-	/** Close the trading screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close trade screen if open."))
-	void CloseTradeScreen();
-
-	/** Open a shop screen for a shop component (client-side). */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Open shop UI using provided replicated stock snapshot."))
-	UUserWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
-
-	/** Update the shop screen if it is already open (no-op if closed). */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Refresh currently open shop UI snapshot."))
-	void UpdateShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
-
-	/** Close the shop screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close shop screen if open."))
-	void CloseShopScreen();
-
-	/** Close all inventory-related screens (inventory/trade/shop). */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close all inventory/trade/shop screens."))
+	/** Close all inventory-related screens managed by this component. */
+	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close all screens managed by this component."))
 	void CloseAllScreens();
 
 protected:
@@ -302,8 +274,6 @@ private:
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* BagEventSource = nullptr;
 	TWeakObjectPtr<UUserWidget> ActiveInventoryScreen;
-	TWeakObjectPtr<UUserWidget> ActiveTradeScreen;
-	TWeakObjectPtr<UUserWidget> ActiveShopScreen;
 
 	// Cleanup delegate when component is destroyed
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
