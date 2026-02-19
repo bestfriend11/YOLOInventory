@@ -19,11 +19,9 @@
 #include "AssetTypeActions_YIDataTableItemSource.h"
 #include "AssetTypeActions_YILootTable.h"
 #include "AssetTypeActions_YIItemGenerator.h"
-#include "AssetTypeActions_YIEquipmentSchema.h"
 #include "YILootTableFactory.h"
 #include "YIRarityProfileFactory.h"
 #include "YIItemGeneratorFactory.h"
-#include "YIEquipmentSchemaAssetFactory.h"
 #include "ToolMenus.h"
 // #include "YIInventoryAssetEditor.h" // legacy editor removed
 
@@ -364,11 +362,6 @@ void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
 	}
 	{
 		TSharedRef<FAssetTypeActions_YIItemGenerator> Action = MakeShared<FAssetTypeActions_YIItemGenerator>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIEquipmentSchema> Action = MakeShared<FAssetTypeActions_YIEquipmentSchema>();
 		AssetTools.RegisterAssetTypeActions(Action);
 		RegisteredAssetTypeActions.Add(Action);
 	}

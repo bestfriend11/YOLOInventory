@@ -35,7 +35,8 @@
     { "Name": "GameplayAbilities", "Enabled": true },
     { "Name": "CSVItemBuilder", "Enabled": true },
     { "Name": "YOLOInventoryCore", "Enabled": true },
-    { "Name": "YOLOInventorySchema", "Enabled": true }
+    { "Name": "YOLOInventorySchema", "Enabled": true },
+    { "Name": "YOLOInventoryEditorCore", "Enabled": true }
   ],
   "SupportedTargetPlatforms": [
     "Win64"

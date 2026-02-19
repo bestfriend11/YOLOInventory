@@ -3,10 +3,10 @@
 #include "SYIAffixDashboard.h"
 #include "SYIGeneratorDashboard.h"
 #include "SYICraftingDashboard.h"
-#include "SYIBagDashboard.h"
 #include "SYICatalogDashboard.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIInventoryEditorModule.h"
+#include "IYOLOInventoryEditorCoreModule.h"
 #include "YIUnifiedDashboardContext.h"
 #include "YIItemDefinition.h"
 #include "Data/YIDataTableItemSource.h"
@@ -493,7 +493,9 @@ void FYIUnifiedDashboardEditor::CreateWidgetsIfNeeded()
 	}
 	if (!BagDashboard.IsValid())
 	{
-		BagDashboard = SNew(SYIBagDashboard);
+		IYOLOInventoryEditorCoreModule& EditorCoreModule = IYOLOInventoryEditorCoreModule::Get();
+		checkf(EditorCoreModule.HasBagDashboardFactory(), TEXT("Bag dashboard factory is not registered. Ensure YOLOInventoryEditorGrid is enabled."));
+		BagDashboard = EditorCoreModule.CreateBagDashboardBridge();
 	}
 	if (!HelpPanel.IsValid())
 	{
@@ -586,7 +588,7 @@ TSharedRef<SDockTab> FYIUnifiedDashboardEditor::SpawnBagsTab(const FSpawnTabArgs
 	TSharedRef<SDockTab> Tab = SNew(SDockTab)
 		.Label(NSLOCTEXT("YOLOInventory", "DashboardTabBagsLabel", "Bags"))
 		[
-			BagDashboard.ToSharedRef()
+			BagDashboard->GetRootWidget()
 		];
 	Tab->SetOnTabActivated(SDockTab::FOnTabActivatedCallback::CreateLambda([this](TSharedRef<SDockTab>, ETabActivationCause)
 		{

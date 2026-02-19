@@ -9,9 +9,9 @@ class SYIItemDashboard;
 class SYIAffixDashboard;
 class SYIGeneratorDashboard;
 class SYICraftingDashboard;
-class SYIBagDashboard;
 class SYICatalogDashboard;
 class SYIUnifiedHelpPanel;
+class IYIBagDashboardBridge;
 class FWorkspaceItem;
 class FToolBarBuilder;
 
@@ -72,7 +72,7 @@ private:
 	TSharedPtr<SYIAffixDashboard> AffixDashboard;
 	TSharedPtr<SYIGeneratorDashboard> GeneratorDashboard;
 	TSharedPtr<SYICraftingDashboard> CraftingDashboard;
-	TSharedPtr<SYIBagDashboard> BagDashboard;
+	TSharedPtr<IYIBagDashboardBridge> BagDashboard;
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;
 	TStrongObjectPtr<UYIUnifiedDashboardContext> EditorContext;
 	TSharedPtr<FExtender> ToolbarExtender;
