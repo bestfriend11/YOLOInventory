@@ -12,6 +12,7 @@
 #include "YIScriptGraph.h"
 #include "YIItemSFXLibrary.h"
 #include "YIItemFragments.h"
+#include "YIItemSchemaTypes.h"
 #include "YIItemDefinition.generated.h"
 
 class UYIDataTableItemSource;
@@ -27,7 +28,7 @@ class UScriptStruct;
  * - Use Tags and ItemType to drive classification and filter behaviors.
  */
 UCLASS(BlueprintType)
-class UYIItemDefinition : public UPrimaryDataAsset
+class YOLOINVENTORY_API UYIItemDefinition : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 public:
@@ -167,13 +168,13 @@ public:
 	/** Returns layout definition fragment if present. */
 	const FYIItemLayoutDefinitionFragment* GetLayoutDefinitionFragment() const;
 
-	/** Resolve display fields from static UI fragment with fallback to legacy fields. */
+	/** Resolve display fields from static UI fragment. */
 	void GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const;
 
 	/** Resolve preferred equip slot from static equipment fragment with fallback to tag-based legacy resolution. */
 	FGameplayTag GetEffectivePrimaryEquipSlotTag() const;
 
-	/** Resolve occupied equip slots from static equipment fragment with fallback to legacy OccupiedEquipSlots. */
+	/** Resolve occupied equip slots from static equipment fragment. */
 	void GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const;
 
 	/** Find static definition fragment by script struct (exact type). */
@@ -182,10 +183,13 @@ public:
 	/** Find or add static definition fragment by script struct (exact type). */
 	FInstancedStruct* FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
 
+	/** Ensure baseline static fragments exist and mirror legacy fields when fragments are missing/empty. Returns true when any fragment data changed. */
+	bool EnsureBaselineDefinitionFragments();
+
 	/** Returns stacking definition fragment if present. */
 	const FYIItemStackingDefinitionFragment* GetStackingDefinitionFragment() const;
 
-	/** Resolve effective affix generation data from legacy fields + optional static fragment override. */
+	/** Resolve effective affix generation data from static fragment. */
 	void GetEffectiveAffixDefinition(
 		TArray<TSoftObjectPtr<class UYIAffixAsset>>& OutTemplateAffixes,
 		int32& OutMinRandomModifiers,
@@ -193,7 +197,7 @@ public:
 		TSoftObjectPtr<class UYIAffixPoolAsset>& OutPrefixPool,
 		TSoftObjectPtr<class UYIAffixPoolAsset>& OutSuffixPool) const;
 
-	/** Resolve effective layout rules from legacy fields + optional static fragment override. */
+	/** Resolve effective layout rules from static fragment. */
 	void GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const;
 
 	/** Effective default size helper. */
@@ -202,7 +206,10 @@ public:
 	/** Effective rotation policy helper. */
 	bool IsEffectiveRotationAllowed() const;
 
-	/** Resolve effective stacking rules from legacy fields + optional static fragment override. */
+	/** Export decoupled suite-facing schema snapshot for non-legacy consumers. */
+	void BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const;
+
+	/** Resolve effective stacking rules from static fragment. */
 	void GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const;
 
 	/** Returns whether this item can be safely stacked under runtime safety rules. */

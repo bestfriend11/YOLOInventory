@@ -5,15 +5,68 @@
 #include "YIShopComponent.h"
 #include "YIInventoryBag.h"
 #include "YITradeSessionActor.h"
-#include "TradingScreenWidget.h"
-#include "ShopScreenWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Net/UnrealNetwork.h"
-#include "YIInventoryComponent.h"
 #include "YIDebugLibrary.h"
+
+namespace YITradeInteractionUIBindings
+{
+	struct FYITradeScreenBindParams
+	{
+		AYITradeSessionActor* InSession = nullptr;
+		UYIInventoryBag* LocalPlayerBag = nullptr;
+		UYIInventoryBag* OtherPartyBag = nullptr;
+	};
+
+	struct FYIShopScreenBindParams
+	{
+		UYIShopComponent* InShop = nullptr;
+		UYIInventoryBag* LocalPlayerBag = nullptr;
+		TArray<FYINetBagItem> Stock;
+		FIntPoint StockSize = FIntPoint::ZeroValue;
+	};
+
+	static void YITradeComp_BindTradeScreenWidget(UUserWidget* Widget, AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
+	{
+		if (!Widget || !Session)
+		{
+			return;
+		}
+
+		if (UFunction* Fn = Widget->FindFunction(TEXT("SetSession")))
+		{
+			FYITradeScreenBindParams Params;
+			Params.InSession = Session;
+			Params.LocalPlayerBag = LocalBag;
+			Params.OtherPartyBag = nullptr;
+			Widget->ProcessEvent(Fn, &Params);
+		}
+	}
+
+	static void YITradeComp_BindShopScreenWidget(UUserWidget* Widget, UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
+	{
+		if (!Widget || !Shop)
+		{
+			return;
+		}
+
+		if (UFunction* Fn = Widget->FindFunction(TEXT("SetShop")))
+		{
+			FYIShopScreenBindParams Params;
+			Params.InShop = Shop;
+			Params.LocalPlayerBag = LocalBag;
+			Params.Stock = Stock;
+			Params.StockSize = StockSize;
+			Widget->ProcessEvent(Fn, &Params);
+		}
+	}
+}
+
+using namespace YITradeInteractionUIBindings;
 
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
@@ -409,7 +462,7 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
         }
         if (bAutoShowShopWidget && AutoShopWidgetClass)
         {
-            if (UShopScreenWidget* WidgetInst = CreateWidget<UShopScreenWidget>(GetOwningPC(), AutoShopWidgetClass))
+            if (UUserWidget* WidgetInst = CreateWidget<UUserWidget>(GetOwningPC(), AutoShopWidgetClass))
             {
                 WidgetInst->AddToViewport();
                 UYIInventoryBag* LocalBag = nullptr;
@@ -420,7 +473,7 @@ void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopC
                         LocalBag = Inv->GetBag();
                     }
                 }
-                WidgetInst->SetShop(Shop, LocalBag, Stock, Size);
+                YITradeComp_BindShopScreenWidget(WidgetInst, Shop, LocalBag, Stock, Size);
             }
         }
     }
@@ -507,7 +560,7 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
             // Fallback to legacy auto widget path if no inventory component
             if (AutoTradeWidgetClass)
             {
-                if (UTradingScreenWidget* WidgetInst = CreateWidget<UTradingScreenWidget>(GetOwningPC(), AutoTradeWidgetClass))
+                if (UUserWidget* WidgetInst = CreateWidget<UUserWidget>(GetOwningPC(), AutoTradeWidgetClass))
                 {
                     WidgetInst->AddToViewport();
                     UYIInventoryBag* LocalBag = nullptr;
@@ -518,7 +571,7 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
                             LocalBag = Inv->GetBag();
                         }
                     }
-                    WidgetInst->SetSession(CurrentSession, LocalBag, nullptr);
+                    YITradeComp_BindTradeScreenWidget(WidgetInst, CurrentSession, LocalBag);
 			}
 		}
 	}

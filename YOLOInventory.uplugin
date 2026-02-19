@@ -32,7 +32,9 @@
   "Plugins": [
     { "Name": "Niagara", "Enabled": true },
     { "Name": "StructUtils", "Enabled": true },
-    { "Name": "GameplayAbilities", "Enabled": true }
+    { "Name": "GameplayAbilities", "Enabled": true },
+    { "Name": "YOLOInventoryCore", "Enabled": true },
+    { "Name": "YOLOInventorySchema", "Enabled": true }
   ],
   "SupportedTargetPlatforms": [
     "Win64"

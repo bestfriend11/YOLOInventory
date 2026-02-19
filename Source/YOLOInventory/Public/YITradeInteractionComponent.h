@@ -7,12 +7,11 @@
 #include "YITradeInteractionComponent.generated.h"
 
 class AYITradeSessionActor;
-class UTradingScreenWidget;
+class UUserWidget;
 class UYIInventoryComponent;
 class UYIInventoryBag;
 class UYIShopComponent;
 struct FYIBagItem;
-class UShopScreenWidget;
 
 /**
  * Player-controller component that handles secure trade initiation and notifies the client UI.
@@ -129,7 +128,7 @@ public:
 
     /** Widget class to spawn when bAutoShowWidget is true. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|UI", meta=(ToolTip="Trade widget class used when bAutoShowWidget is enabled."))
-    TSubclassOf<class UTradingScreenWidget> AutoTradeWidgetClass;
+    TSubclassOf<UUserWidget> AutoTradeWidgetClass;
 
     /** Auto open the shop screen on the owning client when stock is ready. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|UI", meta=(ToolTip="If true, owning client auto-opens shop widget when stock arrives."))
@@ -137,7 +136,7 @@ public:
 
     /** Widget class to spawn when bAutoShowShopWidget is true (fallback if no inventory component). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Shop|UI", meta=(ToolTip="Fallback shop widget class when inventory component does not provide one."))
-    TSubclassOf<UShopScreenWidget> AutoShopWidgetClass;
+    TSubclassOf<UUserWidget> AutoShopWidgetClass;
 
     /** Maximum distance allowed to start a trade (interaction range). */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="YOLOInventory|Trade|Distance", meta=(ToolTip="Max distance allowed to start trade interaction."))

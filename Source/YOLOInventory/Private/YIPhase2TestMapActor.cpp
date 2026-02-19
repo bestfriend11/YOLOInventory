@@ -7,7 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
-#include "InventoryScreenWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "YIDebugLibrary.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
@@ -87,7 +87,7 @@ void AYIPhase2TestMapActor::OpenInventoryForLocalPlayer()
 		InventoryComp->InventoryScreenClass = InventoryScreenClass;
 	}
 
-	if (UInventoryScreenWidget* Screen = InventoryComp->OpenInventoryScreen())
+	if (UUserWidget* Screen = InventoryComp->OpenInventoryScreen())
 	{
 		EmitSetupMessage(FString::Printf(TEXT("Phase2 map setup: opened inventory screen '%s'."), *Screen->GetName()), FColor::Green);
 	}

@@ -2,13 +2,12 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
+#include "YIInventoryCoreTypes.h"
 #include "UObject/SoftObjectPtr.h"
 #include "YIInventoryComponent.generated.h"
 
 class UYIInventoryBag;
-class UInventoryScreenWidget;
-class UTradingScreenWidget;
-class UShopScreenWidget;
+class UUserWidget;
 class AYITradeSessionActor;
 class UYIShopComponent;
 
@@ -43,26 +42,6 @@ struct YOLOINVENTORY_API FYINetBagDescriptor
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	bool bIsActive = false;
-};
-
-USTRUCT(BlueprintType)
-struct YOLOINVENTORY_API FYILockedBagItemRef
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid BagId;
-
-	/** Primary runtime identity for lock tracking. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid ItemInstanceId;
-
-	/** Legacy fallback identity (content hash). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	int64 CustomStackKey = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	int64 Code = 0;
 };
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
@@ -158,14 +137,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by bag+index.\nLocked items cannot be moved/rotated/removed."))
 	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by identity reference (BagId + CustomStackKey + Code fallback). Prefer SetBagItemLockedByInstanceRef for deterministic identity."))
-	bool SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by canonical core identity reference (Bag + Item handles)."))
+	bool SetBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef, bool bLocked);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by deterministic runtime identity.\nArgs: BagId + ItemInstanceId (primary), with optional CustomStackKey/Code fallback for legacy items."))
-	bool SetBagItemLockedByInstanceRef(const FGuid& BagId, const FGuid& ItemInstanceId, int64 CustomStackKey, int64 Code, bool bLocked);
+	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Build canonical core item reference for a bag item index.\nReturns false when bag/index is invalid or identity cannot be resolved."))
+	bool GetBagItemCoreRef(UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutItemRef) const;
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified item is currently lock-protected."))
 	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
+
+	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified canonical item ref is currently lock-protected."))
+	bool IsBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef) const;
 
 	/** Server-only: push current bag state into net mirror to replicate to owning client. */
 	void SyncNetState();
@@ -212,13 +194,13 @@ public:
 
 	/** Soft class references so designers can assign widgets once and call the helpers below. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Inventory screen widget class used by OpenInventoryScreen on owning client."))
-	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;
+	TSoftClassPtr<UUserWidget> InventoryScreenClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Trade screen widget class used by OpenTradeScreen on owning client."))
-	TSoftClassPtr<UTradingScreenWidget> TradingScreenClass;
+	TSoftClassPtr<UUserWidget> TradingScreenClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Shop screen widget class used by OpenShopScreen on owning client."))
-	TSoftClassPtr<UShopScreenWidget> ShopScreenClass;
+	TSoftClassPtr<UUserWidget> ShopScreenClass;
 
 	/** Optional per-inventory SFX library for item-driven UI sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Optional per-inventory SFX library for item-driven UI sounds"))
@@ -255,7 +237,7 @@ public:
 
 	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper.\nOpen inventory screen and bind to current active bag context."))
-	UInventoryScreenWidget* OpenInventoryScreen();
+	UUserWidget* OpenInventoryScreen();
 
 	/** Close and remove the inventory screen if it is open. */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close inventory screen if open."))
@@ -263,7 +245,7 @@ public:
 
 	/** Open a trading screen for an existing session (client-side). LocalBag can be left null to auto-use GetBag(). */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper to open trade screen for Session.\nLocalBag optional; null auto-resolves from active bag."))
-	UTradingScreenWidget* OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag = nullptr);
+	UUserWidget* OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag = nullptr);
 
 	/** Close the trading screen if it is open. */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close trade screen if open."))
@@ -271,7 +253,7 @@ public:
 
 	/** Open a shop screen for a shop component (client-side). */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Open shop UI using provided replicated stock snapshot."))
-	UShopScreenWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
+	UUserWidget* OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize);
 
 	/** Update the shop screen if it is already open (no-op if closed). */
 	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Refresh currently open shop UI snapshot."))
@@ -310,7 +292,7 @@ protected:
 	void OnRep_LockedBagItems();
 
 	UPROPERTY(ReplicatedUsing=OnRep_LockedBagItems, Transient)
-	TArray<FYILockedBagItemRef> LockedBagItems;
+	TArray<FYIInventoryLockRef> LockedBagItems;
 
 	/** Client-only preview bag built from NetBagItems (not authoritative). */
 	UPROPERTY(Transient)
@@ -319,9 +301,9 @@ protected:
 private:
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* BagEventSource = nullptr;
-	TWeakObjectPtr<UInventoryScreenWidget> ActiveInventoryScreen;
-	TWeakObjectPtr<UTradingScreenWidget> ActiveTradeScreen;
-	TWeakObjectPtr<UShopScreenWidget> ActiveShopScreen;
+	TWeakObjectPtr<UUserWidget> ActiveInventoryScreen;
+	TWeakObjectPtr<UUserWidget> ActiveTradeScreen;
+	TWeakObjectPtr<UUserWidget> ActiveShopScreen;
 
 	// Cleanup delegate when component is destroyed
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
@@ -345,11 +327,12 @@ private:
 	UFUNCTION()
 	void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
 
-	bool GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYILockedBagItemRef& OutIdentity) const;
-	bool IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const;
+	bool GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutIdentity) const;
+	bool IsBagItemLockedByIdentity(const FYIInventoryItemRef& Identity) const;
 	bool FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const;
 	bool FindContainerParentForBag(const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId) const;
 	bool IsBagDescendantOf(const FGuid& CandidateBagId, const FGuid& PotentialAncestorBagId) const;
 	UYIInventoryBag* EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag);
 	bool TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex);
+	bool SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked);
 };

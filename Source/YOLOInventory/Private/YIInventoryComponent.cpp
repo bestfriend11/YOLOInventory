@@ -7,9 +7,6 @@
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Kismet/GameplayStatics.h"
-#include "InventoryScreenWidget.h"
-#include "TradingScreenWidget.h"
-#include "ShopScreenWidget.h"
 #include "YITradeSessionActor.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -17,6 +14,81 @@
 #include "YIItemPickup.h" // FYIItemInstanceNet / attribute pairs
 #include "YIShopComponent.h"
 #include "YIDebugLibrary.h"
+
+namespace YIInventoryComponentUIBindings
+{
+	struct FYIInventoryScreenBindParams
+	{
+		UYIInventoryComponent* InInventoryComponent = nullptr;
+	};
+
+	struct FYITradeScreenBindParams
+	{
+		AYITradeSessionActor* InSession = nullptr;
+		UYIInventoryBag* LocalPlayerBag = nullptr;
+		UYIInventoryBag* OtherPartyBag = nullptr;
+	};
+
+	struct FYIShopScreenBindParams
+	{
+		UYIShopComponent* InShop = nullptr;
+		UYIInventoryBag* LocalPlayerBag = nullptr;
+		TArray<FYINetBagItem> Stock;
+		FIntPoint StockSize = FIntPoint::ZeroValue;
+	};
+
+	static void YIInventoryComp_BindInventoryScreenWidget(UUserWidget* Widget, UYIInventoryComponent* InventoryComponent)
+	{
+		if (!Widget || !InventoryComponent)
+		{
+			return;
+		}
+
+		if (UFunction* Fn = Widget->FindFunction(TEXT("BindInventoryBagContexts")))
+		{
+			YIInventoryComponentUIBindings::FYIInventoryScreenBindParams Params;
+			Params.InInventoryComponent = InventoryComponent;
+			Widget->ProcessEvent(Fn, &Params);
+		}
+	}
+
+	static void YIInventoryComp_BindTradeScreenWidget(UUserWidget* Widget, AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
+	{
+		if (!Widget || !Session)
+		{
+			return;
+		}
+
+		if (UFunction* Fn = Widget->FindFunction(TEXT("SetSession")))
+		{
+			YIInventoryComponentUIBindings::FYITradeScreenBindParams Params;
+			Params.InSession = Session;
+			Params.LocalPlayerBag = LocalBag;
+			Params.OtherPartyBag = nullptr;
+			Widget->ProcessEvent(Fn, &Params);
+		}
+	}
+
+	static void YIInventoryComp_BindShopScreenWidget(UUserWidget* Widget, UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
+	{
+		if (!Widget || !Shop)
+		{
+			return;
+		}
+
+		if (UFunction* Fn = Widget->FindFunction(TEXT("SetShop")))
+		{
+			YIInventoryComponentUIBindings::FYIShopScreenBindParams Params;
+			Params.InShop = Shop;
+			Params.LocalPlayerBag = LocalBag;
+			Params.Stock = Stock;
+			Params.StockSize = StockSize;
+			Widget->ProcessEvent(Fn, &Params);
+		}
+	}
+}
+
+using namespace YIInventoryComponentUIBindings;
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -417,47 +489,47 @@ UYIInventoryBag* UYIInventoryComponent::GetBagByDisplayName(FName BagName) const
 	return nullptr;
 }
 
-bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYILockedBagItemRef& OutIdentity) const
+bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutIdentity) const
 {
-	OutIdentity = FYILockedBagItemRef();
+	OutIdentity = FYIInventoryItemRef();
 	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
 	{
 		return false;
 	}
 
 	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
-	OutIdentity.BagId = Bag->BagId;
-	OutIdentity.ItemInstanceId = BagItem.Item.InstanceId;
-	OutIdentity.CustomStackKey = BagItem.Item.CustomStackKey;
-	OutIdentity.Code = 0;
+	OutIdentity.Bag.BagId = Bag->BagId;
+	OutIdentity.Item.ItemInstanceId = BagItem.Item.InstanceId;
+	OutIdentity.Item.LegacyStackKey = BagItem.Item.CustomStackKey;
+	OutIdentity.Item.ItemCode = 0;
 	if (UYIItemDefinition* Def = BagItem.Item.Definition.IsValid()
 		? BagItem.Item.Definition.Get()
 		: BagItem.Item.Definition.LoadSynchronous())
 	{
-		OutIdentity.Code = Def->UniqueCode;
+		OutIdentity.Item.ItemCode = Def->UniqueCode;
 	}
 
-	return OutIdentity.BagId.IsValid() && (OutIdentity.ItemInstanceId.IsValid() || OutIdentity.CustomStackKey != 0);
+	return OutIdentity.Bag.BagId.IsValid() && (OutIdentity.Item.ItemInstanceId.IsValid() || OutIdentity.Item.LegacyStackKey != 0);
 }
 
-bool UYIInventoryComponent::IsBagItemLockedByIdentity(const FYILockedBagItemRef& Identity) const
+bool UYIInventoryComponent::IsBagItemLockedByIdentity(const FYIInventoryItemRef& Identity) const
 {
-	if (!Identity.BagId.IsValid())
+	if (!Identity.Bag.BagId.IsValid())
 	{
 		return false;
 	}
 
-	return LockedBagItems.ContainsByPredicate([&Identity](const FYILockedBagItemRef& Entry)
+	return LockedBagItems.ContainsByPredicate([&Identity](const FYIInventoryLockRef& Entry)
 	{
-		if (Entry.BagId != Identity.BagId)
+		if (Entry.ItemRef.Bag.BagId != Identity.Bag.BagId)
 		{
 			return false;
 		}
-		if (Identity.ItemInstanceId.IsValid() && Entry.ItemInstanceId.IsValid())
+		if (Identity.Item.ItemInstanceId.IsValid() && Entry.ItemRef.Item.ItemInstanceId.IsValid())
 		{
-			return Entry.ItemInstanceId == Identity.ItemInstanceId;
+			return Entry.ItemRef.Item.ItemInstanceId == Identity.Item.ItemInstanceId;
 		}
-		return Identity.CustomStackKey != 0 && Entry.CustomStackKey == Identity.CustomStackKey;
+		return Identity.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == Identity.Item.LegacyStackKey;
 	});
 }
 
@@ -485,42 +557,53 @@ bool UYIInventoryComponent::SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemInd
 		MutableItem.Item.CustomStackKey = NewKey == 0 ? 1 : NewKey;
 	}
 
-	FYILockedBagItemRef Identity;
+	FYIInventoryItemRef Identity;
 	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
 	{
 		return false;
 	}
 
-	return SetBagItemLockedByInstanceRef(Identity.BagId, Identity.ItemInstanceId, Identity.CustomStackKey, Identity.Code, bLocked);
+	return SetBagItemLockedInternal(Identity, bLocked);
 }
 
-bool UYIInventoryComponent::SetBagItemLockedByRef(const FGuid& BagId, int64 CustomStackKey, int64 Code, bool bLocked)
+bool UYIInventoryComponent::SetBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef, bool bLocked)
 {
-	return SetBagItemLockedByInstanceRef(BagId, FGuid(), CustomStackKey, Code, bLocked);
+	return SetBagItemLockedInternal(ItemRef, bLocked);
 }
 
-bool UYIInventoryComponent::SetBagItemLockedByInstanceRef(const FGuid& BagId, const FGuid& ItemInstanceId, int64 CustomStackKey, int64 Code, bool bLocked)
+bool UYIInventoryComponent::GetBagItemCoreRef(UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutItemRef) const
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || !BagId.IsValid())
+	OutItemRef = FYIInventoryItemRef();
+
+	if (!GetBagItemIdentity(Bag, ItemIndex, OutItemRef))
 	{
 		return false;
 	}
-	if (!ItemInstanceId.IsValid() && CustomStackKey == 0)
+	return true;
+}
+
+bool UYIInventoryComponent::SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !ItemRef.Bag.BagId.IsValid())
+	{
+		return false;
+	}
+	if (!ItemRef.Item.ItemInstanceId.IsValid() && ItemRef.Item.LegacyStackKey == 0)
 	{
 		return false;
 	}
 
-	const int32 ExistingIndex = LockedBagItems.IndexOfByPredicate([&](const FYILockedBagItemRef& Entry)
+	const int32 ExistingIndex = LockedBagItems.IndexOfByPredicate([&](const FYIInventoryLockRef& Entry)
 	{
-		if (Entry.BagId != BagId)
+		if (Entry.ItemRef.Bag.BagId != ItemRef.Bag.BagId)
 		{
 			return false;
 		}
-		if (ItemInstanceId.IsValid() && Entry.ItemInstanceId.IsValid())
+		if (ItemRef.Item.ItemInstanceId.IsValid() && Entry.ItemRef.Item.ItemInstanceId.IsValid())
 		{
-			return Entry.ItemInstanceId == ItemInstanceId;
+			return Entry.ItemRef.Item.ItemInstanceId == ItemRef.Item.ItemInstanceId;
 		}
-		return CustomStackKey != 0 && Entry.CustomStackKey == CustomStackKey;
+		return ItemRef.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == ItemRef.Item.LegacyStackKey;
 	});
 
 	if (bLocked)
@@ -530,11 +613,8 @@ bool UYIInventoryComponent::SetBagItemLockedByInstanceRef(const FGuid& BagId, co
 			return true;
 		}
 
-		FYILockedBagItemRef NewEntry;
-		NewEntry.BagId = BagId;
-		NewEntry.ItemInstanceId = ItemInstanceId;
-		NewEntry.CustomStackKey = CustomStackKey;
-		NewEntry.Code = Code;
+		FYIInventoryLockRef NewEntry;
+		NewEntry.ItemRef = ItemRef;
 		LockedBagItems.Add(NewEntry);
 		SyncNetState();
 		return true;
@@ -555,13 +635,18 @@ bool UYIInventoryComponent::IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemInde
 		return false;
 	}
 
-	FYILockedBagItemRef Identity;
+	FYIInventoryItemRef Identity;
 	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
 	{
 		return false;
 	}
 
 	return IsBagItemLockedByIdentity(Identity);
+}
+
+bool UYIInventoryComponent::IsBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef) const
+{
+	return IsBagItemLockedByIdentity(ItemRef);
 }
 
 bool UYIInventoryComponent::FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const
@@ -735,9 +820,9 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return false;
 	Bag->EnsureBagId();
-	LockedBagItems.RemoveAllSwap([Bag](const FYILockedBagItemRef& Entry)
+	LockedBagItems.RemoveAllSwap([Bag](const FYIInventoryLockRef& Entry)
 	{
-		return Entry.BagId == Bag->BagId;
+		return Entry.ItemRef.Bag.BagId == Bag->BagId;
 	}, EAllowShrinking::No);
 	if (ActiveBagId.IsValid() && ActiveBagId == Bag->BagId)
 	{
@@ -1322,17 +1407,17 @@ void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 {
 	if (EquippedBag && EquippedBag->BagId.IsValid())
 	{
-		const int32 Removed = LockedBagItems.RemoveAllSwap([this, &Item](const FYILockedBagItemRef& Entry)
+		const int32 Removed = LockedBagItems.RemoveAllSwap([this, &Item](const FYIInventoryLockRef& Entry)
 		{
-			if (!EquippedBag || Entry.BagId != EquippedBag->BagId)
+			if (!EquippedBag || Entry.ItemRef.Bag.BagId != EquippedBag->BagId)
 			{
 				return false;
 			}
-			if (Entry.ItemInstanceId.IsValid() && Item.Item.InstanceId.IsValid())
+			if (Entry.ItemRef.Item.ItemInstanceId.IsValid() && Item.Item.InstanceId.IsValid())
 			{
-				return Entry.ItemInstanceId == Item.Item.InstanceId;
+				return Entry.ItemRef.Item.ItemInstanceId == Item.Item.InstanceId;
 			}
-			return Entry.CustomStackKey != 0 && Entry.CustomStackKey == Item.Item.CustomStackKey;
+			return Entry.ItemRef.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == Item.Item.CustomStackKey;
 		}, EAllowShrinking::No);
 		if (Removed > 0 && GetOwner() && GetOwner()->HasAuthority())
 		{
@@ -1404,23 +1489,19 @@ void UYIInventoryComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIIn
 
 // -------- UI helpers --------
 
-UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
+UUserWidget* UYIInventoryComponent::OpenInventoryScreen()
 {
 	if (!GetOwner()) return nullptr;
 	if (GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr; // no UI on dedicated server
 	if (ActiveInventoryScreen.IsValid())
 	{
-		ActiveInventoryScreen->BindInventoryBagContexts(this);
+		YIInventoryComp_BindInventoryScreenWidget(ActiveInventoryScreen.Get(), this);
 		return ActiveInventoryScreen.Get();
 	}
 
 	if (!InventoryScreenClass.IsNull())
 	{
 		InventoryScreenClass.LoadSynchronous();
-	}
-	if (!InventoryScreenClass.IsValid())
-	{
-		InventoryScreenClass = TSoftClassPtr<UInventoryScreenWidget>(UInventoryScreenWidget::StaticClass());
 	}
 	if (!InventoryScreenClass.IsValid()) return nullptr;
 
@@ -1435,10 +1516,10 @@ UInventoryScreenWidget* UYIInventoryComponent::OpenInventoryScreen()
 	}
 	if (!PC || !PC->IsLocalController()) return nullptr;
 
-	UInventoryScreenWidget* Screen = CreateWidget<UInventoryScreenWidget>(PC, InventoryScreenClass.Get());
+	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, InventoryScreenClass.Get());
 	if (!Screen) return nullptr;
 
-	Screen->BindInventoryBagContexts(this);
+	YIInventoryComp_BindInventoryScreenWidget(Screen, this);
 	Screen->AddToViewport();
 	ActiveInventoryScreen = Screen;
 	return Screen;
@@ -1453,13 +1534,13 @@ void UYIInventoryComponent::CloseInventoryScreen()
 	}
 }
 
-UTradingScreenWidget* UYIInventoryComponent::OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
+UUserWidget* UYIInventoryComponent::OpenTradeScreen(AYITradeSessionActor* Session, UYIInventoryBag* LocalBag)
 {
 	if (!Session) return nullptr;
 	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
 	if (ActiveTradeScreen.IsValid())
 	{
-		ActiveTradeScreen->SetSession(Session, LocalBag ? LocalBag : GetBag(), nullptr);
+		YIInventoryComp_BindTradeScreenWidget(ActiveTradeScreen.Get(), Session, LocalBag ? LocalBag : GetBag());
 		return ActiveTradeScreen.Get();
 	}
 
@@ -1480,10 +1561,10 @@ UTradingScreenWidget* UYIInventoryComponent::OpenTradeScreen(AYITradeSessionActo
 	}
 	if (!PC || !PC->IsLocalController()) return nullptr;
 
-	UTradingScreenWidget* Screen = CreateWidget<UTradingScreenWidget>(PC, TradingScreenClass.Get());
+	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, TradingScreenClass.Get());
 	if (!Screen) return nullptr;
 
-	Screen->SetSession(Session, LocalBag ? LocalBag : GetBag(), nullptr);
+	YIInventoryComp_BindTradeScreenWidget(Screen, Session, LocalBag ? LocalBag : GetBag());
 	Screen->AddToViewport();
 	ActiveTradeScreen = Screen;
 	return Screen;
@@ -1498,13 +1579,13 @@ void UYIInventoryComponent::CloseTradeScreen()
 	}
 }
 
-UShopScreenWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
+UUserWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop, UYIInventoryBag* LocalBag, const TArray<FYINetBagItem>& Stock, FIntPoint StockSize)
 {
 	if (!Shop) return nullptr;
 	if (!GetOwner() || GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr;
 	if (ActiveShopScreen.IsValid())
 	{
-		ActiveShopScreen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+		YIInventoryComp_BindShopScreenWidget(ActiveShopScreen.Get(), Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
 		return ActiveShopScreen.Get();
 	}
 
@@ -1525,10 +1606,10 @@ UShopScreenWidget* UYIInventoryComponent::OpenShopScreen(UYIShopComponent* Shop,
 	}
 	if (!PC || !PC->IsLocalController()) return nullptr;
 
-	UShopScreenWidget* Screen = CreateWidget<UShopScreenWidget>(PC, ShopScreenClass.Get());
+	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, ShopScreenClass.Get());
 	if (!Screen) return nullptr;
 
-	Screen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+	YIInventoryComp_BindShopScreenWidget(Screen, Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
 	Screen->AddToViewport();
 	ActiveShopScreen = Screen;
 	return Screen;
@@ -1539,7 +1620,7 @@ void UYIInventoryComponent::UpdateShopScreen(UYIShopComponent* Shop, UYIInventor
 	if (!Shop) return;
 	if (ActiveShopScreen.IsValid())
 	{
-		ActiveShopScreen->SetShop(Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
+		YIInventoryComp_BindShopScreenWidget(ActiveShopScreen.Get(), Shop, LocalBag ? LocalBag : GetBag(), Stock, StockSize);
 	}
 }
 

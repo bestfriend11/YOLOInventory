@@ -5,8 +5,6 @@
 #include "GameplayTagContainer.h"
 #include "YOLOInventorySettings.generated.h"
 
-class UYIInventoryGridStyleAsset;
-
 UENUM(BlueprintType)
 enum class EYIDebugChannel : uint8
 {
@@ -141,8 +139,8 @@ public:
 	TArray<FString> SuggestedInventoryTagPrefixes;
 
 	/** Optional default runtime grid style used when widget and bag do not specify one. */
-	UPROPERTY(EditAnywhere, config, Category = "Visuals", meta=(ToolTip="Fallback grid style for runtime inventory grids (widget override and bag style take priority)."))
-	TSoftObjectPtr<UYIInventoryGridStyleAsset> DefaultGridStyle;
+	UPROPERTY(EditAnywhere, config, Category = "Visuals", meta=(AllowedClasses="/Script/YOLOInventoryGrid.YIInventoryGridStyleAsset", ToolTip="Fallback grid style for runtime inventory grids (widget override and bag style take priority)."))
+	TSoftObjectPtr<UObject> DefaultGridStyle;
 
 	/** Read-only access to settings. */
 	static const UYOLOInventorySettings& Get();

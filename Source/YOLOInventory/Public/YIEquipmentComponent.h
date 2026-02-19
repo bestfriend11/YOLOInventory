@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "YIInventoryCoreTypes.h"
 #include "YIItemPickup.h"
 #include "YIEquipmentComponent.generated.h"
 
@@ -43,21 +44,9 @@ struct YOLOINVENTORY_API FYIEquippedItemEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated. True when equip mode keeps the item in inventory as locked and mirrors it in equipment."))
 	bool bInventoryLocked = false;
 
-	/** Source bag id used when bInventoryLocked is true. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source bag id used to unlock/reconcile the source item when unequipping locked inventory entries."))
-	FGuid SourceBagId;
-
-	/** Source item runtime identity used when bInventoryLocked is true. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source item runtime id used for deterministic unlock/reconcile of locked inventory entries."))
-	FGuid SourceInstanceId;
-
-	/** Source item identity used when bInventoryLocked is true. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated source item key used to find the locked item inside source bag."))
-	int64 SourceCustomStackKey = 0;
-
-	/** Source item code fallback for lock resolution. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated fallback item code used for source item lock resolution."))
-	int64 SourceItemCode = 0;
+	/** Canonical source item identity used for deterministic unlock/reconcile in locked inventory mode. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ToolTip="Replicated canonical source identity (Bag + Item runtime handle). Preferred over legacy source id fields."))
+	FYIInventoryItemRef SourceItemRef;
 };
 
 USTRUCT(BlueprintType)

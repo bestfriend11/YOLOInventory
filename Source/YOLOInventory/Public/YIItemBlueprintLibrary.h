@@ -7,7 +7,7 @@
 class UYIItemDefinition;
 
 UCLASS()
-class UYIItemBlueprintLibrary : public UBlueprintFunctionLibrary
+class YOLOINVENTORY_API UYIItemBlueprintLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 public:

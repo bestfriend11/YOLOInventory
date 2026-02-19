@@ -6,7 +6,7 @@
 #include "YIPhase2TestMapActor.generated.h"
 
 class APawn;
-class UInventoryScreenWidget;
+class UUserWidget;
 class UYIInventoryBag;
 class UYIInventoryComponent;
 class UYIItemDefinition;
@@ -123,7 +123,7 @@ protected:
 	int32 SpellbookActionSlotIndex = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Phase2|UI")
-	TSoftClassPtr<UInventoryScreenWidget> InventoryScreenClass;
+	TSoftClassPtr<UUserWidget> InventoryScreenClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Phase2|Debug")
 	bool bShowScreenMessages = true;

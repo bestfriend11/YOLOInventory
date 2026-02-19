@@ -31,6 +31,19 @@ namespace
 		}
 		return nullptr;
 	}
+
+	template<typename TFragment>
+	static TFragment* YI_FindDefinitionFragmentMutable(TArray<FInstancedStruct>& Fragments)
+	{
+		for (FInstancedStruct& Fragment : Fragments)
+		{
+			if (TFragment* Value = Fragment.GetMutablePtr<TFragment>())
+			{
+				return Value;
+			}
+		}
+		return nullptr;
+	}
 }
 
 const FYIItemUIDefinitionFragment* UYIItemDefinition::GetUIDefinitionFragment() const
@@ -60,24 +73,27 @@ const FYIItemLayoutDefinitionFragment* UYIItemDefinition::GetLayoutDefinitionFra
 
 void UYIItemDefinition::GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const
 {
-	OutDisplayName = DisplayName;
-	OutDescription = Description;
-	OutIcon = Icon;
+	OutDisplayName = FText::FromString(GetName());
+	OutDescription = FText::GetEmpty();
+	OutIcon = nullptr;
 
-	if (const FYIItemUIDefinitionFragment* UI = GetUIDefinitionFragment())
+	const FYIItemUIDefinitionFragment* UI = GetUIDefinitionFragment();
+	if (!UI)
 	{
-		if (!UI->DisplayName.IsEmpty())
-		{
-			OutDisplayName = UI->DisplayName;
-		}
-		if (!UI->Description.IsEmpty())
-		{
-			OutDescription = UI->Description;
-		}
-		if (UI->Icon.ToSoftObjectPath().IsValid())
-		{
-			OutIcon = UI->Icon;
-		}
+		return;
+	}
+
+	if (!UI->DisplayName.IsEmpty())
+	{
+		OutDisplayName = UI->DisplayName;
+	}
+	if (!UI->Description.IsEmpty())
+	{
+		OutDescription = UI->Description;
+	}
+	if (UI->Icon.ToSoftObjectPath().IsValid())
+	{
+		OutIcon = UI->Icon;
 	}
 }
 
@@ -96,7 +112,6 @@ FGameplayTag UYIItemDefinition::GetEffectivePrimaryEquipSlotTag() const
 void UYIItemDefinition::GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const
 {
 	OutOccupiedSlots.Reset();
-	OutOccupiedSlots.AppendTags(OccupiedEquipSlots);
 
 	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
 	{
@@ -141,6 +156,181 @@ FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const U
 	return &NewFragment;
 }
 
+bool UYIItemDefinition::EnsureBaselineDefinitionFragments()
+{
+	bool bChanged = false;
+
+	// UI fragment: mirror legacy display data when missing/empty.
+	if (FYIItemUIDefinitionFragment* UI = YI_FindDefinitionFragmentMutable<FYIItemUIDefinitionFragment>(DefinitionFragments))
+	{
+		if (UI->DisplayName.IsEmpty() && !DisplayName.IsEmpty())
+		{
+			bChanged = true;
+			UI->DisplayName = DisplayName;
+		}
+		if (UI->Description.IsEmpty() && !Description.IsEmpty())
+		{
+			bChanged = true;
+			UI->Description = Description;
+		}
+		if (!UI->Icon.ToSoftObjectPath().IsValid() && Icon.ToSoftObjectPath().IsValid())
+		{
+			bChanged = true;
+			UI->Icon = Icon;
+		}
+	}
+	else if (!DisplayName.IsEmpty() || !Description.IsEmpty() || Icon.ToSoftObjectPath().IsValid())
+	{
+		bChanged = true;
+		FInstancedStruct& UIFragment = DefinitionFragments.AddDefaulted_GetRef();
+		UIFragment.InitializeAs<FYIItemUIDefinitionFragment>();
+		if (FYIItemUIDefinitionFragment* UIFrag = UIFragment.GetMutablePtr<FYIItemUIDefinitionFragment>())
+		{
+			UIFrag->DisplayName = DisplayName;
+			UIFrag->Description = Description;
+			UIFrag->Icon = Icon;
+		}
+	}
+
+	// Layout fragment: keep fragment values synced to legacy unless explicitly overriding.
+	if (FYIItemLayoutDefinitionFragment* Layout = YI_FindDefinitionFragmentMutable<FYIItemLayoutDefinitionFragment>(DefinitionFragments))
+	{
+		if (!Layout->bOverrideLegacyLayoutFields)
+		{
+			if (Layout->DefaultSize != DefaultSize)
+			{
+				bChanged = true;
+				Layout->DefaultSize = DefaultSize;
+			}
+			if (Layout->bAllowRotation != bAllowRotation)
+			{
+				bChanged = true;
+				Layout->bAllowRotation = bAllowRotation;
+			}
+		}
+	}
+	else
+	{
+		bChanged = true;
+		FInstancedStruct& LayoutFragment = DefinitionFragments.AddDefaulted_GetRef();
+		LayoutFragment.InitializeAs<FYIItemLayoutDefinitionFragment>();
+		if (FYIItemLayoutDefinitionFragment* LayoutFrag = LayoutFragment.GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+		{
+			LayoutFrag->bOverrideLegacyLayoutFields = false;
+			LayoutFrag->DefaultSize = DefaultSize;
+			LayoutFrag->bAllowRotation = bAllowRotation;
+		}
+	}
+
+	// Stacking fragment: preserve runtime behavior while exposing fragment mirror data.
+	if (FYIItemStackingDefinitionFragment* Stacking = YI_FindDefinitionFragmentMutable<FYIItemStackingDefinitionFragment>(DefinitionFragments))
+	{
+		if (!Stacking->bOverrideLegacyStackingFields)
+		{
+			const bool bDesiredRiskChecks = !bAllowUnsafeStacking;
+			if (Stacking->bAllowStacking != bAllowStacking)
+			{
+				bChanged = true;
+				Stacking->bAllowStacking = bAllowStacking;
+			}
+			if (Stacking->MaxStackCount != MaxStackCount)
+			{
+				bChanged = true;
+				Stacking->MaxStackCount = MaxStackCount;
+			}
+			if (Stacking->bUseRiskChecks != bDesiredRiskChecks)
+			{
+				bChanged = true;
+				Stacking->bUseRiskChecks = bDesiredRiskChecks;
+			}
+		}
+	}
+	else
+	{
+		bChanged = true;
+		FInstancedStruct& StackingFragment = DefinitionFragments.AddDefaulted_GetRef();
+		StackingFragment.InitializeAs<FYIItemStackingDefinitionFragment>();
+		if (FYIItemStackingDefinitionFragment* StackingFrag = StackingFragment.GetMutablePtr<FYIItemStackingDefinitionFragment>())
+		{
+			StackingFrag->bOverrideLegacyStackingFields = false;
+			StackingFrag->bAllowStacking = bAllowStacking;
+			StackingFrag->MaxStackCount = MaxStackCount;
+			StackingFrag->bUseRiskChecks = !bAllowUnsafeStacking;
+		}
+	}
+
+	// Affix fragment: keep baseline generation config mirrored for schema-driven tools.
+	if (FYIItemAffixDefinitionFragment* AffixDef = YI_FindDefinitionFragmentMutable<FYIItemAffixDefinitionFragment>(DefinitionFragments))
+	{
+		if (!AffixDef->bOverrideLegacyAffixFields)
+		{
+			if (AffixDef->TemplateAffixes != TemplateAffixes)
+			{
+				bChanged = true;
+				AffixDef->TemplateAffixes = TemplateAffixes;
+			}
+			if (AffixDef->MinRandomModifiers != MinRandomModifiers)
+			{
+				bChanged = true;
+				AffixDef->MinRandomModifiers = MinRandomModifiers;
+			}
+			if (AffixDef->MaxRandomModifiers != MaxRandomModifiers)
+			{
+				bChanged = true;
+				AffixDef->MaxRandomModifiers = MaxRandomModifiers;
+			}
+			if (AffixDef->PrefixPool.ToSoftObjectPath() != PrefixPool.ToSoftObjectPath())
+			{
+				bChanged = true;
+				AffixDef->PrefixPool = PrefixPool;
+			}
+			if (AffixDef->SuffixPool.ToSoftObjectPath() != SuffixPool.ToSoftObjectPath())
+			{
+				bChanged = true;
+				AffixDef->SuffixPool = SuffixPool;
+			}
+		}
+	}
+	else if (TemplateAffixes.Num() > 0 || MinRandomModifiers > 0 || MaxRandomModifiers > 0
+		|| PrefixPool.ToSoftObjectPath().IsValid() || SuffixPool.ToSoftObjectPath().IsValid())
+	{
+		bChanged = true;
+		FInstancedStruct& AffixFragment = DefinitionFragments.AddDefaulted_GetRef();
+		AffixFragment.InitializeAs<FYIItemAffixDefinitionFragment>();
+		if (FYIItemAffixDefinitionFragment* AffixFrag = AffixFragment.GetMutablePtr<FYIItemAffixDefinitionFragment>())
+		{
+			AffixFrag->bOverrideLegacyAffixFields = false;
+			AffixFrag->TemplateAffixes = TemplateAffixes;
+			AffixFrag->MinRandomModifiers = MinRandomModifiers;
+			AffixFrag->MaxRandomModifiers = MaxRandomModifiers;
+			AffixFrag->PrefixPool = PrefixPool;
+			AffixFrag->SuffixPool = SuffixPool;
+		}
+	}
+
+	// Equipment fragment baseline: occupied slot list can be represented as schema fragment data.
+	if (FYIItemEquipmentDefinitionFragment* Equipment = YI_FindDefinitionFragmentMutable<FYIItemEquipmentDefinitionFragment>(DefinitionFragments))
+	{
+		if (Equipment->OccupiedSlots.Num() == 0 && OccupiedEquipSlots.Num() > 0)
+		{
+			bChanged = true;
+			Equipment->OccupiedSlots = OccupiedEquipSlots;
+		}
+	}
+	else if (OccupiedEquipSlots.Num() > 0)
+	{
+		bChanged = true;
+		FInstancedStruct& EquipmentFragment = DefinitionFragments.AddDefaulted_GetRef();
+		EquipmentFragment.InitializeAs<FYIItemEquipmentDefinitionFragment>();
+		if (FYIItemEquipmentDefinitionFragment* EquipmentFrag = EquipmentFragment.GetMutablePtr<FYIItemEquipmentDefinitionFragment>())
+		{
+			EquipmentFrag->OccupiedSlots = OccupiedEquipSlots;
+		}
+	}
+
+	return bChanged;
+}
+
 const FYIItemStackingDefinitionFragment* UYIItemDefinition::GetStackingDefinitionFragment() const
 {
 	return YI_FindDefinitionFragment<FYIItemStackingDefinitionFragment>(DefinitionFragments);
@@ -153,54 +343,38 @@ void UYIItemDefinition::GetEffectiveAffixDefinition(
 	TSoftObjectPtr<UYIAffixPoolAsset>& OutPrefixPool,
 	TSoftObjectPtr<UYIAffixPoolAsset>& OutSuffixPool) const
 {
-	OutTemplateAffixes = TemplateAffixes;
-	OutMinRandomModifiers = MinRandomModifiers;
-	OutMaxRandomModifiers = MaxRandomModifiers;
-	OutPrefixPool = PrefixPool;
-	OutSuffixPool = SuffixPool;
+	OutTemplateAffixes.Reset();
+	OutMinRandomModifiers = 0;
+	OutMaxRandomModifiers = 0;
+	OutPrefixPool = nullptr;
+	OutSuffixPool = nullptr;
 
-	if (const FYIItemAffixDefinitionFragment* AffixDef = GetAffixDefinitionFragment())
+	const FYIItemAffixDefinitionFragment* AffixDef = GetAffixDefinitionFragment();
+	if (!AffixDef)
 	{
-		if (AffixDef->bOverrideLegacyAffixFields)
-		{
-			OutTemplateAffixes = AffixDef->TemplateAffixes;
-			OutMinRandomModifiers = AffixDef->MinRandomModifiers;
-			OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
-			OutPrefixPool = AffixDef->PrefixPool;
-			OutSuffixPool = AffixDef->SuffixPool;
-			return;
-		}
-
-		for (const TSoftObjectPtr<UYIAffixAsset>& Affix : AffixDef->TemplateAffixes)
-		{
-			OutTemplateAffixes.AddUnique(Affix);
-		}
-		OutMinRandomModifiers = AffixDef->MinRandomModifiers;
-		OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
-		if (AffixDef->PrefixPool.ToSoftObjectPath().IsValid())
-		{
-			OutPrefixPool = AffixDef->PrefixPool;
-		}
-		if (AffixDef->SuffixPool.ToSoftObjectPath().IsValid())
-		{
-			OutSuffixPool = AffixDef->SuffixPool;
-		}
+		return;
 	}
+
+	OutTemplateAffixes = AffixDef->TemplateAffixes;
+	OutMinRandomModifiers = AffixDef->MinRandomModifiers;
+	OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
+	OutPrefixPool = AffixDef->PrefixPool;
+	OutSuffixPool = AffixDef->SuffixPool;
 }
 
 void UYIItemDefinition::GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const
 {
-	OutDefaultSize = DefaultSize;
-	bOutAllowRotation = bAllowRotation;
+	OutDefaultSize = FIntPoint(1, 1);
+	bOutAllowRotation = true;
 
-	if (const FYIItemLayoutDefinitionFragment* Layout = GetLayoutDefinitionFragment())
+	const FYIItemLayoutDefinitionFragment* Layout = GetLayoutDefinitionFragment();
+	if (!Layout)
 	{
-		if (Layout->bOverrideLegacyLayoutFields)
-		{
-			OutDefaultSize = Layout->DefaultSize;
-			bOutAllowRotation = Layout->bAllowRotation;
-		}
+		return;
 	}
+
+	OutDefaultSize = Layout->DefaultSize;
+	bOutAllowRotation = Layout->bAllowRotation;
 
 	OutDefaultSize.X = FMath::Max(1, OutDefaultSize.X);
 	OutDefaultSize.Y = FMath::Max(1, OutDefaultSize.Y);
@@ -222,21 +396,59 @@ bool UYIItemDefinition::IsEffectiveRotationAllowed() const
 	return bRotationAllowed;
 }
 
-void UYIItemDefinition::GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const
+void UYIItemDefinition::BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const
 {
-	bOutAllowStacking = bAllowStacking;
-	OutMaxStackCount = MaxStackCount;
-	bOutUseRiskChecks = true;
+	OutSnapshot = FYIItemSchemaSnapshot();
+	OutSnapshot.UniqueCode = UniqueCode;
+	OutSnapshot.TemplateId = TemplateId;
+	OutSnapshot.ItemType = ItemType;
+	OutSnapshot.Tags = Tags;
 
-	if (const FYIItemStackingDefinitionFragment* Stacking = GetStackingDefinitionFragment())
+	GetEffectiveDisplayData(OutSnapshot.Display.DisplayName, OutSnapshot.Display.Description, OutSnapshot.Display.Icon);
+	GetEffectiveLayoutData(OutSnapshot.Layout.DefaultSize, OutSnapshot.Layout.bAllowRotation);
+	GetEffectiveStackingRules(
+		OutSnapshot.Stacking.bAllowStacking,
+		OutSnapshot.Stacking.MaxStackCount,
+		OutSnapshot.Stacking.bUseRiskChecks);
+
+	TArray<TSoftObjectPtr<UYIAffixAsset>> TemplateAffixAssets;
+	TSoftObjectPtr<UYIAffixPoolAsset> PrefixPoolAsset;
+	TSoftObjectPtr<UYIAffixPoolAsset> SuffixPoolAsset;
+	GetEffectiveAffixDefinition(
+		TemplateAffixAssets,
+		OutSnapshot.Affix.MinRandomModifiers,
+		OutSnapshot.Affix.MaxRandomModifiers,
+		PrefixPoolAsset,
+		SuffixPoolAsset);
+
+	OutSnapshot.Affix.TemplateAffixes.Reserve(TemplateAffixAssets.Num());
+	for (const TSoftObjectPtr<UYIAffixAsset>& TemplateAffix : TemplateAffixAssets)
 	{
-		if (Stacking->bOverrideLegacyStackingFields)
+		const FSoftObjectPath AssetPath = TemplateAffix.ToSoftObjectPath();
+		if (AssetPath.IsValid())
 		{
-			bOutAllowStacking = Stacking->bAllowStacking;
-			OutMaxStackCount = Stacking->MaxStackCount;
-			bOutUseRiskChecks = Stacking->bUseRiskChecks;
+			OutSnapshot.Affix.TemplateAffixes.Add(AssetPath);
 		}
 	}
+	OutSnapshot.Affix.PrefixPool = PrefixPoolAsset.ToSoftObjectPath();
+	OutSnapshot.Affix.SuffixPool = SuffixPoolAsset.ToSoftObjectPath();
+}
+
+void UYIItemDefinition::GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const
+{
+	bOutAllowStacking = false;
+	OutMaxStackCount = 1;
+	bOutUseRiskChecks = true;
+
+	const FYIItemStackingDefinitionFragment* Stacking = GetStackingDefinitionFragment();
+	if (!Stacking)
+	{
+		return;
+	}
+
+	bOutAllowStacking = Stacking->bAllowStacking;
+	OutMaxStackCount = Stacking->MaxStackCount;
+	bOutUseRiskChecks = Stacking->bUseRiskChecks;
 }
 
 bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
@@ -354,6 +566,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+	EnsureBaselineDefinitionFragments();
 
 	const FProperty* ChangedProperty = PropertyChangedEvent.Property;
 	if (!ChangedProperty || !bAllowStacking)
@@ -409,6 +622,8 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 {
 	Super::PreSave(SaveContext);
+	EnsureBaselineDefinitionFragments();
+
 	if (UniqueCode == 0)
 	{
 		if (UEngine* Engine = GEngine)
