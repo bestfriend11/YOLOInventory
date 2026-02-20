@@ -17,7 +17,7 @@ struct FYIEditorLogEntry
 	FText Context;
 };
 
-class YOLOINVENTORYEDITORCORE_API FYIEditorMessageLog
+class YOLOINVENTORYEDITORSCHEMA_API FYIEditorMessageLog
 {
 public:
 	DECLARE_MULTICAST_DELEGATE(FOnLogChanged);

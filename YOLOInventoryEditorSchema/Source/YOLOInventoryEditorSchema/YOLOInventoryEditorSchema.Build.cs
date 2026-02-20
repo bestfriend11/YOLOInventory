@@ -13,8 +13,7 @@ public class YOLOInventoryEditorSchema : ModuleRules
             "Engine",
             "YOLOInventorySchema",
             "YOLOInventoryLegacyBridge",
-            "YOLOInventoryContainers",
-            "YOLOInventoryEditorCore"
+            "YOLOInventoryContainers"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]

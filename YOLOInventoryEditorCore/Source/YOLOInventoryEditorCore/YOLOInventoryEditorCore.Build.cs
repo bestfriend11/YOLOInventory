@@ -11,7 +11,10 @@ public class YOLOInventoryEditorCore : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "YOLOInventoryCore"
+            "YOLOInventoryCore",
+            "YOLOInventorySchema",
+            "YOLOInventoryContainers",
+            "YOLOInventoryEditorSchema"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
@@ -21,7 +24,11 @@ public class YOLOInventoryEditorCore : ModuleRules
             "SlateCore",
             "ToolMenus",
             "PropertyEditor",
-            "AssetRegistry"
+            "AssetRegistry",
+            "AssetTools",
+            "EditorFramework",
+            "Kismet",
+            "YOLOInventoryWorld"
         });
     }
 }
