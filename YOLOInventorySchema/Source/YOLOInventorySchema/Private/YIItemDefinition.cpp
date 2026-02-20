@@ -24,19 +24,6 @@ namespace
 	}
 
 	template<typename TFragment>
-	static const TFragment* YI_FindDefinitionFragment(const TArray<FInstancedStruct>& Fragments)
-	{
-		for (const FInstancedStruct& Fragment : Fragments)
-		{
-			if (const TFragment* Value = Fragment.GetPtr<TFragment>())
-			{
-				return Value;
-			}
-		}
-		return nullptr;
-	}
-
-	template<typename TFragment>
 	static TFragment* YI_FindDefinitionFragmentMutable(TArray<FInstancedStruct>& Fragments)
 	{
 		for (FInstancedStruct& Fragment : Fragments)
@@ -102,38 +89,6 @@ namespace
 		return YI_FindResolvedDefinitionFragmentByStruct(Parent, FragmentStruct, VisitedDefinitions);
 	}
 
-	static void YI_CollectEffectiveTagsRecursive(const UYIItemDefinition* ItemDef, TSet<const UYIItemDefinition*>& VisitedDefinitions, FGameplayTagContainer& OutTags)
-	{
-		if (!ItemDef || VisitedDefinitions.Contains(ItemDef))
-		{
-			return;
-		}
-		VisitedDefinitions.Add(ItemDef);
-
-		if (const UYIItemDefinition* Parent = ItemDef->ParentDefinition.LoadSynchronous())
-		{
-			YI_CollectEffectiveTagsRecursive(Parent, VisitedDefinitions, OutTags);
-		}
-
-		for (const TSoftObjectPtr<UYIItemTraitAsset>& TraitPtr : ItemDef->Traits)
-		{
-			const UYIItemTraitAsset* Trait = TraitPtr.LoadSynchronous();
-			if (!Trait)
-			{
-				continue;
-			}
-
-			if (const FYIItemClassificationDefinitionFragment* Classification = YI_FindDefinitionFragment<FYIItemClassificationDefinitionFragment>(Trait->DefinitionFragments))
-			{
-				OutTags.AppendTags(Classification->Tags);
-			}
-		}
-
-		if (const FYIItemClassificationDefinitionFragment* Classification = YI_FindDefinitionFragment<FYIItemClassificationDefinitionFragment>(ItemDef->DefinitionFragments))
-		{
-			OutTags.AppendTags(Classification->Tags);
-		}
-	}
 }
 
 const FYIItemUIDefinitionFragment* UYIItemDefinition::GetUIDefinitionFragment() const
@@ -233,171 +188,6 @@ const FYIItemAttributeModsDefinitionFragment* UYIItemDefinition::GetAttributeMod
 		return Fragment->GetPtr<FYIItemAttributeModsDefinitionFragment>();
 	}
 	return nullptr;
-}
-
-void UYIItemDefinition::GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const
-{
-	OutDisplayName = FText::FromString(GetName());
-	OutDescription = FText::GetEmpty();
-	OutIcon = nullptr;
-
-	if (const FYIItemUIDefinitionFragment* UI = GetUIDefinitionFragment())
-	{
-		if (!UI->DisplayName.IsEmpty())
-		{
-			OutDisplayName = UI->DisplayName;
-		}
-		if (!UI->Description.IsEmpty())
-		{
-			OutDescription = UI->Description;
-		}
-		if (UI->Icon.ToSoftObjectPath().IsValid())
-		{
-			OutIcon = UI->Icon;
-		}
-	}
-}
-
-FText UYIItemDefinition::GetEffectiveDisplayName() const
-{
-	FText Name;
-	FText Description;
-	TSoftObjectPtr<UTexture2D> Icon;
-	GetEffectiveDisplayData(Name, Description, Icon);
-	return Name;
-}
-
-FText UYIItemDefinition::GetEffectiveDescription() const
-{
-	FText Name;
-	FText Description;
-	TSoftObjectPtr<UTexture2D> Icon;
-	GetEffectiveDisplayData(Name, Description, Icon);
-	return Description;
-}
-
-TSoftObjectPtr<UTexture2D> UYIItemDefinition::GetEffectiveIcon() const
-{
-	FText Name;
-	FText Description;
-	TSoftObjectPtr<UTexture2D> Icon;
-	GetEffectiveDisplayData(Name, Description, Icon);
-	return Icon;
-}
-
-FGameplayTag UYIItemDefinition::GetEffectiveItemType() const
-{
-	if (const FYIItemClassificationDefinitionFragment* Classification = GetClassificationDefinitionFragment())
-	{
-		return Classification->ItemType;
-	}
-	return FGameplayTag();
-}
-
-void UYIItemDefinition::GetEffectiveTags(FGameplayTagContainer& OutTags) const
-{
-	OutTags.Reset();
-	TSet<const UYIItemDefinition*> VisitedDefinitions;
-	YI_CollectEffectiveTagsRecursive(this, VisitedDefinitions, OutTags);
-}
-
-FGameplayTag UYIItemDefinition::GetEffectiveRarityTag() const
-{
-	if (const FYIItemClassificationDefinitionFragment* Classification = GetClassificationDefinitionFragment())
-	{
-		return Classification->RarityTag;
-	}
-	return FGameplayTag();
-}
-
-FGameplayTag UYIItemDefinition::GetEffectiveAudioTag() const
-{
-	if (const FYIItemAudioDefinitionFragment* Audio = GetAudioDefinitionFragment())
-	{
-		return Audio->AudioTag;
-	}
-	return FGameplayTag();
-}
-
-TSoftObjectPtr<UYIItemSFXProfile> UYIItemDefinition::GetEffectiveSoundProfileOverride() const
-{
-	if (const FYIItemAudioDefinitionFragment* Audio = GetAudioDefinitionFragment())
-	{
-		return Audio->SoundProfileOverride;
-	}
-	return nullptr;
-}
-
-bool UYIItemDefinition::IsEffectiveUniquePerType() const
-{
-	if (const FYIItemRulesDefinitionFragment* Rules = GetRulesDefinitionFragment())
-	{
-		return Rules->bUniquePerType;
-	}
-	return false;
-}
-
-int32 UYIItemDefinition::GetEffectiveEquipSlotCost() const
-{
-	if (const FYIItemRulesDefinitionFragment* Rules = GetRulesDefinitionFragment())
-	{
-		return FMath::Max(1, Rules->EquipSlotCost);
-	}
-	return 1;
-}
-
-bool UYIItemDefinition::IsEffectiveContainerItem() const
-{
-	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
-	{
-		return Container->bIsContainerItem;
-	}
-	return false;
-}
-
-TSoftObjectPtr<UObject> UYIItemDefinition::GetEffectiveContainerTemplateBag() const
-{
-	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
-	{
-		return Container->ContainerTemplateBag;
-	}
-	return nullptr;
-}
-
-FIntPoint UYIItemDefinition::GetEffectiveContainerDefaultGridSize() const
-{
-	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
-	{
-		return FIntPoint(FMath::Max(1, Container->ContainerDefaultGridSize.X), FMath::Max(1, Container->ContainerDefaultGridSize.Y));
-	}
-	return FIntPoint(6, 8);
-}
-
-void UYIItemDefinition::GetEffectiveAttributeMods(TArray<TSoftObjectPtr<UYIAttributeModAsset>>& OutAttributeMods) const
-{
-	OutAttributeMods.Reset();
-	if (const FYIItemAttributeModsDefinitionFragment* AttrMods = GetAttributeModsDefinitionFragment())
-	{
-		OutAttributeMods = AttrMods->AttributeMods;
-	}
-}
-
-FGameplayTag UYIItemDefinition::GetEffectivePrimaryEquipSlotTag() const
-{
-	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
-	{
-		return Equip->PrimaryEquipSlot;
-	}
-	return FGameplayTag();
-}
-
-void UYIItemDefinition::GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const
-{
-	OutOccupiedSlots.Reset();
-	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
-	{
-		OutOccupiedSlots.AppendTags(Equip->OccupiedSlots);
-	}
 }
 
 const FInstancedStruct* UYIItemDefinition::FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
@@ -508,141 +298,40 @@ bool UYIItemDefinition::EnsureBaselineDefinitionFragments()
 	return bChanged;
 }
 
-void UYIItemDefinition::GetEffectiveAffixDefinition(
-	TArray<TSoftObjectPtr<UYIAffixAsset>>& OutTemplateAffixes,
-	int32& OutMinRandomModifiers,
-	int32& OutMaxRandomModifiers,
-	TSoftObjectPtr<UYIAffixPoolAsset>& OutPrefixPool,
-	TSoftObjectPtr<UYIAffixPoolAsset>& OutSuffixPool) const
-{
-	OutTemplateAffixes.Reset();
-	OutMinRandomModifiers = 0;
-	OutMaxRandomModifiers = 0;
-	OutPrefixPool = nullptr;
-	OutSuffixPool = nullptr;
-
-	if (const FYIItemAffixDefinitionFragment* AffixDef = GetAffixDefinitionFragment())
-	{
-		OutTemplateAffixes = AffixDef->TemplateAffixes;
-		OutMinRandomModifiers = AffixDef->MinRandomModifiers;
-		OutMaxRandomModifiers = AffixDef->MaxRandomModifiers;
-		OutPrefixPool = AffixDef->PrefixPool;
-		OutSuffixPool = AffixDef->SuffixPool;
-	}
-}
-
-void UYIItemDefinition::GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const
-{
-	OutDefaultSize = FIntPoint(1, 1);
-	bOutAllowRotation = true;
-
-	if (const FYIItemLayoutDefinitionFragment* Layout = GetLayoutDefinitionFragment())
-	{
-		OutDefaultSize = Layout->DefaultSize;
-		bOutAllowRotation = Layout->bAllowRotation;
-		OutDefaultSize.X = FMath::Max(1, OutDefaultSize.X);
-		OutDefaultSize.Y = FMath::Max(1, OutDefaultSize.Y);
-	}
-}
-
-FIntPoint UYIItemDefinition::GetEffectiveDefaultSize() const
-{
-	FIntPoint Size = FIntPoint(1, 1);
-	bool bRotation = true;
-	GetEffectiveLayoutData(Size, bRotation);
-	return Size;
-}
-
-bool UYIItemDefinition::IsEffectiveRotationAllowed() const
-{
-	FIntPoint Size = FIntPoint(1, 1);
-	bool bRotation = true;
-	GetEffectiveLayoutData(Size, bRotation);
-	return bRotation;
-}
-
 void UYIItemDefinition::BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const
 {
 	OutSnapshot = YIItemSchema::ResolveSnapshot(this);
 }
 
-void UYIItemDefinition::GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const
-{
-	bOutAllowStacking = true;
-	OutMaxStackCount = 99;
-	bOutUseRiskChecks = true;
-
-	if (const FYIItemStackingDefinitionFragment* Stacking = GetStackingDefinitionFragment())
-	{
-		bOutAllowStacking = Stacking->bAllowStacking;
-		OutMaxStackCount = Stacking->MaxStackCount;
-		bOutUseRiskChecks = Stacking->bUseRiskChecks;
-	}
-
-	OutMaxStackCount = FMath::Max(1, OutMaxStackCount);
-}
-
-int32 UYIItemDefinition::GetEffectiveMaxStackCount() const
-{
-	bool bAllowStacking = true;
-	int32 MaxStack = 99;
-	bool bUseRiskChecks = true;
-	GetEffectiveStackingRules(bAllowStacking, MaxStack, bUseRiskChecks);
-	return MaxStack;
-}
-
-bool UYIItemDefinition::IsEffectiveStackingEnabled() const
-{
-	bool bAllowStacking = true;
-	int32 MaxStack = 99;
-	bool bUseRiskChecks = true;
-	GetEffectiveStackingRules(bAllowStacking, MaxStack, bUseRiskChecks);
-	return bAllowStacking && MaxStack > 1;
-}
-
 bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 {
+	const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(this);
 	TArray<FString> Reasons;
 
-	TArray<TSoftObjectPtr<UYIAffixAsset>> EffectiveTemplateAffixes;
-	int32 EffectiveMinRandomModifiers = 0;
-	int32 EffectiveMaxRandomModifiers = 0;
-	TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
-	TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
-	GetEffectiveAffixDefinition(
-		EffectiveTemplateAffixes,
-		EffectiveMinRandomModifiers,
-		EffectiveMaxRandomModifiers,
-		EffectivePrefixPool,
-		EffectiveSuffixPool);
-
-	const bool bHasRandomRollSetup = EffectiveMinRandomModifiers > 0
-		|| EffectiveMaxRandomModifiers > 0
-		|| EffectivePrefixPool.ToSoftObjectPath().IsValid()
-		|| EffectiveSuffixPool.ToSoftObjectPath().IsValid();
+	const bool bHasRandomRollSetup = Snapshot.Affix.MinRandomModifiers > 0
+		|| Snapshot.Affix.MaxRandomModifiers > 0
+		|| Snapshot.Affix.PrefixPool.IsValid()
+		|| Snapshot.Affix.SuffixPool.IsValid();
 	if (bHasRandomRollSetup)
 	{
 		Reasons.Add(TEXT("randomized affix rolls/pools"));
 	}
 
-	if (EffectiveTemplateAffixes.Num() > 0)
+	if (Snapshot.Affix.TemplateAffixes.Num() > 0)
 	{
 		Reasons.Add(TEXT("template affixes (instance data can diverge after runtime changes)"));
 	}
 
-	if (IsEffectiveContainerItem())
+	if (Snapshot.Container.bIsContainerItem)
 	{
 		Reasons.Add(TEXT("container item (bag-in-bag instances must not stack)"));
 	}
 
 	TArray<FGameplayTag> TagArray;
-	FGameplayTagContainer EffectiveTags;
-	GetEffectiveTags(EffectiveTags);
-	EffectiveTags.GetGameplayTagArray(TagArray);
-	const FGameplayTag EffectiveItemType = GetEffectiveItemType();
-	if (EffectiveItemType.IsValid())
+	Snapshot.Classification.Tags.GetGameplayTagArray(TagArray);
+	if (Snapshot.Classification.ItemType.IsValid())
 	{
-		TagArray.Add(EffectiveItemType);
+		TagArray.Add(Snapshot.Classification.ItemType);
 	}
 	for (const FGameplayTag& Tag : TagArray)
 	{
@@ -663,12 +352,8 @@ bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 
 bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 {
-	bool bAllowStacking = true;
-	int32 MaxStackCount = 99;
-	bool bUseRiskChecks = true;
-	GetEffectiveStackingRules(bAllowStacking, MaxStackCount, bUseRiskChecks);
-
-	if (IsEffectiveContainerItem())
+	const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(this);
+	if (Snapshot.Container.bIsContainerItem)
 	{
 		if (OutReason)
 		{
@@ -677,7 +362,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 		return false;
 	}
 
-	if (!bAllowStacking || MaxStackCount <= 1)
+	if (!Snapshot.Stacking.bAllowStacking || Snapshot.Stacking.MaxStackCount <= 1)
 	{
 		if (OutReason)
 		{
@@ -687,7 +372,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 	}
 
 	FString RiskReason;
-	if (bUseRiskChecks && HasStackingRisk(&RiskReason))
+	if (Snapshot.Stacking.bUseRiskChecks && HasStackingRisk(&RiskReason))
 	{
 		if (OutReason)
 		{
@@ -788,7 +473,7 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 
 	Stacking->MaxStackCount = FMath::Max(1, Stacking->MaxStackCount);
 
-	if (IsEffectiveContainerItem())
+	if (YIItemSchema::ResolveSnapshot(this).Container.bIsContainerItem)
 	{
 		Stacking->bAllowStacking = false;
 		Stacking->MaxStackCount = 1;

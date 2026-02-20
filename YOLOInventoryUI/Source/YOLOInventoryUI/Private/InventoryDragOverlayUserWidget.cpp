@@ -9,6 +9,7 @@
 #include "Blueprint/SlateBlueprintLibrary.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YOLOInventorySettings.h"
 #include "YIInventoryGridStyleAsset.h"
 
@@ -63,7 +64,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		{
 			if (const UYIItemDefinition* Def = Item.Item.Definition.Get())
 			{
-				Name = Def->GetEffectiveDisplayName().ToString();
+				Name = YIItemSchema::GetDisplayName(Def).ToString();
 			}
 			else
 			{
@@ -158,7 +159,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 			? LiveDragItem.Item.Definition.Get()
 			: LiveDragItem.Item.Definition.LoadSynchronous())
 		{
-			const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def->GetEffectiveIcon();
+			const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
 			DragIconTexture = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous();
 		}
 	}

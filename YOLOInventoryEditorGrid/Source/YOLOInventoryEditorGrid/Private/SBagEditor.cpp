@@ -18,6 +18,7 @@
 #include "DragAndDrop/AssetDragDropOp.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIInventoryBlueprintLibrary.h"
 
 SBagEditor::~SBagEditor()
@@ -138,7 +139,7 @@ int32 SBagEditor::OnPaint(const FPaintArgs& Args, const FGeometry& AllottedGeome
 			const FSlateBrush* Icon = nullptr;
 			if (Def)
 			{
-				const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def->GetEffectiveIcon();
+				const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
 				UTexture2D* IconTex = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous();
 				if (IconTex)
 				{
@@ -266,7 +267,7 @@ FReply SBagEditor::OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& Dra
 				const FVector2D Local = MyGeometry.AbsoluteToLocal(DragDropEvent.GetScreenSpacePosition());
 				const FIntPoint Cell = ToCell(Local);
 				UYIItemDefinition* Def = Cast<UYIItemDefinition>(AD.GetAsset());
-				FIntPoint Size = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1, 1);
+				FIntPoint Size = Def ? YIItemSchema::GetDefaultSize(Def) : FIntPoint(1, 1);
 				// Alt modifier forces new stack even if merge is possible
 				const bool bForceNewStack = DragDropEvent.IsAltDown();
 				// If hovering an item and it matches type with stacking capability, stack into it (unless Alt forces new stack)
@@ -279,9 +280,9 @@ FReply SBagEditor::OnDrop(const FGeometry& MyGeometry, const FDragDropEvent& Dra
 						// Merge 1 unit if allowed
 						FYIBagItem& Target = Bag->Items[Hit];
 						UYIItemDefinition* DefT = Target.Item.Definition.IsValid() ? Target.Item.Definition.Get() : Target.Item.Definition.LoadSynchronous();
-						if (DefT && DefT == Def && DefT->IsEffectiveStackingEnabled())
+						if (DefT && DefT == Def && YIItemSchema::IsStackingEnabled(DefT))
 						{
-							Target.Item.Count = FMath::Clamp(Target.Item.Count + 1, 1, DefT->GetEffectiveMaxStackCount());
+							Target.Item.Count = FMath::Clamp(Target.Item.Count + 1, 1, YIItemSchema::GetMaxStackCount(DefT));
 							Bag->MarkPackageDirty();
 							Bag->OnChanged.Broadcast();
 							return FReply::Handled();
@@ -382,7 +383,7 @@ FReply SBagEditor::OnDragOver(const FGeometry& MyGeometry, const FDragDropEvent&
                 PreviewCell = ToCell(Local);
                 // Load the asset to get its default size
                 UYIItemDefinition* Def = Cast<UYIItemDefinition>(AD.GetAsset());
-                FIntPoint ItemSize = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1, 1);
+                FIntPoint ItemSize = Def ? YIItemSchema::GetDefaultSize(Def) : FIntPoint(1, 1);
                 PreviewSize = Bag->GetEffectiveSize(ItemSize);
                 bPreviewActive = true;
                 bPreviewOk = Bag->CanPlaceAtWithScale(PreviewCell, ItemSize);

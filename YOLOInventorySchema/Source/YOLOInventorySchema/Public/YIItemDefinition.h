@@ -11,11 +11,6 @@
 class UYIDataTableItemSource;
 class UYIItemTraitAsset;
 class UYIRequirement;
-class UYIItemSFXProfile;
-class UYIAttributeModAsset;
-class UYIAffixAsset;
-class UYIAffixPoolAsset;
-class UTexture2D;
 class UScriptStruct;
 
 /**
@@ -75,29 +70,6 @@ public:
 	const FYIItemContainerDefinitionFragment* GetContainerDefinitionFragment() const;
 	const FYIItemAttributeModsDefinitionFragment* GetAttributeModsDefinitionFragment() const;
 
-	/** Resolve display payload from UI fragment with asset-name fallback. */
-	void GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const;
-	FText GetEffectiveDisplayName() const;
-	FText GetEffectiveDescription() const;
-	TSoftObjectPtr<UTexture2D> GetEffectiveIcon() const;
-	FGameplayTag GetEffectiveItemType() const;
-	void GetEffectiveTags(FGameplayTagContainer& OutTags) const;
-	FGameplayTag GetEffectiveRarityTag() const;
-	FGameplayTag GetEffectiveAudioTag() const;
-	TSoftObjectPtr<UYIItemSFXProfile> GetEffectiveSoundProfileOverride() const;
-	bool IsEffectiveUniquePerType() const;
-	int32 GetEffectiveEquipSlotCost() const;
-	bool IsEffectiveContainerItem() const;
-	TSoftObjectPtr<UObject> GetEffectiveContainerTemplateBag() const;
-	FIntPoint GetEffectiveContainerDefaultGridSize() const;
-	void GetEffectiveAttributeMods(TArray<TSoftObjectPtr<UYIAttributeModAsset>>& OutAttributeMods) const;
-
-	/** Resolve preferred equip slot from equipment fragment. */
-	FGameplayTag GetEffectivePrimaryEquipSlotTag() const;
-
-	/** Resolve occupied equip slots from equipment fragment. */
-	void GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& OutOccupiedSlots) const;
-
 	/** Find static definition fragment by exact struct type. */
 	const FInstancedStruct* FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 	const FInstancedStruct* FindResolvedDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
@@ -108,27 +80,8 @@ public:
 	/** Ensure baseline required fragments exist. Returns true when fragment array changed. */
 	bool EnsureBaselineDefinitionFragments();
 
-	/** Resolve affix-generation payload from affix fragment. */
-	void GetEffectiveAffixDefinition(
-		TArray<TSoftObjectPtr<UYIAffixAsset>>& OutTemplateAffixes,
-		int32& OutMinRandomModifiers,
-		int32& OutMaxRandomModifiers,
-		TSoftObjectPtr<UYIAffixPoolAsset>& OutPrefixPool,
-		TSoftObjectPtr<UYIAffixPoolAsset>& OutSuffixPool) const;
-
-	/** Resolve layout payload from layout fragment. */
-	void GetEffectiveLayoutData(FIntPoint& OutDefaultSize, bool& bOutAllowRotation) const;
-
-	FIntPoint GetEffectiveDefaultSize() const;
-	bool IsEffectiveRotationAllowed() const;
-
 	/** Export decoupled suite-facing snapshot for non-schema consumers. */
 	void BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const;
-
-	/** Resolve stacking payload from stacking fragment. */
-	void GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const;
-	int32 GetEffectiveMaxStackCount() const;
-	bool IsEffectiveStackingEnabled() const;
 
 	/** Returns whether runtime stacking is currently allowed by fragment policy/risk rules. */
 	bool IsRuntimeStackingAllowed(FString* OutReason = nullptr) const;

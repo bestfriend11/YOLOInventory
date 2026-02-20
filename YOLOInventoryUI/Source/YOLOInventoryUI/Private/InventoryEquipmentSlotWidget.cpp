@@ -4,6 +4,7 @@
 #include "YIEquipmentComponent.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "Engine/Texture2D.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -127,8 +128,8 @@ void UInventoryEquipmentSlotWidget::UpdateVisualState(bool bForceInvalidTint)
 		BackgroundColor = FilledTint;
 		if (UYIItemDefinition* Definition = EquippedItem.Definition.IsValid() ? EquippedItem.Definition.Get() : EquippedItem.Definition.LoadSynchronous())
 		{
-			LabelText = Definition->GetEffectiveDisplayName();
-			const TSoftObjectPtr<UTexture2D> EffectiveIcon = Definition->GetEffectiveIcon();
+			LabelText = YIItemSchema::GetDisplayName(Definition);
+			const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Definition);
 			CachedIcon = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous();
 		}
 	}

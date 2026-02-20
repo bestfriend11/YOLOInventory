@@ -1,6 +1,7 @@
 #include "SYICraftingDashboard.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIAffixAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "AssetRegistry/AssetRegistryModule.h"
@@ -380,7 +381,7 @@ FReply SYICraftingDashboard::AddCraftedItemToBag()
 	FYIBagItem NewItem;
 	NewItem.Item.Definition = Def;
 	NewItem.Item.Count = FMath::Max(1, ItemCount);
-	NewItem.Size = Def->GetEffectiveDefaultSize();
+	NewItem.Size = YIItemSchema::GetDefaultSize(Def);
 	NewItem.Pos = FIntPoint::ZeroValue;
 
 	if (bIncludeTemplateAffixes)

@@ -36,6 +36,7 @@
 #include "ObjectTools.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
 #include "UObject/UnrealType.h"
+#include "YIItemSchemaResolver.h"
 
 TWeakPtr<FYIInventoryBagEditor> FYIInventoryBagEditor::ActiveEditor;
 
@@ -763,7 +764,7 @@ const FSlateBrush* FYIInventoryBagEditor::ResolveRuntimeItemIcon(UYIItemDefiniti
 {
 	if (Def)
 	{
-		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def->GetEffectiveIcon();
+		const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
 		UTexture2D* IconTex = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : nullptr;
 		if (!IconTex)
 		{
@@ -790,11 +791,13 @@ FText FYIInventoryBagEditor::BuildRuntimeItemTooltip(const UYIItemDefinition* De
 		return NSLOCTEXT("YOLOInventory","BagRuntimeTooltipMissing","Missing item definition.");
 	}
 
-	const FString DisplayName = Def->GetEffectiveDisplayName().ToString();
-	const FText EffectiveDescription = Def->GetEffectiveDescription();
+	const FString DisplayName = YIItemSchema::GetDisplayName(Def).ToString();
+	const FText EffectiveDescription = YIItemSchema::GetDescription(Def);
 	const FString Description = EffectiveDescription.IsEmpty() ? TEXT("-") : EffectiveDescription.ToString();
-	const FString Type = Def->GetEffectiveItemType().IsValid() ? Def->GetEffectiveItemType().ToString() : TEXT("-");
-	const FString Rarity = Def->GetEffectiveRarityTag().IsValid() ? Def->GetEffectiveRarityTag().ToString() : TEXT("-");
+	const FGameplayTag EffectiveItemType = YIItemSchema::GetItemType(Def);
+	const FGameplayTag EffectiveRarity = YIItemSchema::GetRarityTag(Def);
+	const FString Type = EffectiveItemType.IsValid() ? EffectiveItemType.ToString() : TEXT("-");
+	const FString Rarity = EffectiveRarity.IsValid() ? EffectiveRarity.ToString() : TEXT("-");
 
 	const FString Tooltip = FString::Printf(
 		TEXT("%s\nCount: %d\nType: %s\nRarity: %s\nCode: %lld\nTemplate: %s\n\n%s"),
@@ -822,10 +825,10 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeRuntimeItemTile(TSharedPtr<int3
 	}
 
 	const FText NameText = Def
-		? Def->GetEffectiveDisplayName()
+		? YIItemSchema::GetDisplayName(Def)
 		: NSLOCTEXT("YOLOInventory","BagRuntimeUnknown","Unknown");
 	const FText MetaText = Def
-		? FText::FromString(FString::Printf(TEXT("x%d  |  %s"), Count, Def->GetEffectiveRarityTag().IsValid() ? *Def->GetEffectiveRarityTag().ToString() : TEXT("No Rarity")))
+		? FText::FromString(FString::Printf(TEXT("x%d  |  %s"), Count, YIItemSchema::GetRarityTag(Def).IsValid() ? *YIItemSchema::GetRarityTag(Def).ToString() : TEXT("No Rarity")))
 		: FText::FromString(TEXT("x0"));
 	const FSlateBrush* IconBrush = ResolveRuntimeItemIcon(Def);
 
@@ -1108,7 +1111,7 @@ bool FYIInventoryBagEditor::AddEntryToBag(const FYIBagDataRowEntry& Entry)
 	FYIBagItem NewItem;
 	NewItem.Item.Definition = Def;
 	NewItem.Item.Count = 1;
-	NewItem.Size = Def->GetEffectiveDefaultSize();
+	NewItem.Size = YIItemSchema::GetDefaultSize(Def);
 	NewItem.Pos = FIntPoint::ZeroValue;
 	Bag->AddBagItem(NewItem);
 	RefreshRuntimeEntries();

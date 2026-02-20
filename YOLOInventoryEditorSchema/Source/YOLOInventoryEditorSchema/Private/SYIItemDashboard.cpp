@@ -2,6 +2,7 @@
 #include "YIItemRegistrySubsystem.h"
 #include "Data/YIDataTableItemSource.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "CSVBPFunctionLibrary.h"
 #include "RowData.h"
 #include "Engine/DataTable.h"
@@ -3348,7 +3349,7 @@ void SYIItemDashboard::Refresh()
 					ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
 				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(View.Object.LoadSynchronous()))
 				{
-					Entry->Name = Def->GetEffectiveDisplayName().ToString();
+					Entry->Name = YIItemSchema::GetDisplayName(Def).ToString();
 					Entry->DataSource = Def->SourceDataSource;
 					Entry->RowName = Def->SourceRowName;
 				}
@@ -6324,7 +6325,7 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 				{
 					return FText();
 				}
-				const FText DefDescription = Def->GetEffectiveDescription();
+				const FText DefDescription = YIItemSchema::GetDescription(Def);
 				if (!DefDescription.IsEmpty())
 				{
 					Summary += FString::Printf(TEXT("\n\n%s"), *DefDescription.ToString());

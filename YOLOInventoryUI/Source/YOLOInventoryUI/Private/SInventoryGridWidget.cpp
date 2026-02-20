@@ -7,6 +7,7 @@
 #include "Rendering/DrawElements.h"
 #include "Engine/Texture2D.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "Framework/Application/SlateApplication.h"
 #include "YIInventoryGridStyleAsset.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -424,7 +425,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		const FVector2D S = FVector2D(Eff) * LocalCell;
 
 		UYIItemDefinition* Def = It.Item.Definition.IsValid() ? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
-		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? Def->GetEffectiveIcon() : nullptr;
+		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
 		UTexture2D* IconTex = bShowItemIcons && Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
 
 		if (GridStyle && GridStyle->ItemFill.bEnabled)
@@ -529,7 +530,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			{
 				const FYIBagItem& HoverItem = Bag->Items[HoveredItemIndex];
 				UYIItemDefinition* HoverDef = HoverItem.Item.Definition.IsValid() ? HoverItem.Item.Definition.Get() : HoverItem.Item.Definition.LoadSynchronous();
-				const TSoftObjectPtr<UTexture2D> EffectiveHoverIcon = HoverDef ? HoverDef->GetEffectiveIcon() : nullptr;
+				const TSoftObjectPtr<UTexture2D> EffectiveHoverIcon = HoverDef ? YIItemSchema::GetIcon(HoverDef) : nullptr;
 				UTexture2D* HoverIcon = bShowItemIcons && HoverDef ? (EffectiveHoverIcon.IsValid() ? EffectiveHoverIcon.Get() : EffectiveHoverIcon.LoadSynchronous()) : nullptr;
 				DrawItemIcon(HoverIcon, P, S);
 			}
@@ -676,7 +677,7 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 			GhostSize = FVector2D(GhostFootprint) * CellSize;
 		}
 		UYIItemDefinition* Def = DragItem.Item.Definition.IsValid() ? DragItem.Item.Definition.Get() : DragItem.Item.Definition.LoadSynchronous();
-		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? Def->GetEffectiveIcon() : nullptr;
+		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
 		UTexture2D* Icon = Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
 		if (Icon)
 		{
@@ -917,7 +918,7 @@ if (OwnerWidget->BeginDragFromCell(DropCell))
 					GhostSize = FVector2D(Eff) * CellSize;
 					GhostFootprint = Eff;
 					UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
-					const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? Def->GetEffectiveIcon() : nullptr;
+					const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
 					UTexture2D* Icon = Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
 					if (Icon)
 					{

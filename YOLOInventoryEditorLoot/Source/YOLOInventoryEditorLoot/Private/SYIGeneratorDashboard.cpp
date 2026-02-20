@@ -6,6 +6,7 @@
 #include "YIRarityProfile.h"
 #include "YIItemGenerator.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIItemRegistrySubsystem.h"
 #include "YIAffixAsset.h"
 #include "Data/YIDataTableAffixSource.h"
@@ -999,7 +1000,7 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 		RarityHistogram.FindOrAdd(RarityName)++;
 		if (UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous())
 		{
-			const FString Name = Def->GetEffectiveDisplayName().ToString();
+			const FString Name = YIItemSchema::GetDisplayName(Def).ToString();
 			ItemHistogram.FindOrAdd(Name)++;
 		}
 	}
@@ -1021,7 +1022,7 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 				RarityHistogram.FindOrAdd(RarityName)++;
 				if (UYIItemDefinition* Def = TmpItem.Item.Definition.IsValid() ? TmpItem.Item.Definition.Get() : TmpItem.Item.Definition.LoadSynchronous())
 				{
-					const FString Name = Def->GetEffectiveDisplayName().ToString();
+					const FString Name = YIItemSchema::GetDisplayName(Def).ToString();
 					ItemHistogram.FindOrAdd(Name)++;
 				}
 				if (RunIndex == 0)
@@ -1050,7 +1051,7 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 	FString DefName = TEXT("Unknown");
 	if (UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous())
 	{
-		DefName = Def->GetEffectiveDisplayName().ToString();
+		DefName = YIItemSchema::GetDisplayName(Def).ToString();
 	}
 	const FString RarityName = Rarity.IsValid() ? Rarity.ToString() : TEXT("None");
 
@@ -1237,7 +1238,7 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 			continue;
 		}
 		UYIItemDefinition* Def = Entry->Definition.IsValid() ? Entry->Definition.Get() : Entry->Definition.LoadSynchronous();
-		const FString Name = Def ? Def->GetEffectiveDisplayName().ToString() : Entry->Definition.ToSoftObjectPath().GetAssetName();
+		const FString Name = Def ? YIItemSchema::GetDisplayName(Def).ToString() : Entry->Definition.ToSoftObjectPath().GetAssetName();
 		const int32 MinCount = FMath::Max(1, Entry->MinCount);
 		const int32 MaxCount = FMath::Max(MinCount, Entry->MaxCount);
 		const int32 CountChoices = MaxCount - MinCount + 1;
@@ -1317,17 +1318,9 @@ FReply SYIGeneratorDashboard::AnalyzeGeneratorStats()
 				{
 					continue;
 				}
-				TArray<TSoftObjectPtr<UYIAffixAsset>> TemplateAffixes;
-				int32 MinRandomModifiers = 0;
-				int32 MaxRandomModifiers = 0;
-				TSoftObjectPtr<UYIAffixPoolAsset> PrefixPoolSoft;
-				TSoftObjectPtr<UYIAffixPoolAsset> SuffixPoolSoft;
-				Def->GetEffectiveAffixDefinition(
-					TemplateAffixes,
-					MinRandomModifiers,
-					MaxRandomModifiers,
-					PrefixPoolSoft,
-					SuffixPoolSoft);
+				const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Def);
+				TSoftObjectPtr<UYIAffixPoolAsset> PrefixPoolSoft(Snapshot.Affix.PrefixPool);
+				TSoftObjectPtr<UYIAffixPoolAsset> SuffixPoolSoft(Snapshot.Affix.SuffixPool);
 				UYIAffixPoolAsset* PrefixPool = PrefixPoolSoft.IsValid() ? PrefixPoolSoft.Get() : PrefixPoolSoft.LoadSynchronous();
 				UYIAffixPoolAsset* SuffixPool = SuffixPoolSoft.IsValid() ? SuffixPoolSoft.Get() : SuffixPoolSoft.LoadSynchronous();
 				if (PrefixPool)

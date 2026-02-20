@@ -11,6 +11,7 @@
 
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "InventoryActionMenuWidget.h"
 #include "YIInventoryComponent.h"
 #include "YIEquipmentComponent.h"
@@ -515,7 +516,7 @@ void UInventoryScreenWidget::EvaluateActionsForIndex(int32 Index, TArray<FText>&
 	UYIItemDefinition* Definition = SelectedItem.Item.Definition.IsValid()
 		? SelectedItem.Item.Definition.Get()
 		: SelectedItem.Item.Definition.LoadSynchronous();
-	const bool bCanOpenContainer = SelectedItem.Item.ContainedBagId.IsValid() || (Definition && Definition->IsEffectiveContainerItem());
+	const bool bCanOpenContainer = SelectedItem.Item.ContainedBagId.IsValid() || (Definition && YIItemSchema::IsContainerItem(Definition));
 	if (bCanOpenContainer)
 	{
 		OutActions.Add(NSLOCTEXT("YOLOInventory", "OpenContainerAction", "Open"));
