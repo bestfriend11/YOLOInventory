@@ -7,9 +7,8 @@
 #include "YIGeneratorDashboardBridge.h"
 
 class SYIItemDashboard;
-class SYIAffixDashboard;
+class SYIFragmentDashboard;
 class SYICraftingDashboard;
-class SYICatalogDashboard;
 class SYIUnifiedHelpPanel;
 class IYIBagDashboardBridge;
 class FWorkspaceItem;
@@ -46,7 +45,6 @@ private:
 	void CloseEquipmentModeTabs();
 
 	TSharedRef<SDockTab> SpawnItemsTab(const FSpawnTabArgs& Args);
-	TSharedRef<SDockTab> SpawnCatalogTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnAffixesTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnGeneratorsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnCraftingTab(const FSpawnTabArgs& Args);
@@ -68,8 +66,7 @@ private:
 	TSharedRef<SDockTab> SpawnBagsDetailsTab(const FSpawnTabArgs& Args);
 
 	TSharedPtr<SYIItemDashboard> ItemDashboard;
-	TSharedPtr<SYICatalogDashboard> CatalogDashboard;
-	TSharedPtr<SYIAffixDashboard> AffixDashboard;
+	TSharedPtr<SYIFragmentDashboard> AffixDashboard;
 	TSharedPtr<IYIGeneratorDashboardBridge> GeneratorDashboard;
 	TSharedPtr<SYICraftingDashboard> CraftingDashboard;
 	TSharedPtr<IYIBagDashboardBridge> BagDashboard;

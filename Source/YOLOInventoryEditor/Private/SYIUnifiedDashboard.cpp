@@ -1,25 +1,14 @@
 #include "SYIUnifiedDashboard.h"
-#include "SYIItemDashboard.h"
-#include "SYIAffixDashboard.h"
-#include "YIItemDefinition.h"
 #include "Data/YIDataTableItemSource.h"
-#include "YIAffixAsset.h"
-#include "YIAffixPoolAsset.h"
 #include "YIAffixFactory.h"
 #include "YIAffixPoolFactory.h"
-#include "IYOLOInventoryEditorCoreModule.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/Factory.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "Misc/PackageName.h"
-#include "Engine/DataTable.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SWidgetSwitcher.h"
-#include "Widgets/Layout/SSplitter.h"
-#include "Widgets/Input/SSegmentedControl.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Layout/SExpandableArea.h"
@@ -30,181 +19,11 @@
 
 namespace
 {
-static UClass* YIUnified_LoadOptionalClass(const TCHAR* ClassPath)
-{
-	if (!ClassPath || !*ClassPath)
-	{
-		return nullptr;
-	}
-
-	return LoadObject<UClass>(nullptr, ClassPath);
-}
-
-static bool YIUnified_IsAssetOfOptionalClass(UObject* Asset, const TCHAR* ClassPath)
-{
-	if (!Asset)
-	{
-		return false;
-	}
-
-	if (UClass* OptionalClass = YIUnified_LoadOptionalClass(ClassPath))
-	{
-		return Asset->IsA(OptionalClass);
-	}
-
-	return false;
-}
-
 static UFactory* YIUnified_CreateFactoryFromClassPath(const TCHAR* FactoryClassPath)
 {
 	UClass* FactoryClass = LoadClass<UFactory>(nullptr, FactoryClassPath);
 	return FactoryClass ? NewObject<UFactory>(GetTransientPackage(), FactoryClass) : nullptr;
 }
-}
-
-void SYIUnifiedDashboard::Construct(const FArguments& InArgs)
-{
-	ItemDashboard = SNew(SYIItemDashboard);
-	AffixDashboard = SNew(SYIAffixDashboard);
-	if (IYOLOInventoryEditorCoreModule::IsAvailable())
-	{
-		IYOLOInventoryEditorCoreModule& EditorCoreModule = IYOLOInventoryEditorCoreModule::Get();
-		if (EditorCoreModule.HasGeneratorDashboardFactory())
-		{
-			GeneratorDashboard = EditorCoreModule.CreateGeneratorDashboardBridge();
-		}
-	}
-
-	ChildSlot
-	[
-		SNew(SBorder)
-		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-		[
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot().AutoHeight().Padding(8, 6)
-			[
-				SNew(SSegmentedControl<EYIUnifiedDashboardTab>)
-				.Value(this, &SYIUnifiedDashboard::GetActiveTab)
-				.OnValueChanged(this, &SYIUnifiedDashboard::HandleTabChanged)
-				+ SSegmentedControl<EYIUnifiedDashboardTab>::Slot(EYIUnifiedDashboardTab::Items)
-				.Text(NSLOCTEXT("YOLOInventory", "UnifiedDash_Items", "Items"))
-				+ SSegmentedControl<EYIUnifiedDashboardTab>::Slot(EYIUnifiedDashboardTab::Affixes)
-				.Text(NSLOCTEXT("YOLOInventory", "UnifiedDash_Affixes", "Affixes"))
-				+ SSegmentedControl<EYIUnifiedDashboardTab>::Slot(EYIUnifiedDashboardTab::Generators)
-				.Text(NSLOCTEXT("YOLOInventory", "UnifiedDash_Generators", "Generators"))
-			]
-			+ SVerticalBox::Slot().FillHeight(1.f).Padding(6, 0, 6, 6)
-			[
-				SNew(SSplitter)
-				+ SSplitter::Slot().Value(0.70f)
-				[
-					SAssignNew(TabSwitcher, SWidgetSwitcher)
-					+ SWidgetSwitcher::Slot()
-					[
-						ItemDashboard.ToSharedRef()
-					]
-					+ SWidgetSwitcher::Slot()
-					[
-						AffixDashboard.ToSharedRef()
-					]
-					+ SWidgetSwitcher::Slot()
-					[
-						GeneratorDashboard.IsValid()
-							? GeneratorDashboard->GetRootWidget()
-							: SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "UnifiedDash_NoGeneratorPlugin", "YOLOInventoryEditorLoot plugin is not enabled."))
-					]
-				]
-				+ SSplitter::Slot().Value(0.30f)
-				[
-					SNew(SBorder)
-					.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
-					.Padding(8)
-					[
-						SAssignNew(HelpPanel, SYIUnifiedHelpPanel)
-					]
-				]
-			]
-		]
-	];
-
-	FYOLOInventoryEditorModule::Get().RegisterHelpWidget(HelpPanel);
-	SetActiveTab(EYIUnifiedDashboardTab::Items);
-}
-
-void SYIUnifiedDashboard::HandleTabChanged(EYIUnifiedDashboardTab NewTab)
-{
-	SetActiveTab(NewTab);
-}
-
-void SYIUnifiedDashboard::SetActiveTab(EYIUnifiedDashboardTab NewTab)
-{
-	ActiveTab = NewTab;
-	if (!TabSwitcher.IsValid())
-	{
-		return;
-	}
-
-	int32 Index = 0;
-	switch (ActiveTab)
-	{
-	case EYIUnifiedDashboardTab::Items:
-		Index = 0;
-		break;
-	case EYIUnifiedDashboardTab::Affixes:
-		Index = 1;
-		break;
-	case EYIUnifiedDashboardTab::Generators:
-		Index = 2;
-		break;
-	default:
-		break;
-	}
-	TabSwitcher->SetActiveWidgetIndex(Index);
-	if (HelpPanel.IsValid())
-	{
-		HelpPanel->SetActiveTab(ActiveTab);
-	}
-	FYOLOInventoryEditorModule::Get().UpdateHelpTabIndex(Index);
-}
-
-void SYIUnifiedDashboard::OpenAsset(UObject* Asset)
-{
-	if (!Asset)
-	{
-		return;
-	}
-
-	if (Asset->IsA<UYIItemDefinition>() || Asset->IsA<UYIDataTableItemSource>() || Asset->IsA<UDataTable>())
-	{
-		SetActiveTab(EYIUnifiedDashboardTab::Items);
-		if (ItemDashboard.IsValid())
-		{
-			ItemDashboard->OpenAsset(Asset);
-		}
-		return;
-	}
-
-	if (Asset->IsA<UYIAffixAsset>() || Asset->IsA<UYIAffixPoolAsset>())
-	{
-		SetActiveTab(EYIUnifiedDashboardTab::Affixes);
-		if (AffixDashboard.IsValid())
-		{
-			AffixDashboard->OpenAsset(Asset);
-		}
-		return;
-	}
-
-	if (YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YILootTable"))
-		|| YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIRarityProfile"))
-		|| YIUnified_IsAssetOfOptionalClass(Asset, TEXT("/Script/YOLOInventoryLoot.YIItemGenerator")))
-	{
-		SetActiveTab(EYIUnifiedDashboardTab::Generators);
-		if (GeneratorDashboard.IsValid())
-		{
-			GeneratorDashboard->OpenAsset(Asset);
-		}
-		return;
-	}
 }
 
 void SYIUnifiedHelpPanel::Construct(const FArguments& InArgs)

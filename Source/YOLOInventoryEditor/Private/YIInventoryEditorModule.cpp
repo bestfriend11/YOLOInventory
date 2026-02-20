@@ -1,33 +1,11 @@
 #include "YIInventoryEditorModule.h"
-#include "AssetToolsModule.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 #include "Modules/ModuleManager.h"
-#include "IAssetTools.h"
-#include "YIItemDefinition.h"
-
-#include "AssetTypeActions_Base.h"
-#include "YIItemDefinitionFactory.h"
-#include "AssetTypeActions_YIAffix.h"
-#include "AssetTypeActions_YIAttributeDef.h"
-#include "AssetTypeActions_YIAttributeMod.h"
-#include "AssetTypeActions_YIItemVariant.h"
-#include "AssetTypeActions_YIRarityPalette.h"
-#include "AssetTypeActions_YIEvolutionPath.h"
-#include "AssetTypeActions_YIItemSFXProfile.h"
-#include "AssetTypeActions_YIItemSFXLibrary.h"
-#include "AssetTypeActions_YIDataTableItemSource.h"
 #include "ToolMenus.h"
 // #include "YIInventoryAssetEditor.h" // legacy editor removed
 
 #include "GraphPanelNodeFactory_YOLO.h"
 #include "EdGraphUtilities.h"
 #include "Styling/AppStyle.h"
-#include "YIItemDefinition.h"
-#include "YIAffixAsset.h"
-#include "YIAffixFactory.h"
-#include "AssetTypeActions_YIAffixPool.h"
-#include "YIAffixPoolFactory.h"
-#include "YIAffixPoolAsset.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardEditor.h"
 #include "YIAutoPickupDropActorDetails.h"
@@ -38,7 +16,6 @@
 
 TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
-uint32 GYOLOInventoryAssetCategory = EAssetTypeCategories::Misc;
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 static const FName YOLOInventoryHelpTabName(TEXT("YOLOInventory_Help"));
 
@@ -54,26 +31,6 @@ static EYIUnifiedDashboardTab YIHelpIndexToTab(int32 Index)
 	}
 }
 }
-
-#include "Toolkits/AssetEditorToolkit.h"
-#include "Toolkits/IToolkitHost.h"
-
-class FAssetTypeActions_YIItemDefinition : public FAssetTypeActions_Base
-{
-public:
-	virtual FText GetName() const override { return NSLOCTEXT("YOLOInventory", "ItemDefAssetTypeName", "Item Definition"); }
-	virtual FColor GetTypeColor() const override { return FColor(120, 170, 255); }
-	virtual UClass* GetSupportedClass() const override { return UYIItemDefinition::StaticClass(); }
-	virtual uint32 GetCategories() override { return GYOLOInventoryAssetCategory; }
-	virtual bool HasActions(const TArray<UObject*>& InObjects) const override { return false; }
-	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost> EditWithinLevelEditor) override
-	{
-		for (UObject* Obj : InObjects)
-		{
-			FYOLOInventoryEditorModule::Get().OpenDashboardForAsset(Obj);
-		}
-	}
-};
 
 FYOLOInventoryEditorModule& FYOLOInventoryEditorModule::Get()
 {
@@ -148,9 +105,6 @@ void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
 }
 void FYOLOInventoryEditorModule::StartupModule()
 {
-	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	GYOLOInventoryAssetCategory = AssetTools.RegisterAdvancedAssetCategory(FName("YOLOInventory"), NSLOCTEXT("YOLOInventory", "AssetCategory", "YOLO Inventory"));
-	RegisterAssetTypeActions();
 	GYOLONodeFactory = MakeShareable(new FGraphPanelNodeFactory_YOLO());
 
 	// // Ensure an example Affix asset exists for authoring docs/demo
@@ -298,85 +252,11 @@ void FYOLOInventoryEditorModule::ShutdownModule()
 		PropertyEditorModule.UnregisterCustomClassLayout(AYIAutoPickupDropActor::StaticClass()->GetFName());
 		PropertyEditorModule.NotifyCustomizationModuleChanged();
 	}
-	UnregisterAssetTypeActions();
 	if (GYOLONodeFactory.IsValid())
 	{
 		FEdGraphUtilities::UnregisterVisualNodeFactory(GYOLONodeFactory);
 		GYOLONodeFactory.Reset();
 	}
-}
-
-void FYOLOInventoryEditorModule::RegisterAssetTypeActions()
-{
-	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	{
-		TSharedRef<FAssetTypeActions_YIItemDefinition> Action = MakeShared<FAssetTypeActions_YIItemDefinition>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIAffix> Action = MakeShared<FAssetTypeActions_YIAffix>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIAffixPool> Action = MakeShared<FAssetTypeActions_YIAffixPool>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIAttributeDef> Action = MakeShared<FAssetTypeActions_YIAttributeDef>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIAttributeMod> Action = MakeShared<FAssetTypeActions_YIAttributeMod>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIItemVariant> Action = MakeShared<FAssetTypeActions_YIItemVariant>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIRarityPalette> Action = MakeShared<FAssetTypeActions_YIRarityPalette>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIEvolutionPath> Action = MakeShared<FAssetTypeActions_YIEvolutionPath>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIItemSFXProfile> Action = MakeShared<FAssetTypeActions_YIItemSFXProfile>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIItemSFXLibrary> Action = MakeShared<FAssetTypeActions_YIItemSFXLibrary>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-	{
-		TSharedRef<FAssetTypeActions_YIDataTableItemSource> Action = MakeShared<FAssetTypeActions_YIDataTableItemSource>();
-		AssetTools.RegisterAssetTypeActions(Action);
-		RegisteredAssetTypeActions.Add(Action);
-	}
-}
-
-void FYOLOInventoryEditorModule::UnregisterAssetTypeActions()
-{
-	if (FModuleManager::Get().IsModuleLoaded("AssetTools"))
-	{
-		IAssetTools& AssetTools = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools").Get();
-		for (auto& Action : RegisteredAssetTypeActions)
-		{
-			AssetTools.UnregisterAssetTypeActions(Action.ToSharedRef());
-		}
-	}
-	RegisteredAssetTypeActions.Empty();
 }
 
 IMPLEMENT_MODULE(FYOLOInventoryEditorModule, YOLOInventoryEditor)

@@ -37,6 +37,8 @@ Optional/legacy layer:
   - Shared editor extension points/factories.
 - `YOLOInventoryEditorSchema/Grid/Loot`
   - Domain editor tooling split by responsibility.
+- `YOLOInventoryTemplateDS1Editor`
+  - DS1-only editor helpers/importers (for example `UYIDungeonSiegeImporter`).
 - `YOLOInventoryLegacyBridge`
   - Migration shims and legacy asset types (`YIGridContainer`, `YIItemBlueprintLibrary`, etc.).
 - `YOLOInventoryTemplateDS1`
@@ -108,3 +110,20 @@ Before merging:
 2. No plugin descriptor dependency from suite plugins to legacy `YOLOInventory`.
 3. New gameplay opinions placed in `TemplateDS1` or project extension plugin, not `Core/Schema`.
 4. Full editor build passes.
+
+## 8) Automated validation
+
+Use:
+
+`Plugins/YOLOInventory/Tools/ValidateInventorySuite.ps1`
+
+What it checks:
+
+- Forbidden cross-module dependencies for core/runtime layers.
+- Legacy runtime shell stays minimal.
+- DS1-specific wording does not leak outside template plugins.
+
+Recommended CI/local usage:
+
+- `powershell -ExecutionPolicy Bypass -File Plugins/YOLOInventory/Tools/ValidateInventorySuite.ps1`
+- strict mode: add `-FailOnWarning`
