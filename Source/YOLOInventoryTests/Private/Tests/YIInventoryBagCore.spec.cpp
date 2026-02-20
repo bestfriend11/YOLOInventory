@@ -4,6 +4,7 @@
 #include "UObject/Package.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemFragments.h"
 #include "InventoryUtils.h"
 
 namespace BagCoreHelpers
@@ -12,10 +13,22 @@ namespace BagCoreHelpers
 static UYIItemDefinition* MakeDefCore(const FIntPoint Size, bool bAllowRotation = true, bool bAllowStacking = true, int32 MaxStack = 99, bool bUniquePerType = false)
 {
 	UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
-	Def->DefaultSize = Size;
-	Def->bAllowRotation = bAllowRotation;
-	Def->bAllowStacking = bAllowStacking;
-	Def->MaxStackCount = MaxStack;
+	if (FInstancedStruct* LayoutStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+	{
+		if (FYIItemLayoutDefinitionFragment* Layout = LayoutStruct->GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+		{
+			Layout->DefaultSize = Size;
+			Layout->bAllowRotation = bAllowRotation;
+		}
+	}
+	if (FInstancedStruct* StackingStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
+	{
+		if (FYIItemStackingDefinitionFragment* Stacking = StackingStruct->GetMutablePtr<FYIItemStackingDefinitionFragment>())
+		{
+			Stacking->bAllowStacking = bAllowStacking;
+			Stacking->MaxStackCount = MaxStack;
+		}
+	}
 	Def->bUniquePerType = bUniquePerType;
 	return Def;
 }
@@ -27,7 +40,7 @@ static FYIBagItem MakeItemCore(UYIItemDefinition* Def, const FIntPoint Pos, int3
 	Item.Item.Count = Count;
 	Item.Item.CustomStackKey = CustomStackKey;
 	Item.Pos = Pos;
-	Item.Size = Def ? Def->DefaultSize : FIntPoint(1,1);
+	Item.Size = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1,1);
 	return Item;
 }
 }
@@ -219,7 +232,7 @@ void FYIInventoryBagCoreSpec::Define()
 		Bag->AutoPack();
 
 		TestEqual(TEXT("Largest (2x2) packed at origin"), Bag->Items[0].Pos, FIntPoint(0,0));
-		TestEqual(TEXT("Largest size"), Bag->Items[0].Size, Three->DefaultSize);
+		TestEqual(TEXT("Largest size"), Bag->Items[0].Size, Three->GetEffectiveDefaultSize());
 		// With first-fit after sorting, 2x1 drops to row 2, then 1x1 fills earliest free (2,0)
 		TestEqual(TEXT("Next (2x1) packed row-major after big"), Bag->Items[1].Pos, FIntPoint(0,2));
 		TestEqual(TEXT("Smallest (1x1) fills earliest free slot"), Bag->Items[2].Pos, FIntPoint(2,0));

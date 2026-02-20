@@ -6,6 +6,7 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIItemDefinition.h"
+#include "YIItemFragments.h"
 #include "YIGridContainer.h"
 
 namespace InventoryTransferHelpers
@@ -13,10 +14,22 @@ namespace InventoryTransferHelpers
 	static UYIItemDefinition* MakeDef(const FIntPoint Size = FIntPoint(1,1), bool bAllowRotation = true, bool bAllowStacking = true, int32 MaxStack = 99, bool bUniquePerType = false, const FGameplayTag ItemType = FGameplayTag())
 	{
 		UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
-		Def->DefaultSize = Size;
-		Def->bAllowRotation = bAllowRotation;
-		Def->bAllowStacking = bAllowStacking;
-		Def->MaxStackCount = MaxStack;
+		if (FInstancedStruct* LayoutStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+		{
+			if (FYIItemLayoutDefinitionFragment* Layout = LayoutStruct->GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+			{
+				Layout->DefaultSize = Size;
+				Layout->bAllowRotation = bAllowRotation;
+			}
+		}
+		if (FInstancedStruct* StackingStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
+		{
+			if (FYIItemStackingDefinitionFragment* Stacking = StackingStruct->GetMutablePtr<FYIItemStackingDefinitionFragment>())
+			{
+				Stacking->bAllowStacking = bAllowStacking;
+				Stacking->MaxStackCount = MaxStack;
+			}
+		}
 		Def->bUniquePerType = bUniquePerType;
 		Def->ItemType = ItemType;
 		return Def;
@@ -28,7 +41,7 @@ namespace InventoryTransferHelpers
 		I.Item.Definition = Def;
 		I.Item.Count = Count;
 		I.Pos = Pos;
-		I.Size = Def ? Def->DefaultSize : FIntPoint(1,1);
+		I.Size = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1,1);
 		return I;
 	}
 

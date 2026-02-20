@@ -4,6 +4,7 @@
 #include "GameplayTagsManager.h"
 #include "UObject/Package.h"
 #include "YIItemDefinition.h"
+#include "YIItemFragments.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIRarityPalette.h"
@@ -15,10 +16,22 @@ namespace ItemDefHelpers
 	static UYIItemDefinition* MakeDef(const FIntPoint Size = FIntPoint(1,1), bool bAllowRotation = true, bool bAllowStacking = true, int32 MaxStack = 99)
 	{
 		UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
-		Def->DefaultSize = Size;
-		Def->bAllowRotation = bAllowRotation;
-		Def->bAllowStacking = bAllowStacking;
-		Def->MaxStackCount = MaxStack;
+		if (FInstancedStruct* LayoutStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+		{
+			if (FYIItemLayoutDefinitionFragment* Layout = LayoutStruct->GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+			{
+				Layout->DefaultSize = Size;
+				Layout->bAllowRotation = bAllowRotation;
+			}
+		}
+		if (FInstancedStruct* StackingStruct = Def->FindOrAddDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
+		{
+			if (FYIItemStackingDefinitionFragment* Stacking = StackingStruct->GetMutablePtr<FYIItemStackingDefinitionFragment>())
+			{
+				Stacking->bAllowStacking = bAllowStacking;
+				Stacking->MaxStackCount = MaxStack;
+			}
+		}
 		return Def;
 	}
 
@@ -28,7 +41,7 @@ namespace ItemDefHelpers
 		BagItem.Item.Definition = Def;
 		BagItem.Item.Count = Count;
 		BagItem.Pos = Pos;
-		BagItem.Size = Def ? Def->DefaultSize : FIntPoint(1,1);
+		BagItem.Size = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1,1);
 		return BagItem;
 	}
 }
@@ -42,17 +55,17 @@ void FYIItemDefinitionSpec::Define()
 	{
 		using namespace ItemDefHelpers;
 		UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
-		TestEqual(TEXT("Default size is 1x1"), Def->DefaultSize, FIntPoint(1,1));
-		TestTrue(TEXT("Rotation allowed by default"), Def->bAllowRotation);
-		TestTrue(TEXT("Stacking allowed by default"), Def->bAllowStacking);
-		TestEqual(TEXT("Default MaxStackCount"), Def->MaxStackCount, 99);
+		TestEqual(TEXT("Default size is 1x1"), Def->GetEffectiveDefaultSize(), FIntPoint(1,1));
+		TestTrue(TEXT("Rotation allowed by default"), Def->IsEffectiveRotationAllowed());
+		TestTrue(TEXT("Stacking allowed by default"), Def->IsEffectiveStackingEnabled());
+		TestEqual(TEXT("Default MaxStackCount"), Def->GetEffectiveMaxStackCount(), 99);
 
 		// Bag respects per-definition rotation rule
 		UYIInventoryBag* Bag = NewObject<UYIInventoryBag>(GetTransientPackage());
 		Bag->GridSize = FIntPoint(2,2);
 		Bag->Items.Add({}); // seed slot 0
 		Bag->Items[0].Item.Definition = MakeDef(FIntPoint(2,1), false /*bAllowRotation*/);
-		Bag->Items[0].Size = Bag->Items[0].Item.Definition->DefaultSize;
+		Bag->Items[0].Size = Bag->Items[0].Item.Definition->GetEffectiveDefaultSize();
 		Bag->Items[0].Pos = FIntPoint(0,0);
 		TestFalse(TEXT("Rotation blocked by definition flag"), Bag->RotateItem(0));
 

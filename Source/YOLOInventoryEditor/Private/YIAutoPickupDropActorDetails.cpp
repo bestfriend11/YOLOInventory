@@ -120,7 +120,8 @@ const FSlateBrush* FYIAutoPickupDropActorDetails::GetPreviewBrush() const
 {
 	if (UYIItemDefinition* Def = ResolveDefinition())
 	{
-		if (UTexture2D* Icon = Def->Icon.IsValid() ? Def->Icon.Get() : Def->Icon.LoadSynchronous())
+		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def->GetEffectiveIcon();
+		if (UTexture2D* Icon = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous())
 		{
 			PreviewBrush.SetResourceObject(Icon);
 			PreviewBrush.ImageSize = FVector2D(Icon->GetSizeX(), Icon->GetSizeY());
@@ -136,11 +137,7 @@ FText FYIAutoPickupDropActorDetails::GetTitleText() const
 {
 	if (UYIItemDefinition* Def = ResolveDefinition())
 	{
-		if (!Def->DisplayName.IsEmpty())
-		{
-			return Def->DisplayName;
-		}
-		return FText::FromString(Def->GetName());
+		return Def->GetEffectiveDisplayName();
 	}
 	return FText::FromString(TEXT("No item selected"));
 }
@@ -149,12 +146,13 @@ FText FYIAutoPickupDropActorDetails::GetSubtitleText() const
 {
 	if (UYIItemDefinition* Def = ResolveDefinition())
 	{
+		const FIntPoint EffectiveSize = Def->GetEffectiveDefaultSize();
 		return FText::FromString(FString::Printf(
 			TEXT("Code: %lld   Template: %s   Size: %dx%d"),
 			static_cast<long long>(Def->UniqueCode),
 			Def->TemplateId.IsEmpty() ? TEXT("-") : *Def->TemplateId,
-			Def->DefaultSize.X,
-			Def->DefaultSize.Y));
+			EffectiveSize.X,
+			EffectiveSize.Y));
 	}
 	return FText::FromString(TEXT("Pick an Item Definition asset to drive this drop"));
 }
@@ -163,9 +161,10 @@ FText FYIAutoPickupDropActorDetails::GetDescriptionText() const
 {
 	if (UYIItemDefinition* Def = ResolveDefinition())
 	{
-		if (!Def->Description.IsEmpty())
+		const FText Description = Def->GetEffectiveDescription();
+		if (!Description.IsEmpty())
 		{
-			return Def->Description;
+			return Description;
 		}
 		return FText::FromString(TEXT("No description on this item."));
 	}

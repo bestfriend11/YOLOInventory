@@ -37,6 +37,8 @@
     { "Name": "YOLOInventorySchema", "Enabled": true },
     { "Name": "YOLOInventoryEditorSchema", "Enabled": true },
     { "Name": "YOLOInventoryEditorCore", "Enabled": true },
+    { "Name": "YOLOInventoryEditorGrid", "Enabled": true },
+    { "Name": "YOLOInventoryEditorLoot", "Enabled": true },
     { "Name": "YOLOInventoryContainers", "Enabled": true },
     { "Name": "YOLOInventoryWorld", "Enabled": true },
     { "Name": "YOLOInventoryLegacyBridge", "Enabled": true }

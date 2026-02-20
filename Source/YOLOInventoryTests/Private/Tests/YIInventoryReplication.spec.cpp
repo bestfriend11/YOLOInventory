@@ -8,6 +8,7 @@
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemFragments.h"
 
 #if WITH_EDITOR
 
@@ -47,7 +48,13 @@ void FYIInventoryReplicationSpec::Define()
 
 		UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
 		Def->UniqueCode = 1234;
-		Def->DefaultSize = FIntPoint(1, 1);
+		if (FInstancedStruct* LayoutData = Def->FindOrAddDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+		{
+			if (FYIItemLayoutDefinitionFragment* Layout = LayoutData->GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+			{
+				Layout->DefaultSize = FIntPoint(1, 1);
+			}
+		}
 		FYIBagItem Item;
 		Item.Item.Definition = Def;
 		Item.Item.Count = 1;

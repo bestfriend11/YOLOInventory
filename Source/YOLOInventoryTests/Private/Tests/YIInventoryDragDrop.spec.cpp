@@ -4,17 +4,36 @@
 #include "UObject/Package.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemFragments.h"
 #include "InventoryUtils.h"
 
 // Helper: make a transient item definition with specified size/stacking
 static UYIItemDefinition* MakeDragDef(FIntPoint Size, bool bAllowRotation = true, bool bAllowStacking = true, int32 MaxStack = 99)
 {
     UYIItemDefinition* Def = NewObject<UYIItemDefinition>(GetTransientPackage());
-    Def->DisplayName = FText::FromString(TEXT("TestDef"));
-    Def->DefaultSize = Size;
-    Def->bAllowRotation = bAllowRotation;
-    Def->bAllowStacking = bAllowStacking;
-    Def->MaxStackCount = MaxStack;
+    if (FInstancedStruct* UIData = Def->FindOrAddDefinitionFragmentByStruct(FYIItemUIDefinitionFragment::StaticStruct()))
+    {
+        if (FYIItemUIDefinitionFragment* UI = UIData->GetMutablePtr<FYIItemUIDefinitionFragment>())
+        {
+            UI->DisplayName = FText::FromString(TEXT("TestDef"));
+        }
+    }
+    if (FInstancedStruct* LayoutData = Def->FindOrAddDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+    {
+        if (FYIItemLayoutDefinitionFragment* Layout = LayoutData->GetMutablePtr<FYIItemLayoutDefinitionFragment>())
+        {
+            Layout->DefaultSize = Size;
+            Layout->bAllowRotation = bAllowRotation;
+        }
+    }
+    if (FInstancedStruct* StackingData = Def->FindOrAddDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
+    {
+        if (FYIItemStackingDefinitionFragment* Stacking = StackingData->GetMutablePtr<FYIItemStackingDefinitionFragment>())
+        {
+            Stacking->bAllowStacking = bAllowStacking;
+            Stacking->MaxStackCount = MaxStack;
+        }
+    }
     return Def;
 }
 
@@ -25,7 +44,7 @@ static int32 AddItemToBag(UYIInventoryBag* Bag, UYIItemDefinition* Def, int32 Co
     Item.Item.Definition = Def; // soft pointer from raw
     Item.Item.Count = Count;
     Item.Pos = Pos;
-    Item.Size = Def ? Def->DefaultSize : FIntPoint(1,1);
+    Item.Size = Def ? Def->GetEffectiveDefaultSize() : FIntPoint(1,1);
     return Bag->AddBagItem(Item);
 }
 
