@@ -1,0 +1,40 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryLoot",
+  "Description": "Loot table and item generation runtime built on core/schema systems.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryLoot",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryWorld",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    }
+  ]
+}

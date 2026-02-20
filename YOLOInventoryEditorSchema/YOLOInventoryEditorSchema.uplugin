@@ -1,0 +1,48 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryEditorSchema",
+  "Description": "Editor dashboards and tooling for schema, fragments, and source mapping.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryEditorSchema",
+      "Type": "Editor",
+      "LoadingPhase": "PostEngineInit"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryLegacyBridge",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    },
+    {
+      "Name": "CSVItemBuilder",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryEditorCore",
+      "Enabled": true
+    }
+  ]
+}

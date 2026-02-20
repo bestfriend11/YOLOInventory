@@ -1,0 +1,44 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryEquipment",
+  "Description": "Equipment and slot runtime built on top of core/schema/grid systems.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryEquipment",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryGrid",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    },
+    {
+      "Name": "GameplayAbilities",
+      "Enabled": true
+    }
+  ]
+}

@@ -1,9 +1,0 @@
-Set environment variables:
-
-  CL=@p:\gpg\msdev.opt
-  GPG_ROOT=p:\gpg
-
-Add to MSVC directories:
-
-  Executable:  p:\gpg\bin
-  Library:     p:\gpg\lib

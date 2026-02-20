@@ -1,7 +1,0 @@
-[OPTIONS]
-LCID=0x409 0x0 0x0 ; English (United States)
-REPORT=Yes
-HLP=UnitTester.hlp
-
-[FILES]
-UnitTester.rtf

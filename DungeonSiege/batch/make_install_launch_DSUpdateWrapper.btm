@@ -1,8 +1,0 @@
-echo *************************************
-echo ***
-echo ***	create the wrapper around the patch 
-echo ***
-echo **************************************
-
-make_install_DSUpdateWrapper \\tankbox\testing_data\current\ds1_main_02.07.0101_tank
-

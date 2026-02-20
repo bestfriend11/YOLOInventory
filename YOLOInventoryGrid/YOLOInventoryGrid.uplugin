@@ -1,0 +1,23 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryGrid",
+  "Description": "Grid and bag runtime (placement, rotation, occupancy) built on core/schema contracts.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryGrid",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": []
+}

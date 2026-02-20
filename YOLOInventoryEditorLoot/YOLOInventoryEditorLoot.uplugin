@@ -1,0 +1,44 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryEditorLoot",
+  "Description": "Editor tooling for loot tables, generators, and simulation analysis.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": false,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryEditorLoot",
+      "Type": "Editor",
+      "LoadingPhase": "PostEngineInit"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryLoot",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryEditorCore",
+      "Enabled": true
+    }
+  ]
+}

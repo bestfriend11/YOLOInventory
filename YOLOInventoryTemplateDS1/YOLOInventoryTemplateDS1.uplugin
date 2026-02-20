@@ -1,0 +1,61 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "YOLOInventoryTemplateDS1",
+  "Description": "Dungeon Siege-inspired showcase template built as an optional opinionated layer.",
+  "Category": "YOLO Inventory Suite",
+  "CreatedBy": "Rovo Dev",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "EnabledByDefault": false,
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "YOLOInventoryTemplateDS1",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    },
+    {
+      "Name": "YOLOInventoryTemplateDS1Editor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryGrid",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryEquipment",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryLoot",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryUI",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryEditorLoot",
+      "Enabled": true
+    }
+  ]
+}
