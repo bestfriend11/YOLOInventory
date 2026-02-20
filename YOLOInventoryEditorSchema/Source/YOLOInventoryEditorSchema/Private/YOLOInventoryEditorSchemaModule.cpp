@@ -16,6 +16,52 @@
 #include "AssetTypeActions_YIItemSFXProfile.h"
 #include "AssetTypeActions_YIItemVariant.h"
 #include "AssetTypeActions_YIRarityPalette.h"
+#include "IYOLOInventoryEditorCoreModule.h"
+#include "SYIItemDashboard.h"
+#include "SYIFragmentDashboard.h"
+#include "SYICraftingDashboard.h"
+
+class FYISchemaDashboardBridge final : public IYISchemaDashboardBridge
+{
+public:
+	FYISchemaDashboardBridge()
+		: ItemDashboardWidget(SNew(SYIItemDashboard).LayoutMode(EYIItemDashboardLayout::ItemListOnly))
+		, FragmentDashboardWidget(SNew(SYIFragmentDashboard).LayoutMode(EYIFragmentDashboardLayout::AssetListOnly))
+		, CraftingDashboardWidget(SNew(SYICraftingDashboard))
+	{
+	}
+
+	virtual TSharedRef<SWidget> GetItemsRootWidget() override { return ItemDashboardWidget.ToSharedRef(); }
+	virtual TSharedRef<SWidget> GetFragmentsRootWidget() override { return FragmentDashboardWidget.ToSharedRef(); }
+	virtual TSharedRef<SWidget> GetCraftingRootWidget() override { return CraftingDashboardWidget.ToSharedRef(); }
+
+	virtual TSharedRef<SWidget> GetItemDetailsPanelWidget() const override { return ItemDashboardWidget->GetDetailsPanelWidget(); }
+	virtual TSharedRef<SWidget> GetItemMappingsPanelWidget() const override { return ItemDashboardWidget->GetMappingPanelWidget(); }
+	virtual TSharedRef<SWidget> GetItemPreviewPanelWidget() const override { return ItemDashboardWidget->GetPreviewPanelWidget(); }
+	virtual TSharedRef<SWidget> GetItemPreflightPanelWidget() const override { return ItemDashboardWidget->GetPreflightPanelWidget(); }
+	virtual TSharedRef<SWidget> GetItemDiffPanelWidget() const override { return ItemDashboardWidget->GetDiffPanelWidget(); }
+	virtual TSharedRef<SWidget> GetItemLogsPanelWidget() const override { return ItemDashboardWidget->GetLogsPanelWidget(); }
+
+	virtual TSharedRef<SWidget> GetFragmentDetailsPanelWidget() const override { return FragmentDashboardWidget->GetDetailsPanelWidget(); }
+	virtual TSharedRef<SWidget> GetFragmentMappingsPanelWidget() const override { return FragmentDashboardWidget->GetMappingPanelWidget(); }
+	virtual TSharedRef<SWidget> GetFragmentPreviewPanelWidget() const override { return FragmentDashboardWidget->GetPreviewPanelWidget(); }
+
+	virtual void OpenAssetInItems(UObject* Asset) override { ItemDashboardWidget->OpenAsset(Asset); }
+	virtual void OpenAssetInFragments(UObject* Asset) override { FragmentDashboardWidget->OpenAsset(Asset); }
+	virtual void OpenAssetInCrafting(UObject* Asset) override { CraftingDashboardWidget->OpenAsset(Asset); }
+
+	virtual void SaveItemsFromToolbar() override { ItemDashboardWidget->SaveCurrentAssetFromToolbar(); }
+	virtual void SaveFragmentsFromToolbar() override { FragmentDashboardWidget->SaveCurrentAssetFromToolbar(); }
+	virtual void SaveCraftingFromToolbar() override { CraftingDashboardWidget->SaveTargetBagFromToolbar(); }
+
+	virtual void SetCraftingTargetBag(UYIInventoryBag* InBag) override { CraftingDashboardWidget->SetTargetBag(InBag); }
+	virtual UYIInventoryBag* GetCraftingTargetBag() const override { return CraftingDashboardWidget->GetTargetBag(); }
+
+private:
+	TSharedPtr<SYIItemDashboard> ItemDashboardWidget;
+	TSharedPtr<SYIFragmentDashboard> FragmentDashboardWidget;
+	TSharedPtr<SYICraftingDashboard> CraftingDashboardWidget;
+};
 
 uint32 GYOLOInventoryEditorSchemaAssetCategory = EAssetTypeCategories::Misc;
 
@@ -41,10 +87,19 @@ public:
 		RegisterAction<FAssetTypeActions_YIItemSFXProfile>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIItemVariant>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIRarityPalette>(AssetTools);
+
+		IYOLOInventoryEditorCoreModule& EditorCoreModule = FModuleManager::LoadModuleChecked<IYOLOInventoryEditorCoreModule>("YOLOInventoryEditorCore");
+		EditorCoreModule.RegisterSchemaDashboardFactory(
+			FYICreateSchemaDashboardBridge::CreateStatic(&FYOLOInventoryEditorSchemaModule::CreateSchemaDashboardBridge));
 	}
 
 	virtual void ShutdownModule() override
 	{
+		if (IYOLOInventoryEditorCoreModule::IsAvailable())
+		{
+			IYOLOInventoryEditorCoreModule::Get().ClearSchemaDashboardFactory();
+		}
+
 		if (FModuleManager::Get().IsModuleLoaded("AssetTools"))
 		{
 			IAssetTools& AssetTools = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools").Get();
@@ -66,6 +121,11 @@ private:
 		TSharedRef<TAction> Action = MakeShared<TAction>();
 		AssetTools.RegisterAssetTypeActions(Action);
 		RegisteredAssetTypeActions.Add(Action);
+	}
+
+	static TSharedRef<IYISchemaDashboardBridge> CreateSchemaDashboardBridge()
+	{
+		return MakeShared<FYISchemaDashboardBridge>();
 	}
 
 private:

@@ -28,10 +28,16 @@ public:
 	virtual bool HasGeneratorDashboardFactory() const override;
 	virtual TSharedRef<IYIGeneratorDashboardBridge> CreateGeneratorDashboardBridge() override;
 
+	virtual void RegisterSchemaDashboardFactory(FYICreateSchemaDashboardBridge InFactory) override;
+	virtual void ClearSchemaDashboardFactory() override;
+	virtual bool HasSchemaDashboardFactory() const override;
+	virtual TSharedRef<IYISchemaDashboardBridge> CreateSchemaDashboardBridge() override;
+
 private:
 	TArray<TWeakPtr<class SYIUnifiedHelpPanel>> HelpWidgets;
 	int32 LastHelpTabIndex = 0;
 	TWeakPtr<class FYIUnifiedDashboardEditor> DashboardEditor;
 	FYICreateBagDashboardBridge BagDashboardFactory;
 	FYICreateGeneratorDashboardBridge GeneratorDashboardFactory;
+	FYICreateSchemaDashboardBridge SchemaDashboardFactory;
 };

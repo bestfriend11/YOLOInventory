@@ -5,10 +5,8 @@
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardContext.h"
 #include "YIGeneratorDashboardBridge.h"
+#include "YISchemaDashboardBridge.h"
 
-class SYIItemDashboard;
-class SYIFragmentDashboard;
-class SYICraftingDashboard;
 class SYIUnifiedHelpPanel;
 class IYIBagDashboardBridge;
 class FWorkspaceItem;
@@ -65,10 +63,8 @@ private:
 	TSharedRef<SDockTab> SpawnCraftingDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnBagsDetailsTab(const FSpawnTabArgs& Args);
 
-	TSharedPtr<SYIItemDashboard> ItemDashboard;
-	TSharedPtr<SYIFragmentDashboard> AffixDashboard;
+	TSharedPtr<IYISchemaDashboardBridge> SchemaDashboard;
 	TSharedPtr<IYIGeneratorDashboardBridge> GeneratorDashboard;
-	TSharedPtr<SYICraftingDashboard> CraftingDashboard;
 	TSharedPtr<IYIBagDashboardBridge> BagDashboard;
 	TSharedPtr<SYIUnifiedHelpPanel> HelpPanel;
 	TStrongObjectPtr<UYIUnifiedDashboardContext> EditorContext;

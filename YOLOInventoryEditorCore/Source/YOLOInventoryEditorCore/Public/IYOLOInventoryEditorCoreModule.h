@@ -4,6 +4,7 @@
 #include "Modules/ModuleManager.h"
 #include "YIBagDashboardBridge.h"
 #include "YIGeneratorDashboardBridge.h"
+#include "YISchemaDashboardBridge.h"
 
 class YOLOINVENTORYEDITORCORE_API IYOLOInventoryEditorCoreModule : public IModuleInterface
 {
@@ -27,4 +28,9 @@ public:
 	virtual void ClearGeneratorDashboardFactory() = 0;
 	virtual bool HasGeneratorDashboardFactory() const = 0;
 	virtual TSharedRef<IYIGeneratorDashboardBridge> CreateGeneratorDashboardBridge() = 0;
+
+	virtual void RegisterSchemaDashboardFactory(FYICreateSchemaDashboardBridge InFactory) = 0;
+	virtual void ClearSchemaDashboardFactory() = 0;
+	virtual bool HasSchemaDashboardFactory() const = 0;
+	virtual TSharedRef<IYISchemaDashboardBridge> CreateSchemaDashboardBridge() = 0;
 };

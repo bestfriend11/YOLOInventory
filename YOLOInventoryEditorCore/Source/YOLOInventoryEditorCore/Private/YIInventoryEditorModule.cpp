@@ -6,11 +6,8 @@
 #include "Styling/AppStyle.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardEditor.h"
-#include "YIAutoPickupDropActorDetails.h"
-#include "YIAutoPickupDropActor.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
-#include "PropertyEditorModule.h"
 
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 static const FName YOLOInventoryHelpTabName(TEXT("YOLOInventory_Help"));
@@ -101,57 +98,6 @@ void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
 }
 void FYOLOInventoryEditorModule::StartupModule()
 {
-	// // Ensure an example Affix asset exists for authoring docs/demo
-	// {
-	// 	FString PackageName = TEXT("/Game/YOLOInventory/Affixes/Affix_Example");
-	// 	FAssetRegistryModule& Arm = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-	// 	FAssetData Existing = Arm.Get().GetAssetByObjectPath(*FString::Printf(TEXT("%s.%s"), *PackageName, TEXT("Affix_Example")));
-	// 	if (!Existing.IsValid())
-	// 	{
-	// 		IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	// 		FString Name, Path; Tools.CreateUniqueAssetName(PackageName, TEXT(""), Name, Path);
-	// 		UYIAffixFactory* Factory = NewObject<UYIAffixFactory>();
-	// 		UClass* Class = UYIAffixAsset::StaticClass();
-	// 		UObject* NewAsset = Tools.CreateAsset(FPackageName::GetLongPackageAssetName(Name), FPackageName::GetLongPackagePath(Path), Class, Factory);
-	// 		if (UYIAffixAsset* Affix = Cast<UYIAffixAsset>(NewAsset))
-	// 		{
-	// 			Affix->DisplayName = NSLOCTEXT("YOLOInventory", "AffixExampleName", "Example Affix");
-	// 			Affix->Description = NSLOCTEXT("YOLOInventory", "AffixExampleDesc", "Example modifier used by YOLOInventory. Edit Min/Max and TooltipFormat.");
-	// 			Affix->TooltipFormat = NSLOCTEXT("YOLOInventory", "AffixExampleFmt", "+{0}% Damage");
-	// 			Affix->MinValue = 5.f; Affix->MaxValue = 10.f;
-	// 			Affix->Modify();
-	// 		}
-	// 	}
-	// }
-
-	// // Ensure an example Affix Pool asset exists for authoring/demo
-	// {
-	// 	FString PoolPkg = TEXT("/Game/YOLOInventory/Affixes/Pool_Example");
-	// 	FAssetRegistryModule& Arm2 = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-	// 	FAssetData Existing = Arm2.Get().GetAssetByObjectPath(*FString::Printf(TEXT("%s.%s"), *PoolPkg, TEXT("Pool_Example")));
-	// 	if (!Existing.IsValid())
-	// 	{
-	// 		IAssetTools& Tools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
-	// 		FString Name, Path; Tools.CreateUniqueAssetName(PoolPkg, TEXT(""), Name, Path);
-	// 		UYIAffixPoolFactory* Factory = NewObject<UYIAffixPoolFactory>();
-	// 		UClass* Class = UYIAffixPoolAsset::StaticClass();
-	// 		UObject* NewAsset = Tools.CreateAsset(FPackageName::GetLongPackageAssetName(Name), FPackageName::GetLongPackagePath(Path), Class, Factory);
-	// 		if (UYIAffixPoolAsset* Pool = Cast<UYIAffixPoolAsset>(NewAsset))
-	// 		{
-	// 			// stub: leave empty to edit in project
-	// 			Pool->Modify();
-	// 		}
-	// 	}
-	// }
-
-	{
-		FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
-		PropertyEditorModule.RegisterCustomClassLayout(
-			AYIAutoPickupDropActor::StaticClass()->GetFName(),
-			FOnGetDetailCustomizationInstance::CreateStatic(&FYIAutoPickupDropActorDetails::MakeInstance));
-		PropertyEditorModule.NotifyCustomizationModuleChanged();
-	}
-
 	// Register Window -> YOLO Inventory menu and toolbar buttons
 	static bool bYOLOMenusExtended = false;
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateLambda([]()
@@ -211,6 +157,24 @@ void FYOLOInventoryEditorModule::StartupModule()
 		if (UToolMenu* ToolsMenu = UToolMenus::Get()->ExtendMenu("LevelEditor.MainMenu.Tools"))
 		{
 			FToolMenuSection& Sec2 = ToolsMenu->AddSection("YOLOInventoryTools", NSLOCTEXT("YOLOInventory","Tools","YOLO Inventory"));
+			Sec2.AddMenuEntry("YOLO_OpenUnifiedDashboard",
+				NSLOCTEXT("YOLOInventory","OpenUnifiedDashboard","Open Unified Dashboard"),
+				NSLOCTEXT("YOLOInventory","OpenUnifiedDashboard_TT","Open YOLO Inventory unified dashboard window."),
+				FSlateIcon(),
+				FToolMenuExecuteAction::CreateLambda([](const FToolMenuContext&)
+				{
+					FYOLOInventoryEditorModule::Get().OpenDashboard();
+				})
+			);
+			Sec2.AddMenuEntry("YOLO_OpenUnifiedDashboardHelp",
+				NSLOCTEXT("YOLOInventory","OpenUnifiedDashboardHelp","Open Dashboard Help"),
+				NSLOCTEXT("YOLOInventory","OpenUnifiedDashboardHelp_TT","Open Help panel inside YOLO Inventory unified dashboard."),
+				FSlateIcon(),
+				FToolMenuExecuteAction::CreateLambda([](const FToolMenuContext&)
+				{
+					FYOLOInventoryEditorModule::Get().OpenDashboardHelp();
+				})
+			);
 			Sec2.AddMenuEntry("YOLO_ValidateUniqueCodes",
 				NSLOCTEXT("YOLOInventory","ValidateCodes","Validate Unique Item Codes"),
 				NSLOCTEXT("YOLOInventory","ValidateCodes_TT","Scan all UYIItemDefinition assets and ensure UniqueCode is non-zero and unique. Auto-fix assigns new codes where needed."),
@@ -239,13 +203,8 @@ void FYOLOInventoryEditorModule::ShutdownModule()
 {
 	BagDashboardFactory.Unbind();
 	GeneratorDashboardFactory.Unbind();
+	SchemaDashboardFactory.Unbind();
 	DashboardEditor.Reset();
-	if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
-	{
-		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
-		PropertyEditorModule.UnregisterCustomClassLayout(AYIAutoPickupDropActor::StaticClass()->GetFName());
-		PropertyEditorModule.NotifyCustomizationModuleChanged();
-	}
 }
 
 void FYOLOInventoryEditorModule::RegisterBagDashboardFactory(FYICreateBagDashboardBridge InFactory)
@@ -288,6 +247,27 @@ TSharedRef<IYIGeneratorDashboardBridge> FYOLOInventoryEditorModule::CreateGenera
 {
 	checkf(GeneratorDashboardFactory.IsBound(), TEXT("YOLOInventoryEditorCore: Generator dashboard factory is not registered."));
 	return GeneratorDashboardFactory.Execute();
+}
+
+void FYOLOInventoryEditorModule::RegisterSchemaDashboardFactory(FYICreateSchemaDashboardBridge InFactory)
+{
+	SchemaDashboardFactory = MoveTemp(InFactory);
+}
+
+void FYOLOInventoryEditorModule::ClearSchemaDashboardFactory()
+{
+	SchemaDashboardFactory.Unbind();
+}
+
+bool FYOLOInventoryEditorModule::HasSchemaDashboardFactory() const
+{
+	return SchemaDashboardFactory.IsBound();
+}
+
+TSharedRef<IYISchemaDashboardBridge> FYOLOInventoryEditorModule::CreateSchemaDashboardBridge()
+{
+	checkf(SchemaDashboardFactory.IsBound(), TEXT("YOLOInventoryEditorCore: Schema dashboard factory is not registered."));
+	return SchemaDashboardFactory.Execute();
 }
 
 IMPLEMENT_MODULE(FYOLOInventoryEditorModule, YOLOInventoryEditorCore)

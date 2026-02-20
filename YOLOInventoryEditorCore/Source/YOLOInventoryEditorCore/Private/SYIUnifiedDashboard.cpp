@@ -1,7 +1,4 @@
 #include "SYIUnifiedDashboard.h"
-#include "Data/YIDataTableItemSource.h"
-#include "YIAffixFactory.h"
-#include "YIAffixPoolFactory.h"
 #include "Factories/DataAssetFactory.h"
 #include "Factories/Factory.h"
 #include "AssetToolsModule.h"
@@ -336,18 +333,26 @@ static void CreateAssetWithFactory(UFactory* Factory, const FString& TargetPath,
 void SYIUnifiedHelpPanel::CreateItemSource()
 {
 	UDataAssetFactory* Factory = NewObject<UDataAssetFactory>();
-	Factory->DataAssetClass = UYIDataTableItemSource::StaticClass();
-	CreateAssetWithFactory(Factory, TEXT("/Game/YOLOInventory/ItemSources"), TEXT("ItemSource"));
+	if (!Factory)
+	{
+		return;
+	}
+
+	if (UClass* SourceClass = LoadClass<UObject>(nullptr, TEXT("/Script/YOLOInventorySchema.YIDataTableItemSource")))
+	{
+		Factory->DataAssetClass = SourceClass;
+		CreateAssetWithFactory(Factory, TEXT("/Game/YOLOInventory/ItemSources"), TEXT("ItemSource"));
+	}
 }
 
 void SYIUnifiedHelpPanel::CreateAffix()
 {
-	CreateAssetWithFactory(NewObject<UYIAffixFactory>(), TEXT("/Game/YOLOInventory/Affixes"), TEXT("Affix"));
+	CreateAssetWithFactory(YIUnified_CreateFactoryFromClassPath(TEXT("/Script/YOLOInventoryEditorSchema.YIAffixFactory")), TEXT("/Game/YOLOInventory/Affixes"), TEXT("Affix"));
 }
 
 void SYIUnifiedHelpPanel::CreateAffixPool()
 {
-	CreateAssetWithFactory(NewObject<UYIAffixPoolFactory>(), TEXT("/Game/YOLOInventory/Affixes"), TEXT("AffixPool"));
+	CreateAssetWithFactory(YIUnified_CreateFactoryFromClassPath(TEXT("/Script/YOLOInventoryEditorSchema.YIAffixPoolFactory")), TEXT("/Game/YOLOInventory/Affixes"), TEXT("AffixPool"));
 }
 
 void SYIUnifiedHelpPanel::CreateLootTable()

@@ -23,22 +23,6 @@
     {
       "Name": "YOLOInventoryCore",
       "Enabled": true
-    },
-    {
-      "Name": "YOLOInventorySchema",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryContainers",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryWorld",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryEditorSchema",
-      "Enabled": true
     }
   ]
 }

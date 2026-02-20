@@ -111,7 +111,7 @@ class FYIGeneratorDashboardBridge final : public IYIGeneratorDashboardBridge
 {
 public:
 	FYIGeneratorDashboardBridge()
-		: GeneratorDashboardWidget(SNew(SYIGeneratorDashboard))
+		: GeneratorDashboardWidget(SNew(SYIGeneratorDashboard).LayoutMode(EYIGeneratorDashboardLayout::AssetListOnly))
 	{
 	}
 
