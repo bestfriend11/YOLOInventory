@@ -1,5 +1,6 @@
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "InventoryUtils.h"
 #include "UObject/Package.h"
@@ -63,7 +64,7 @@ bool UYIInventoryBag::CanAcceptItemDefinition(const UYIItemDefinition* Definitio
 	// ItemType allow-list with hierarchical match (e.g. Item.Spell accepts Item.Spell.Fire).
 	if (AllowedItemTypes.Num() > 0)
 	{
-		const FGameplayTag ItemType = Definition->ItemType;
+		const FGameplayTag ItemType = YIItemSchema::GetItemType(Definition);
 		bool bTypeAllowed = false;
 		if (ItemType.IsValid())
 		{
@@ -82,10 +83,12 @@ bool UYIInventoryBag::CanAcceptItemDefinition(const UYIItemDefinition* Definitio
 		}
 	}
 
-	FGameplayTagContainer EffectiveTags = Definition->Tags;
-	if (Definition->ItemType.IsValid())
+	FGameplayTagContainer EffectiveTags;
+	YIItemSchema::GetTags(Definition, EffectiveTags);
+	const FGameplayTag ItemTypeTag = YIItemSchema::GetItemType(Definition);
+	if (ItemTypeTag.IsValid())
 	{
-		EffectiveTags.AddTag(Definition->ItemType);
+		EffectiveTags.AddTag(ItemTypeTag);
 	}
 
 	if (RequiredItemTags.Num() > 0 && !EffectiveTags.HasAll(RequiredItemTags))
@@ -190,7 +193,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	}
 
 	FYIBagItem NormalizedNewItem = NewItem;
-	if (Def->bIsContainerItem)
+	if (YIItemSchema::IsContainerItem(Def))
 	{
 		NormalizedNewItem.Item.Count = 1;
 	}
@@ -204,13 +207,14 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	}
 
 	// Enforce uniqueness-per-type: only one stack per ItemType in this bag when flagged on the incoming item
-	if (Def->bUniquePerType)
+	if (YIItemSchema::IsUniquePerType(Def))
 	{
+		const FGameplayTag NewItemType = YIItemSchema::GetItemType(Def);
 		for (const FYIBagItem& E : Items)
 		{
 			if (UYIItemDefinition* EDef = (E.Item.Definition.IsValid() ? E.Item.Definition.Get() : E.Item.Definition.LoadSynchronous()))
 			{
-				if (EDef->ItemType == Def->ItemType)
+				if (YIItemSchema::GetItemType(EDef) == NewItemType)
 				{
 					// Another item of the same ItemType already exists; reject placement
 					return INDEX_NONE;
@@ -220,7 +224,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	}
 
 	// Stacking logic: if enabled and there is an existing stack and stacking allowed, try to merge; otherwise create another stack
-	if (bAutoMergeOnAdd && !Def->bIsContainerItem)
+	if (bAutoMergeOnAdd && !YIItemSchema::IsContainerItem(Def))
 	{
 		int32 Existing = INDEX_NONE;
 		// Prefer matching by per-instance stack key when present
@@ -235,7 +239,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		}
 		if (Existing != INDEX_NONE && Def->IsRuntimeStackingAllowed())
 		{
-			const int32 MaxStackCount = Def->GetEffectiveMaxStackCount();
+			const int32 MaxStackCount = YIItemSchema::GetMaxStackCount(Def);
 			int32 Room = MaxStackCount - Items[Existing].Item.Count;
 			if (Room > 0)
 			{
@@ -256,7 +260,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 	// Clamp count to MaxStackCount if stacking
 	if (Def->IsRuntimeStackingAllowed())
 	{
-		Copy.Item.Count = FMath::Clamp(Copy.Item.Count, 1, Def->GetEffectiveMaxStackCount());
+		Copy.Item.Count = FMath::Clamp(Copy.Item.Count, 1, YIItemSchema::GetMaxStackCount(Def));
 	}
 	int32 OutIndex = Items.Add(Copy);
 	if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
@@ -274,7 +278,7 @@ bool UYIInventoryBag::CombineStacks(int32 IndexA, int32 IndexB)
 	if (!DefA || !DefB) return false;
 	if (DefA != DefB) return false;
 	if (!DefA->IsRuntimeStackingAllowed()) return false;
-	int32 Room = DefA->GetEffectiveMaxStackCount() - A.Item.Count;
+	int32 Room = YIItemSchema::GetMaxStackCount(DefA) - A.Item.Count;
 	if (Room <= 0) return false;
 	int32 Moved = FMath::Min(Room, B.Item.Count);
 	A.Item.Count += Moved;
@@ -365,7 +369,7 @@ bool UYIInventoryBag::RotateItem(int32 Index)
 	// Respect per-item rotation rule if available on the asset
 	const FYIBagItem& Cur = Items[Index];
 	UYIItemDefinition* Def = Cur.Item.Definition.IsValid() ? Cur.Item.Definition.Get() : Cur.Item.Definition.LoadSynchronous();
-	if (Def && !Def->IsEffectiveRotationAllowed())
+	if (Def && !YIItemSchema::IsRotationAllowed(Def))
 	{
 		return false;
 	}

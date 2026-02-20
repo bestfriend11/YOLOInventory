@@ -1,5 +1,6 @@
 #include "YILootTable.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 
 bool UYILootTable::GetEligibleEntries(int32 Level, TArray<const FYILootTableEntry*>& OutEntries) const
 {
@@ -21,7 +22,13 @@ bool UYILootTable::GetEligibleEntries(int32 Level, TArray<const FYILootTableEntr
 		if (!Entry.RequiredTags.IsEmpty())
 		{
 			UYIItemDefinition* Def = Entry.Definition.IsValid() ? Entry.Definition.Get() : Entry.Definition.LoadSynchronous();
-			if (!Def || !Def->Tags.HasAny(Entry.RequiredTags))
+			FGameplayTagContainer EffectiveTags;
+			if (!Def)
+			{
+				continue;
+			}
+			YIItemSchema::GetTags(Def, EffectiveTags);
+			if (!EffectiveTags.HasAny(Entry.RequiredTags))
 			{
 				continue;
 			}

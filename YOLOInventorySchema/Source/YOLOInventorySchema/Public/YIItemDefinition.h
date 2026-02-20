@@ -9,6 +9,7 @@
 #include "YIItemDefinition.generated.h"
 
 class UYIDataTableItemSource;
+class UYIItemTraitAsset;
 class UYIRequirement;
 class UYIItemSFXProfile;
 class UYIAttributeModAsset;
@@ -34,53 +35,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Identity", meta=(ToolTip="Optional external/template identifier, e.g. 'weapon_fire_01'"))
 	FString TemplateId;
 
-	/** Primary gameplay classification tag (e.g. Item.Weapon.Sword). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Classification", meta=(ToolTip="Primary gameplay classification tag"))
-	FGameplayTag ItemType;
+	/** Optional parent definition for base-mod authoring; local fragments override parent fragments by struct type. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Authoring", meta=(ToolTip="Optional parent definition used as a shared baseline"))
+	TSoftObjectPtr<UYIItemDefinition> ParentDefinition;
 
-	/** Additional gameplay tags used by filtering/rules. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Classification", meta=(ToolTip="Additional gameplay tags for filtering and rules"))
-	FGameplayTagContainer Tags;
-
-	/** Designer rarity tag for UI/gameplay tuning. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Classification", meta=(ToolTip="Designer rarity tag (e.g., Rarity.Common)"))
-	FGameplayTag RarityTag;
-
-	/** Optional audio routing tag, falls back to ItemType when unset. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio", meta=(ToolTip="Optional audio tag override"))
-	FGameplayTag AudioTag;
-
-	/** Optional item-specific SFX profile (highest priority). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio", meta=(ToolTip="Optional per-item SFX profile override"))
-	TObjectPtr<UYIItemSFXProfile> SoundProfileOverride = nullptr;
-
-	/** If true, only one instance of this item type can exist in a target bag. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stacking", meta=(ToolTip="If true, only one instance of this item type may exist in a target bag"))
-	bool bUniquePerType = false;
-
-	/** Container items own a nested runtime bag instance (bag-in-bag). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(ToolTip="If true, this item behaves as a container item"))
-	bool bIsContainerItem = false;
-
-	/** Optional template bag asset used to initialize container runtime bags. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", AllowedClasses="/Script/YOLOInventoryContainers.YIInventoryBag", ToolTip="Optional template bag cloned for container item instances"))
-	TSoftObjectPtr<UObject> ContainerTemplateBag;
-
-	/** Default nested bag size when no container template is supplied. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Container", meta=(EditCondition="bIsContainerItem", ClampMin="1", ToolTip="Default nested bag size for container items without a template"))
-	FIntPoint ContainerDefaultGridSize = FIntPoint(6, 8);
-
-	/** Slot-capacity cost consumed when equipped. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Equipment", meta=(ClampMin="1", ToolTip="Slot capacity cost consumed by this item when equipped"))
-	int32 EquipSlotCost = 1;
+	/** Optional reusable trait bundles. Later traits override earlier traits by fragment struct type. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Authoring", meta=(ToolTip="Optional trait assets that contribute reusable definition fragments"))
+	TArray<TSoftObjectPtr<UYIItemTraitAsset>> Traits;
 
 	/** Optional requirement objects that gate use/equip. */
 	UPROPERTY(EditAnywhere, Instanced, Category="Requirements", meta=(ToolTip="Optional requirement objects (level/quest/etc)"))
 	TArray<TObjectPtr<UYIRequirement>> Requirements;
-
-	/** GAS-backed attribute-mod assets applied by inventory/equipment systems. */
-	UPROPERTY(EditAnywhere, Category="Attributes", meta=(ToolTip="Attribute mod assets applied by this item"))
-	TArray<TSoftObjectPtr<UYIAttributeModAsset>> AttributeMods;
 
 	/** Optional source linkage for dashboard regeneration. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Source asset this item was generated from"))
@@ -99,17 +64,33 @@ public:
 	TArray<FInstancedStruct> DefinitionFragments;
 
 	const FYIItemUIDefinitionFragment* GetUIDefinitionFragment() const;
+	const FYIItemClassificationDefinitionFragment* GetClassificationDefinitionFragment() const;
+	const FYIItemAudioDefinitionFragment* GetAudioDefinitionFragment() const;
 	const FYIItemPickupDefinitionFragment* GetPickupDefinitionFragment() const;
 	const FYIItemEquipmentDefinitionFragment* GetEquipmentDefinitionFragment() const;
 	const FYIItemAffixDefinitionFragment* GetAffixDefinitionFragment() const;
 	const FYIItemLayoutDefinitionFragment* GetLayoutDefinitionFragment() const;
 	const FYIItemStackingDefinitionFragment* GetStackingDefinitionFragment() const;
+	const FYIItemRulesDefinitionFragment* GetRulesDefinitionFragment() const;
+	const FYIItemContainerDefinitionFragment* GetContainerDefinitionFragment() const;
+	const FYIItemAttributeModsDefinitionFragment* GetAttributeModsDefinitionFragment() const;
 
 	/** Resolve display payload from UI fragment with asset-name fallback. */
 	void GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const;
 	FText GetEffectiveDisplayName() const;
 	FText GetEffectiveDescription() const;
 	TSoftObjectPtr<UTexture2D> GetEffectiveIcon() const;
+	FGameplayTag GetEffectiveItemType() const;
+	void GetEffectiveTags(FGameplayTagContainer& OutTags) const;
+	FGameplayTag GetEffectiveRarityTag() const;
+	FGameplayTag GetEffectiveAudioTag() const;
+	TSoftObjectPtr<UYIItemSFXProfile> GetEffectiveSoundProfileOverride() const;
+	bool IsEffectiveUniquePerType() const;
+	int32 GetEffectiveEquipSlotCost() const;
+	bool IsEffectiveContainerItem() const;
+	TSoftObjectPtr<UObject> GetEffectiveContainerTemplateBag() const;
+	FIntPoint GetEffectiveContainerDefaultGridSize() const;
+	void GetEffectiveAttributeMods(TArray<TSoftObjectPtr<UYIAttributeModAsset>>& OutAttributeMods) const;
 
 	/** Resolve preferred equip slot from equipment fragment. */
 	FGameplayTag GetEffectivePrimaryEquipSlotTag() const;
@@ -119,6 +100,7 @@ public:
 
 	/** Find static definition fragment by exact struct type. */
 	const FInstancedStruct* FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+	const FInstancedStruct* FindResolvedDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 
 	/** Find or add static definition fragment by exact struct type. */
 	FInstancedStruct* FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);

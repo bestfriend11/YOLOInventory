@@ -400,6 +400,21 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 		NSLOCTEXT("YOLOInventory", "Dash_Mode_Save", "Save"),
 		NSLOCTEXT("YOLOInventory", "Dash_Mode_Save_TT", "Save current mode selection"),
 		FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Save"));
+	if (bHasSchemaDashboard && ActiveTab == EYIUnifiedDashboardTab::Items)
+	{
+		ToolbarBuilder.AddToolBarButton(
+			FUIAction(FExecuteAction::CreateLambda([this]()
+				{
+					if (SchemaDashboard.IsValid())
+					{
+						SchemaDashboard->CreateItemDataSourceFromToolbar();
+					}
+				})),
+			NAME_None,
+			NSLOCTEXT("YOLOInventory", "Dash_Mode_NewItemSource", "New Source"),
+			NSLOCTEXT("YOLOInventory", "Dash_Mode_NewItemSource_TT", "Create a new item data table source asset."),
+			FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"));
+	}
 	ToolbarBuilder.EndSection();
 
 	ToolbarBuilder.BeginSection("YOLOInventoryCompactPanels");
@@ -411,6 +426,13 @@ void FYIUnifiedDashboardEditor::FillDashboardToolbar(FToolBarBuilder& ToolbarBui
 			switch (ActiveTab)
 			{
 			case EYIUnifiedDashboardTab::Items:
+				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_ItemCreateSource", "New Data Table Source"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Plus"), FExecuteAction::CreateLambda([this]()
+					{
+						if (SchemaDashboard.IsValid())
+						{
+							SchemaDashboard->CreateItemDataSourceFromToolbar();
+						}
+					}));
 				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_ItemDetails", "Item Details"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Details"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemDetails); }));
 				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_ItemMappings", "Item Mappings"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Link"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemMappings); }));
 				AddMenuAction(MenuBuilder, NSLOCTEXT("YOLOInventory", "Dash_Panel_ItemPreview", "Item Preview"), FText::GetEmpty(), FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Visibility"), FExecuteAction::CreateLambda([OpenTab]() { OpenTab(Tab_Dashboard_ItemPreview); }));

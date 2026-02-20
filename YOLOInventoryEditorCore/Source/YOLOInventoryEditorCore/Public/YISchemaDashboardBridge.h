@@ -33,10 +33,10 @@ public:
 	virtual void SaveItemsFromToolbar() = 0;
 	virtual void SaveFragmentsFromToolbar() = 0;
 	virtual void SaveCraftingFromToolbar() = 0;
+	virtual void CreateItemDataSourceFromToolbar() = 0;
 
 	virtual void SetCraftingTargetBag(UYIInventoryBag* InBag) = 0;
 	virtual UYIInventoryBag* GetCraftingTargetBag() const = 0;
 };
 
 DECLARE_DELEGATE_RetVal(TSharedRef<IYISchemaDashboardBridge>, FYICreateSchemaDashboardBridge);
-

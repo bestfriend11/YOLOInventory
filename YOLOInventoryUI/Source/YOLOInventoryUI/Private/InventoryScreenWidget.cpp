@@ -515,7 +515,7 @@ void UInventoryScreenWidget::EvaluateActionsForIndex(int32 Index, TArray<FText>&
 	UYIItemDefinition* Definition = SelectedItem.Item.Definition.IsValid()
 		? SelectedItem.Item.Definition.Get()
 		: SelectedItem.Item.Definition.LoadSynchronous();
-	const bool bCanOpenContainer = SelectedItem.Item.ContainedBagId.IsValid() || (Definition && Definition->bIsContainerItem);
+	const bool bCanOpenContainer = SelectedItem.Item.ContainedBagId.IsValid() || (Definition && Definition->IsEffectiveContainerItem());
 	if (bCanOpenContainer)
 	{
 		OutActions.Add(NSLOCTEXT("YOLOInventory", "OpenContainerAction", "Open"));

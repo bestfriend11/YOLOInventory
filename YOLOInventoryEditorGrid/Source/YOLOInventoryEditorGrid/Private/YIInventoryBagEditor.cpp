@@ -793,8 +793,8 @@ FText FYIInventoryBagEditor::BuildRuntimeItemTooltip(const UYIItemDefinition* De
 	const FString DisplayName = Def->GetEffectiveDisplayName().ToString();
 	const FText EffectiveDescription = Def->GetEffectiveDescription();
 	const FString Description = EffectiveDescription.IsEmpty() ? TEXT("-") : EffectiveDescription.ToString();
-	const FString Type = Def->ItemType.IsValid() ? Def->ItemType.ToString() : TEXT("-");
-	const FString Rarity = Def->RarityTag.IsValid() ? Def->RarityTag.ToString() : TEXT("-");
+	const FString Type = Def->GetEffectiveItemType().IsValid() ? Def->GetEffectiveItemType().ToString() : TEXT("-");
+	const FString Rarity = Def->GetEffectiveRarityTag().IsValid() ? Def->GetEffectiveRarityTag().ToString() : TEXT("-");
 
 	const FString Tooltip = FString::Printf(
 		TEXT("%s\nCount: %d\nType: %s\nRarity: %s\nCode: %lld\nTemplate: %s\n\n%s"),
@@ -825,7 +825,7 @@ TSharedRef<ITableRow> FYIInventoryBagEditor::MakeRuntimeItemTile(TSharedPtr<int3
 		? Def->GetEffectiveDisplayName()
 		: NSLOCTEXT("YOLOInventory","BagRuntimeUnknown","Unknown");
 	const FText MetaText = Def
-		? FText::FromString(FString::Printf(TEXT("x%d  |  %s"), Count, Def->RarityTag.IsValid() ? *Def->RarityTag.ToString() : TEXT("No Rarity")))
+		? FText::FromString(FString::Printf(TEXT("x%d  |  %s"), Count, Def->GetEffectiveRarityTag().IsValid() ? *Def->GetEffectiveRarityTag().ToString() : TEXT("No Rarity")))
 		: FText::FromString(TEXT("x0"));
 	const FSlateBrush* IconBrush = ResolveRuntimeItemIcon(Def);
 

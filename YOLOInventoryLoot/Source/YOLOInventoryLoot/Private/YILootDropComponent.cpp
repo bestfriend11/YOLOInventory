@@ -3,6 +3,7 @@
 #include "YIItemGenerator.h"
 #include "YILootTable.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIWorldLootBlueprintLibrary.h"
@@ -319,7 +320,7 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 		FYIBagItem Item;
 		Item.Item.Definition = Def;
 		Item.Item.Count = Count;
-		Item.Size = Def->GetEffectiveDefaultSize();
+		Item.Size = YIItemSchema::GetDefaultSize(Def);
 		Item.Pos = FIntPoint::ZeroValue;
 
 		if (RouteItem(Item))
@@ -365,7 +366,7 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 				{
 					Item.Item.Definition = Def;
 					Item.Item.Count = FMath::Max(1, RolledCount);
-					Item.Size = Def->GetEffectiveDefaultSize();
+					Item.Size = YIItemSchema::GetDefaultSize(Def);
 					Item.Pos = FIntPoint::ZeroValue;
 					bProduced = true;
 				}

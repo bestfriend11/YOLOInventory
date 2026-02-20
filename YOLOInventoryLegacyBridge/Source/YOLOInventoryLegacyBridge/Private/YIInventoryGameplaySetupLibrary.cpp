@@ -259,14 +259,19 @@ bool UYIInventoryGameplaySetupLibrary::EnsureItemSupportsEquipSlot(UYIItemDefini
 	}
 
 	ItemDef->Modify();
-	if (!ItemDef->Tags.HasTagExact(SlotTag))
+	if (FInstancedStruct* ClassificationStruct = ItemDef->FindOrAddDefinitionFragmentByStruct(FYIItemClassificationDefinitionFragment::StaticStruct()))
 	{
-		ItemDef->Tags.AddTag(SlotTag);
-	}
-
-	if (bSetItemTypeToSlotTag)
-	{
-		ItemDef->ItemType = SlotTag;
+		if (FYIItemClassificationDefinitionFragment* Classification = ClassificationStruct->GetMutablePtr<FYIItemClassificationDefinitionFragment>())
+		{
+			if (!Classification->Tags.HasTagExact(SlotTag))
+			{
+				Classification->Tags.AddTag(SlotTag);
+			}
+			if (bSetItemTypeToSlotTag)
+			{
+				Classification->ItemType = SlotTag;
+			}
+		}
 	}
 
 	if (bAddToOccupiedSlots)

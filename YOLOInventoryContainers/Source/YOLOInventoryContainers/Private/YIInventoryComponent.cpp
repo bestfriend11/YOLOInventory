@@ -1,4 +1,5 @@
 #include "YIInventoryComponent.h"
+#include "YIItemSchemaResolver.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "Net/UnrealNetwork.h"
@@ -698,7 +699,7 @@ UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& In
 	UYIItemDefinition* Definition = InOutItem.Item.Definition.IsValid()
 		? InOutItem.Item.Definition.Get()
 		: InOutItem.Item.Definition.LoadSynchronous();
-	if (!Definition || !Definition->bIsContainerItem)
+	if (!Definition || !YIItemSchema::IsContainerItem(Definition))
 	{
 		return nullptr;
 	}
@@ -712,7 +713,7 @@ UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& In
 	}
 
 	UYIInventoryBag* ChildBag = nullptr;
-	if (const UYIInventoryBag* TemplateBag = Cast<UYIInventoryBag>(Definition->ContainerTemplateBag.LoadSynchronous()))
+	if (const UYIInventoryBag* TemplateBag = Cast<UYIInventoryBag>(YIItemSchema::GetContainerTemplateBag(Definition).LoadSynchronous()))
 	{
 		ChildBag = CloneBagTemplate(TemplateBag);
 	}
@@ -722,11 +723,11 @@ UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& In
 		if (ChildBag)
 		{
 			ChildBag->EnsureBagId();
-			const FText EffectiveName = Definition->GetEffectiveDisplayName();
+			const FText EffectiveName = YIItemSchema::GetDisplayName(Definition);
 			ChildBag->DisplayName = EffectiveName.IsEmpty()
 				? FText::FromString(TEXT("Container"))
 				: EffectiveName;
-			const FIntPoint DefaultGrid = Definition->ContainerDefaultGridSize;
+			const FIntPoint DefaultGrid = YIItemSchema::GetContainerDefaultGridSize(Definition);
 			ChildBag->GridSize = FIntPoint(
 				FMath::Max(1, DefaultGrid.X),
 				FMath::Max(1, DefaultGrid.Y));
@@ -849,8 +850,8 @@ bool UYIInventoryComponent::AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<UY
 	FYIBagItem New;
 	New.Item.Definition = ItemDef;
 	New.Item.Count = FMath::Max(1, Count);
-	New.Size = Def->GetEffectiveDefaultSize();
-	if (Def->bIsContainerItem)
+	New.Size = YIItemSchema::GetDefaultSize(Def);
+	if (YIItemSchema::IsContainerItem(Def))
 	{
 		New.Item.Count = 1;
 	}
@@ -1222,7 +1223,7 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 				? MutableItem.Item.Definition.Get()
 				: MutableItem.Item.Definition.LoadSynchronous())
 			{
-				if (Def->bIsContainerItem)
+				if (YIItemSchema::IsContainerItem(Def))
 				{
 					MutableItem.Item.Count = 1;
 				}

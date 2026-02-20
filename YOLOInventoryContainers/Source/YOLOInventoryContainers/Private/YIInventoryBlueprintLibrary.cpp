@@ -1,6 +1,7 @@
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIAffixAsset.h"
 #include "YIAffixPoolAsset.h"
 #include "YIItemInstance.h"
@@ -48,12 +49,16 @@ namespace
 			return;
 		}
 
-		Definition->GetEffectiveAffixDefinition(
-			OutTemplateAffixes,
-			OutMinRandomModifiers,
-			OutMaxRandomModifiers,
-			OutPrefixPool,
-			OutSuffixPool);
+		const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Definition);
+		OutMinRandomModifiers = Snapshot.Affix.MinRandomModifiers;
+		OutMaxRandomModifiers = Snapshot.Affix.MaxRandomModifiers;
+		OutPrefixPool = TSoftObjectPtr<UYIAffixPoolAsset>(Snapshot.Affix.PrefixPool);
+		OutSuffixPool = TSoftObjectPtr<UYIAffixPoolAsset>(Snapshot.Affix.SuffixPool);
+		OutTemplateAffixes.Reserve(Snapshot.Affix.TemplateAffixes.Num());
+		for (const FSoftObjectPath& Path : Snapshot.Affix.TemplateAffixes)
+		{
+			OutTemplateAffixes.Add(TSoftObjectPtr<UYIAffixAsset>(Path));
+		}
 	}
 }
 
@@ -154,7 +159,9 @@ bool UYIInventoryBlueprintLibrary::ApplyAffixSnapshot(FYIBagItem& Item, const FY
 	FYIAffixResolvedDefinitionData Effective;
 	Affix->GetEffectiveDefinitionData(Effective);
 
-	if (!Effective.AllowedItemTags.IsEmpty() && !Def->Tags.HasAny(Effective.AllowedItemTags))
+	FGameplayTagContainer EffectiveItemTags;
+	YIItemSchema::GetTags(Def, EffectiveItemTags);
+	if (!Effective.AllowedItemTags.IsEmpty() && !EffectiveItemTags.HasAny(Effective.AllowedItemTags))
 	{
 		UE_LOG(LogTemp, Verbose, TEXT("ApplyAffixSnapshot: affix '%s' not allowed on item '%s' by tags"), *Affix->GetName(), *Def->GetName());
 		return false;
@@ -228,7 +235,9 @@ int32 UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(const UYIItem
 			A->GetEffectiveDefinitionData(EffectiveAffixData);
 
 			// Validate allowed tags on definition
-			if (!EffectiveAffixData.AllowedItemTags.IsEmpty() && !Definition->Tags.HasAny(EffectiveAffixData.AllowedItemTags))
+			FGameplayTagContainer EffectiveDefinitionTags;
+			YIItemSchema::GetTags(Definition, EffectiveDefinitionTags);
+			if (!EffectiveAffixData.AllowedItemTags.IsEmpty() && !EffectiveDefinitionTags.HasAny(EffectiveAffixData.AllowedItemTags))
 			{
 				UE_LOG(LogTemp, Verbose, TEXT("ApplyTemplateAffixesToInstance: skipping affix '%s' due to AllowedItemTags"), *A->GetName());
 				continue;
@@ -388,7 +397,7 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 	if (Existing != INDEX_NONE && bStacking)
 	{
 		FYIBagItem& DestIt = Dest->Items[Existing];
-		int32 Room = Def->GetEffectiveMaxStackCount() - DestIt.Item.Count;
+		int32 Room = YIItemSchema::GetMaxStackCount(Def) - DestIt.Item.Count;
 		if (Room > 0)
 		{
 			int32 MoveCount = FMath::Min(Room, ToPlace.Item.Count);
@@ -469,7 +478,7 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 bool UYIInventoryBlueprintLibrary::GetFirstEmptyPosForItem(const UYIInventoryBag* Bag, const UYIItemDefinition* Definition, FIntPoint& OutPos)
 {
 	if (!Bag || !Definition) return false;
-	return Bag->FindFirstFit(Definition->GetEffectiveDefaultSize(), OutPos);
+	return Bag->FindFirstFit(YIItemSchema::GetDefaultSize(Definition), OutPos);
 }
 
 bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int64 Code, int32 Count)
@@ -488,7 +497,7 @@ bool UYIInventoryBlueprintLibrary::AddItemToBagByCode(UYIInventoryBag* Bag, int6
 
 	FYIBagItem NewItem;
 	NewItem.Item = YI_MakeItemInstanceByCode(Code, Count);
-	NewItem.Size = Def->GetEffectiveDefaultSize();
+	NewItem.Size = YIItemSchema::GetDefaultSize(Def);
 	int32 NewIdx = Bag->AddBagItem(NewItem);
 	return NewIdx != INDEX_NONE;
 }
@@ -516,7 +525,10 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	FText EffectiveDisplayName;
 	FText EffectiveDescription;
 	TSoftObjectPtr<UTexture2D> EffectiveIcon;
-	Def->GetEffectiveDisplayData(EffectiveDisplayName, EffectiveDescription, EffectiveIcon);
+	const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Def);
+	EffectiveDisplayName = Snapshot.Display.DisplayName;
+	EffectiveDescription = Snapshot.Display.Description;
+	EffectiveIcon = Snapshot.Display.Icon;
 
 	OutData.NameBase = EffectiveDisplayName;
 	OutData.Title = EffectiveDisplayName;
@@ -544,7 +556,7 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 		OutData.Title = OutData.FullName;
 	}
 	// Derive rarity color from definition using designer-authored rarity tags.
-	OutData.RarityColor = UYIInventoryBlueprintLibrary::GetColorForRarityTag(Def->RarityTag);
+	OutData.RarityColor = UYIInventoryBlueprintLibrary::GetColorForRarityTag(YIItemSchema::GetRarityTag(Def));
 	// Peek at a UI stack entry if present for description and icon
 	// We do not keep a runtime merged stack list here; just use asset fields if available
 	OutData.Description = EffectiveDescription;
@@ -674,7 +686,7 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 	FIntPoint Sz(1,1);
 	if (UYIItemDefinition* Def = Instance.Definition.IsValid() ? Instance.Definition.Get() : Instance.Definition.LoadSynchronous())
 	{
-		Sz = Def->GetEffectiveDefaultSize();
+		Sz = YIItemSchema::GetDefaultSize(Def);
 		if (Instance.bRotated) Sz = FIntPoint(Sz.Y, Sz.X);
 	}
 	Desc += FString::Printf(TEXT("|S%d,%d"), Sz.X, Sz.Y);
@@ -883,7 +895,7 @@ bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, co
 	FYIBagItem NewItem;
 	NewItem.Item = Instance;
 	NewItem.Item.SyncLegacyToCoreFragments();
-	NewItem.Size = Def->GetEffectiveDefaultSize();
+	NewItem.Size = YIItemSchema::GetDefaultSize(Def);
 	int32 AddedIdx = Bag->AddBagItem(NewItem);
 	return AddedIdx != INDEX_NONE;
 }
@@ -902,15 +914,20 @@ const UYIItemSFXProfile* UYIInventoryBlueprintLibrary::ResolveItemSFXProfile(con
 	{
 		return nullptr;
 	}
-	if (Definition && Definition->SoundProfileOverride)
+	if (Definition)
 	{
-		return Definition->SoundProfileOverride;
+		const TSoftObjectPtr<UYIItemSFXProfile> EffectiveOverride = YIItemSchema::GetSoundProfileOverride(Definition);
+		if (EffectiveOverride.ToSoftObjectPath().IsValid())
+		{
+			return EffectiveOverride.LoadSynchronous();
+		}
 	}
 
 	FGameplayTag Tag;
 	if (Definition)
 	{
-		Tag = Definition->AudioTag.IsValid() ? Definition->AudioTag : Definition->ItemType;
+		const FGameplayTag EffectiveAudioTag = YIItemSchema::GetAudioTag(Definition);
+		Tag = EffectiveAudioTag.IsValid() ? EffectiveAudioTag : YIItemSchema::GetItemType(Definition);
 	}
 
 	if (Tag.IsValid())

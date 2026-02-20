@@ -2,6 +2,7 @@
 #include "YILootTable.h"
 #include "YIRarityProfile.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIAffixPoolAsset.h"
 #include "YIAffixAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
@@ -113,9 +114,14 @@ bool UYIItemGenerator::DoesAffixPassCriteria(const UYIAffixAsset* Affix, const U
 	}
 
 	// Respect item compatibility tags before trying to add.
-	if (ItemDef && !AffixData.AllowedItemTags.IsEmpty() && !ItemDef->Tags.HasAny(AffixData.AllowedItemTags))
+	if (ItemDef && !AffixData.AllowedItemTags.IsEmpty())
 	{
-		return false;
+		FGameplayTagContainer EffectiveTags;
+		YIItemSchema::GetTags(ItemDef, EffectiveTags);
+		if (!EffectiveTags.HasAny(AffixData.AllowedItemTags))
+		{
+			return false;
+		}
 	}
 
 	return true;
@@ -230,7 +236,7 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 
 	OutItem.Item.Definition = DefSoft;
 	OutItem.Item.Count = FMath::Max(1, Count);
-	OutItem.Size = Def->GetEffectiveDefaultSize();
+	OutItem.Size = YIItemSchema::GetDefaultSize(Def);
 
 	if (bApplyTemplateAffixes)
 	{
@@ -259,12 +265,15 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 		int32 UnusedMaxMods = 0;
 		TSoftObjectPtr<UYIAffixPoolAsset> EffectivePrefixPool;
 		TSoftObjectPtr<UYIAffixPoolAsset> EffectiveSuffixPool;
-		Def->GetEffectiveAffixDefinition(
-			UnusedTemplateAffixes,
-			UnusedMinMods,
-			UnusedMaxMods,
-			EffectivePrefixPool,
-			EffectiveSuffixPool);
+		const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Def);
+		UnusedMinMods = Snapshot.Affix.MinRandomModifiers;
+		UnusedMaxMods = Snapshot.Affix.MaxRandomModifiers;
+		for (const FSoftObjectPath& Path : Snapshot.Affix.TemplateAffixes)
+		{
+			UnusedTemplateAffixes.Add(TSoftObjectPtr<UYIAffixAsset>(Path));
+		}
+		EffectivePrefixPool = TSoftObjectPtr<UYIAffixPoolAsset>(Snapshot.Affix.PrefixPool);
+		EffectiveSuffixPool = TSoftObjectPtr<UYIAffixPoolAsset>(Snapshot.Affix.SuffixPool);
 		(void)UnusedTemplateAffixes;
 		(void)UnusedMinMods;
 		(void)UnusedMaxMods;

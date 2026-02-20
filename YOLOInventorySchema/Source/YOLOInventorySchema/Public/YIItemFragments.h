@@ -7,6 +7,8 @@
 
 class UTexture2D;
 class UStaticMesh;
+class UYIItemSFXProfile;
+class UYIAttributeModAsset;
 class UYIAffixAsset;
 class UYIAffixPoolAsset;
 
@@ -40,6 +42,40 @@ struct YOLOINVENTORYSCHEMA_API FYIItemUIDefinitionFragment : public FYIItemDefin
 	TSoftObjectPtr<UTexture2D> Icon;
 };
 
+/** Shared classification/taxonomy metadata for an item definition. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemClassificationDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	/** Primary gameplay classification tag (e.g. Item.Weapon.Sword). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTag ItemType;
+
+	/** Additional taxonomy tags used by filters/rules/UI. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTagContainer Tags;
+
+	/** Designer rarity tag for color/economy/progression rules. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTag RarityTag;
+};
+
+/** Shared audio routing metadata for an item definition. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemAudioDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	/** Optional audio routing tag, falls back to ItemType when unset. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTag AudioTag;
+
+	/** Optional per-item SFX profile override (highest priority). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	TSoftObjectPtr<UYIItemSFXProfile> SoundProfileOverride;
+};
+
 /** Shared grid layout policy for an item definition. */
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemLayoutDefinitionFragment : public FYIItemDefinitionFragmentBase
@@ -70,6 +106,51 @@ struct YOLOINVENTORYSCHEMA_API FYIItemStackingDefinitionFragment : public FYIIte
 	/** Keep mutable-state safety checks enabled for stacking. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
 	bool bUseRiskChecks = true;
+};
+
+/** Shared generic policy toggles for an item definition. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemRulesDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	/** If true, only one instance of this item type may exist in a bag at once. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	bool bUniquePerType = false;
+
+	/** Slot-capacity cost consumed while equipped. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment", meta=(ClampMin="1"))
+	int32 EquipSlotCost = 1;
+};
+
+/** Shared container/bag-in-bag metadata for an item definition. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemContainerDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	/** If true, this item owns a nested runtime bag instance. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	bool bIsContainerItem = false;
+
+	/** Optional template bag cloned for new container instances. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment", meta=(EditCondition="bIsContainerItem", AllowedClasses="/Script/YOLOInventoryContainers.YIInventoryBag"))
+	TSoftObjectPtr<UObject> ContainerTemplateBag;
+
+	/** Default nested bag size when template is not provided. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment", meta=(EditCondition="bIsContainerItem", ClampMin="1"))
+	FIntPoint ContainerDefaultGridSize = FIntPoint(6, 8);
+};
+
+/** Shared gameplay-mod metadata for an item definition. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemAttributeModsDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	/** GAS-backed attribute mod assets applied by inventory/equipment systems. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	TArray<TSoftObjectPtr<UYIAttributeModAsset>> AttributeMods;
 };
 
 /** Shared world-drop rendering/physics hints for an item definition. */

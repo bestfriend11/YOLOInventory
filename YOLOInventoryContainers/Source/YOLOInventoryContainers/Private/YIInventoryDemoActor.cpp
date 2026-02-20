@@ -1,6 +1,7 @@
 #include "YIInventoryDemoActor.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIInventoryBlueprintLibrary.h"
 
 AYIInventoryDemoActor::AYIInventoryDemoActor()
@@ -30,7 +31,7 @@ int32 AYIInventoryDemoActor::AddItemToBag(UYIInventoryBag* Bag, UYIItemDefinitio
 {
 	if (!Bag || !Definition) return INDEX_NONE;
 	FIntPoint Pos;
-	const FIntPoint ItemSize = Definition->GetEffectiveDefaultSize();
+	const FIntPoint ItemSize = YIItemSchema::GetDefaultSize(Definition);
 	if (!Bag->FindFirstFit(ItemSize, Pos)) return INDEX_NONE;
 	FYIBagItem NewItem;
 	NewItem.Item.Definition = TSoftObjectPtr<UYIItemDefinition>(Definition);

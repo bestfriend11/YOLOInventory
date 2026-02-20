@@ -1,13 +1,14 @@
 #include "YIGridContainer.h"
 
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 
 static FIntPoint GetSize(const FYIItemInstance& I)
 {
 	// Size is derived from the definition's DefaultSize; take rotation into account
 	if (UYIItemDefinition* Def = I.Definition.LoadSynchronous())
 	{
-		FIntPoint S = Def->GetEffectiveDefaultSize();
+		FIntPoint S = YIItemSchema::GetDefaultSize(Def);
 		if (I.bRotated) { S = FIntPoint(S.Y, S.X); }
 		return S;
 	}
@@ -53,14 +54,15 @@ bool UYIGridContainer::AddItem_Implementation(const FYIItemInstance& Instance)
 		return false;
 	}
 
-	// Enforce unique-per-type: if Def->bUniquePerType, only allow one stack for this ItemType
-	if (Def->bUniquePerType)
+	// Enforce unique-per-type when enabled by item rules fragment.
+	if (YIItemSchema::IsUniquePerType(Def))
 	{
+		const FGameplayTag NewItemType = YIItemSchema::GetItemType(Def);
 		for (const FYIGridEntry& E : Items)
 		{
 			if (UYIItemDefinition* EDef = E.Instance.Definition.LoadSynchronous())
 			{
-				if (EDef->ItemType == Def->ItemType)
+				if (YIItemSchema::GetItemType(EDef) == NewItemType)
 				{
 					return false; // already present
 				}
@@ -75,7 +77,7 @@ bool UYIGridContainer::AddItem_Implementation(const FYIItemInstance& Instance)
 		if (Remaining <= 0) break;
 		if (E.Instance.Definition == Instance.Definition && E.Instance.CustomStackKey == Instance.CustomStackKey)
 		{
-			const int32 Capacity = Def->IsEffectiveStackingEnabled() ? Def->GetEffectiveMaxStackCount() : 1;
+			const int32 Capacity = YIItemSchema::IsStackingEnabled(Def) ? YIItemSchema::GetMaxStackCount(Def) : 1;
 			int32 CanAdd = Capacity - E.Instance.Count;
 			if (CanAdd > 0)
 			{
@@ -94,7 +96,7 @@ bool UYIGridContainer::AddItem_Implementation(const FYIItemInstance& Instance)
 	while (Remaining > 0)
 	{
 		FYIItemInstance NewInst = Instance;
-		const int32 Capacity = Def->IsEffectiveStackingEnabled() ? Def->GetEffectiveMaxStackCount() : 1;
+		const int32 Capacity = YIItemSchema::IsStackingEnabled(Def) ? YIItemSchema::GetMaxStackCount(Def) : 1;
 		int32 ToPlace = FMath::Min(Capacity, Remaining);
 		NewInst.Count = ToPlace;
 		// Size is derived from the item definition; rotation flag controls orientation (no per-instance size override)

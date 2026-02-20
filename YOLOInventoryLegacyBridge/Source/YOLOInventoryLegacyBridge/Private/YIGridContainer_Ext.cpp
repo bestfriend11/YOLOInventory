@@ -1,11 +1,12 @@
 #include "YIGridContainer.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 
 static FIntPoint Local_GetSize(const FYIItemInstance& I)
 {
 	if (UYIItemDefinition* Def = I.Definition.LoadSynchronous())
 	{
-		FIntPoint S = Def->GetEffectiveDefaultSize();
+		FIntPoint S = YIItemSchema::GetDefaultSize(Def);
 		if (I.bRotated) S = FIntPoint(S.Y, S.X);
 		return S;
 	}
@@ -38,7 +39,7 @@ bool UYIGridContainer::RotateItem(const FGuid& InstanceId)
 		if (E.Instance.InstanceId == InstanceId)
 		{
 			UYIItemDefinition* Def = E.Instance.Definition.LoadSynchronous();
-			if (!Def || !Def->IsEffectiveRotationAllowed()) return false;
+			if (!Def || !YIItemSchema::IsRotationAllowed(Def)) return false;
 			// Toggle rotation and validate placement using the definition-derived size
 			FYIItemInstance Tmp = E.Instance;
 			Tmp.bRotated = !E.Instance.bRotated;
@@ -68,7 +69,7 @@ bool UYIGridContainer::CombineStacks(const FGuid& A, const FGuid& B)
 	FYIItemInstance& BInst = Items[IB].Instance;
 	if (AInst.Definition != BInst.Definition || AInst.CustomStackKey != BInst.CustomStackKey) return false;
 	UYIItemDefinition* Def = AInst.Definition.LoadSynchronous(); if (!Def) return false;
-	const int32 Capacity = Def->IsEffectiveStackingEnabled() ? Def->GetEffectiveMaxStackCount() : 1;
+	const int32 Capacity = YIItemSchema::IsStackingEnabled(Def) ? YIItemSchema::GetMaxStackCount(Def) : 1;
 	int32 CanAdd = Capacity - AInst.Count;
 	if (CanAdd <= 0) return false;
 	int32 Moved = FMath::Min(CanAdd, BInst.Count);

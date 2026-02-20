@@ -5,6 +5,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIItemRegistrySubsystem.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
@@ -116,23 +117,26 @@ void AYIItemPickup::RefreshVisuals()
 			ItemInstance.Definition = Definition;
 		}
 
-		if (const FYIItemPickupDefinitionFragment* PickupFragment = Def->GetPickupDefinitionFragment())
+		if (const FInstancedStruct* PickupFragmentStruct = YIItemSchema::FindResolvedDefinitionFragmentByStruct(Def, FYIItemPickupDefinitionFragment::StaticStruct()))
 		{
-			if (UStaticMesh* DropMesh = PickupFragment->WorldMesh.IsValid()
-				? PickupFragment->WorldMesh.Get()
-				: PickupFragment->WorldMesh.LoadSynchronous())
+			if (const FYIItemPickupDefinitionFragment* PickupFragment = PickupFragmentStruct->GetPtr<FYIItemPickupDefinitionFragment>())
 			{
-				MeshComponent->SetStaticMesh(DropMesh);
+				if (UStaticMesh* DropMesh = PickupFragment->WorldMesh.IsValid()
+					? PickupFragment->WorldMesh.Get()
+					: PickupFragment->WorldMesh.LoadSynchronous())
+				{
+					MeshComponent->SetStaticMesh(DropMesh);
+				}
+
+				MeshComponent->SetRelativeScale3D(PickupFragment->MeshScale);
+
+				if (!PickupFragment->CollisionProfile.IsNone())
+				{
+					MeshComponent->SetCollisionProfileName(PickupFragment->CollisionProfile);
+				}
+
+				MeshComponent->SetSimulatePhysics(PickupFragment->bSimulatePhysicsOnDrop);
 			}
-
-			MeshComponent->SetRelativeScale3D(PickupFragment->MeshScale);
-
-			if (!PickupFragment->CollisionProfile.IsNone())
-			{
-				MeshComponent->SetCollisionProfileName(PickupFragment->CollisionProfile);
-			}
-
-			MeshComponent->SetSimulatePhysics(PickupFragment->bSimulatePhysicsOnDrop);
 		}
 	}
 

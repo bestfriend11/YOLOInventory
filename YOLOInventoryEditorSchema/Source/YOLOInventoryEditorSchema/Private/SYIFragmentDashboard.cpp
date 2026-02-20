@@ -3,6 +3,7 @@
 #include "YIAffix.h"
 #include "YIAffixAsset.h"
 #include "YIFragmentAsset.h"
+#include "YIItemTraitAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "IDetailsView.h"
 #include "PropertyEditorModule.h"
@@ -155,6 +156,10 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 		{
 			bAdded = FragmentAsset->FindOrAddAffixDefinitionFragmentByStruct(FragmentStruct) != nullptr;
 		}
+		else if (UYIItemTraitAsset* TraitAsset = Cast<UYIItemTraitAsset>(Asset))
+		{
+			bAdded = TraitAsset->FindOrAddDefinitionFragmentByStruct(FragmentStruct) != nullptr;
+		}
 
 		if (bAdded)
 		{
@@ -190,7 +195,8 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 						return true;
 					}
 					return !(AssetClass->IsChildOf(UYIAffixAsset::StaticClass())
-						|| AssetClass->IsChildOf(UYIFragmentAsset::StaticClass()));
+						|| AssetClass->IsChildOf(UYIFragmentAsset::StaticClass())
+						|| AssetClass->IsChildOf(UYIItemTraitAsset::StaticClass()));
 				})
 				.ObjectPath_Lambda([this]()
 				{
@@ -246,7 +252,7 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
 			[
 				SNew(SButton)
-				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_Save", "Save Selected Affix"))
+				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_Save", "Save Selected Asset"))
 				.OnClicked_Lambda([this]()
 				{
 					SaveCurrentAssetFromToolbar();
@@ -376,9 +382,24 @@ FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 		return FText::FromString(Summary);
 	}
 
+	if (const UYIItemTraitAsset* TraitAsset = Cast<UYIItemTraitAsset>(SelectedAsset.Get()))
+	{
+		FString Summary = FString::Printf(
+			TEXT("Item Trait Asset\nDefinition Fragments: %d"),
+			TraitAsset->DefinitionFragments.Num());
+		Summary += TEXT("\n\nDefinition Fragment Types:");
+		for (const FInstancedStruct& Fragment : TraitAsset->DefinitionFragments)
+		{
+			const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
+			Summary += TEXT("\n- ");
+			Summary += FragmentStruct ? FragmentStruct->GetName() : TEXT("<Invalid Fragment>");
+		}
+		return FText::FromString(Summary);
+	}
+
 	if (!SelectedAsset.IsValid())
 	{
-		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select an Affix Asset or Fragment Asset to inspect its fragment data.");
+		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select an Affix Asset, Fragment Asset, or Item Trait Asset to inspect fragment data.");
 	}
 	return FText::FromString(SelectedAsset->GetClass()->GetName());
 }

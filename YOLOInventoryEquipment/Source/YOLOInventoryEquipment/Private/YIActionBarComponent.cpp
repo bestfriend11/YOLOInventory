@@ -7,6 +7,7 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
 #include "YIDebugLibrary.h"
@@ -378,7 +379,9 @@ FGameplayTag UYIActionBarComponent::ResolveActionTagFromDefinition(const UYIItem
 	}
 
 	TArray<FGameplayTag> ItemTags;
-	Definition->Tags.GetGameplayTagArray(ItemTags);
+	FGameplayTagContainer EffectiveTags;
+	YIItemSchema::GetTags(Definition, EffectiveTags);
+	EffectiveTags.GetGameplayTagArray(ItemTags);
 	for (const FGameplayTag& Tag : ItemTags)
 	{
 		if (Tag.ToString().StartsWith(ActionTagPrefix))

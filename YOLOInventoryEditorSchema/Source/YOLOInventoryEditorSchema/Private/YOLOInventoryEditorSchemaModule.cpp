@@ -6,6 +6,7 @@
 #include "YIEditorSchemaCategory.h"
 #include "AssetTypeActions_YIItemDefinition.h"
 #include "AssetTypeActions_YIFragmentAsset.h"
+#include "AssetTypeActions_YIItemTraitAsset.h"
 #include "AssetTypeActions_YIAffix.h"
 #include "AssetTypeActions_YIAffixPool.h"
 #include "AssetTypeActions_YIAttributeDef.h"
@@ -53,6 +54,7 @@ public:
 	virtual void SaveItemsFromToolbar() override { ItemDashboardWidget->SaveCurrentAssetFromToolbar(); }
 	virtual void SaveFragmentsFromToolbar() override { FragmentDashboardWidget->SaveCurrentAssetFromToolbar(); }
 	virtual void SaveCraftingFromToolbar() override { CraftingDashboardWidget->SaveTargetBagFromToolbar(); }
+	virtual void CreateItemDataSourceFromToolbar() override { ItemDashboardWidget->CreateDataSourceFromToolbar(); }
 
 	virtual void SetCraftingTargetBag(UYIInventoryBag* InBag) override { CraftingDashboardWidget->SetTargetBag(InBag); }
 	virtual UYIInventoryBag* GetCraftingTargetBag() const override { return CraftingDashboardWidget->GetTargetBag(); }
@@ -77,6 +79,7 @@ public:
 
 		RegisterAction<FAssetTypeActions_YIItemDefinition>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIFragmentAsset>(AssetTools);
+		RegisterAction<FAssetTypeActions_YIItemTraitAsset>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIAffix>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIAffixPool>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIAttributeDef>(AssetTools);

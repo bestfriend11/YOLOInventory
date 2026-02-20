@@ -22,6 +22,35 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaDisplayData
 	TSoftObjectPtr<UTexture2D> Icon;
 };
 
+/** Classification payload (type, tags, rarity). */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaClassificationData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTag ItemType;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTagContainer Tags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTag RarityTag;
+};
+
+/** Audio payload for item SFX routing. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaAudioData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTag AudioTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FSoftObjectPath SoundProfileOverride;
+};
+
 /** Schema-facing layout payload used by grid and non-grid consumers. */
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemSchemaLayoutData
@@ -73,6 +102,58 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaAffixData
 	FSoftObjectPath SuffixPool;
 };
 
+/** Equipment payload used by equipment-slot systems. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaEquipmentData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTag PrimaryEquipSlot;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FGameplayTagContainer OccupiedSlots;
+};
+
+/** Rule payload for uniqueness/capacity concerns. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaRulesData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	bool bUniquePerType = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema", meta=(ClampMin="1"))
+	int32 EquipSlotCost = 1;
+};
+
+/** Container payload for nested bag scenarios. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaContainerData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	bool bIsContainerItem = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FSoftObjectPath ContainerTemplateBag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema", meta=(ClampMin="1"))
+	FIntPoint ContainerDefaultGridSize = FIntPoint(6, 8);
+};
+
+/** Attribute-mod payload for item-driven stat grants. */
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYSCHEMA_API FYIItemSchemaAttributeModsData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	TArray<FSoftObjectPath> AttributeMods;
+};
+
 /** Combined schema snapshot exported from legacy item definitions for suite-side consumers. */
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshot
@@ -86,13 +167,13 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshot
 	FString TemplateId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
-	FGameplayTag ItemType;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
-	FGameplayTagContainer Tags;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
 	FYIItemSchemaDisplayData Display;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaClassificationData Classification;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaAudioData Audio;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
 	FYIItemSchemaLayoutData Layout;
@@ -102,4 +183,16 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
 	FYIItemSchemaAffixData Affix;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaEquipmentData Equipment;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaRulesData Rules;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaContainerData Container;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
+	FYIItemSchemaAttributeModsData AttributeMods;
 };

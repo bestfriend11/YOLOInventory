@@ -7,6 +7,7 @@
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "Engine/Engine.h"
 
 AYITradeSessionActor::AYITradeSessionActor()
@@ -250,7 +251,7 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
         if (Def && Def->IsRuntimeStackingAllowed() &&
             DestItem.Item.Definition.ToSoftObjectPath() == SrcItem.Item.Definition.ToSoftObjectPath())
         {
-            const int32 Room = Def->GetEffectiveMaxStackCount() - DestItem.Item.Count;
+            const int32 Room = YIItemSchema::GetMaxStackCount(Def) - DestItem.Item.Count;
             if (Room > 0)
             {
                 const int32 Applied = FMath::Min(Room, MoveCount);

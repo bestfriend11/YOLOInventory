@@ -4,6 +4,7 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIItemSchemaResolver.h"
 #include "YIEquipmentSchemaAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIItemSFXLibrary.h"
@@ -237,16 +238,19 @@ FGameplayTag UYIEquipmentComponent::ResolveSlotTagFromDefinition(const UYIItemDe
 		return FGameplayTag();
 	}
 
-	if (const FGameplayTag FragmentSlot = Definition->GetEffectivePrimaryEquipSlotTag(); FragmentSlot.IsValid())
+	if (const FGameplayTag FragmentSlot = YIItemSchema::GetPrimaryEquipSlot(Definition); FragmentSlot.IsValid())
 	{
 		return FragmentSlot;
 	}
 
 	TArray<FGameplayTag> ItemTags;
-	Definition->Tags.GetGameplayTagArray(ItemTags);
-	if (Definition->ItemType.IsValid())
+	FGameplayTagContainer EffectiveTags;
+	YIItemSchema::GetTags(Definition, EffectiveTags);
+	EffectiveTags.GetGameplayTagArray(ItemTags);
+	const FGameplayTag EffectiveItemType = YIItemSchema::GetItemType(Definition);
+	if (EffectiveItemType.IsValid())
 	{
-		ItemTags.Add(Definition->ItemType);
+		ItemTags.Add(EffectiveItemType);
 	}
 
 	FString EffectivePrefix = EquipSlotTagPrefix;
@@ -285,7 +289,7 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 	}
 
 	FGameplayTagContainer OccupiedSlots;
-	Definition->GetEffectiveOccupiedEquipSlots(OccupiedSlots);
+	YIItemSchema::GetOccupiedEquipSlots(Definition, OccupiedSlots);
 	TArray<FGameplayTag> OccupiedSlotArray;
 	OccupiedSlots.GetGameplayTagArray(OccupiedSlotArray);
 	for (const FGameplayTag& OccupiedSlot : OccupiedSlotArray)
@@ -297,10 +301,13 @@ bool UYIEquipmentComponent::DoesDefinitionSupportSlot(const UYIItemDefinition* D
 	}
 
 	TArray<FGameplayTag> ItemTags;
-	Definition->Tags.GetGameplayTagArray(ItemTags);
-	if (Definition->ItemType.IsValid())
+	FGameplayTagContainer EffectiveTags;
+	YIItemSchema::GetTags(Definition, EffectiveTags);
+	EffectiveTags.GetGameplayTagArray(ItemTags);
+	const FGameplayTag EffectiveItemType = YIItemSchema::GetItemType(Definition);
+	if (EffectiveItemType.IsValid())
 	{
-		ItemTags.Add(Definition->ItemType);
+		ItemTags.Add(EffectiveItemType);
 	}
 
 	for (const FGameplayTag& Tag : ItemTags)
@@ -327,10 +334,12 @@ bool UYIEquipmentComponent::DoesDefinitionPassSlotFilter(const UYIItemDefinition
 		return true;
 	}
 
-	FGameplayTagContainer ItemTags = Definition->Tags;
-	if (Definition->ItemType.IsValid())
+	FGameplayTagContainer ItemTags;
+	YIItemSchema::GetTags(Definition, ItemTags);
+	const FGameplayTag EffectiveItemType = YIItemSchema::GetItemType(Definition);
+	if (EffectiveItemType.IsValid())
 	{
-		ItemTags.AddTag(Definition->ItemType);
+		ItemTags.AddTag(EffectiveItemType);
 	}
 
 	return ItemTags.HasAny(SlotDefinitions[SlotDefIndex].AcceptedItemTags);
@@ -732,7 +741,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		return false;
 	}
 
-	const int32 RequiredEquipCost = FMath::Max(1, Definition->EquipSlotCost);
+	const int32 RequiredEquipCost = YIItemSchema::GetEquipSlotCost(Definition);
 	const int32 SlotDefIndex = FindSlotDefinitionIndex(SlotTag);
 	if (SlotDefIndex != INDEX_NONE)
 	{
@@ -762,7 +771,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	TargetSlots.Add(SlotTag);
 
 	FGameplayTagContainer OccupiedSlots;
-	Definition->GetEffectiveOccupiedEquipSlots(OccupiedSlots);
+	YIItemSchema::GetOccupiedEquipSlots(Definition, OccupiedSlots);
 	TArray<FGameplayTag> OccupiedSlotArray;
 	OccupiedSlots.GetGameplayTagArray(OccupiedSlotArray);
 	for (const FGameplayTag& OccupiedSlot : OccupiedSlotArray)
@@ -899,7 +908,7 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 				? ReturnItem.Item.Definition.Get()
 				: ReturnItem.Item.Definition.LoadSynchronous())
 			{
-				const FIntPoint BaseSize = ExistingDef->GetEffectiveDefaultSize();
+				const FIntPoint BaseSize = YIItemSchema::GetDefaultSize(ExistingDef);
 				ReturnItem.Size = ReturnItem.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
 			}
 			else
@@ -1033,7 +1042,7 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 			? ToInventory.Item.Definition.Get()
 			: ToInventory.Item.Definition.LoadSynchronous())
 		{
-			const FIntPoint BaseSize = Def->GetEffectiveDefaultSize();
+			const FIntPoint BaseSize = YIItemSchema::GetDefaultSize(Def);
 			ToInventory.Size = ToInventory.Item.bRotated ? FIntPoint(BaseSize.Y, BaseSize.X) : BaseSize;
 		}
 		else

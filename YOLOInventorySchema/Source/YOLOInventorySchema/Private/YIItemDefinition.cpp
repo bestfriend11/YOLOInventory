@@ -1,6 +1,8 @@
 #include "YIItemDefinition.h"
 
 #include "YIItemRegistrySubsystem.h"
+#include "YIItemSchemaResolver.h"
+#include "YIItemTraitAsset.h"
 #include "Engine/Engine.h"
 #include "UObject/ObjectSaveContext.h"
 
@@ -46,36 +48,191 @@ namespace
 		}
 		return nullptr;
 	}
+
+	static const FInstancedStruct* YI_FindDefinitionFragmentByStruct(const TArray<FInstancedStruct>& Fragments, const UScriptStruct* FragmentStruct)
+	{
+		if (!FragmentStruct)
+		{
+			return nullptr;
+		}
+
+		for (const FInstancedStruct& Fragment : Fragments)
+		{
+			if (Fragment.GetScriptStruct() == FragmentStruct)
+			{
+				return &Fragment;
+			}
+		}
+		return nullptr;
+	}
+
+	static const FInstancedStruct* YI_FindResolvedDefinitionFragmentByStruct(
+		const UYIItemDefinition* ItemDef,
+		const UScriptStruct* FragmentStruct,
+		TSet<const UYIItemDefinition*>& VisitedDefinitions)
+	{
+		if (!ItemDef || !FragmentStruct || VisitedDefinitions.Contains(ItemDef))
+		{
+			return nullptr;
+		}
+		VisitedDefinitions.Add(ItemDef);
+
+		// Local fragments have highest precedence.
+		if (const FInstancedStruct* Local = YI_FindDefinitionFragmentByStruct(ItemDef->DefinitionFragments, FragmentStruct))
+		{
+			return Local;
+		}
+
+		// Traits are applied in order; later traits should override earlier traits.
+		for (int32 TraitIndex = ItemDef->Traits.Num() - 1; TraitIndex >= 0; --TraitIndex)
+		{
+			const UYIItemTraitAsset* Trait = ItemDef->Traits[TraitIndex].LoadSynchronous();
+			if (!Trait)
+			{
+				continue;
+			}
+			if (const FInstancedStruct* TraitFragment = YI_FindDefinitionFragmentByStruct(Trait->DefinitionFragments, FragmentStruct))
+			{
+				return TraitFragment;
+			}
+		}
+
+		// Parent definition is the fallback baseline.
+		const UYIItemDefinition* Parent = ItemDef->ParentDefinition.LoadSynchronous();
+		return YI_FindResolvedDefinitionFragmentByStruct(Parent, FragmentStruct, VisitedDefinitions);
+	}
+
+	static void YI_CollectEffectiveTagsRecursive(const UYIItemDefinition* ItemDef, TSet<const UYIItemDefinition*>& VisitedDefinitions, FGameplayTagContainer& OutTags)
+	{
+		if (!ItemDef || VisitedDefinitions.Contains(ItemDef))
+		{
+			return;
+		}
+		VisitedDefinitions.Add(ItemDef);
+
+		if (const UYIItemDefinition* Parent = ItemDef->ParentDefinition.LoadSynchronous())
+		{
+			YI_CollectEffectiveTagsRecursive(Parent, VisitedDefinitions, OutTags);
+		}
+
+		for (const TSoftObjectPtr<UYIItemTraitAsset>& TraitPtr : ItemDef->Traits)
+		{
+			const UYIItemTraitAsset* Trait = TraitPtr.LoadSynchronous();
+			if (!Trait)
+			{
+				continue;
+			}
+
+			if (const FYIItemClassificationDefinitionFragment* Classification = YI_FindDefinitionFragment<FYIItemClassificationDefinitionFragment>(Trait->DefinitionFragments))
+			{
+				OutTags.AppendTags(Classification->Tags);
+			}
+		}
+
+		if (const FYIItemClassificationDefinitionFragment* Classification = YI_FindDefinitionFragment<FYIItemClassificationDefinitionFragment>(ItemDef->DefinitionFragments))
+		{
+			OutTags.AppendTags(Classification->Tags);
+		}
+	}
 }
 
 const FYIItemUIDefinitionFragment* UYIItemDefinition::GetUIDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemUIDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemUIDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemUIDefinitionFragment>();
+	}
+	return nullptr;
+}
+
+const FYIItemClassificationDefinitionFragment* UYIItemDefinition::GetClassificationDefinitionFragment() const
+{
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemClassificationDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemClassificationDefinitionFragment>();
+	}
+	return nullptr;
+}
+
+const FYIItemAudioDefinitionFragment* UYIItemDefinition::GetAudioDefinitionFragment() const
+{
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAudioDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemAudioDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 const FYIItemPickupDefinitionFragment* UYIItemDefinition::GetPickupDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemPickupDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemPickupDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemPickupDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 const FYIItemEquipmentDefinitionFragment* UYIItemDefinition::GetEquipmentDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemEquipmentDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemEquipmentDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemEquipmentDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 const FYIItemAffixDefinitionFragment* UYIItemDefinition::GetAffixDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemAffixDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAffixDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemAffixDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 const FYIItemLayoutDefinitionFragment* UYIItemDefinition::GetLayoutDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemLayoutDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemLayoutDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 const FYIItemStackingDefinitionFragment* UYIItemDefinition::GetStackingDefinitionFragment() const
 {
-	return YI_FindDefinitionFragment<FYIItemStackingDefinitionFragment>(DefinitionFragments);
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemStackingDefinitionFragment>();
+	}
+	return nullptr;
+}
+
+const FYIItemRulesDefinitionFragment* UYIItemDefinition::GetRulesDefinitionFragment() const
+{
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemRulesDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemRulesDefinitionFragment>();
+	}
+	return nullptr;
+}
+
+const FYIItemContainerDefinitionFragment* UYIItemDefinition::GetContainerDefinitionFragment() const
+{
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemContainerDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemContainerDefinitionFragment>();
+	}
+	return nullptr;
+}
+
+const FYIItemAttributeModsDefinitionFragment* UYIItemDefinition::GetAttributeModsDefinitionFragment() const
+{
+	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAttributeModsDefinitionFragment::StaticStruct()))
+	{
+		return Fragment->GetPtr<FYIItemAttributeModsDefinitionFragment>();
+	}
+	return nullptr;
 }
 
 void UYIItemDefinition::GetEffectiveDisplayData(FText& OutDisplayName, FText& OutDescription, TSoftObjectPtr<UTexture2D>& OutIcon) const
@@ -128,6 +285,103 @@ TSoftObjectPtr<UTexture2D> UYIItemDefinition::GetEffectiveIcon() const
 	return Icon;
 }
 
+FGameplayTag UYIItemDefinition::GetEffectiveItemType() const
+{
+	if (const FYIItemClassificationDefinitionFragment* Classification = GetClassificationDefinitionFragment())
+	{
+		return Classification->ItemType;
+	}
+	return FGameplayTag();
+}
+
+void UYIItemDefinition::GetEffectiveTags(FGameplayTagContainer& OutTags) const
+{
+	OutTags.Reset();
+	TSet<const UYIItemDefinition*> VisitedDefinitions;
+	YI_CollectEffectiveTagsRecursive(this, VisitedDefinitions, OutTags);
+}
+
+FGameplayTag UYIItemDefinition::GetEffectiveRarityTag() const
+{
+	if (const FYIItemClassificationDefinitionFragment* Classification = GetClassificationDefinitionFragment())
+	{
+		return Classification->RarityTag;
+	}
+	return FGameplayTag();
+}
+
+FGameplayTag UYIItemDefinition::GetEffectiveAudioTag() const
+{
+	if (const FYIItemAudioDefinitionFragment* Audio = GetAudioDefinitionFragment())
+	{
+		return Audio->AudioTag;
+	}
+	return FGameplayTag();
+}
+
+TSoftObjectPtr<UYIItemSFXProfile> UYIItemDefinition::GetEffectiveSoundProfileOverride() const
+{
+	if (const FYIItemAudioDefinitionFragment* Audio = GetAudioDefinitionFragment())
+	{
+		return Audio->SoundProfileOverride;
+	}
+	return nullptr;
+}
+
+bool UYIItemDefinition::IsEffectiveUniquePerType() const
+{
+	if (const FYIItemRulesDefinitionFragment* Rules = GetRulesDefinitionFragment())
+	{
+		return Rules->bUniquePerType;
+	}
+	return false;
+}
+
+int32 UYIItemDefinition::GetEffectiveEquipSlotCost() const
+{
+	if (const FYIItemRulesDefinitionFragment* Rules = GetRulesDefinitionFragment())
+	{
+		return FMath::Max(1, Rules->EquipSlotCost);
+	}
+	return 1;
+}
+
+bool UYIItemDefinition::IsEffectiveContainerItem() const
+{
+	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
+	{
+		return Container->bIsContainerItem;
+	}
+	return false;
+}
+
+TSoftObjectPtr<UObject> UYIItemDefinition::GetEffectiveContainerTemplateBag() const
+{
+	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
+	{
+		return Container->ContainerTemplateBag;
+	}
+	return nullptr;
+}
+
+FIntPoint UYIItemDefinition::GetEffectiveContainerDefaultGridSize() const
+{
+	if (const FYIItemContainerDefinitionFragment* Container = GetContainerDefinitionFragment())
+	{
+		return FIntPoint(FMath::Max(1, Container->ContainerDefaultGridSize.X), FMath::Max(1, Container->ContainerDefaultGridSize.Y));
+	}
+	return FIntPoint(6, 8);
+}
+
+void UYIItemDefinition::GetEffectiveAttributeMods(TArray<TSoftObjectPtr<UYIAttributeModAsset>>& OutAttributeMods) const
+{
+	OutAttributeMods.Reset();
+	if (const FYIItemAttributeModsDefinitionFragment* AttrMods = GetAttributeModsDefinitionFragment())
+	{
+		OutAttributeMods = AttrMods->AttributeMods;
+	}
+}
+
 FGameplayTag UYIItemDefinition::GetEffectivePrimaryEquipSlotTag() const
 {
 	if (const FYIItemEquipmentDefinitionFragment* Equip = GetEquipmentDefinitionFragment())
@@ -148,19 +402,13 @@ void UYIItemDefinition::GetEffectiveOccupiedEquipSlots(FGameplayTagContainer& Ou
 
 const FInstancedStruct* UYIItemDefinition::FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
 {
-	if (!FragmentStruct)
-	{
-		return nullptr;
-	}
+	return YI_FindDefinitionFragmentByStruct(DefinitionFragments, FragmentStruct);
+}
 
-	for (const FInstancedStruct& Fragment : DefinitionFragments)
-	{
-		if (Fragment.GetScriptStruct() == FragmentStruct)
-		{
-			return &Fragment;
-		}
-	}
-	return nullptr;
+const FInstancedStruct* UYIItemDefinition::FindResolvedDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
+{
+	TSet<const UYIItemDefinition*> VisitedDefinitions;
+	return YI_FindResolvedDefinitionFragmentByStruct(this, FragmentStruct, VisitedDefinitions);
 }
 
 FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct)
@@ -187,6 +435,20 @@ bool UYIItemDefinition::EnsureBaselineDefinitionFragments()
 {
 	bool bChanged = false;
 
+	if (!GetClassificationDefinitionFragment())
+	{
+		bChanged = true;
+		FInstancedStruct& Classification = DefinitionFragments.AddDefaulted_GetRef();
+		Classification.InitializeAs<FYIItemClassificationDefinitionFragment>();
+	}
+
+	if (!GetAudioDefinitionFragment())
+	{
+		bChanged = true;
+		FInstancedStruct& Audio = DefinitionFragments.AddDefaulted_GetRef();
+		Audio.InitializeAs<FYIItemAudioDefinitionFragment>();
+	}
+
 	if (!GetUIDefinitionFragment())
 	{
 		bChanged = true;
@@ -206,6 +468,27 @@ bool UYIItemDefinition::EnsureBaselineDefinitionFragments()
 		bChanged = true;
 		FInstancedStruct& Stacking = DefinitionFragments.AddDefaulted_GetRef();
 		Stacking.InitializeAs<FYIItemStackingDefinitionFragment>();
+	}
+
+	if (!GetRulesDefinitionFragment())
+	{
+		bChanged = true;
+		FInstancedStruct& Rules = DefinitionFragments.AddDefaulted_GetRef();
+		Rules.InitializeAs<FYIItemRulesDefinitionFragment>();
+	}
+
+	if (!GetContainerDefinitionFragment())
+	{
+		bChanged = true;
+		FInstancedStruct& Container = DefinitionFragments.AddDefaulted_GetRef();
+		Container.InitializeAs<FYIItemContainerDefinitionFragment>();
+	}
+
+	if (!GetAttributeModsDefinitionFragment())
+	{
+		bChanged = true;
+		FInstancedStruct& AttrMods = DefinitionFragments.AddDefaulted_GetRef();
+		AttrMods.InitializeAs<FYIItemAttributeModsDefinitionFragment>();
 	}
 
 	if (!GetAffixDefinitionFragment())
@@ -280,40 +563,7 @@ bool UYIItemDefinition::IsEffectiveRotationAllowed() const
 
 void UYIItemDefinition::BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const
 {
-	OutSnapshot = FYIItemSchemaSnapshot();
-	OutSnapshot.UniqueCode = UniqueCode;
-	OutSnapshot.TemplateId = TemplateId;
-	OutSnapshot.ItemType = ItemType;
-	OutSnapshot.Tags = Tags;
-
-	GetEffectiveDisplayData(OutSnapshot.Display.DisplayName, OutSnapshot.Display.Description, OutSnapshot.Display.Icon);
-	GetEffectiveLayoutData(OutSnapshot.Layout.DefaultSize, OutSnapshot.Layout.bAllowRotation);
-	GetEffectiveStackingRules(
-		OutSnapshot.Stacking.bAllowStacking,
-		OutSnapshot.Stacking.MaxStackCount,
-		OutSnapshot.Stacking.bUseRiskChecks);
-
-	TArray<TSoftObjectPtr<UYIAffixAsset>> TemplateAffixAssets;
-	TSoftObjectPtr<UYIAffixPoolAsset> PrefixPoolAsset;
-	TSoftObjectPtr<UYIAffixPoolAsset> SuffixPoolAsset;
-	GetEffectiveAffixDefinition(
-		TemplateAffixAssets,
-		OutSnapshot.Affix.MinRandomModifiers,
-		OutSnapshot.Affix.MaxRandomModifiers,
-		PrefixPoolAsset,
-		SuffixPoolAsset);
-
-	OutSnapshot.Affix.TemplateAffixes.Reserve(TemplateAffixAssets.Num());
-	for (const TSoftObjectPtr<UYIAffixAsset>& TemplateAffix : TemplateAffixAssets)
-	{
-		const FSoftObjectPath Path = TemplateAffix.ToSoftObjectPath();
-		if (Path.IsValid())
-		{
-			OutSnapshot.Affix.TemplateAffixes.Add(Path);
-		}
-	}
-	OutSnapshot.Affix.PrefixPool = PrefixPoolAsset.ToSoftObjectPath();
-	OutSnapshot.Affix.SuffixPool = SuffixPoolAsset.ToSoftObjectPath();
+	OutSnapshot = YIItemSchema::ResolveSnapshot(this);
 }
 
 void UYIItemDefinition::GetEffectiveStackingRules(bool& bOutAllowStacking, int32& OutMaxStackCount, bool& bOutUseRiskChecks) const
@@ -380,16 +630,19 @@ bool UYIItemDefinition::HasStackingRisk(FString* OutReason) const
 		Reasons.Add(TEXT("template affixes (instance data can diverge after runtime changes)"));
 	}
 
-	if (bIsContainerItem)
+	if (IsEffectiveContainerItem())
 	{
 		Reasons.Add(TEXT("container item (bag-in-bag instances must not stack)"));
 	}
 
 	TArray<FGameplayTag> TagArray;
-	Tags.GetGameplayTagArray(TagArray);
-	if (ItemType.IsValid())
+	FGameplayTagContainer EffectiveTags;
+	GetEffectiveTags(EffectiveTags);
+	EffectiveTags.GetGameplayTagArray(TagArray);
+	const FGameplayTag EffectiveItemType = GetEffectiveItemType();
+	if (EffectiveItemType.IsValid())
 	{
-		TagArray.Add(ItemType);
+		TagArray.Add(EffectiveItemType);
 	}
 	for (const FGameplayTag& Tag : TagArray)
 	{
@@ -415,7 +668,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 	bool bUseRiskChecks = true;
 	GetEffectiveStackingRules(bAllowStacking, MaxStackCount, bUseRiskChecks);
 
-	if (bIsContainerItem)
+	if (IsEffectiveContainerItem())
 	{
 		if (OutReason)
 		{
@@ -454,6 +707,7 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+	YIItemSchema::InvalidateAllSnapshotCaches();
 	EnsureBaselineDefinitionFragments();
 
 	FYIItemStackingDefinitionFragment* Stacking = YI_FindDefinitionFragmentMutable<FYIItemStackingDefinitionFragment>(DefinitionFragments);
@@ -471,9 +725,8 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 	const FName ChangedName = ChangedProperty->GetFName();
 	const bool bRelevantChange =
 		ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, DefinitionFragments)
-		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, bIsContainerItem)
-		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ItemType)
-		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, Tags);
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, ParentDefinition)
+		|| ChangedName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, Traits);
 	if (!bRelevantChange)
 	{
 		return;
@@ -506,6 +759,7 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 {
 	Super::PreSave(SaveContext);
+	YIItemSchema::InvalidateSnapshotCache(this);
 	EnsureBaselineDefinitionFragments();
 
 	if (UniqueCode == 0)
@@ -534,7 +788,7 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 
 	Stacking->MaxStackCount = FMath::Max(1, Stacking->MaxStackCount);
 
-	if (bIsContainerItem)
+	if (IsEffectiveContainerItem())
 	{
 		Stacking->bAllowStacking = false;
 		Stacking->MaxStackCount = 1;
