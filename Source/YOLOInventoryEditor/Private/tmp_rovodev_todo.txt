@@ -1,4 +1,0 @@
-Editor TODOs next:
-- Item editor details: when selecting a variant element, drive details view to show that variant (FStructOnScope or property handle selection).
-- Add context panel to preview variant evaluation (attributes/xp/tags) and show tooltip.
-- Bag grid: optional Delete key shortcut to remove selected item.

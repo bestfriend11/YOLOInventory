@@ -1,4 +1,0 @@
-Future UX polish:
-- Right-click context for connector to jump to next variant and show requirements editor.
-- Inline edit of variant name in the row.
-- Confirmation dialog on remove variant.

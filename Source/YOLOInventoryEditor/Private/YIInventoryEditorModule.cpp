@@ -3,8 +3,6 @@
 #include "ToolMenus.h"
 // #include "YIInventoryAssetEditor.h" // legacy editor removed
 
-#include "GraphPanelNodeFactory_YOLO.h"
-#include "EdGraphUtilities.h"
 #include "Styling/AppStyle.h"
 #include "SYIUnifiedDashboard.h"
 #include "YIUnifiedDashboardEditor.h"
@@ -13,8 +11,6 @@
 #include "Widgets/Docking/SDockTab.h"
 #include "Framework/Docking/TabManager.h"
 #include "PropertyEditorModule.h"
-
-TSharedPtr<FGraphPanelNodeFactory> GYOLONodeFactory;
 
 static const FName YOLOInventoryDashboardTabName(TEXT("YOLOInventory_Dashboard"));
 static const FName YOLOInventoryHelpTabName(TEXT("YOLOInventory_Help"));
@@ -105,8 +101,6 @@ void FYOLOInventoryEditorModule::UpdateHelpTabIndex(int32 Index)
 }
 void FYOLOInventoryEditorModule::StartupModule()
 {
-	GYOLONodeFactory = MakeShareable(new FGraphPanelNodeFactory_YOLO());
-
 	// // Ensure an example Affix asset exists for authoring docs/demo
 	// {
 	// 	FString PackageName = TEXT("/Game/YOLOInventory/Affixes/Affix_Example");
@@ -149,8 +143,6 @@ void FYOLOInventoryEditorModule::StartupModule()
 	// 		}
 	// 	}
 	// }
-
-	FEdGraphUtilities::RegisterVisualNodeFactory(GYOLONodeFactory);
 
 	{
 		FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
@@ -251,11 +243,6 @@ void FYOLOInventoryEditorModule::ShutdownModule()
 		FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 		PropertyEditorModule.UnregisterCustomClassLayout(AYIAutoPickupDropActor::StaticClass()->GetFName());
 		PropertyEditorModule.NotifyCustomizationModuleChanged();
-	}
-	if (GYOLONodeFactory.IsValid())
-	{
-		FEdGraphUtilities::UnregisterVisualNodeFactory(GYOLONodeFactory);
-		GYOLONodeFactory.Reset();
 	}
 }
 
