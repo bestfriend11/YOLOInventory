@@ -52,6 +52,7 @@
 #include "GameplayTagContainer.h"
 #include "GameplayTagsManager.h"
 #include "Engine/Texture.h"
+#include "YIItemFragments.h"
 #include "EdGraphSchema_K2.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Algo/Sort.h"
@@ -221,6 +222,108 @@ static bool TryExtractRowTextFieldEditor(const UScriptStruct* RowStruct, const u
 	return false;
 }
 
+static bool TryExtractRowTextFromMappingsEditor(
+	const UYIDataTableItemSource* Source,
+	const UScriptStruct* RowStruct,
+	const uint8* RowData,
+	const TFunctionRef<bool(const FYIFieldMapping&)>& MatchesTarget,
+	FString& OutValue)
+{
+	if (!Source || !RowStruct || !RowData)
+	{
+		return false;
+	}
+
+	for (const FYIFieldMapping& Mapping : Source->InlineMappings)
+	{
+		if (!MatchesTarget(Mapping))
+		{
+			continue;
+		}
+
+		if (Mapping.bUseStaticValue)
+		{
+			const FString StaticText = Mapping.StaticValue.TrimStartAndEnd();
+			if (!StaticText.IsEmpty())
+			{
+				OutValue = StaticText;
+				return true;
+			}
+			continue;
+		}
+
+		if (Mapping.SourceField.IsNone())
+		{
+			continue;
+		}
+
+		FString TextValue = YIEditor_GetRowStringFromStruct(RowStruct, RowData, Mapping.SourceField);
+		if (TextValue.IsEmpty())
+		{
+			TryExtractRowTextFieldEditor(RowStruct, RowData, Mapping.SourceField, TextValue);
+		}
+		TextValue = TextValue.TrimStartAndEnd();
+		if (!TextValue.IsEmpty())
+		{
+			OutValue = TextValue;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static bool TryExtractRowDisplayNameFromMappingsEditor(
+	const UYIDataTableItemSource* Source,
+	const UScriptStruct* RowStruct,
+	const uint8* RowData,
+	FString& OutValue)
+{
+	return TryExtractRowTextFromMappingsEditor(
+		Source,
+		RowStruct,
+		RowData,
+		[](const FYIFieldMapping& Mapping) -> bool
+		{
+			if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+			{
+				return Mapping.TargetProperty == FName(TEXT("DisplayName"));
+			}
+
+			if (Mapping.TargetLayer != EYIFieldMappingTargetLayer::StaticDefinitionFragment)
+			{
+				return false;
+			}
+
+			const UScriptStruct* FragmentStruct = Mapping.TargetFragmentStruct.Get();
+			if (!FragmentStruct || !FragmentStruct->IsChildOf(FYIItemUIDefinitionFragment::StaticStruct()))
+			{
+				return false;
+			}
+
+			return YIGetResolvedTargetFieldName(Mapping) == GET_MEMBER_NAME_CHECKED(FYIItemUIDefinitionFragment, DisplayName);
+		},
+		OutValue);
+}
+
+static bool TryExtractRowTemplateIdFromMappingsEditor(
+	const UYIDataTableItemSource* Source,
+	const UScriptStruct* RowStruct,
+	const uint8* RowData,
+	FString& OutValue)
+{
+	return TryExtractRowTextFromMappingsEditor(
+		Source,
+		RowStruct,
+		RowData,
+		[](const FYIFieldMapping& Mapping) -> bool
+		{
+			return Mapping.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty
+				&& Mapping.TargetProperty == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateId);
+		},
+		OutValue);
+}
+
 static UScriptStruct* ResolveStructFromPathString(const FString& StructPath)
 {
 	if (StructPath.IsEmpty())
@@ -376,6 +479,50 @@ static bool IsIdentityMappingProperty(const FName FieldName)
 {
 	return FieldName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode)
 		|| FieldName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateId);
+}
+
+static bool YIResolveDashboardDisplayName(const UYIItemDefinition* Def, FString& OutName, bool& bOutMissingUIDisplayName)
+{
+	OutName.Reset();
+	bOutMissingUIDisplayName = false;
+	if (!Def)
+	{
+		return false;
+	}
+
+	const FInstancedStruct* UIFragmentInst = YIItemSchema::FindResolvedDefinitionFragmentByStruct(Def, FYIItemUIDefinitionFragment::StaticStruct());
+	if (const FYIItemUIDefinitionFragment* UIFragment = UIFragmentInst ? UIFragmentInst->GetPtr<FYIItemUIDefinitionFragment>() : nullptr)
+	{
+		const FString UIDisplayName = UIFragment->DisplayName.ToString().TrimStartAndEnd();
+		if (!UIDisplayName.IsEmpty())
+		{
+			OutName = UIDisplayName;
+			return true;
+		}
+		bOutMissingUIDisplayName = true;
+	}
+	else
+	{
+		// Dashboard relies on UI fragment naming for user-facing labels.
+		bOutMissingUIDisplayName = true;
+	}
+
+	const FString SnapshotDisplayName = YIItemSchema::GetDisplayName(Def).ToString().TrimStartAndEnd();
+	if (!SnapshotDisplayName.IsEmpty())
+	{
+		OutName = SnapshotDisplayName;
+		return true;
+	}
+
+	OutName = Def->GetName();
+	return true;
+}
+
+static FString YIMakeDashboardName(const FString& Name, const bool bMissingUIDisplayName)
+{
+	return bMissingUIDisplayName
+		? FString::Printf(TEXT("[Missing UI.DisplayName] %s"), *Name)
+		: Name;
 }
 
 static bool TryAssignDefaultStaticFragmentTarget(FYIFieldMapping& Mapping)
@@ -2307,6 +2454,18 @@ void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 		ObjectPathsToSave.Add(Path);
 		ObjectsToSave.Add(InObject);
 	};
+	auto AddSourceAndTable = [&AddSaveObject](UYIDataTableItemSource* Source)
+	{
+		if (!Source)
+		{
+			return;
+		}
+		AddSaveObject(Source);
+		if (UDataTable* Table = Source->DataTable.LoadSynchronous())
+		{
+			AddSaveObject(Table);
+		}
+	};
 
 	if (ListView.IsValid())
 	{
@@ -2319,25 +2478,55 @@ void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 			}
 			if (!Entry->bIsDataTable)
 			{
-				AddSaveObject(Entry->Object.LoadSynchronous());
+				if (UObject* PrimaryObject = Entry->Object.LoadSynchronous())
+				{
+					AddSaveObject(PrimaryObject);
+					if (const UYIItemDefinition* Def = Cast<UYIItemDefinition>(PrimaryObject))
+					{
+						AddSourceAndTable(Def->SourceDataSource.LoadSynchronous());
+					}
+				}
+				if (UYIDataTableItemSource* Source = Entry->DataSource.LoadSynchronous())
+				{
+					AddSourceAndTable(Source);
+				}
 			}
 			else
 			{
-				// Prefer generated asset for row entries; also include source asset.
+				// Save generated asset + data source + data table for row entries.
 				if (Entry->ItemAsset.IsValid() || Entry->ItemAsset.ToSoftObjectPath().IsValid())
 				{
 					AddSaveObject(Entry->ItemAsset.LoadSynchronous());
 				}
 				if (Entry->DataSource.IsValid() || Entry->DataSource.ToSoftObjectPath().IsValid())
 				{
-					AddSaveObject(Entry->DataSource.LoadSynchronous());
+					AddSourceAndTable(Entry->DataSource.LoadSynchronous());
+				}
+				else if (Entry->DataTable.IsValid() || Entry->DataTable.ToSoftObjectPath().IsValid())
+				{
+					AddSaveObject(Entry->DataTable.LoadSynchronous());
 				}
 			}
 		}
 	}
 	if (ObjectsToSave.Num() == 0)
 	{
-		AddSaveObject(LastDetailObject.Get());
+		if (UObject* DetailObject = LastDetailObject.Get())
+		{
+			AddSaveObject(DetailObject);
+			if (const UYIItemDefinition* Def = Cast<UYIItemDefinition>(DetailObject))
+			{
+				AddSourceAndTable(Def->SourceDataSource.LoadSynchronous());
+			}
+			else if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(DetailObject))
+			{
+				AddSourceAndTable(Source);
+			}
+			else if (UDataTable* DataTable = Cast<UDataTable>(DetailObject))
+			{
+				AddSaveObject(DataTable);
+			}
+		}
 	}
 
 	if (ObjectsToSave.Num() == 0)
@@ -2357,6 +2546,11 @@ void SYIItemDashboard::SaveCurrentAssetFromToolbar()
 			NSLOCTEXT("YOLOInventory", "Dash_Save_Summary", "Save selected assets complete. Saved: {0}/{1}"),
 			FText::AsNumber(SavedCount),
 			FText::AsNumber(RequestedCount)));
+
+	if (bSaved)
+	{
+		Refresh();
+	}
 }
 
 void SYIItemDashboard::GuidedSetupFromToolbar()
@@ -3276,6 +3470,23 @@ bool SYIItemDashboard::RunPreflightForEntry(const FYIItemDashboardEntry& Entry, 
 				Context);
 		}
 	};
+	auto ValidateItemDisplayNaming = [&](const UYIItemDefinition* Def, const FText& Context)
+	{
+		if (!Def)
+		{
+			return;
+		}
+
+		FString ResolvedName;
+		bool bMissingUIDisplayName = false;
+		YIResolveDashboardDisplayName(Def, ResolvedName, bMissingUIDisplayName);
+		if (bMissingUIDisplayName)
+		{
+			AddIssue(EYIDashboardIssueSeverity::Warning, false,
+				NSLOCTEXT("YOLOInventory", "Dash_Preflight_MissingUIDisplayName", "UI fragment DisplayName is missing. Dashboard labels should come from UI.DisplayName."),
+				Context);
+		}
+	};
 
 	if (Entry.Code == 0)
 	{
@@ -3330,11 +3541,16 @@ bool SYIItemDashboard::RunPreflightForEntry(const FYIItemDashboardEntry& Entry, 
 				NSLOCTEXT("YOLOInventory", "Dash_Preflight_InlineEnabledEmpty", "Inline mapping is enabled but has no mappings."),
 				FText::FromString(Source->GetPathName()));
 		}
+		if (Entry.bHasAsset)
+		{
+			ValidateItemDisplayNaming(Entry.ItemAsset.LoadSynchronous(), FText::FromString(Entry.Name));
+		}
 	}
 	else
 	{
 		if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(Entry.Object.LoadSynchronous()))
 		{
+			ValidateItemDisplayNaming(Def, FText::FromString(Def->GetPathName()));
 			if (Def->SourceDataSource.IsNull() || Def->SourceRowName.IsNone())
 			{
 				AddIssue(EYIDashboardIssueSeverity::Info, false,
@@ -3939,7 +4155,10 @@ void SYIItemDashboard::Refresh()
 					{
 						Entry->ItemAsset = TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath());
 						ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
-						Entry->Name = YIItemSchema::GetDisplayName(Def).ToString();
+						FString ResolvedName;
+						bool bMissingUIDisplayName = false;
+						YIResolveDashboardDisplayName(Def, ResolvedName, bMissingUIDisplayName);
+						Entry->Name = YIMakeDashboardName(ResolvedName, bMissingUIDisplayName);
 						Entry->DataSource = Def->SourceDataSource;
 						Entry->RowName = Def->SourceRowName;
 					}
@@ -3964,7 +4183,8 @@ void SYIItemDashboard::Refresh()
 					if (UDataTable* Table = Entry->DataTable.LoadSynchronous())
 					{
 						FName PreviewField = TEXT("DisplayName");
-						if (UYIDataTableItemSource* Source = Entry->DataSource.LoadSynchronous())
+						UYIDataTableItemSource* Source = Entry->DataSource.LoadSynchronous();
+						if (Source)
 						{
 							PreviewField = Source->PreviewNameFieldName.IsNone() ? PreviewField : Source->PreviewNameFieldName;
 						}
@@ -3976,11 +4196,51 @@ void SYIItemDashboard::Refresh()
 							{
 								Entry->Name = RowDisplay;
 							}
+							else if (Source)
+							{
+								FString MappedDisplayName;
+								if (TryExtractRowDisplayNameFromMappingsEditor(Source, Table->RowStruct, *Found, MappedDisplayName))
+								{
+									Entry->Name = MappedDisplayName;
+								}
+							}
+
+							if (Entry->TemplateId.IsEmpty() && Source)
+							{
+								FString MappedTemplateId;
+								if (TryExtractRowTemplateIdFromMappingsEditor(Source, Table->RowStruct, *Found, MappedTemplateId))
+								{
+									Entry->TemplateId = MappedTemplateId;
+								}
+							}
 						}
 					}
 				}
 
 				Items.Add(Entry);
+			}
+		}
+	}
+
+	// Normalize row labels against generated item assets when available.
+	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Items)
+	{
+		if (!Entry.IsValid() || !Entry->bIsDataTable || Entry->bIsDataSourceEntry)
+		{
+			continue;
+		}
+
+		if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(Entry->Code))
+		{
+			Entry->bHasAsset = true;
+			Entry->ItemAsset = *FoundAsset;
+
+			if (UYIItemDefinition* Def = FoundAsset->LoadSynchronous())
+			{
+				FString ResolvedName;
+				bool bMissingUIDisplayName = false;
+				YIResolveDashboardDisplayName(Def, ResolvedName, bMissingUIDisplayName);
+				Entry->Name = YIMakeDashboardName(ResolvedName, bMissingUIDisplayName);
 			}
 		}
 	}
@@ -4043,6 +4303,10 @@ void SYIItemDashboard::Refresh()
 				{
 					TryExtractRowTextFieldEditor(Table->RowStruct, RowData, TemplateField, TemplateIdValue);
 				}
+				if (TemplateIdValue.IsEmpty())
+				{
+					TryExtractRowTemplateIdFromMappingsEditor(Source, Table->RowStruct, RowData, TemplateIdValue);
+				}
 
 				const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
 				if (ExistingRowKeys.Contains(RowKey))
@@ -4066,11 +4330,26 @@ void SYIItemDashboard::Refresh()
 				{
 					Entry->Name = PreviewName;
 				}
+				else
+				{
+					FString MappedDisplayName;
+					if (TryExtractRowDisplayNameFromMappingsEditor(Source, Table->RowStruct, RowData, MappedDisplayName))
+					{
+						Entry->Name = MappedDisplayName;
+					}
+				}
 
 				if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
 				{
 					Entry->bHasAsset = true;
 					Entry->ItemAsset = *FoundAsset;
+					if (UYIItemDefinition* Def = FoundAsset->LoadSynchronous())
+					{
+						FString ResolvedName;
+						bool bMissingUIDisplayName = false;
+						YIResolveDashboardDisplayName(Def, ResolvedName, bMissingUIDisplayName);
+						Entry->Name = YIMakeDashboardName(ResolvedName, bMissingUIDisplayName);
+					}
 				}
 
 				Items.Add(Entry);
@@ -4781,6 +5060,26 @@ UObject* SYIItemDashboard::ResolveDetailObject(const FYIItemDashboardEntry& Entr
 		if (UObject* Obj = Entry.Object.LoadSynchronous())
 		{
 			return Obj;
+		}
+	}
+
+	// For source rows, keep details anchored to source assets so authoring stays data-source-first.
+	if (Entry.bIsDataTable)
+	{
+		if (Entry.DataSource.IsValid())
+		{
+			if (UObject* Source = Entry.DataSource.LoadSynchronous())
+			{
+				return Source;
+			}
+		}
+
+		if (Entry.DataTable.IsValid())
+		{
+			if (UObject* Table = Entry.DataTable.LoadSynchronous())
+			{
+				return Table;
+			}
 		}
 	}
 

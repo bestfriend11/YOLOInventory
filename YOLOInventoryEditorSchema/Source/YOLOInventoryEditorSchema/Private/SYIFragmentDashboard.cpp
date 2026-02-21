@@ -17,9 +17,84 @@
 #include "Widgets/Input/SButton.h"
 #include "Styling/AppStyle.h"
 #include "FileHelpers.h"
+#include "UObject/UObjectIterator.h"
 
 namespace
 {
+static UScriptStruct* YIResolveStructFromPath(const FString& StructPath)
+{
+	if (StructPath.IsEmpty())
+	{
+		return nullptr;
+	}
+	if (UScriptStruct* Found = FindObject<UScriptStruct>(nullptr, *StructPath))
+	{
+		return Found;
+	}
+	return LoadObject<UScriptStruct>(nullptr, *StructPath);
+}
+
+static FString YIMakeReadableFragmentName(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return TEXT("Fragment");
+	}
+
+	const FString MetaDisplayName = FragmentStruct->GetMetaData(TEXT("DisplayName"));
+	if (!MetaDisplayName.IsEmpty())
+	{
+		return MetaDisplayName;
+	}
+
+	FString Name = FragmentStruct->GetName();
+	Name.RemoveFromStart(TEXT("FYI"));
+	Name.RemoveFromEnd(TEXT("DefinitionFragment"));
+	Name.RemoveFromEnd(TEXT("Fragment"));
+	Name = Name.TrimStartAndEnd();
+	return Name.IsEmpty() ? FragmentStruct->GetName() : Name;
+}
+
+static void YICollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray<TSharedPtr<FString>>& OutPaths)
+{
+	OutPaths.Reset();
+	if (!BaseStruct)
+	{
+		return;
+	}
+
+	TArray<FString> Paths;
+	for (TObjectIterator<UScriptStruct> It; It; ++It)
+	{
+		UScriptStruct* Struct = *It;
+		if (!Struct || Struct == BaseStruct)
+		{
+			continue;
+		}
+		if (Struct->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject) || Struct->IsNative() == false)
+		{
+			continue;
+		}
+		if (!Struct->IsChildOf(BaseStruct))
+		{
+			continue;
+		}
+		Paths.AddUnique(Struct->GetPathName());
+	}
+
+	Paths.Sort([](const FString& A, const FString& B)
+	{
+		UScriptStruct* SA = YIResolveStructFromPath(A);
+		UScriptStruct* SB = YIResolveStructFromPath(B);
+		return YIMakeReadableFragmentName(SA) < YIMakeReadableFragmentName(SB);
+	});
+
+	for (const FString& Path : Paths)
+	{
+		OutPaths.Add(MakeShared<FString>(Path));
+	}
+}
+
 static bool YIFragmentDashboard_SaveObjectPackage(UObject* ObjectToSave)
 {
 	if (!ObjectToSave)
@@ -44,6 +119,8 @@ static bool YIFragmentDashboard_SaveObjectPackage(UObject* ObjectToSave)
 void SYIFragmentDashboard::Construct(const FArguments& InArgs)
 {
 	LayoutMode = InArgs._LayoutMode;
+	RefreshFragmentStructOptions();
+	LastActionStatus = NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetHint", "Select a Fragment Asset, Affix Asset, or Item Trait Asset.");
 
 	FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FDetailsViewArgs DetailsArgs;
@@ -137,14 +214,124 @@ void SYIFragmentDashboard::SaveCurrentAssetFromToolbar()
 	YIFragmentDashboard_SaveObjectPackage(SelectedAsset.Get());
 }
 
+void SYIFragmentDashboard::RefreshFragmentStructOptions()
+{
+	YICollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), ItemDefinitionFragmentStructOptions);
+	YICollectFragmentStructOptions(FYIAffixDefinitionFragmentBase::StaticStruct(), AffixDefinitionFragmentStructOptions);
+
+	if (!SelectedItemDefinitionFragmentStructOption.IsValid()
+		|| !ItemDefinitionFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
+		{
+			return Entry.IsValid() && SelectedItemDefinitionFragmentStructOption.IsValid() && *Entry == *SelectedItemDefinitionFragmentStructOption;
+		}))
+	{
+		SelectedItemDefinitionFragmentStructOption = ItemDefinitionFragmentStructOptions.Num() > 0
+			? ItemDefinitionFragmentStructOptions[0]
+			: nullptr;
+	}
+
+	if (!SelectedAffixDefinitionFragmentStructOption.IsValid()
+		|| !AffixDefinitionFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
+		{
+			return Entry.IsValid() && SelectedAffixDefinitionFragmentStructOption.IsValid() && *Entry == *SelectedAffixDefinitionFragmentStructOption;
+		}))
+	{
+		SelectedAffixDefinitionFragmentStructOption = AffixDefinitionFragmentStructOptions.Num() > 0
+			? AffixDefinitionFragmentStructOptions[0]
+			: nullptr;
+	}
+}
+
+void SYIFragmentDashboard::SetActionStatus(const FText& InStatus, bool bIsError)
+{
+	LastActionStatus = InStatus;
+	bLastActionError = bIsError;
+}
+
 TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 {
-	auto AddFragment = [this](const UScriptStruct* FragmentStruct)
+	auto CanAuthorItemDefinitionFragments = [this]() -> bool
+	{
+		const UObject* Asset = SelectedAsset.Get();
+		return Asset && (Asset->IsA<UYIItemTraitAsset>() || Asset->IsA<UYIFragmentAsset>());
+	};
+
+	auto CanAuthorAffixDefinitionFragments = [this]() -> bool
+	{
+		const UObject* Asset = SelectedAsset.Get();
+		return Asset && (Asset->IsA<UYIAffixAsset>() || Asset->IsA<UYIFragmentAsset>());
+	};
+
+	auto AddItemDefinitionFragment = [this]() -> FReply
 	{
 		UObject* Asset = SelectedAsset.Get();
-		if (!Asset || !FragmentStruct)
+		if (!Asset)
 		{
-			return;
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoAsset", "Select an asset first."), true);
+			return FReply::Handled();
+		}
+		if (!SelectedItemDefinitionFragmentStructOption.IsValid())
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoItemFragmentType", "No item-definition fragment type is available."), true);
+			return FReply::Handled();
+		}
+
+		UScriptStruct* FragmentStruct = YIResolveStructFromPath(*SelectedItemDefinitionFragmentStructOption);
+		if (!FragmentStruct)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_ItemFragmentInvalid", "Selected item fragment type is invalid."), true);
+			return FReply::Handled();
+		}
+
+		bool bAdded = false;
+		if (UYIItemTraitAsset* TraitAsset = Cast<UYIItemTraitAsset>(Asset))
+		{
+			bAdded = TraitAsset->FindOrAddDefinitionFragmentByStruct(FragmentStruct) != nullptr;
+		}
+		else if (UYIFragmentAsset* FragmentAsset = Cast<UYIFragmentAsset>(Asset))
+		{
+			bAdded = FragmentAsset->FindOrAddItemDefinitionFragmentByStruct(FragmentStruct) != nullptr;
+		}
+
+		if (bAdded)
+		{
+			Asset->Modify();
+			Asset->MarkPackageDirty();
+			if (DetailsView.IsValid())
+			{
+				DetailsView->SetObject(Asset, true);
+			}
+			SetActionStatus(FText::Format(
+				NSLOCTEXT("YOLOInventory", "FragmentDashboard_ItemFragmentAdded", "Added item fragment: {0}"),
+				FText::FromString(YIMakeReadableFragmentName(FragmentStruct))), false);
+		}
+		else
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_ItemFragmentAddFailed", "Could not add item fragment to selected asset type."), true);
+		}
+
+		return FReply::Handled();
+	};
+
+	auto AddAffixDefinitionFragment = [this]() -> FReply
+	{
+		UObject* Asset = SelectedAsset.Get();
+		if (!Asset)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoAsset", "Select an asset first."), true);
+			return FReply::Handled();
+		}
+		if (!SelectedAffixDefinitionFragmentStructOption.IsValid())
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoAffixFragmentType", "No affix-definition fragment type is available."), true);
+			return FReply::Handled();
+		}
+
+		UScriptStruct* FragmentStruct = YIResolveStructFromPath(*SelectedAffixDefinitionFragmentStructOption);
+		if (!FragmentStruct)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentInvalid", "Selected affix fragment type is invalid."), true);
+			return FReply::Handled();
 		}
 
 		bool bAdded = false;
@@ -156,10 +343,6 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 		{
 			bAdded = FragmentAsset->FindOrAddAffixDefinitionFragmentByStruct(FragmentStruct) != nullptr;
 		}
-		else if (UYIItemTraitAsset* TraitAsset = Cast<UYIItemTraitAsset>(Asset))
-		{
-			bAdded = TraitAsset->FindOrAddDefinitionFragmentByStruct(FragmentStruct) != nullptr;
-		}
 
 		if (bAdded)
 		{
@@ -169,7 +352,16 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			{
 				DetailsView->SetObject(Asset, true);
 			}
+			SetActionStatus(FText::Format(
+				NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentAdded", "Added affix fragment: {0}"),
+				FText::FromString(YIMakeReadableFragmentName(FragmentStruct))), false);
 		}
+		else
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentAddFailed", "Could not add affix fragment to selected asset type."), true);
+		}
+
+		return FReply::Handled();
 	};
 
 	return SNew(SBorder)
@@ -207,6 +399,21 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 					SetSelectedAsset(AssetData.GetAsset());
 				})
 			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([this]()
+				{
+					if (const UObject* Asset = SelectedAsset.Get())
+					{
+						return FText::Format(
+							NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectedType", "Selected: {0}"),
+							FText::FromString(Asset->GetClass()->GetName()));
+					}
+					return NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectedTypeNone", "Selected: <None>");
+				})
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.75f, 0.75f)))
+			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 4.f)
 			[
 				SNew(STextBlock)
@@ -214,23 +421,118 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
 			[
-				SNew(SButton)
-				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddStaticAffix", "Add Static Affix Fragment"))
-				.OnClicked_Lambda([AddFragment]()
+				SNew(SVerticalBox)
+				.Visibility_Lambda([CanAuthorItemDefinitionFragments]()
 				{
-					AddFragment(FYIStaticAffixDefinitionFragment::StaticStruct());
-					return FReply::Handled();
+					return CanAuthorItemDefinitionFragments() ? EVisibility::Visible : EVisibility::Collapsed;
 				})
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(&ItemDefinitionFragmentStructOptions)
+					.OnComboBoxOpening_Lambda([this]()
+					{
+						RefreshFragmentStructOptions();
+					})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					{
+						if (NewItem.IsValid())
+						{
+							SelectedItemDefinitionFragmentStructOption = NewItem;
+						}
+					})
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+					{
+						const FString Path = InItem.IsValid() ? *InItem : FString();
+						return SNew(STextBlock).Text(FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(Path))));
+					})
+					.Content()
+					[
+						SNew(STextBlock)
+						.Text_Lambda([this]()
+						{
+							if (!SelectedItemDefinitionFragmentStructOption.IsValid())
+							{
+								return NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectItemFragment", "Select item fragment");
+							}
+							return FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(*SelectedItemDefinitionFragmentStructOption)));
+						})
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddItemFragment", "Add Item Fragment"))
+					.OnClicked_Lambda([AddItemDefinitionFragment]()
+					{
+						return AddItemDefinitionFragment();
+					})
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
+			[
+				SNew(SVerticalBox)
+				.Visibility_Lambda([CanAuthorAffixDefinitionFragments]()
+				{
+					return CanAuthorAffixDefinitionFragments() ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(&AffixDefinitionFragmentStructOptions)
+					.OnComboBoxOpening_Lambda([this]()
+					{
+						RefreshFragmentStructOptions();
+					})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					{
+						if (NewItem.IsValid())
+						{
+							SelectedAffixDefinitionFragmentStructOption = NewItem;
+						}
+					})
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+					{
+						const FString Path = InItem.IsValid() ? *InItem : FString();
+						return SNew(STextBlock).Text(FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(Path))));
+					})
+					.Content()
+					[
+						SNew(STextBlock)
+						.Text_Lambda([this]()
+						{
+							if (!SelectedAffixDefinitionFragmentStructOption.IsValid())
+							{
+								return NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAffixFragment", "Select affix fragment");
+							}
+							return FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(*SelectedAffixDefinitionFragmentStructOption)));
+						})
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddAffixFragment", "Add Affix Fragment"))
+					.OnClicked_Lambda([AddAffixDefinitionFragment]()
+					{
+						return AddAffixDefinitionFragment();
+					})
+				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
 			[
 				SNew(SButton)
 				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_BuildSnapshot", "Build Runtime Snapshot (Preview)"))
+				.IsEnabled_Lambda([this]()
+				{
+					return Cast<UYIAffixAsset>(SelectedAsset.Get()) != nullptr;
+				})
 				.OnClicked_Lambda([this]()
 				{
 					UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(SelectedAsset.Get());
 					if (!AffixAsset)
 					{
+						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotNeedsAffix", "Runtime snapshot preview requires an Affix Asset selection."), true);
 						return FReply::Handled();
 					}
 
@@ -243,10 +545,25 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 						Snapshot);
 					if (bBuilt)
 					{
-						// We only need package-dirty behavior when authoring data changes.
-						// Snapshot preview is runtime data; it is rendered in Preview panel.
+						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotBuilt", "Runtime snapshot built. Check Preview panel for rolled values."), false);
+					}
+					else
+					{
+						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotFailed", "Runtime snapshot build failed for selected Affix Asset."), true);
 					}
 					return FReply::Handled();
+				})
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
+			[
+				SNew(STextBlock)
+				.AutoWrapText(true)
+				.Text_Lambda([this]() { return LastActionStatus; })
+				.ColorAndOpacity_Lambda([this]()
+				{
+					return bLastActionError
+						? FSlateColor(FLinearColor(0.9f, 0.35f, 0.35f))
+						: FSlateColor(FLinearColor(0.35f, 0.75f, 0.45f));
 				})
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
@@ -291,7 +608,7 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildMappingPanelWidget()
 			[
 				SNew(STextBlock)
 				.AutoWrapText(true)
-				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_MappingHelp", "Author static affix data in DefinitionFragments, then generate runtime snapshots when rolling item instances."))
+				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_MappingHelp", "Definition fragments are static authoring data stored on assets. Runtime/dynamic fragments are created per item instance at generation/equip time and are not authored directly here."))
 			]
 		];
 }
@@ -318,6 +635,13 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildPreviewPanelWidget()
 void SYIFragmentDashboard::SetSelectedAsset(UObject* InAsset)
 {
 	SelectedAsset = InAsset;
+	RefreshFragmentStructOptions();
+	SetActionStatus(
+		InAsset
+			? FText::Format(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectedAssetStatus", "Selected {0}. Choose fragment type and click Add."),
+				FText::FromString(InAsset->GetName()))
+			: NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetStatus", "Select an asset to start authoring fragments."),
+		false);
 	if (DetailsView.IsValid())
 	{
 		DetailsView->SetObject(InAsset);

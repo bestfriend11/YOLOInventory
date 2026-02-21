@@ -38,5 +38,5 @@ private:
 		FName FunctionName;
 	};
 	TArray<TSharedPtr<FYITransformFunctionInfo>> TransformFunctionOptions;
+	TMap<FString, FString> PendingAddFieldByFragmentPath;
 };
-

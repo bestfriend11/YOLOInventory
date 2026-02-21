@@ -38,11 +38,19 @@ private:
 	TSharedRef<SWidget> BuildMappingPanelWidget();
 	TSharedRef<SWidget> BuildPreviewPanelWidget();
 	void SetSelectedAsset(UObject* InAsset);
+	void RefreshFragmentStructOptions();
+	void SetActionStatus(const FText& InStatus, bool bIsError);
 	FText BuildFragmentSummaryText() const;
 
 private:
 	EYIFragmentDashboardLayout LayoutMode = EYIFragmentDashboardLayout::Full;
 	TWeakObjectPtr<UObject> SelectedAsset;
+	TArray<TSharedPtr<FString>> ItemDefinitionFragmentStructOptions;
+	TArray<TSharedPtr<FString>> AffixDefinitionFragmentStructOptions;
+	TSharedPtr<FString> SelectedItemDefinitionFragmentStructOption;
+	TSharedPtr<FString> SelectedAffixDefinitionFragmentStructOption;
+	FText LastActionStatus;
+	bool bLastActionError = false;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<SWidget> AssetPanelWidget;
 	TSharedPtr<SWidget> DetailsPanelWidget;

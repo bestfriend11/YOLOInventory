@@ -7,6 +7,8 @@
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraphSchema_K2.h"
 #include "Engine/DataTable.h"
+#include "Engine/Texture.h"
+#include "GameplayTagsManager.h"
 #include "Styling/AppStyle.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IDetailChildrenBuilder.h"
@@ -15,10 +17,12 @@
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SExpandableArea.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/Layout/SWidgetSwitcher.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Algo/Unique.h"
 #include "StructUtils/InstancedStruct.h"
@@ -327,6 +331,69 @@ static EYIFieldMappingConversion LabelToConversionLocal(const FString& Label)
 	if (Label == TEXT("Vector2D from XY Fields")) return EYIFieldMappingConversion::Vector2DFromXY;
 	return EYIFieldMappingConversion::None;
 }
+
+static EYIFieldMappingConversion GuessConversionForPropsLocal(const FProperty* SourceProp, const FProperty* TargetProp)
+{
+	if (!SourceProp || !TargetProp)
+	{
+		return EYIFieldMappingConversion::None;
+	}
+	if (SourceProp->GetClass() == TargetProp->GetClass())
+	{
+		return EYIFieldMappingConversion::None;
+	}
+	if (CastField<FBoolProperty>(TargetProp))
+	{
+		if (CastField<FNumericProperty>(SourceProp))
+		{
+			return EYIFieldMappingConversion::BoolFromInt;
+		}
+		if (CastField<FStrProperty>(SourceProp) || CastField<FNameProperty>(SourceProp) || CastField<FTextProperty>(SourceProp))
+		{
+			return EYIFieldMappingConversion::BoolFromText;
+		}
+	}
+	if (CastField<FNameProperty>(TargetProp))
+	{
+		return EYIFieldMappingConversion::ToName;
+	}
+	if (CastField<FTextProperty>(TargetProp))
+	{
+		return EYIFieldMappingConversion::ToText;
+	}
+	if (CastField<FEnumProperty>(TargetProp))
+	{
+		return EYIFieldMappingConversion::ToEnum;
+	}
+	if (const FNumericProperty* TargetNum = CastField<FNumericProperty>(TargetProp))
+	{
+		if (TargetNum->IsEnum())
+		{
+			return EYIFieldMappingConversion::ToEnum;
+		}
+		if (TargetNum->IsInteger())
+		{
+			return EYIFieldMappingConversion::ToInt;
+		}
+		return EYIFieldMappingConversion::ToFloat;
+	}
+	if (const FStructProperty* TargetStruct = CastField<FStructProperty>(TargetProp))
+	{
+		if (TargetStruct->Struct == FGameplayTag::StaticStruct())
+		{
+			return EYIFieldMappingConversion::ToGameplayTag;
+		}
+	}
+	if (const FSoftObjectProperty* TargetSoftObj = CastField<FSoftObjectProperty>(TargetProp))
+	{
+		if (TargetSoftObj->PropertyClass && TargetSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+		{
+			return EYIFieldMappingConversion::ToSoftTexture;
+		}
+		return EYIFieldMappingConversion::ToSoftObject;
+	}
+	return EYIFieldMappingConversion::None;
+}
 }
 
 TSharedRef<IDetailCustomization> FYIDataTableItemSourceDetails::MakeInstance()
@@ -607,18 +674,18 @@ void FYIDataTableItemSourceDetails::AddFragmentMappingsForStruct(const UScriptSt
 
 		if (RowStruct)
 		{
-			if (FindPropertyByAuthoredPathLocal(RowStruct, FieldPath))
+			if (const FProperty* SourcePathProp = FindPropertyByAuthoredPathLocal(RowStruct, FieldPath))
 			{
 				NewMapping.SourceField = FName(*FieldPath);
-				NewMapping.Conversion = EYIFieldMappingConversion::None;
+				NewMapping.Conversion = GuessConversionForPropsLocal(SourcePathProp, TargetProp);
 			}
 			else
 			{
 				const FName LeafName(*TargetProp->GetAuthoredName());
-				if (FindPropertyByAuthoredNameLocal(RowStruct, LeafName))
+				if (const FProperty* SourceLeafProp = FindPropertyByAuthoredNameLocal(RowStruct, LeafName))
 				{
 					NewMapping.SourceField = LeafName;
-					NewMapping.Conversion = EYIFieldMappingConversion::None;
+					NewMapping.Conversion = GuessConversionForPropsLocal(SourceLeafProp, TargetProp);
 				}
 			}
 		}
@@ -663,18 +730,18 @@ void FYIDataTableItemSourceDetails::AutoMatchExistingMappings()
 			continue;
 		}
 
-		if (FindPropertyByAuthoredPathLocal(Table->RowStruct, TargetFieldPath))
+		if (const FProperty* SourcePathProp = FindPropertyByAuthoredPathLocal(Table->RowStruct, TargetFieldPath))
 		{
 			Mapping.SourceField = FName(*TargetFieldPath);
-			Mapping.Conversion = EYIFieldMappingConversion::None;
+			Mapping.Conversion = GuessConversionForPropsLocal(SourcePathProp, TargetProp);
 			continue;
 		}
 
 		const FName LeafName(*TargetProp->GetAuthoredName());
-		if (FindPropertyByAuthoredNameLocal(Table->RowStruct, LeafName))
+		if (const FProperty* SourceLeafProp = FindPropertyByAuthoredNameLocal(Table->RowStruct, LeafName))
 		{
 			Mapping.SourceField = LeafName;
-			Mapping.Conversion = EYIFieldMappingConversion::None;
+			Mapping.Conversion = GuessConversionForPropsLocal(SourceLeafProp, TargetProp);
 		}
 	}
 
@@ -730,6 +797,166 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingsTreeWidget()
 
 		const FString GroupLabel = MakeReadableFragmentNameFromPathLocal(GroupKey);
 		TSharedRef<SVerticalBox> GroupContent = SNew(SVerticalBox);
+
+		UScriptStruct* GroupStruct = ResolveStructFromPathLocal(GroupKey);
+		TSharedPtr<TArray<TSharedPtr<FString>>> MissingFieldOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+		if (GroupStruct)
+		{
+			TArray<TSharedPtr<FString>> AllFieldPaths;
+			CollectStructFieldOptionsLocal(GroupStruct, AllFieldPaths);
+			TSet<FName> ExistingFields;
+			for (const int32 MappingIndex : *Group)
+			{
+				if (Source->InlineMappings.IsValidIndex(MappingIndex))
+				{
+					ExistingFields.Add(YIGetResolvedTargetFieldName(Source->InlineMappings[MappingIndex]));
+				}
+			}
+			for (const TSharedPtr<FString>& FieldPathPtr : AllFieldPaths)
+			{
+				if (!FieldPathPtr.IsValid())
+				{
+					continue;
+				}
+				const FString FieldPath = *FieldPathPtr;
+				FProperty* FieldProp = FindPropertyByAuthoredPathLocal(GroupStruct, FieldPath);
+				if (!FieldProp || !IsMappableFragmentFieldLocal(FieldProp))
+				{
+					continue;
+				}
+				const FName FieldName(*FieldPath);
+				if (!ExistingFields.Contains(FieldName))
+				{
+					MissingFieldOptions->Add(MakeShared<FString>(FieldPath));
+				}
+			}
+			MissingFieldOptions->Sort([](const TSharedPtr<FString>& A, const TSharedPtr<FString>& B)
+				{
+					if (!A.IsValid() || !B.IsValid())
+					{
+						return A.IsValid();
+					}
+					return *A < *B;
+				});
+		}
+
+		if (GroupStruct)
+		{
+			GroupContent->AddSlot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(0.7f).Padding(0.f, 0.f, 6.f, 0.f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+						.OptionsSource(MissingFieldOptions.Get())
+						.IsEnabled_Lambda([MissingFieldOptions]()
+							{
+								return MissingFieldOptions->Num() > 0;
+							})
+						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+							{
+								return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
+							})
+						.OnSelectionChanged_Lambda([this, GroupKey](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+							{
+								if (NewItem.IsValid())
+								{
+									PendingAddFieldByFragmentPath.Add(GroupKey, *NewItem);
+								}
+							})
+						.Content()
+						[
+							SNew(STextBlock).Text_Lambda([this, GroupKey, MissingFieldOptions]()
+								{
+									if (MissingFieldOptions->Num() == 0)
+									{
+										return NSLOCTEXT("YOLOInventory", "SourceDetails_AllFieldsMapped", "All fields mapped");
+									}
+									if (const FString* Pending = PendingAddFieldByFragmentPath.Find(GroupKey))
+									{
+										return FText::FromString(*Pending);
+									}
+									if ((*MissingFieldOptions)[0].IsValid())
+									{
+										return FText::FromString(**(*MissingFieldOptions)[0]);
+									}
+									return NSLOCTEXT("YOLOInventory", "SourceDetails_SelectFieldToAdd", "Select field to add");
+								})
+						]
+				]
+				+ SHorizontalBox::Slot().AutoWidth()
+				[
+					SNew(SButton)
+						.Text(NSLOCTEXT("YOLOInventory", "SourceDetails_AddFieldButton", "Add Field"))
+						.IsEnabled_Lambda([MissingFieldOptions]()
+							{
+								return MissingFieldOptions->Num() > 0;
+							})
+						.OnClicked_Lambda([this, GroupKey, GroupStruct, MissingFieldOptions]()
+							{
+								UYIDataTableItemSource* MutableSource = EditedSource.Get();
+								if (!MutableSource || !GroupStruct || MissingFieldOptions->Num() == 0)
+								{
+									return FReply::Handled();
+								}
+
+								FString FieldToAdd;
+								if (const FString* Pending = PendingAddFieldByFragmentPath.Find(GroupKey))
+								{
+									FieldToAdd = *Pending;
+								}
+								if (FieldToAdd.IsEmpty() && (*MissingFieldOptions)[0].IsValid())
+								{
+									FieldToAdd = **(*MissingFieldOptions)[0];
+								}
+								if (FieldToAdd.IsEmpty())
+								{
+									return FReply::Handled();
+								}
+
+								FProperty* TargetProp = FindPropertyByAuthoredPathLocal(GroupStruct, FieldToAdd);
+								if (!TargetProp || !IsMappableFragmentFieldLocal(TargetProp))
+								{
+									return FReply::Handled();
+								}
+
+								MutableSource->Modify();
+								FYIFieldMapping NewMapping;
+								NewMapping.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+								NewMapping.TargetFragmentStruct = GroupStruct;
+								NewMapping.TargetFragmentField = FName(*FieldToAdd);
+								NewMapping.TargetProperty = NewMapping.TargetFragmentField;
+
+								if (UDataTable* Table = MutableSource->DataTable.LoadSynchronous())
+								{
+									if (const UScriptStruct* RowStruct = Table->RowStruct)
+									{
+										if (const FProperty* SourcePathProp = FindPropertyByAuthoredPathLocal(RowStruct, FieldToAdd))
+										{
+											NewMapping.SourceField = FName(*FieldToAdd);
+											NewMapping.Conversion = GuessConversionForPropsLocal(SourcePathProp, TargetProp);
+										}
+										else
+										{
+											const FName LeafName(*TargetProp->GetAuthoredName());
+											if (const FProperty* SourceLeafProp = FindPropertyByAuthoredNameLocal(RowStruct, LeafName))
+											{
+												NewMapping.SourceField = LeafName;
+												NewMapping.Conversion = GuessConversionForPropsLocal(SourceLeafProp, TargetProp);
+											}
+										}
+									}
+								}
+
+								MutableSource->InlineMappings.Add(NewMapping);
+								PendingAddFieldByFragmentPath.Remove(GroupKey);
+								RequestRefresh();
+								return FReply::Handled();
+							})
+				]
+			];
+		}
+
 		for (const int32 MappingIndex : *Group)
 		{
 			GroupContent->AddSlot().AutoHeight().Padding(0.f, 3.f)
@@ -769,6 +996,89 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingsTreeWidget()
 
 TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingRowWidget(int32 MappingIndex)
 {
+	TSharedPtr<TArray<TSharedPtr<FString>>> StaticEnumOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	TSharedPtr<TArray<TSharedPtr<FString>>> StaticGameplayTagOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+
+	auto GetMapping = [this, MappingIndex]() -> FYIFieldMapping*
+	{
+		UYIDataTableItemSource* Source = EditedSource.Get();
+		return (Source && Source->InlineMappings.IsValidIndex(MappingIndex)) ? &Source->InlineMappings[MappingIndex] : nullptr;
+	};
+	auto GetMappingConst = [this, MappingIndex]() -> const FYIFieldMapping*
+	{
+		const UYIDataTableItemSource* Source = EditedSource.Get();
+		return (Source && Source->InlineMappings.IsValidIndex(MappingIndex)) ? &Source->InlineMappings[MappingIndex] : nullptr;
+	};
+	auto GetTargetProp = [GetMappingConst]() -> FProperty*
+	{
+		const FYIFieldMapping* Mapping = GetMappingConst();
+		if (!Mapping || !Mapping->TargetFragmentStruct)
+		{
+			return nullptr;
+		}
+		return FindPropertyByAuthoredPathLocal(Mapping->TargetFragmentStruct.Get(), YIGetResolvedTargetFieldName(*Mapping).ToString());
+	};
+	auto GetSourceProp = [this, GetMappingConst]() -> const FProperty*
+	{
+		const FYIFieldMapping* Mapping = GetMappingConst();
+		if (!Mapping || Mapping->SourceField.IsNone())
+		{
+			return nullptr;
+		}
+		const UYIDataTableItemSource* Source = EditedSource.Get();
+		if (!Source)
+		{
+			return nullptr;
+		}
+		if (UDataTable* Table = Source->DataTable.LoadSynchronous())
+		{
+			return FindPropertyByAuthoredPathLocal(Table->RowStruct, Mapping->SourceField.ToString());
+		}
+		return nullptr;
+	};
+	auto RefreshEnumOptions = [StaticEnumOptions, GetTargetProp]()
+	{
+		StaticEnumOptions->Reset();
+		FProperty* TargetProp = GetTargetProp();
+		const UEnum* Enum = nullptr;
+		if (const FEnumProperty* EnumProp = CastField<FEnumProperty>(TargetProp))
+		{
+			Enum = EnumProp->GetEnum();
+		}
+		else if (const FNumericProperty* Num = CastField<FNumericProperty>(TargetProp))
+		{
+			if (Num->IsEnum())
+			{
+				Enum = Num->GetIntPropertyEnum();
+			}
+		}
+		if (!Enum)
+		{
+			return;
+		}
+
+		for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+		{
+			if (!Enum->HasMetaData(TEXT("Hidden"), Index))
+			{
+				StaticEnumOptions->Add(MakeShared<FString>(Enum->GetNameStringByIndex(Index)));
+			}
+		}
+	};
+	auto RefreshGameplayTagOptions = [StaticGameplayTagOptions]()
+	{
+		StaticGameplayTagOptions->Reset();
+		FGameplayTagContainer AllTags;
+		UGameplayTagsManager::Get().RequestAllGameplayTags(AllTags, true);
+		TArray<FGameplayTag> Tags;
+		AllTags.GetGameplayTagArray(Tags);
+		Tags.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return A.ToString() < B.ToString(); });
+		for (const FGameplayTag& Tag : Tags)
+		{
+			StaticGameplayTagOptions->Add(MakeShared<FString>(Tag.ToString()));
+		}
+	};
+
 	return SNew(SBorder)
 		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
 		.Padding(6.f)
@@ -779,17 +1089,15 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingRowWidget(int32 M
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().FillWidth(1.f)
 				[
-					SNew(STextBlock).Text_Lambda([this, MappingIndex]()
+					SNew(STextBlock).Text_Lambda([GetMappingConst]()
 						{
-							const UYIDataTableItemSource* Source = EditedSource.Get();
-							if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
+							const FYIFieldMapping* Mapping = GetMappingConst();
+							if (!Mapping)
 							{
 								return FText::GetEmpty();
 							}
-							const FYIFieldMapping& Mapping = Source->InlineMappings[MappingIndex];
-							const FName ResolvedTarget = YIGetResolvedTargetFieldName(Mapping);
-							const FString Fragment = MakeReadableFragmentNameLocal(Mapping.TargetFragmentStruct.Get());
-							return FText::FromString(FString::Printf(TEXT("%s.%s"), *Fragment, *ResolvedTarget.ToString()));
+							const FString Fragment = MakeReadableFragmentNameLocal(Mapping->TargetFragmentStruct.Get());
+							return FText::FromString(FString::Printf(TEXT("%s.%s"), *Fragment, *YIGetResolvedTargetFieldName(*Mapping).ToString()));
 						})
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(6.f, 0.f, 0.f, 0.f)
@@ -797,43 +1105,46 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingRowWidget(int32 M
 					SNew(SBorder)
 						.BorderImage(FAppStyle::Get().GetBrush("WhiteBrush"))
 						.Padding(FMargin(3.f, 1.f))
-						.BorderBackgroundColor_Lambda([this, MappingIndex]()
+						.BorderBackgroundColor_Lambda([GetTargetProp]()
 							{
-								const UYIDataTableItemSource* Source = EditedSource.Get();
-								if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-								{
-									return FLinearColor(0.2f, 0.2f, 0.2f, 1.f);
-								}
-								const FYIFieldMapping& Mapping = Source->InlineMappings[MappingIndex];
-								const FName ResolvedTarget = YIGetResolvedTargetFieldName(Mapping);
-								const FProperty* TargetProp = Mapping.TargetFragmentStruct
-									? FindPropertyByAuthoredPathLocal(Mapping.TargetFragmentStruct.Get(), ResolvedTarget.ToString())
-									: nullptr;
 								FString TypeName;
 								FLinearColor TypeColor;
-								GetPropertyTypeInfoLocal(TargetProp, TypeName, TypeColor);
+								GetPropertyTypeInfoLocal(GetTargetProp(), TypeName, TypeColor);
 								return TypeColor;
 							})
 						[
 							SNew(STextBlock)
-								.Text_Lambda([this, MappingIndex]()
+								.Text_Lambda([GetTargetProp]()
 									{
-										const UYIDataTableItemSource* Source = EditedSource.Get();
-										if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-										{
-											return FText::FromString(TEXT("Any"));
-										}
-										const FYIFieldMapping& Mapping = Source->InlineMappings[MappingIndex];
-										const FName ResolvedTarget = YIGetResolvedTargetFieldName(Mapping);
-										const FProperty* TargetProp = Mapping.TargetFragmentStruct
-											? FindPropertyByAuthoredPathLocal(Mapping.TargetFragmentStruct.Get(), ResolvedTarget.ToString())
-											: nullptr;
 										FString TypeName;
 										FLinearColor TypeColor;
-										GetPropertyTypeInfoLocal(TargetProp, TypeName, TypeColor);
+										GetPropertyTypeInfoLocal(GetTargetProp(), TypeName, TypeColor);
 										return FText::FromString(TypeName);
 									})
 								.ColorAndOpacity(FSlateColor(FLinearColor::Black))
+						]
+				]
+				+ SHorizontalBox::Slot().AutoWidth().Padding(8.f, 0.f, 0.f, 0.f).VAlign(VAlign_Center)
+				[
+					SNew(SCheckBox)
+						.IsChecked_Lambda([GetMappingConst]()
+							{
+								const FYIFieldMapping* Mapping = GetMappingConst();
+								return (Mapping && Mapping->bUseStaticValue) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+							})
+						.OnCheckStateChanged_Lambda([this, GetMapping](ECheckBoxState State)
+							{
+								if (UYIDataTableItemSource* Source = EditedSource.Get())
+								{
+									if (FYIFieldMapping* Mapping = GetMapping())
+									{
+										Source->Modify();
+										Mapping->bUseStaticValue = (State == ECheckBoxState::Checked);
+									}
+								}
+							})
+						[
+							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "SourceDetails_StaticToggle", "Static"))
 						]
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(6.f, 0.f, 0.f, 0.f)
@@ -858,166 +1169,271 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingRowWidget(int32 M
 			]
 			+ SVerticalBox::Slot().AutoHeight()
 			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(0.f, 0.f, 6.f, 0.f)
+				SNew(SWidgetSwitcher)
+				.WidgetIndex_Lambda([GetMappingConst]()
+					{
+						const FYIFieldMapping* Mapping = GetMappingConst();
+						return (Mapping && Mapping->bUseStaticValue) ? 1 : 0;
+					})
+				+ SWidgetSwitcher::Slot()
 				[
-					SNew(SComboBox<TSharedPtr<FString>>)
-						.OptionsSource(&SourceFieldOptions)
-						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-							{
-								return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
-							})
-						.OnSelectionChanged_Lambda([this, MappingIndex](TSharedPtr<FString> NewItem, ESelectInfo::Type)
-							{
-								if (UYIDataTableItemSource* Source = EditedSource.Get())
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot().FillWidth(0.38f).Padding(0.f, 0.f, 6.f, 0.f)
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+							.OptionsSource(&SourceFieldOptions)
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
 								{
-									if (Source->InlineMappings.IsValidIndex(MappingIndex) && NewItem.IsValid())
-									{
-										Source->Modify();
-										Source->InlineMappings[MappingIndex].SourceField = (*NewItem == TEXT("<None>")) ? NAME_None : FName(**NewItem);
-									}
-								}
-							})
-						.Content()
-						[
-							SNew(STextBlock).Text_Lambda([this, MappingIndex]()
-								{
-									const UYIDataTableItemSource* Source = EditedSource.Get();
-									if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-									{
-										return FText::FromString(TEXT("<None>"));
-									}
-									const FName SourceField = Source->InlineMappings[MappingIndex].SourceField;
-									return SourceField.IsNone()
-										? FText::FromString(TEXT("<None>"))
-										: FText::FromName(SourceField);
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
 								})
-						]
-				]
-				+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 6.f, 0.f).VAlign(VAlign_Center)
-				[
-					SNew(SCheckBox)
-						.IsChecked_Lambda([this, MappingIndex]()
-							{
-								const UYIDataTableItemSource* Source = EditedSource.Get();
-								const bool bOn = Source && Source->InlineMappings.IsValidIndex(MappingIndex)
-									? Source->InlineMappings[MappingIndex].bUseStaticValue
-									: false;
-								return bOn ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-							})
-						.OnCheckStateChanged_Lambda([this, MappingIndex](ECheckBoxState State)
-							{
-								if (UYIDataTableItemSource* Source = EditedSource.Get())
+							.OnSelectionChanged_Lambda([this, GetMapping, GetSourceProp, GetTargetProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 								{
-									if (Source->InlineMappings.IsValidIndex(MappingIndex))
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
 									{
-										Source->Modify();
-										Source->InlineMappings[MappingIndex].bUseStaticValue = (State == ECheckBoxState::Checked);
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->SourceField = (NewItem.IsValid() && *NewItem != TEXT("<None>")) ? FName(**NewItem) : NAME_None;
+											Mapping->Conversion = GuessConversionForPropsLocal(GetSourceProp(), GetTargetProp());
+										}
 									}
-								}
-							})
-						[
-							SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "SourceDetails_StaticValue", "Static"))
-						]
-				]
-				+ SHorizontalBox::Slot().FillWidth(0.30f)
-				[
-					SNew(SEditableTextBox)
-						.Text_Lambda([this, MappingIndex]()
-							{
-								const UYIDataTableItemSource* Source = EditedSource.Get();
-								if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-								{
-									return FText::GetEmpty();
-								}
-								return FText::FromString(Source->InlineMappings[MappingIndex].StaticValue);
-							})
-						.OnTextCommitted_Lambda([this, MappingIndex](const FText& NewText, ETextCommit::Type)
-							{
-								if (UYIDataTableItemSource* Source = EditedSource.Get())
-								{
-									if (Source->InlineMappings.IsValidIndex(MappingIndex))
-									{
-										Source->Modify();
-										Source->InlineMappings[MappingIndex].StaticValue = NewText.ToString();
-										Source->InlineMappings[MappingIndex].bUseStaticValue = true;
-									}
-								}
-							})
-				]
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 4.f, 0.f, 0.f)
-			[
-				SNew(SHorizontalBox)
-				+ SHorizontalBox::Slot().FillWidth(0.45f).Padding(0.f, 0.f, 6.f, 0.f)
-				[
-					SNew(SComboBox<TSharedPtr<FString>>)
-						.OptionsSource(&ConversionOptions)
-						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-							{
-								return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
-							})
-						.OnSelectionChanged_Lambda([this, MappingIndex](TSharedPtr<FString> NewItem, ESelectInfo::Type)
-							{
-								if (UYIDataTableItemSource* Source = EditedSource.Get())
-								{
-									if (Source->InlineMappings.IsValidIndex(MappingIndex) && NewItem.IsValid())
-									{
-										Source->Modify();
-										Source->InlineMappings[MappingIndex].Conversion = LabelToConversionLocal(*NewItem);
-									}
-								}
-							})
-						.Content()
-						[
-							SNew(STextBlock).Text_Lambda([this, MappingIndex]()
-								{
-									const UYIDataTableItemSource* Source = EditedSource.Get();
-									if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-									{
-										return FText::FromString(TEXT("None"));
-									}
-									return FText::FromString(ConversionToLabelLocal(Source->InlineMappings[MappingIndex].Conversion));
 								})
-						]
-				]
-				+ SHorizontalBox::Slot().FillWidth(0.55f)
-				[
-					SNew(SComboBox<TSharedPtr<FYITransformFunctionInfo>>)
-						.OptionsSource(&TransformFunctionOptions)
-						.OnGenerateWidget_Lambda([](TSharedPtr<FYITransformFunctionInfo> InItem)
-							{
-								return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? InItem->DisplayName : FString(TEXT("None"))));
-							})
-						.OnSelectionChanged_Lambda([this, MappingIndex](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
-							{
-								if (UYIDataTableItemSource* Source = EditedSource.Get())
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([GetMappingConst]()
+									{
+										const FYIFieldMapping* Mapping = GetMappingConst();
+										return (!Mapping || Mapping->SourceField.IsNone())
+											? FText::FromString(TEXT("<None>"))
+											: FText::FromName(Mapping->SourceField);
+									})
+							]
+					]
+					+ SHorizontalBox::Slot().FillWidth(0.24f).Padding(0.f, 0.f, 6.f, 0.f)
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+							.OptionsSource(&ConversionOptions)
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
 								{
-									if (Source->InlineMappings.IsValidIndex(MappingIndex) && NewItem.IsValid())
-									{
-										Source->Modify();
-										Source->InlineMappings[MappingIndex].TransformFunction = NewItem->FunctionName;
-										Source->InlineMappings[MappingIndex].TransformLibrary = NewItem->Library;
-									}
-								}
-							})
-						.Content()
-						[
-							SNew(STextBlock).Text_Lambda([this, MappingIndex]()
-								{
-									const UYIDataTableItemSource* Source = EditedSource.Get();
-									if (!Source || !Source->InlineMappings.IsValidIndex(MappingIndex))
-									{
-										return FText::FromString(TEXT("None"));
-									}
-									const FYIFieldMapping& Mapping = Source->InlineMappings[MappingIndex];
-									if (Mapping.TransformFunction.IsNone())
-									{
-										return FText::FromString(TEXT("None"));
-									}
-									return FText::FromName(Mapping.TransformFunction);
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
 								})
-						]
+							.OnSelectionChanged_Lambda([this, GetMapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->Conversion = NewItem.IsValid() ? LabelToConversionLocal(*NewItem) : EYIFieldMappingConversion::None;
+										}
+									}
+								})
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([GetMappingConst]()
+									{
+										const FYIFieldMapping* Mapping = GetMappingConst();
+										return FText::FromString(Mapping ? ConversionToLabelLocal(Mapping->Conversion) : TEXT("None"));
+									})
+							]
+					]
+					+ SHorizontalBox::Slot().FillWidth(0.38f)
+					[
+						SNew(SComboBox<TSharedPtr<FYITransformFunctionInfo>>)
+							.OptionsSource(&TransformFunctionOptions)
+							.OnGenerateWidget_Lambda([](TSharedPtr<FYITransformFunctionInfo> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? InItem->DisplayName : FString(TEXT("None"))));
+								})
+							.OnSelectionChanged_Lambda([this, GetMapping](TSharedPtr<FYITransformFunctionInfo> NewItem, ESelectInfo::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->TransformFunction = NewItem.IsValid() ? NewItem->FunctionName : NAME_None;
+											Mapping->TransformLibrary = NewItem.IsValid() ? NewItem->Library : TSoftClassPtr<UBlueprintFunctionLibrary>();
+										}
+									}
+								})
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([GetMappingConst]()
+									{
+										const FYIFieldMapping* Mapping = GetMappingConst();
+										if (!Mapping || Mapping->TransformFunction.IsNone())
+										{
+											return FText::FromString(TEXT("None"));
+										}
+										return FText::FromName(Mapping->TransformFunction);
+									})
+							]
+					]
+				]
+				+ SWidgetSwitcher::Slot()
+				[
+					SNew(SWidgetSwitcher)
+					.WidgetIndex_Lambda([GetTargetProp]()
+						{
+							const FProperty* TargetProp = GetTargetProp();
+							if (CastField<FBoolProperty>(TargetProp)) return 0;
+							if (CastField<FNumericProperty>(TargetProp)) return 1;
+							if (CastField<FEnumProperty>(TargetProp)) return 2;
+							if (const FStructProperty* StructProp = CastField<FStructProperty>(TargetProp))
+							{
+								if (StructProp->Struct == FGameplayTag::StaticStruct()) return 3;
+							}
+							return 4;
+						})
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SCheckBox)
+							.IsChecked_Lambda([GetMappingConst]()
+								{
+									const FYIFieldMapping* Mapping = GetMappingConst();
+									const FString Lower = Mapping ? Mapping->StaticValue.ToLower() : FString();
+									const bool bTrue = (Lower == TEXT("1") || Lower == TEXT("true") || Lower == TEXT("yes"));
+									return bTrue ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+								})
+							.OnCheckStateChanged_Lambda([this, GetMapping](ECheckBoxState State)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->StaticValue = (State == ECheckBoxState::Checked) ? TEXT("true") : TEXT("false");
+											Mapping->bUseStaticValue = true;
+										}
+									}
+								})
+							[
+								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "SourceDetails_StaticBool", "Value"))
+							]
+					]
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SNumericEntryBox<double>)
+							.Value_Lambda([GetMappingConst]()
+								{
+									double Num = 0.0;
+									const FYIFieldMapping* Mapping = GetMappingConst();
+									if (Mapping && LexTryParseString(Num, *Mapping->StaticValue))
+									{
+										return TOptional<double>(Num);
+									}
+									return TOptional<double>();
+								})
+							.OnValueCommitted_Lambda([this, GetMapping, GetTargetProp](double NewValue, ETextCommit::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											if (const FNumericProperty* Num = CastField<FNumericProperty>(GetTargetProp()))
+											{
+												Mapping->StaticValue = Num->IsInteger()
+													? LexToString((int64)FMath::RoundToInt64(NewValue))
+													: LexToString(NewValue);
+											}
+											else
+											{
+												Mapping->StaticValue = LexToString(NewValue);
+											}
+											Mapping->bUseStaticValue = true;
+										}
+									}
+								})
+					]
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+							.OptionsSource(StaticEnumOptions.Get())
+							.OnComboBoxOpening_Lambda([RefreshEnumOptions]()
+								{
+									RefreshEnumOptions();
+								})
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
+								})
+							.OnSelectionChanged_Lambda([this, GetMapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->StaticValue = NewItem.IsValid() ? *NewItem : FString();
+											Mapping->bUseStaticValue = true;
+										}
+									}
+								})
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([GetMappingConst]()
+									{
+										const FYIFieldMapping* Mapping = GetMappingConst();
+										return FText::FromString((Mapping && !Mapping->StaticValue.IsEmpty()) ? Mapping->StaticValue : TEXT("Select enum value"));
+									})
+							]
+					]
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SComboBox<TSharedPtr<FString>>)
+							.OptionsSource(StaticGameplayTagOptions.Get())
+							.OnComboBoxOpening_Lambda([RefreshGameplayTagOptions]()
+								{
+									RefreshGameplayTagOptions();
+								})
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString()));
+								})
+							.OnSelectionChanged_Lambda([this, GetMapping](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->StaticValue = NewItem.IsValid() ? *NewItem : FString();
+											Mapping->bUseStaticValue = true;
+										}
+									}
+								})
+							.Content()
+							[
+								SNew(STextBlock).Text_Lambda([GetMappingConst]()
+									{
+										const FYIFieldMapping* Mapping = GetMappingConst();
+										return FText::FromString((Mapping && !Mapping->StaticValue.IsEmpty()) ? Mapping->StaticValue : TEXT("Select gameplay tag"));
+									})
+							]
+					]
+					+ SWidgetSwitcher::Slot()
+					[
+						SNew(SEditableTextBox)
+							.Text_Lambda([GetMappingConst]()
+								{
+									const FYIFieldMapping* Mapping = GetMappingConst();
+									return FText::FromString(Mapping ? Mapping->StaticValue : FString());
+								})
+							.OnTextCommitted_Lambda([this, GetMapping](const FText& NewText, ETextCommit::Type)
+								{
+									if (UYIDataTableItemSource* Source = EditedSource.Get())
+									{
+										if (FYIFieldMapping* Mapping = GetMapping())
+										{
+											Source->Modify();
+											Mapping->StaticValue = NewText.ToString();
+											Mapping->bUseStaticValue = true;
+										}
+									}
+								})
+					]
 				]
 			]
 		];
