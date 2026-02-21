@@ -20,6 +20,7 @@ enum class EYIFieldMappingConversion : uint8
 	BoolFromText UMETA(DisplayName="Bool from Text (non-empty)"),
 	ToEnum UMETA(DisplayName="To Enum"),
 	ToGameplayTag UMETA(DisplayName="To Gameplay Tag"),
+	ToSoftObject UMETA(DisplayName="To Soft Object"),
 	ToSoftTexture UMETA(DisplayName="To Texture (Soft)"),
 	Vector2DFromXY UMETA(DisplayName="Vector2D from XY Fields")
 };

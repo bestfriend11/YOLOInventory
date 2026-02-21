@@ -24,6 +24,13 @@ USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemDefinitionFragmentBase
 {
 	GENERATED_BODY()
+
+	/**
+	 * Marks whether this fragment type should be treated as unique within a definition.
+	 * Editor tools can use this to prevent duplicate fragment authoring when desired.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment|Policy", AdvancedDisplay, meta=(YIInlineMapIgnore="true"))
+	bool bIsUniqueFragment = true;
 };
 
 /** Shared UI metadata for an item definition. */

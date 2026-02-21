@@ -11,6 +11,7 @@
 
 class UYIDataTableItemSource;
 class UYIItemDefinition;
+class UScriptStruct;
 
 struct FYIItemDashboardEntry
 {
@@ -178,6 +179,9 @@ private:
 	void BuildTransformFunctionOptions();
 	void RefreshMappingPreview();
 	TSharedRef<ITableRow> MakePreviewRow(TSharedPtr<FYIMappingPreviewRow> Row, const TSharedRef<STableViewBase>& Owner);
+	void RefreshAddFragmentStructOptions();
+	void AddFragmentMappingsForSelection();
+	void AddFragmentMappingsForStruct(UYIDataTableItemSource* Source, const UScriptStruct* FragmentStruct);
 	void RebuildPreflightForSelection();
 	bool RunPreflightForEntry(const FYIItemDashboardEntry& Entry, TArray<FYIPreflightIssue>& OutIssues, bool bLogIssues) const;
 	TSharedRef<ITableRow> MakePreflightRow(TSharedPtr<FYIPreflightIssue> Entry, const TSharedRef<STableViewBase>& Owner);
@@ -210,6 +214,8 @@ private:
 	TArray<TSharedPtr<FString>> SourceFieldOptions;
 	TArray<TSharedPtr<FString>> TargetPropertyOptions;
 	TArray<TSharedPtr<FString>> ConverterOptions;
+	TArray<TSharedPtr<FString>> AddFragmentStructOptions;
+	TSharedPtr<FString> SelectedAddFragmentStructOption;
 	TArray<TSharedPtr<FString>> ListTypeOptions;
 	TArray<TSharedPtr<FString>> ListStatusOptions;
 	TMap<FName, FProperty*> SourceFieldPropCache;
@@ -238,10 +244,10 @@ private:
 	bool bGroupBySource = false;
 	bool bShowDetailsPanel = true;
 	bool bShowMappingPanel = true;
-	bool bShowPreviewPanel = true;
-	bool bShowLogPanel = true;
-	bool bShowPreflightPanel = true;
-	bool bShowDiffPanel = true;
+	bool bShowPreviewPanel = false;
+	bool bShowLogPanel = false;
+	bool bShowPreflightPanel = false;
+	bool bShowDiffPanel = false;
 	bool bShowBatchPanel = true;
 	EYIDashboardBottomPanel ActiveBottomPanel = EYIDashboardBottomPanel::Logs;
 };

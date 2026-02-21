@@ -24,6 +24,8 @@
 #include "SYICraftingDashboard.h"
 #include "YIItemDefinition.h"
 #include "YIItemDefinitionDetails.h"
+#include "YIDataTableItemSourceDetails.h"
+#include "Data/YIDataTableItemSource.h"
 
 class FYISchemaDashboardBridge final : public IYISchemaDashboardBridge
 {
@@ -98,6 +100,9 @@ public:
 		PropertyEditorModule.RegisterCustomClassLayout(
 			UYIItemDefinition::StaticClass()->GetFName(),
 			FOnGetDetailCustomizationInstance::CreateStatic(&FYIItemDefinitionDetails::MakeInstance));
+		PropertyEditorModule.RegisterCustomClassLayout(
+			UYIDataTableItemSource::StaticClass()->GetFName(),
+			FOnGetDetailCustomizationInstance::CreateStatic(&FYIDataTableItemSourceDetails::MakeInstance));
 		PropertyEditorModule.NotifyCustomizationModuleChanged();
 
 		IYOLOInventoryEditorCoreModule& EditorCoreModule = FModuleManager::LoadModuleChecked<IYOLOInventoryEditorCoreModule>("YOLOInventoryEditorCore");
@@ -111,6 +116,7 @@ public:
 		{
 			FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 			PropertyEditorModule.UnregisterCustomClassLayout(UYIItemDefinition::StaticClass()->GetFName());
+			PropertyEditorModule.UnregisterCustomClassLayout(UYIDataTableItemSource::StaticClass()->GetFName());
 			PropertyEditorModule.NotifyCustomizationModuleChanged();
 		}
 

@@ -37,6 +37,55 @@ static bool MatchesFieldName(const FProperty* Prop, FName FieldName)
 	return Authored.Equals(Target, ESearchCase::IgnoreCase);
 }
 
+static bool TryReadCodeInt64FromProperty(const FProperty* Prop, const uint8* RowData, int64& OutCode)
+{
+	if (!Prop || !RowData)
+	{
+		return false;
+	}
+
+	if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+	{
+		const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+		if (Num->IsInteger())
+		{
+			OutCode = bTreatAsSigned
+				? Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData))
+				: (int64)Num->GetUnsignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+			return true;
+		}
+
+		OutCode = (int64)Num->GetFloatingPointPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
+		return true;
+	}
+
+	FString AsText;
+	if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+	{
+		AsText = Str->GetPropertyValue_InContainer(RowData);
+	}
+	else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+	{
+		AsText = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+	{
+		AsText = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else
+	{
+		return false;
+	}
+
+	int64 Parsed = 0;
+	if (LexTryParseString(Parsed, *AsText))
+	{
+		OutCode = Parsed;
+		return true;
+	}
+	return false;
+}
+
 static bool TryGetEnumValueFromString(const UEnum* Enum, const FString& Value, int64& OutValue)
 {
 	if (!Enum)
@@ -111,6 +160,71 @@ static bool SetEnumPropertyValue(FProperty* DestProp, uint8* DestPtr, const FStr
 	}
 
 	return false;
+}
+
+static bool YIIsSoftObjectConversion(EYIFieldMappingConversion Conversion)
+{
+	return Conversion == EYIFieldMappingConversion::ToSoftObject || Conversion == EYIFieldMappingConversion::ToSoftTexture;
+}
+
+static bool YICanAssignSoftObjectToTarget(const FSoftObjectProperty* DestSoftObj, UObject* ObjectValue, EYIFieldMappingConversion Conversion)
+{
+	if (!DestSoftObj)
+	{
+		return false;
+	}
+
+	const UClass* RequiredClass = DestSoftObj->PropertyClass.Get();
+	if (!RequiredClass)
+	{
+		RequiredClass = UObject::StaticClass();
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !RequiredClass->IsChildOf(UTexture::StaticClass()))
+	{
+		return false;
+	}
+	if (!ObjectValue)
+	{
+		return true;
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !ObjectValue->IsA(UTexture::StaticClass()))
+	{
+		return false;
+	}
+	return ObjectValue->IsA(RequiredClass);
+}
+
+static bool YISetSoftObjectFromPathString(const FString& Value, FSoftObjectProperty* DestSoftObj, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!DestSoftObj || !DestPtr || !YIIsSoftObjectConversion(Conversion))
+	{
+		return false;
+	}
+
+	const UClass* RequiredClass = DestSoftObj->PropertyClass.Get();
+	if (!RequiredClass)
+	{
+		RequiredClass = UObject::StaticClass();
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !RequiredClass->IsChildOf(UTexture::StaticClass()))
+	{
+		return false;
+	}
+
+	if (Value.IsEmpty())
+	{
+		DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr());
+		return true;
+	}
+
+	const FSoftObjectPath SoftPath(Value);
+	if (!SoftPath.IsValid())
+	{
+		return false;
+	}
+
+	DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(SoftPath));
+	return true;
 }
 
 static bool SetPropertyValueFromString(const FString& Value, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
@@ -207,24 +321,41 @@ static bool SetPropertyValueFromString(const FString& Value, FProperty* DestProp
 
 int64 UYIItemRegistrySubsystem::ExtractCodeFromRow(const UScriptStruct* Struct, const uint8* RowData, FName FieldName) const
 {
-	if (!Struct || !RowData || FieldName.IsNone())
+	if (!Struct || !RowData)
 	{
 		return 0;
 	}
 
-	for (TFieldIterator<FProperty> It(Struct); It; ++It)
+	auto TryByName = [&](const FName NameToFind, int64& OutValue) -> bool
 	{
-		const FProperty* Prop = *It;
-		if (MatchesFieldName(Prop, FieldName))
+		if (NameToFind.IsNone())
 		{
-			if (const FInt64Property* Int64Prop = CastField<FInt64Property>(Prop))
+			return false;
+		}
+
+		for (TFieldIterator<FProperty> It(Struct); It; ++It)
+		{
+			const FProperty* Prop = *It;
+			if (MatchesFieldName(Prop, NameToFind) && TryReadCodeInt64FromProperty(Prop, RowData, OutValue))
 			{
-				return Int64Prop->GetPropertyValue_InContainer(RowData);
+				return true;
 			}
-			if (const FIntProperty* IntProp = CastField<FIntProperty>(Prop))
-			{
-				return (int64)IntProp->GetPropertyValue_InContainer(RowData);
-			}
+		}
+		return false;
+	};
+
+	int64 CodeValue = 0;
+	if (TryByName(FieldName, CodeValue))
+	{
+		return CodeValue;
+	}
+
+	static const FName FallbackNames[] = { TEXT("UniqueCode"), TEXT("Code"), TEXT("ItemCode"), TEXT("ID") };
+	for (const FName Fallback : FallbackNames)
+	{
+		if (TryByName(Fallback, CodeValue))
+		{
+			return CodeValue;
 		}
 	}
 	return 0;
@@ -249,6 +380,21 @@ FString UYIItemRegistrySubsystem::ExtractTemplateIdFromRow(const UScriptStruct* 
 			if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
 			{
 				return NameProp->GetPropertyValue_InContainer(RowData).ToString();
+			}
+			if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+			{
+				return TextProp->GetPropertyValue_InContainer(RowData).ToString();
+			}
+			if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+			{
+				const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+				if (Num->IsInteger())
+				{
+					return bTreatAsSigned
+						? LexToString(Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)))
+						: LexToString(Num->GetUnsignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)));
+				}
+				return LexToString(Num->GetFloatingPointPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)));
 			}
 		}
 	}
@@ -331,29 +477,27 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 		}
 	}
 
-	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	if (YIIsSoftObjectConversion(Conversion))
 	{
 		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 		{
-			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
 			{
-				if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
+				UObject* ResolvedObject = SrcSoftObj->GetPropertyValue(SourcePtr).Get();
+				if (YICanAssignSoftObjectToTarget(DestSoftObj, ResolvedObject, Conversion))
 				{
-					if (!SrcSoftObj->PropertyClass || SrcSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
-					{
-						DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
-						return true;
-					}
+					DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
+					return true;
 				}
-				if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+			}
+			if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+			{
+				if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
 				{
-					if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
+					if (YICanAssignSoftObjectToTarget(DestSoftObj, Obj, Conversion))
 					{
-						if (Obj->IsA(UTexture::StaticClass()))
-						{
-							DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
-							return true;
-						}
+						DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
+						return true;
 					}
 				}
 			}
@@ -419,18 +563,16 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	if (YIIsSoftObjectConversion(Conversion))
+	{
+		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 		{
-			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
+			if (YISetSoftObjectFromPathString(Value, DestSoftObj, DestPtr, Conversion))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
-				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
-					return true;
-				}
+				return true;
 			}
 		}
+	}
 	}
 	if (const FNameProperty* SrcName = CastField<FNameProperty>(SourceProp))
 	{
@@ -469,14 +611,12 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		if (YIIsSoftObjectConversion(Conversion))
 		{
 			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				if (YISetSoftObjectFromPathString(Value.ToString(), DestSoftObj, DestPtr, Conversion))
 				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 					return true;
 				}
 			}
@@ -524,14 +664,12 @@ static bool CopyValueBetweenProperties(const FProperty* SourceProp, const uint8*
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		if (YIIsSoftObjectConversion(Conversion))
 		{
 			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				if (YISetSoftObjectFromPathString(Value.ToString(), DestSoftObj, DestPtr, Conversion))
 				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 					return true;
 				}
 			}

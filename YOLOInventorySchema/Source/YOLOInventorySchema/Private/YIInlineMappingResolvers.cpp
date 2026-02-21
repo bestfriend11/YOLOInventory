@@ -38,6 +38,100 @@ namespace
 			*OutError = Message;
 		}
 	}
+
+	static bool YIResolvePropertyPathConst(
+		const UStruct* RootStruct,
+		const uint8* RootData,
+		const FString& PathString,
+		const FProperty*& OutProperty,
+		const uint8*& OutValuePtr,
+		FString* OutError)
+	{
+		OutProperty = nullptr;
+		OutValuePtr = nullptr;
+
+		if (!RootStruct || !RootData)
+		{
+			YISetResolveError(OutError, TEXT("Root struct/data is missing."));
+			return false;
+		}
+		if (PathString.IsEmpty())
+		{
+			YISetResolveError(OutError, TEXT("Field path is empty."));
+			return false;
+		}
+
+		TArray<FString> Segments;
+		PathString.ParseIntoArray(Segments, TEXT("."), true);
+		if (Segments.Num() == 0)
+		{
+			Segments.Add(PathString);
+		}
+
+		const UStruct* CurrentStruct = RootStruct;
+		const uint8* CurrentData = RootData;
+		for (int32 Index = 0; Index < Segments.Num(); ++Index)
+		{
+			const FName SegmentName(*Segments[Index]);
+			FProperty* SegmentProp = YIFindPropertyByAuthoredName(CurrentStruct, SegmentName);
+			if (!SegmentProp)
+			{
+				YISetResolveError(OutError, FString::Printf(TEXT("Field segment '%s' not found on '%s'."),
+					*Segments[Index], *CurrentStruct->GetName()));
+				return false;
+			}
+
+			const uint8* SegmentValuePtr = SegmentProp->ContainerPtrToValuePtr<uint8>(CurrentData);
+			if (!SegmentValuePtr)
+			{
+				YISetResolveError(OutError, FString::Printf(TEXT("Field segment '%s' has invalid data pointer."), *Segments[Index]));
+				return false;
+			}
+
+			const bool bLastSegment = (Index == Segments.Num() - 1);
+			if (bLastSegment)
+			{
+				OutProperty = SegmentProp;
+				OutValuePtr = SegmentValuePtr;
+				return true;
+			}
+
+			const FStructProperty* StructProp = CastField<FStructProperty>(SegmentProp);
+			if (!StructProp || !StructProp->Struct)
+			{
+				YISetResolveError(OutError, FString::Printf(TEXT("Field segment '%s' is not a struct."), *Segments[Index]));
+				return false;
+			}
+
+			CurrentStruct = StructProp->Struct;
+			CurrentData = SegmentValuePtr;
+		}
+
+		return false;
+	}
+
+	static bool YIResolvePropertyPathMutable(
+		const UStruct* RootStruct,
+		uint8* RootData,
+		const FString& PathString,
+		FProperty*& OutProperty,
+		uint8*& OutValuePtr,
+		FString* OutError)
+	{
+		OutProperty = nullptr;
+		OutValuePtr = nullptr;
+
+		const FProperty* ConstProp = nullptr;
+		const uint8* ConstPtr = nullptr;
+		if (!YIResolvePropertyPathConst(RootStruct, RootData, PathString, ConstProp, ConstPtr, OutError))
+		{
+			return false;
+		}
+
+		OutProperty = const_cast<FProperty*>(ConstProp);
+		OutValuePtr = const_cast<uint8*>(ConstPtr);
+		return true;
+	}
 }
 
 FName YIGetResolvedTargetFieldName(const FYIFieldMapping& Mapping)
@@ -66,17 +160,7 @@ bool YIResolveMappingSource(
 		YISetResolveError(OutError, TEXT("Source field is not set."));
 		return false;
 	}
-
-	FProperty* SourceProperty = YIFindPropertyByAuthoredName(SourceStruct, SourceField);
-	if (!SourceProperty)
-	{
-		YISetResolveError(OutError, FString::Printf(TEXT("Source field '%s' not found."), *SourceField.ToString()));
-		return false;
-	}
-
-	OutProperty = SourceProperty;
-	OutValuePtr = SourceProperty->ContainerPtrToValuePtr<uint8>(SourceData);
-	return OutValuePtr != nullptr;
+	return YIResolvePropertyPathConst(SourceStruct, SourceData, SourceField.ToString(), OutProperty, OutValuePtr, OutError);
 }
 
 bool YIResolveMappingTarget(
@@ -110,16 +194,15 @@ bool YIResolveMappingTarget(
 			return false;
 		}
 
-		FProperty* TargetProperty = YIFindPropertyByAuthoredName(TargetObject->GetClass(), Mapping.TargetProperty);
-		if (!TargetProperty)
+		FProperty* TargetProperty = nullptr;
+		uint8* TargetValuePtr = nullptr;
+		if (!YIResolvePropertyPathMutable(TargetObject->GetClass(), reinterpret_cast<uint8*>(TargetObject), Mapping.TargetProperty.ToString(), TargetProperty, TargetValuePtr, OutError))
 		{
-			YISetResolveError(OutError, FString::Printf(TEXT("Target property '%s' not found on '%s'."),
-				*Mapping.TargetProperty.ToString(), *TargetObject->GetClass()->GetName()));
 			return false;
 		}
 
 		OutTarget.Property = TargetProperty;
-		OutTarget.ValuePtr = TargetProperty->ContainerPtrToValuePtr<uint8>(TargetObject);
+		OutTarget.ValuePtr = TargetValuePtr;
 		OutTarget.OwnerStruct = TargetObject->GetClass();
 		return OutTarget.ValuePtr != nullptr;
 	}
@@ -177,16 +260,15 @@ bool YIResolveMappingTarget(
 		return false;
 	}
 
-	FProperty* TargetProperty = YIFindPropertyByAuthoredName(FragmentStruct, FragmentField);
-	if (!TargetProperty)
+	FProperty* TargetProperty = nullptr;
+	uint8* TargetValuePtr = nullptr;
+	if (!YIResolvePropertyPathMutable(FragmentStruct, Fragment->GetMutableMemory(), FragmentField.ToString(), TargetProperty, TargetValuePtr, OutError))
 	{
-		YISetResolveError(OutError, FString::Printf(TEXT("Field '%s' not found on fragment '%s'."),
-			*FragmentField.ToString(), *FragmentStruct->GetName()));
 		return false;
 	}
 
 	OutTarget.Property = TargetProperty;
-	OutTarget.ValuePtr = TargetProperty->ContainerPtrToValuePtr<uint8>(Fragment->GetMutableMemory());
+	OutTarget.ValuePtr = TargetValuePtr;
 	OutTarget.OwnerStruct = FragmentStruct;
 	return OutTarget.ValuePtr != nullptr;
 }

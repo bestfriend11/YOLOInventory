@@ -85,6 +85,138 @@ static bool YIEditorGrid_MatchesFieldByAuthoredName(const FProperty* Property, c
 	return Property->GetAuthoredName().Equals(FieldName.ToString(), ESearchCase::IgnoreCase);
 }
 
+static bool YIEditorGrid_TryReadInt64FromProperty(const FProperty* Property, const uint8* RowData, int64& OutValue)
+{
+	if (!Property || !RowData)
+	{
+		return false;
+	}
+
+	if (const FNumericProperty* Num = CastField<FNumericProperty>(Property))
+	{
+		const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+		if (Num->IsInteger())
+		{
+			OutValue = bTreatAsSigned
+				? Num->GetSignedIntPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData))
+				: (int64)Num->GetUnsignedIntPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData));
+			return true;
+		}
+		OutValue = (int64)Num->GetFloatingPointPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData));
+		return true;
+	}
+
+	FString AsString;
+	if (const FStrProperty* Str = CastField<FStrProperty>(Property))
+	{
+		AsString = Str->GetPropertyValue_InContainer(RowData);
+	}
+	else if (const FNameProperty* NameProp = CastField<FNameProperty>(Property))
+	{
+		AsString = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else if (const FTextProperty* TextProp = CastField<FTextProperty>(Property))
+	{
+		AsString = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else
+	{
+		return false;
+	}
+
+	int64 Parsed = 0;
+	if (LexTryParseString(Parsed, *AsString))
+	{
+		OutValue = Parsed;
+		return true;
+	}
+	return false;
+}
+
+static bool YIEditorGrid_TryExtractRowCode(const UScriptStruct* RowStruct, const uint8* RowData, const FName ConfiguredField, int64& OutCode)
+{
+	if (!RowStruct || !RowData)
+	{
+		return false;
+	}
+
+	auto TryField = [&](const FName FieldName) -> bool
+	{
+		if (FieldName.IsNone())
+		{
+			return false;
+		}
+		for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+		{
+			const FProperty* Prop = *It;
+			if (YIEditorGrid_MatchesFieldByAuthoredName(Prop, FieldName) && YIEditorGrid_TryReadInt64FromProperty(Prop, RowData, OutCode))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (TryField(ConfiguredField))
+	{
+		return true;
+	}
+
+	static const FName FallbackNames[] = { TEXT("UniqueCode"), TEXT("Code"), TEXT("ItemCode"), TEXT("ID") };
+	for (const FName Fallback : FallbackNames)
+	{
+		if (TryField(Fallback))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool YIEditorGrid_TryExtractRowText(const UScriptStruct* RowStruct, const uint8* RowData, const FName FieldName, FString& OutValue)
+{
+	if (!RowStruct || !RowData || FieldName.IsNone())
+	{
+		return false;
+	}
+
+	for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+	{
+		const FProperty* Prop = *It;
+		if (!YIEditorGrid_MatchesFieldByAuthoredName(Prop, FieldName))
+		{
+			continue;
+		}
+		if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+		{
+			OutValue = Str->GetPropertyValue_InContainer(RowData);
+			return true;
+		}
+		if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+		{
+			OutValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+			return true;
+		}
+		if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+		{
+			OutValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+			return true;
+		}
+		if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+		{
+			const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+			OutValue = Num->IsInteger()
+				? (bTreatAsSigned
+					? LexToString(Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)))
+					: LexToString(Num->GetUnsignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData))))
+				: LexToString(Num->GetFloatingPointPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)));
+			return true;
+		}
+		return false;
+	}
+	return false;
+}
+
 void FYIInventoryBagEditor::InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, UYIInventoryBag* InBag)
 {
 	Bag = InBag;
@@ -653,45 +785,16 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 				const uint8* RowData = RowPair.Value;
 
 				int64 CodeValue = 0;
-				bool bFoundCode = false;
 				FString TemplateIdValue;
 
-				for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
-				{
-					const FProperty* Prop = *It;
-					if (!Prop) continue;
-
-					if (YIEditorGrid_MatchesFieldByAuthoredName(Prop, CodeField))
-					{
-						if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
-						{
-							if (Num->IsInteger())
-							{
-								CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
-								bFoundCode = true;
-							}
-						}
-					}
-					else if (TemplateField != NAME_None && YIEditorGrid_MatchesFieldByAuthoredName(Prop, TemplateField))
-					{
-						if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
-						{
-							TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
-						}
-						else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
-						{
-							TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
-						}
-						else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
-						{
-							TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
-						}
-					}
-				}
-
+				const bool bFoundCode = YIEditorGrid_TryExtractRowCode(Table->RowStruct, RowData, CodeField, CodeValue);
 				if (!bFoundCode)
 				{
 					continue;
+				}
+				if (TemplateField != NAME_None)
+				{
+					YIEditorGrid_TryExtractRowText(Table->RowStruct, RowData, TemplateField, TemplateIdValue);
 				}
 
 				const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());

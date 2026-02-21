@@ -33,6 +33,7 @@ public class YOLOInventoryEditorSchema : ModuleRules
             "AssetRegistry",
             "DataTableEditor",
             "GameplayTags",
+            "BlueprintGraph",
             "Kismet",
             "CSVItemBuilder",
             "YOLOInventoryEquipment"

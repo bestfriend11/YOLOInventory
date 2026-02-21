@@ -52,7 +52,10 @@
 #include "GameplayTagContainer.h"
 #include "GameplayTagsManager.h"
 #include "Engine/Texture.h"
+#include "EdGraphSchema_K2.h"
+#include "EdGraph/EdGraphPin.h"
 #include "Algo/Sort.h"
+#include "Algo/Unique.h"
 #include "YIEditorRowHelpers.h"
 #include "YIEditorMessageLog.h"
 #include "YIInlineMappingResolvers.h"
@@ -85,6 +88,139 @@ static bool MatchesFieldByAuthoredNameEditor(const FProperty* Property, const FN
 	return Property->GetAuthoredName().Equals(FieldName.ToString(), ESearchCase::IgnoreCase);
 }
 
+static bool TryReadInt64FromRowPropertyEditor(const FProperty* Property, const uint8* RowData, int64& OutValue)
+{
+	if (!Property || !RowData)
+	{
+		return false;
+	}
+
+	if (const FNumericProperty* Num = CastField<FNumericProperty>(Property))
+	{
+		const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+		if (Num->IsInteger())
+		{
+			OutValue = bTreatAsSigned
+				? Num->GetSignedIntPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData))
+				: (int64)Num->GetUnsignedIntPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData));
+			return true;
+		}
+		OutValue = (int64)Num->GetFloatingPointPropertyValue(Property->ContainerPtrToValuePtr<uint8>(RowData));
+		return true;
+	}
+
+	FString AsString;
+	if (const FStrProperty* Str = CastField<FStrProperty>(Property))
+	{
+		AsString = Str->GetPropertyValue_InContainer(RowData);
+	}
+	else if (const FNameProperty* NameProp = CastField<FNameProperty>(Property))
+	{
+		AsString = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else if (const FTextProperty* TextProp = CastField<FTextProperty>(Property))
+	{
+		AsString = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+	}
+	else
+	{
+		return false;
+	}
+
+	int64 Parsed = 0;
+	if (LexTryParseString(Parsed, *AsString))
+	{
+		OutValue = Parsed;
+		return true;
+	}
+	return false;
+}
+
+static bool TryExtractRowCodeEditor(const UScriptStruct* RowStruct, const uint8* RowData, const FName ConfiguredField, int64& OutCode)
+{
+	if (!RowStruct || !RowData)
+	{
+		return false;
+	}
+
+	auto TryField = [&](const FName FieldName) -> bool
+	{
+		if (FieldName.IsNone())
+		{
+			return false;
+		}
+		for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+		{
+			const FProperty* Prop = *It;
+			if (MatchesFieldByAuthoredNameEditor(Prop, FieldName) && TryReadInt64FromRowPropertyEditor(Prop, RowData, OutCode))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (TryField(ConfiguredField))
+	{
+		return true;
+	}
+
+	static const FName FallbackNames[] = { TEXT("UniqueCode"), TEXT("Code"), TEXT("ItemCode"), TEXT("ID") };
+	for (const FName Fallback : FallbackNames)
+	{
+		if (TryField(Fallback))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool TryExtractRowTextFieldEditor(const UScriptStruct* RowStruct, const uint8* RowData, const FName FieldName, FString& OutValue)
+{
+	if (!RowStruct || !RowData || FieldName.IsNone())
+	{
+		return false;
+	}
+
+	for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+	{
+		const FProperty* Prop = *It;
+		if (!MatchesFieldByAuthoredNameEditor(Prop, FieldName))
+		{
+			continue;
+		}
+
+		if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
+		{
+			OutValue = Str->GetPropertyValue_InContainer(RowData);
+			return true;
+		}
+		if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
+		{
+			OutValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
+			return true;
+		}
+		if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
+		{
+			OutValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
+			return true;
+		}
+		if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
+		{
+			const bool bTreatAsSigned = Num->CanHoldValue<int64>(-1);
+			OutValue = Num->IsInteger()
+				? (bTreatAsSigned
+					? LexToString(Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)))
+					: LexToString(Num->GetUnsignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData))))
+				: LexToString(Num->GetFloatingPointPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData)));
+			return true;
+		}
+		return false;
+	}
+	return false;
+}
+
 static UScriptStruct* ResolveStructFromPathString(const FString& StructPath)
 {
 	if (StructPath.IsEmpty())
@@ -108,6 +244,7 @@ static void CollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray
 	}
 
 	TArray<FString> Paths;
+	TSet<FString> SeenPaths;
 	for (TObjectIterator<UScriptStruct> It; It; ++It)
 	{
 		UScriptStruct* ScriptStruct = *It;
@@ -115,8 +252,47 @@ static void CollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray
 		{
 			continue;
 		}
-		Paths.Add(ScriptStruct->GetPathName());
+		const FString Path = ScriptStruct->GetPathName();
+		if (Path.Contains(TEXT("TRASH")) || Path.Contains(TEXT("REINST")))
+		{
+			continue;
+		}
+		if (SeenPaths.Contains(Path))
+		{
+			continue;
+		}
+		SeenPaths.Add(Path);
+		Paths.Add(Path);
 	}
+
+	// Fallback: ensure core schema fragment structs are available even before first asset usage.
+	auto AddIfMissing = [&Paths, &SeenPaths](UScriptStruct* Struct)
+	{
+		if (!Struct)
+		{
+			return;
+		}
+		const FString Path = Struct->GetPathName();
+		if (Path.IsEmpty() || SeenPaths.Contains(Path))
+		{
+			return;
+		}
+		SeenPaths.Add(Path);
+		Paths.Add(Path);
+	};
+	AddIfMissing(FYIItemUIDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemClassificationDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemAudioDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemLayoutDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemStackingDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemRulesDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemContainerDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemAttributeModsDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemPickupDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemWeightDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemEquipmentDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemAffixDefinitionFragment::StaticStruct());
+
 	Paths.Sort();
 	for (const FString& Path : Paths)
 	{
@@ -191,7 +367,9 @@ static FString MakeReadableFragmentNameFromPath(const FString& StructPath)
 
 static bool IsMappableFragmentField(const FProperty* Property)
 {
-	return Property && !Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated);
+	return Property
+		&& !Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated)
+		&& !Property->HasMetaData(TEXT("YIInlineMapIgnore"));
 }
 
 static bool IsIdentityMappingProperty(const FName FieldName)
@@ -298,19 +476,93 @@ static void CollectStructFieldOptions(const UStruct* OwnerStruct, TArray<TShared
 		return;
 	}
 
-	TArray<FString> Names;
-	for (TFieldIterator<FProperty> It(OwnerStruct); It; ++It)
+	auto ShouldExpandStruct = [](const UScriptStruct* StructType, int32 Depth) -> bool
 	{
-		if (FProperty* Property = *It)
+		if (!StructType || Depth >= 2)
 		{
-			Names.Add(Property->GetAuthoredName());
+			return false;
 		}
-	}
+		if (StructType == FGameplayTag::StaticStruct())
+		{
+			return false;
+		}
+		return true;
+	};
+
+	TArray<FString> Names;
+	TFunction<void(const UStruct*, const FString&, int32)> CollectRecursive;
+	CollectRecursive = [&](const UStruct* Struct, const FString& Prefix, int32 Depth)
+	{
+		for (TFieldIterator<FProperty> It(Struct); It; ++It)
+		{
+			FProperty* Property = *It;
+			if (!Property)
+			{
+				continue;
+			}
+
+			const FString LocalName = Property->GetAuthoredName();
+			const FString FullName = Prefix.IsEmpty()
+				? LocalName
+				: FString::Printf(TEXT("%s.%s"), *Prefix, *LocalName);
+			Names.Add(FullName);
+
+			if (const FStructProperty* StructProp = CastField<FStructProperty>(Property))
+			{
+				if (ShouldExpandStruct(StructProp->Struct, Depth))
+				{
+					CollectRecursive(StructProp->Struct, FullName, Depth + 1);
+				}
+			}
+		}
+	};
+
+	CollectRecursive(OwnerStruct, FString(), 0);
 	Names.Sort();
+	Names.SetNum(Algo::Unique(Names));
 	for (const FString& Name : Names)
 	{
 		OutOptions.Add(MakeShared<FString>(Name));
 	}
+}
+
+static FProperty* FindPropertyByAuthoredPathEditor(const UStruct* OwnerStruct, const FString& FieldPath)
+{
+	if (!OwnerStruct || FieldPath.IsEmpty())
+	{
+		return nullptr;
+	}
+
+	TArray<FString> Segments;
+	FieldPath.ParseIntoArray(Segments, TEXT("."), true);
+	if (Segments.Num() == 0)
+	{
+		Segments.Add(FieldPath);
+	}
+
+	const UStruct* CurrentStruct = OwnerStruct;
+	FProperty* CurrentProperty = nullptr;
+	for (int32 Index = 0; Index < Segments.Num(); ++Index)
+	{
+		CurrentProperty = FindPropertyByAuthoredNameEditor(CurrentStruct, FName(*Segments[Index]));
+		if (!CurrentProperty)
+		{
+			return nullptr;
+		}
+
+		const bool bLast = (Index == Segments.Num() - 1);
+		if (!bLast)
+		{
+			const FStructProperty* StructProp = CastField<FStructProperty>(CurrentProperty);
+			if (!StructProp || !StructProp->Struct)
+			{
+				return nullptr;
+			}
+			CurrentStruct = StructProp->Struct;
+		}
+	}
+
+	return CurrentProperty;
 }
 
 static bool YIItemDash_PromptSavePackages(const TArray<UObject*>& ObjectsToSave, int32& OutRequestedCount)
@@ -451,6 +703,71 @@ static bool SetEnumPropertyValueEditor(FProperty* DestProp, uint8* DestPtr, cons
 	return false;
 }
 
+static bool YIIsSoftObjectConversionEditor(EYIFieldMappingConversion Conversion)
+{
+	return Conversion == EYIFieldMappingConversion::ToSoftObject || Conversion == EYIFieldMappingConversion::ToSoftTexture;
+}
+
+static bool YICanAssignSoftObjectToTargetEditor(const FSoftObjectProperty* DestSoftObj, UObject* ObjectValue, EYIFieldMappingConversion Conversion)
+{
+	if (!DestSoftObj)
+	{
+		return false;
+	}
+
+	const UClass* RequiredClass = DestSoftObj->PropertyClass.Get();
+	if (!RequiredClass)
+	{
+		RequiredClass = UObject::StaticClass();
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !RequiredClass->IsChildOf(UTexture::StaticClass()))
+	{
+		return false;
+	}
+	if (!ObjectValue)
+	{
+		return true;
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !ObjectValue->IsA(UTexture::StaticClass()))
+	{
+		return false;
+	}
+	return ObjectValue->IsA(RequiredClass);
+}
+
+static bool YISetSoftObjectFromPathStringEditor(const FString& Value, FSoftObjectProperty* DestSoftObj, uint8* DestPtr, EYIFieldMappingConversion Conversion)
+{
+	if (!DestSoftObj || !DestPtr || !YIIsSoftObjectConversionEditor(Conversion))
+	{
+		return false;
+	}
+
+	const UClass* RequiredClass = DestSoftObj->PropertyClass.Get();
+	if (!RequiredClass)
+	{
+		RequiredClass = UObject::StaticClass();
+	}
+	if (Conversion == EYIFieldMappingConversion::ToSoftTexture && !RequiredClass->IsChildOf(UTexture::StaticClass()))
+	{
+		return false;
+	}
+
+	if (Value.IsEmpty())
+	{
+		DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr());
+		return true;
+	}
+
+	const FSoftObjectPath SoftPath(Value);
+	if (!SoftPath.IsValid())
+	{
+		return false;
+	}
+
+	DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(SoftPath));
+	return true;
+}
+
 static bool SetPropertyValueFromStringEditor(const FString& Value, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
 {
 	if (!DestProp || !DestPtr)
@@ -525,20 +842,18 @@ static bool SetPropertyValueFromStringEditor(const FString& Value, FProperty* De
 		}
 	}
 
-	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	if (YIIsSoftObjectConversionEditor(Conversion))
 	{
 		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 		{
-			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			if (YISetSoftObjectFromPathStringEditor(Value, DestSoftObj, DestPtr, Conversion))
 			{
-				const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
-				DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 				return true;
 			}
 		}
 	}
 
-	return false;
+	return DestProp->ImportText_Direct(*Value, DestPtr, nullptr, PPF_None) != nullptr;
 }
 
 static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const uint8* SourcePtr, FProperty* DestProp, uint8* DestPtr, EYIFieldMappingConversion Conversion)
@@ -591,29 +906,27 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 		}
 	}
 
-	if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+	if (YIIsSoftObjectConversionEditor(Conversion))
 	{
 		if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 		{
-			if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+			if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
 			{
-				if (const FSoftObjectProperty* SrcSoftObj = CastField<FSoftObjectProperty>(SourceProp))
+				UObject* ResolvedObject = SrcSoftObj->GetPropertyValue(SourcePtr).Get();
+				if (YICanAssignSoftObjectToTargetEditor(DestSoftObj, ResolvedObject, Conversion))
 				{
-					if (!SrcSoftObj->PropertyClass || SrcSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
-					{
-						DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
-						return true;
-					}
+					DestSoftObj->SetPropertyValue(DestPtr, SrcSoftObj->GetPropertyValue(SourcePtr));
+					return true;
 				}
-				if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+			}
+			if (const FObjectPropertyBase* SrcObj = CastField<FObjectPropertyBase>(SourceProp))
+			{
+				if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
 				{
-					if (UObject* Obj = SrcObj->GetObjectPropertyValue(SourcePtr))
+					if (YICanAssignSoftObjectToTargetEditor(DestSoftObj, Obj, Conversion))
 					{
-						if (Obj->IsA(UTexture::StaticClass()))
-						{
-							DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
-							return true;
-						}
+						DestSoftObj->SetPropertyValue(DestPtr, FSoftObjectPtr(Obj));
+						return true;
 					}
 				}
 			}
@@ -674,14 +987,12 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		if (YIIsSoftObjectConversionEditor(Conversion))
 		{
 			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				if (YISetSoftObjectFromPathStringEditor(Value, DestSoftObj, DestPtr, Conversion))
 				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 					return true;
 				}
 			}
@@ -720,14 +1031,12 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		if (YIIsSoftObjectConversionEditor(Conversion))
 		{
 			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				if (YISetSoftObjectFromPathStringEditor(Value.ToString(), DestSoftObj, DestPtr, Conversion))
 				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 					return true;
 				}
 			}
@@ -771,14 +1080,12 @@ static bool CopyValueBetweenPropertiesEditor(const FProperty* SourceProp, const 
 				}
 			}
 		}
-		if (Conversion == EYIFieldMappingConversion::ToSoftTexture)
+		if (YIIsSoftObjectConversionEditor(Conversion))
 		{
 			if (FSoftObjectProperty* DestSoftObj = CastField<FSoftObjectProperty>(DestProp))
 			{
-				if (DestSoftObj->PropertyClass && DestSoftObj->PropertyClass->IsChildOf(UTexture::StaticClass()))
+				if (YISetSoftObjectFromPathStringEditor(Value.ToString(), DestSoftObj, DestPtr, Conversion))
 				{
-					const FSoftObjectPtr SoftPtr = FSoftObjectPtr(FSoftObjectPath(Value.ToString()));
-					DestSoftObj->SetPropertyValue(DestPtr, SoftPtr);
 					return true;
 				}
 			}
@@ -1011,6 +1318,7 @@ static EYIFieldMappingConversion GuessConversionForProps(const FProperty* Source
 		{
 			return EYIFieldMappingConversion::ToSoftTexture;
 		}
+		return EYIFieldMappingConversion::ToSoftObject;
 	}
 	if (const FNumericProperty* NumTarget = CastField<FNumericProperty>(TargetProp))
 	{
@@ -1588,18 +1896,42 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 														]
 													+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 														[
+															SNew(SComboBox<TSharedPtr<FString>>)
+																.OptionsSource(&AddFragmentStructOptions)
+																.OnComboBoxOpening_Lambda([this]()
+																	{
+																		RefreshAddFragmentStructOptions();
+																	})
+																.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+																	{
+																		if (NewItem.IsValid())
+																		{
+																			SelectedAddFragmentStructOption = NewItem;
+																		}
+																	})
+																.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+																	{
+																		return SNew(STextBlock).Text(FText::FromString(MakeReadableFragmentNameFromPath(InItem.IsValid() ? *InItem : FString())));
+																	})
+																.Content()
+																[
+																	SNew(STextBlock).Text_Lambda([this]()
+																		{
+																			if (!SelectedAddFragmentStructOption.IsValid())
+																			{
+																				return NSLOCTEXT("YOLOInventory", "Dash_SelectFragmentForAdd", "Select Fragment");
+																			}
+																			return FText::FromString(MakeReadableFragmentNameFromPath(*SelectedAddFragmentStructOption));
+																		})
+																]
+														]
+													+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
+														[
 															SNew(SButton)
-																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment Mapping"))
+																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment (+Fields)"))
 																.OnClicked_Lambda([this]()
 																	{
-																		if (CurrentMappingSource.IsValid())
-																		{
-																			CurrentMappingSource->Modify();
-																			FYIFieldMapping NewMap;
-																			TryAssignDefaultStaticFragmentTarget(NewMap);
-																			CurrentMappingSource->InlineMappings.Add(NewMap);
-																			RefreshInlineMappingEditor(CurrentMappingSource.Get());
-																		}
+																		AddFragmentMappingsForSelection();
 																		return FReply::Handled();
 																	})
 														]
@@ -2533,18 +2865,42 @@ TSharedRef<SWidget> SYIItemDashboard::BuildMappingPanelWidget()
 						]
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 						[
+							SNew(SComboBox<TSharedPtr<FString>>)
+								.OptionsSource(&AddFragmentStructOptions)
+								.OnComboBoxOpening_Lambda([this]()
+									{
+										RefreshAddFragmentStructOptions();
+									})
+								.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+									{
+										if (NewItem.IsValid())
+										{
+											SelectedAddFragmentStructOption = NewItem;
+										}
+									})
+								.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+									{
+										return SNew(STextBlock).Text(FText::FromString(MakeReadableFragmentNameFromPath(InItem.IsValid() ? *InItem : FString())));
+									})
+								.Content()
+								[
+									SNew(STextBlock).Text_Lambda([this]()
+										{
+											if (!SelectedAddFragmentStructOption.IsValid())
+											{
+												return NSLOCTEXT("YOLOInventory", "Dash_SelectFragmentForAdd", "Select Fragment");
+											}
+											return FText::FromString(MakeReadableFragmentNameFromPath(*SelectedAddFragmentStructOption));
+										})
+								]
+						]
+						+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
+						[
 							SNew(SButton)
-								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment Mapping"))
+								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment (+Fields)"))
 								.OnClicked_Lambda([this]()
 									{
-										if (CurrentMappingSource.IsValid())
-										{
-											CurrentMappingSource->Modify();
-											FYIFieldMapping NewMap;
-											TryAssignDefaultStaticFragmentTarget(NewMap);
-											CurrentMappingSource->InlineMappings.Add(NewMap);
-											RefreshInlineMappingEditor(CurrentMappingSource.Get());
-										}
+										AddFragmentMappingsForSelection();
 										return FReply::Handled();
 									})
 						]
@@ -3512,7 +3868,21 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 									? NSLOCTEXT("YOLOInventory", "Dash_AssetBadge", "Asset")
 									: NSLOCTEXT("YOLOInventory", "Dash_MakeAssetShort", "Make"))
 							])
-						: StaticCastSharedRef<SWidget>(SNew(SSpacer).Size(FVector2D(40.f, 1.f)))
+						: (Entry->bIsDataSourceEntry
+							? StaticCastSharedRef<SWidget>(
+								SNew(SButton)
+									.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton"))
+									.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_OpenSourceDetails", "Open data source details"))
+									.OnClicked_Lambda([this, Entry]()
+										{
+											OpenDataSource(Entry);
+											return FReply::Handled();
+										})
+									.Content()
+									[
+										SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_SourceBadge", "Source"))
+									])
+							: StaticCastSharedRef<SWidget>(SNew(SSpacer).Size(FVector2D(40.f, 1.f))))
 				]
 		];
 }
@@ -3625,109 +3995,86 @@ void SYIItemDashboard::Refresh()
 
 	for (const FAssetData& SourceData : Sources)
 	{
-		const FString SourceObjectPath = SourceData.GetSoftObjectPath().ToString();
-		if (UYIDataTableItemSource* Source = Cast<UYIDataTableItemSource>(SourceData.GetAsset()))
+		const FSoftObjectPath SourceSoftPath = SourceData.GetSoftObjectPath();
+		const FString SourceObjectPath = SourceSoftPath.ToString();
+		TSoftObjectPtr<UYIDataTableItemSource> SourcePtr(SourceSoftPath);
+
+		if (!ExistingSourcePaths.Contains(SourceObjectPath))
 		{
-			if (!ExistingSourcePaths.Contains(SourceObjectPath))
-			{
-				TSharedPtr<FYIItemDashboardEntry> SourceEntry = MakeShared<FYIItemDashboardEntry>();
-				SourceEntry->Code = 0;
-				SourceEntry->Name = SourceData.AssetName.ToString();
-				SourceEntry->TemplateId = TEXT("DataSource");
-				SourceEntry->Source = SourceObjectPath;
-				SourceEntry->bIsDataTable = false;
-				SourceEntry->bIsDataSourceEntry = true;
-				SourceEntry->Object = Source;
-				SourceEntry->DataSource = Source;
-				Items.Add(SourceEntry);
-				ExistingSourcePaths.Add(SourceObjectPath);
-			}
+			TSharedPtr<FYIItemDashboardEntry> SourceEntry = MakeShared<FYIItemDashboardEntry>();
+			SourceEntry->Code = 0;
+			SourceEntry->Name = SourceData.AssetName.ToString();
+			SourceEntry->TemplateId = TEXT("DataSource");
+			SourceEntry->Source = SourceObjectPath;
+			SourceEntry->bIsDataTable = false;
+			SourceEntry->bIsDataSourceEntry = true;
+			SourceEntry->Object = TSoftObjectPtr<UObject>(SourceSoftPath);
+			SourceEntry->DataSource = SourcePtr;
+			Items.Add(SourceEntry);
+			ExistingSourcePaths.Add(SourceObjectPath);
+		}
 
-			if (UDataTable* Table = Source->ResolveDataTable())
-			{
-				const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
-				const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
-				const FName TemplateField = Source->TemplateIdFieldName;
+		UYIDataTableItemSource* Source = SourcePtr.LoadSynchronous();
+		if (!Source)
+		{
+			continue;
+		}
 
-				for (const auto& RowPair : Table->GetRowMap())
+		if (UDataTable* Table = Source->ResolveDataTable())
+		{
+			const FName CodeField = Source->UniqueCodeFieldName.IsNone() ? TEXT("UniqueCode") : Source->UniqueCodeFieldName;
+			const FName PreviewField = Source->PreviewNameFieldName.IsNone() ? TEXT("DisplayName") : Source->PreviewNameFieldName;
+			const FName TemplateField = Source->TemplateIdFieldName;
+
+			for (const auto& RowPair : Table->GetRowMap())
+			{
+				const FName RowName = RowPair.Key;
+				const uint8* RowData = RowPair.Value;
+
+				int64 CodeValue = 0;
+				FString TemplateIdValue;
+
+				const bool bFoundCode = TryExtractRowCodeEditor(Table->RowStruct, RowData, CodeField, CodeValue);
+				if (!bFoundCode)
 				{
-					const FName RowName = RowPair.Key;
-					const uint8* RowData = RowPair.Value;
-
-					int64 CodeValue = 0;
-					bool bFoundCode = false;
-					FString TemplateIdValue;
-
-					for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
-					{
-						const FProperty* Prop = *It;
-						if (!Prop) continue;
-
-						if (MatchesFieldByAuthoredNameEditor(Prop, CodeField))
-						{
-							if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
-							{
-								if (Num->IsInteger())
-								{
-									CodeValue = Num->GetSignedIntPropertyValue(Prop->ContainerPtrToValuePtr<uint8>(RowData));
-									bFoundCode = true;
-								}
-							}
-						}
-						else if (TemplateField != NAME_None && MatchesFieldByAuthoredNameEditor(Prop, TemplateField))
-						{
-							if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
-							{
-								TemplateIdValue = Str->GetPropertyValue_InContainer(RowData);
-							}
-							else if (const FNameProperty* NameProp = CastField<FNameProperty>(Prop))
-							{
-								TemplateIdValue = NameProp->GetPropertyValue_InContainer(RowData).ToString();
-							}
-							else if (const FTextProperty* TextProp = CastField<FTextProperty>(Prop))
-							{
-								TemplateIdValue = TextProp->GetPropertyValue_InContainer(RowData).ToString();
-							}
-						}
-					}
-
-					if (!bFoundCode)
-					{
-						continue;
-					}
-
-					const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
-					if (ExistingRowKeys.Contains(RowKey))
-					{
-						continue;
-					}
-
-					TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
-					Entry->Code = CodeValue;
-					Entry->RowName = RowName;
-					Entry->bIsDataTable = true;
-					Entry->bIsDataSourceEntry = false;
-					Entry->DataSource = Source;
-					Entry->DataTable = Table;
-					Entry->TemplateId = TemplateIdValue;
-					Entry->Source = SourceData.GetSoftObjectPath().ToString();
-					Entry->Name = RowName.ToString();
-
-					const FString PreviewName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
-					if (!PreviewName.IsEmpty())
-					{
-						Entry->Name = PreviewName;
-					}
-
-					if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
-					{
-						Entry->bHasAsset = true;
-						Entry->ItemAsset = *FoundAsset;
-					}
-
-					Items.Add(Entry);
-					ExistingRowKeys.Add(RowKey);
+					continue;
 				}
+				if (TemplateField != NAME_None)
+				{
+					TryExtractRowTextFieldEditor(Table->RowStruct, RowData, TemplateField, TemplateIdValue);
+				}
+
+				const FString RowKey = FString::Printf(TEXT("%lld|%s"), CodeValue, *RowName.ToString());
+				if (ExistingRowKeys.Contains(RowKey))
+				{
+					continue;
+				}
+
+				TSharedPtr<FYIItemDashboardEntry> Entry = MakeShared<FYIItemDashboardEntry>();
+				Entry->Code = CodeValue;
+				Entry->RowName = RowName;
+				Entry->bIsDataTable = true;
+				Entry->bIsDataSourceEntry = false;
+				Entry->DataSource = Source;
+				Entry->DataTable = Table;
+				Entry->TemplateId = TemplateIdValue;
+				Entry->Source = SourceData.GetSoftObjectPath().ToString();
+				Entry->Name = RowName.ToString();
+
+				const FString PreviewName = YIEditor_GetRowStringFromStruct(Table->RowStruct, RowData, PreviewField);
+				if (!PreviewName.IsEmpty())
+				{
+					Entry->Name = PreviewName;
+				}
+
+				if (TSoftObjectPtr<UYIItemDefinition>* FoundAsset = ExistingAssets.Find(CodeValue))
+				{
+					Entry->bHasAsset = true;
+					Entry->ItemAsset = *FoundAsset;
+				}
+
+				Items.Add(Entry);
+				ExistingRowKeys.Add(RowKey);
 			}
 		}
 	}
@@ -3751,7 +4098,7 @@ void SYIItemDashboard::Refresh()
 	for (const TSharedPtr<FYIItemDashboardEntry>& Entry : Items)
 	{
 		// Type filter
-		if (TypeFilter == EDashTypeFilter::DataTableRows && !Entry->bIsDataTable)
+		if (TypeFilter == EDashTypeFilter::DataTableRows && !(Entry->bIsDataTable || Entry->bIsDataSourceEntry))
 		{
 			continue;
 		}
@@ -3773,11 +4120,6 @@ void SYIItemDashboard::Refresh()
 		{
 			continue;
 		}
-		if (StatusFilter == EDashStatusFilter::AssetOnly && Entry->bIsDataSourceEntry)
-		{
-			continue;
-		}
-
 		const bool bPass = SearchFilter.IsEmpty() ||
 			Entry->Name.Contains(SearchFilter) ||
 			Entry->TemplateId.Contains(SearchFilter) ||
@@ -4123,6 +4465,67 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildContextMenuForEntry(const TSharedPtr<
 
 	SYIItemDashboard* Self = const_cast<SYIItemDashboard*>(this);
 	FMenuBuilder MenuBuilder(true, nullptr);
+
+	if (Entry->bIsDataSourceEntry)
+	{
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataSourceAsset", "Open Data Source Asset"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_OpenDataSourceAsset_Tip", "Open this item data source in the details panel."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
+				{
+					if (Self)
+					{
+						Self->OpenDataSource(Entry);
+					}
+				})));
+
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_ShowSourceInBrowser", "Show Data Source in Content Browser"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_ShowSourceInBrowser_Tip", "Highlight this data source asset in the Content Browser."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Entry]()
+				{
+					if (GEditor && Entry.IsValid())
+					{
+						if (UObject* SourceObj = Entry->Object.LoadSynchronous())
+						{
+							TArray<UObject*> Objects;
+							Objects.Add(SourceObj);
+							GEditor->SyncBrowserToObjects(Objects);
+						}
+					}
+				})));
+
+		MenuBuilder.AddSeparator();
+		MenuBuilder.AddMenuEntry(
+			NSLOCTEXT("YOLOInventory", "Dash_Context_DeleteDataSource", "Delete Data Source Asset"),
+			NSLOCTEXT("YOLOInventory", "Dash_Context_DeleteDataSource_Tip", "Delete this data source asset from disk."),
+			FSlateIcon(),
+			FUIAction(FExecuteAction::CreateLambda([Self, Entry]()
+				{
+					if (!Self || !Entry.IsValid())
+					{
+						return;
+					}
+
+					if (UObject* SourceObj = Entry->Object.LoadSynchronous())
+					{
+						const FText Msg = FText::Format(
+							NSLOCTEXT("YOLOInventory", "Dash_ConfirmDeleteDataSource", "Delete data source '{0}'?"),
+							FText::FromString(SourceObj->GetName()));
+						if (FMessageDialog::Open(EAppMsgType::YesNo, Msg) == EAppReturnType::Yes)
+						{
+							TArray<UObject*> ToDelete;
+							ToDelete.Add(SourceObj);
+							ObjectTools::DeleteObjects(ToDelete, /*bShowConfirmation=*/false);
+							Self->Refresh();
+						}
+					}
+				})));
+
+		return MenuBuilder.MakeWidget();
+	}
 
 	UYIItemDefinition* ItemDef = nullptr;
 	if (Entry->Object.ToSoftObjectPath().IsValid())
@@ -4672,6 +5075,7 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	SourceFieldPropCache.Reset();
 	TargetFieldPropCache.Reset();
 	TransformFunctionOptions.Reset();
+	RefreshAddFragmentStructOptions();
 
 	if (!Source)
 	{
@@ -4692,11 +5096,25 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	{
 		if (UScriptStruct* RowStruct = Table->RowStruct)
 		{
-			for (TFieldIterator<FProperty> It(RowStruct); It; ++It)
+			TArray<TSharedPtr<FString>> SourcePaths;
+			CollectStructFieldOptions(RowStruct, SourcePaths);
+			for (const TSharedPtr<FString>& PathPtr : SourcePaths)
 			{
-				const FName FieldName((*It)->GetAuthoredName());
-				SourceFieldOptions.Add(MakeShared<FString>(FieldName.ToString()));
-				SourceFieldPropCache.Add(FieldName, *It);
+				if (!PathPtr.IsValid())
+				{
+					continue;
+				}
+
+				const FString& PathString = *PathPtr;
+				const FName FieldName(*PathString);
+				FProperty* LeafProp = FindPropertyByAuthoredPathEditor(RowStruct, PathString);
+				if (!LeafProp)
+				{
+					continue;
+				}
+
+				SourceFieldOptions.Add(MakeShared<FString>(PathString));
+				SourceFieldPropCache.Add(FieldName, LeafProp);
 			}
 		}
 	}
@@ -4715,14 +5133,23 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 		{
 			continue;
 		}
-		for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+		TArray<TSharedPtr<FString>> FieldOptions;
+		CollectStructFieldOptions(FragmentStruct, FieldOptions);
+		for (const TSharedPtr<FString>& FieldPathPtr : FieldOptions)
 		{
-			if (!IsMappableFragmentField(*It))
+			if (!FieldPathPtr.IsValid())
 			{
 				continue;
 			}
-			const FName FieldName((*It)->GetAuthoredName());
-			const FString ScopedName = FString::Printf(TEXT("%s.%s"), *MakeReadableFragmentName(FragmentStruct), *FieldName.ToString());
+
+			const FString FieldPath = *FieldPathPtr;
+			FProperty* LeafProperty = FindPropertyByAuthoredPathEditor(FragmentStruct, FieldPath);
+			if (!LeafProperty || !IsMappableFragmentField(LeafProperty))
+			{
+				continue;
+			}
+
+			const FString ScopedName = FString::Printf(TEXT("%s.%s"), *MakeReadableFragmentName(FragmentStruct), *FieldPath);
 			TargetPropertyOptions.Add(MakeShared<FString>(ScopedName));
 		}
 	}
@@ -4781,6 +5208,134 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 	{
 		MappingPreviewListView->RequestListRefresh();
 	}
+}
+
+void SYIItemDashboard::RefreshAddFragmentStructOptions()
+{
+	AddFragmentStructOptions.Reset();
+	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), AddFragmentStructOptions);
+
+	if (!SelectedAddFragmentStructOption.IsValid()
+		|| !AddFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
+			{
+				return Entry.IsValid()
+					&& SelectedAddFragmentStructOption.IsValid()
+					&& **Entry == **SelectedAddFragmentStructOption;
+			}))
+	{
+		SelectedAddFragmentStructOption = AddFragmentStructOptions.Num() > 0
+			? AddFragmentStructOptions[0]
+			: TSharedPtr<FString>();
+	}
+}
+
+void SYIItemDashboard::AddFragmentMappingsForStruct(UYIDataTableItemSource* Source, const UScriptStruct* FragmentStruct)
+{
+	if (!Source || !FragmentStruct)
+	{
+		return;
+	}
+
+	Source->Modify();
+	UDataTable* Table = Source->DataTable.LoadSynchronous();
+	const UScriptStruct* RowStruct = (Table ? Table->RowStruct : nullptr);
+
+	TArray<TSharedPtr<FString>> FragmentFields;
+	CollectStructFieldOptions(FragmentStruct, FragmentFields);
+
+	bool bAddedAny = false;
+	for (const TSharedPtr<FString>& FieldPathPtr : FragmentFields)
+	{
+		if (!FieldPathPtr.IsValid())
+		{
+			continue;
+		}
+
+		const FString FieldPath = *FieldPathPtr;
+		FProperty* TargetProp = FindPropertyByAuthoredPathEditor(FragmentStruct, FieldPath);
+		if (!TargetProp || !IsMappableFragmentField(TargetProp))
+		{
+			continue;
+		}
+
+		const FName TargetFieldName(*FieldPath);
+		const bool bAlreadyMapped = Source->InlineMappings.ContainsByPredicate([FragmentStruct, TargetFieldName](const FYIFieldMapping& Existing)
+			{
+				if (Existing.TargetLayer != EYIFieldMappingTargetLayer::StaticDefinitionFragment)
+				{
+					return false;
+				}
+				if (Existing.TargetFragmentStruct.Get() != FragmentStruct)
+				{
+					return false;
+				}
+				return YIGetResolvedTargetFieldName(Existing).IsEqual(TargetFieldName);
+			});
+		if (bAlreadyMapped)
+		{
+			continue;
+		}
+
+		FYIFieldMapping Mapping;
+		Mapping.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+		Mapping.TargetFragmentStruct = const_cast<UScriptStruct*>(FragmentStruct);
+		Mapping.TargetFragmentField = TargetFieldName;
+		Mapping.TargetProperty = TargetFieldName;
+
+		if (RowStruct)
+		{
+			// Exact nested-path match first (e.g. Stats.Attack -> Fragment.Attack).
+			if (FProperty* SourceProp = FindPropertyByAuthoredPathEditor(RowStruct, FieldPath))
+			{
+				Mapping.SourceField = FName(*FieldPath);
+				Mapping.Conversion = GuessConversionForProps(SourceProp, TargetProp);
+			}
+			else
+			{
+				// Fallback to leaf-name match.
+				const FName LeafName(*TargetProp->GetAuthoredName());
+				if (FProperty* SourceLeafProp = FindPropertyByAuthoredNameEditor(RowStruct, LeafName))
+				{
+					Mapping.SourceField = LeafName;
+					Mapping.Conversion = GuessConversionForProps(SourceLeafProp, TargetProp);
+				}
+			}
+		}
+
+		Source->InlineMappings.Add(Mapping);
+		bAddedAny = true;
+	}
+
+	if (bAddedAny)
+	{
+		RefreshInlineMappingEditor(Source);
+	}
+}
+
+void SYIItemDashboard::AddFragmentMappingsForSelection()
+{
+	if (!CurrentMappingSource.IsValid())
+	{
+		return;
+	}
+
+	RefreshAddFragmentStructOptions();
+	if (!SelectedAddFragmentStructOption.IsValid())
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error, NSLOCTEXT("YOLOInventory", "Dash_NoFragmentForAdd", "No fragment type is available to add mappings."));
+		return;
+	}
+
+	UScriptStruct* FragmentStruct = ResolveStructFromPathString(*SelectedAddFragmentStructOption);
+	if (!FragmentStruct)
+	{
+		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Error, FText::Format(
+			NSLOCTEXT("YOLOInventory", "Dash_InvalidFragmentSelection", "Invalid fragment selection: {0}"),
+			FText::FromString(*SelectedAddFragmentStructOption)));
+		return;
+	}
+
+	AddFragmentMappingsForStruct(CurrentMappingSource.Get(), FragmentStruct);
 }
 
 void SYIItemDashboard::BuildTransformFunctionOptions()
@@ -5126,9 +5681,15 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 	TMap<FString, FName> SourceByLower;
 	struct FSourceCandidate { FName Name; FString Lower; FString Norm; };
 	TArray<FSourceCandidate> SourceCandidates;
-	for (TFieldIterator<FProperty> It(Table->RowStruct); It; ++It)
+	TArray<TSharedPtr<FString>> SourcePaths;
+	CollectStructFieldOptions(Table->RowStruct, SourcePaths);
+	for (const TSharedPtr<FString>& SourcePathPtr : SourcePaths)
 	{
-		const FName FieldName((*It)->GetAuthoredName());
+		if (!SourcePathPtr.IsValid())
+		{
+			continue;
+		}
+		const FName FieldName(**SourcePathPtr);
 		const FString NameStr = FieldName.ToString();
 		const FString Lower = NameStr.ToLower();
 		const FString Norm = NormalizeField(NameStr);
@@ -5165,16 +5726,22 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 			continue;
 		}
 
-		for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+		TArray<TSharedPtr<FString>> FragmentFieldPaths;
+		CollectStructFieldOptions(FragmentStruct, FragmentFieldPaths);
+		for (const TSharedPtr<FString>& FragmentFieldPathPtr : FragmentFieldPaths)
 		{
-			FProperty* TargetProp = *It;
+			if (!FragmentFieldPathPtr.IsValid())
+			{
+				continue;
+			}
+			const FString FieldString = **FragmentFieldPathPtr;
+			FProperty* TargetProp = FindPropertyByAuthoredPathEditor(FragmentStruct, FieldString);
 			if (!IsMappableFragmentField(TargetProp))
 			{
 				continue;
 			}
 
-			const FName FieldName(TargetProp->GetAuthoredName());
-			const FString FieldString = FieldName.ToString();
+			const FName FieldName(*FieldString);
 			const FString Lower = FieldString.ToLower();
 			const FString Norm = NormalizeField(FieldString);
 			const FString Key = FString::Printf(TEXT("%s|%s"), *FragmentStruct->GetPathName(), *FieldString);
@@ -5330,7 +5897,7 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 			const FProperty* TargetProp = nullptr;
 			if (M.TargetFragmentStruct)
 			{
-				TargetProp = FindPropertyByAuthoredNameEditor(M.TargetFragmentStruct.Get(), TargetField);
+				TargetProp = FindPropertyByAuthoredPathEditor(M.TargetFragmentStruct.Get(), TargetField.ToString());
 			}
 			M.Conversion = GuessConversionForProps(SourceProp, TargetProp);
 			bChanged = true;
@@ -5423,23 +5990,30 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			OutLabel = TEXT("?");
 			OutColor = FLinearColor(0.5f, 0.5f, 0.5f);
 			if (!Prop) return;
+			if (const UEdGraphSchema_K2* K2Schema = GetDefault<UEdGraphSchema_K2>())
+			{
+				FEdGraphPinType PinType;
+				if (K2Schema->ConvertPropertyToPinType(Prop, PinType))
+				{
+					OutColor = K2Schema->GetPinTypeColor(PinType);
+				}
+			}
 			if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
 			{
 				OutLabel = Num->IsInteger() ? TEXT("Int") : TEXT("Float");
-				OutColor = Num->IsInteger() ? FLinearColor(0.3f, 0.7f, 1.f) : FLinearColor(0.3f, 1.f, 0.6f);
 				return;
 			}
-			if (CastField<FBoolProperty>(Prop)) { OutLabel = TEXT("Bool"); OutColor = FLinearColor(1.f, 0.85f, 0.3f); return; }
-			if (CastField<FNameProperty>(Prop)) { OutLabel = TEXT("Name"); OutColor = FLinearColor(0.4f, 0.7f, 1.f); return; }
-			if (CastField<FStrProperty>(Prop)) { OutLabel = TEXT("String"); OutColor = FLinearColor(0.7f, 0.5f, 1.f); return; }
-			if (CastField<FTextProperty>(Prop)) { OutLabel = TEXT("Text"); OutColor = FLinearColor(0.3f, 0.9f, 0.9f); return; }
-			if (CastField<FEnumProperty>(Prop)) { OutLabel = TEXT("Enum"); OutColor = FLinearColor(1.f, 0.6f, 0.2f); return; }
-			if (CastField<FStructProperty>(Prop)) { OutLabel = TEXT("Struct"); OutColor = FLinearColor(0.6f, 0.6f, 0.6f); return; }
-			if (CastField<FObjectPropertyBase>(Prop)) { OutLabel = TEXT("Object"); OutColor = FLinearColor(0.8f, 0.6f, 0.3f); return; }
-			if (CastField<FSoftObjectProperty>(Prop)) { OutLabel = TEXT("SoftObj"); OutColor = FLinearColor(0.8f, 0.6f, 0.3f); return; }
-			if (CastField<FArrayProperty>(Prop)) { OutLabel = TEXT("Array"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
-			if (CastField<FMapProperty>(Prop)) { OutLabel = TEXT("Map"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
-			if (CastField<FSetProperty>(Prop)) { OutLabel = TEXT("Set"); OutColor = FLinearColor(0.6f, 0.8f, 0.4f); return; }
+			if (CastField<FBoolProperty>(Prop)) { OutLabel = TEXT("Bool"); return; }
+			if (CastField<FNameProperty>(Prop)) { OutLabel = TEXT("Name"); return; }
+			if (CastField<FStrProperty>(Prop)) { OutLabel = TEXT("String"); return; }
+			if (CastField<FTextProperty>(Prop)) { OutLabel = TEXT("Text"); return; }
+			if (CastField<FEnumProperty>(Prop)) { OutLabel = TEXT("Enum"); return; }
+			if (CastField<FStructProperty>(Prop)) { OutLabel = TEXT("Struct"); return; }
+			if (CastField<FObjectPropertyBase>(Prop)) { OutLabel = TEXT("Object"); return; }
+			if (CastField<FSoftObjectProperty>(Prop)) { OutLabel = TEXT("SoftObj"); return; }
+			if (CastField<FArrayProperty>(Prop)) { OutLabel = TEXT("Array"); return; }
+			if (CastField<FMapProperty>(Prop)) { OutLabel = TEXT("Map"); return; }
+			if (CastField<FSetProperty>(Prop)) { OutLabel = TEXT("Set"); return; }
 		};
 
 	auto MakeTypeBadgeDynamic = [&](TFunction<FProperty*()> PropGetter)->TSharedRef<SWidget>
@@ -5487,7 +6061,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				{
 					return nullptr;
 				}
-				return FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), Mapping->TargetProperty);
+				return FindPropertyByAuthoredPathEditor(UYIItemDefinition::StaticClass(), Mapping->TargetProperty.ToString());
 			}
 
 			const UScriptStruct* FragmentStruct = Mapping->TargetFragmentStruct.Get();
@@ -5496,7 +6070,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				return nullptr;
 			}
 
-			return FindPropertyByAuthoredNameEditor(FragmentStruct, YIGetResolvedTargetFieldName(*Mapping));
+			return FindPropertyByAuthoredPathEditor(FragmentStruct, YIGetResolvedTargetFieldName(*Mapping).ToString());
 		};
 
 	auto IsStaticMapping = [Mapping]() -> bool
@@ -5649,6 +6223,9 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			}
 			CollectStructFieldOptions(FragmentStruct, *TargetFragmentFieldOptions);
 		};
+
+	RefreshTargetFragmentStructOptions();
+	RefreshTargetFragmentFieldOptions();
 
 	auto PersistCurrentMapping = [this, Mapping]()
 		{
@@ -6571,6 +7148,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 									else if (*NewItem == TEXT("Bool from Text (non-empty)")) NewConv = EYIFieldMappingConversion::BoolFromText;
 									else if (*NewItem == TEXT("To Enum")) NewConv = EYIFieldMappingConversion::ToEnum;
 									else if (*NewItem == TEXT("To Gameplay Tag")) NewConv = EYIFieldMappingConversion::ToGameplayTag;
+									else if (*NewItem == TEXT("To Soft Object")) NewConv = EYIFieldMappingConversion::ToSoftObject;
 									else if (*NewItem == TEXT("To Texture (Soft)")) NewConv = EYIFieldMappingConversion::ToSoftTexture;
 									else if (*NewItem == TEXT("Vector2D from XY Fields")) NewConv = EYIFieldMappingConversion::Vector2DFromXY;
 									Mapping->Conversion = NewConv;
@@ -6594,6 +7172,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								ConverterOptions.Add(MakeShared<FString>(TEXT("Bool from Text (non-empty)")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Enum")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Gameplay Tag")));
+								ConverterOptions.Add(MakeShared<FString>(TEXT("To Soft Object")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("To Texture (Soft)")));
 								ConverterOptions.Add(MakeShared<FString>(TEXT("Vector2D from XY Fields")));
 							})
@@ -6611,6 +7190,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 								case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
 								case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 								case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
+								case EYIFieldMappingConversion::ToSoftObject: Label = TEXT("To Soft Object"); break;
 								case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 								case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
 								default: break;
@@ -6641,6 +7221,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										case EYIFieldMappingConversion::BoolFromText: Label = TEXT("Bool from Text (non-empty)"); break;
 										case EYIFieldMappingConversion::ToEnum: Label = TEXT("To Enum"); break;
 										case EYIFieldMappingConversion::ToGameplayTag: Label = TEXT("To Gameplay Tag"); break;
+										case EYIFieldMappingConversion::ToSoftObject: Label = TEXT("To Soft Object"); break;
 										case EYIFieldMappingConversion::ToSoftTexture: Label = TEXT("To Texture (Soft)"); break;
 										case EYIFieldMappingConversion::Vector2DFromXY: Label = TEXT("Vector2D from XY Fields"); break;
 										default: break;
