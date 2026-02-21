@@ -76,6 +76,15 @@ static FString YIEditorGrid_GetRowStringFromStruct(const UScriptStruct* Struct, 
 	return FString();
 }
 
+static bool YIEditorGrid_MatchesFieldByAuthoredName(const FProperty* Property, const FName FieldName)
+{
+	if (!Property || FieldName.IsNone())
+	{
+		return false;
+	}
+	return Property->GetAuthoredName().Equals(FieldName.ToString(), ESearchCase::IgnoreCase);
+}
+
 void FYIInventoryBagEditor::InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, UYIInventoryBag* InBag)
 {
 	Bag = InBag;
@@ -652,7 +661,7 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 					const FProperty* Prop = *It;
 					if (!Prop) continue;
 
-					if (Prop->GetFName() == CodeField)
+					if (YIEditorGrid_MatchesFieldByAuthoredName(Prop, CodeField))
 					{
 						if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
 						{
@@ -663,7 +672,7 @@ void FYIInventoryBagEditor::RefreshDataRowEntries()
 							}
 						}
 					}
-					else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
+					else if (TemplateField != NAME_None && YIEditorGrid_MatchesFieldByAuthoredName(Prop, TemplateField))
 					{
 						if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
 						{

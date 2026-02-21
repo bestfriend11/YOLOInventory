@@ -76,6 +76,15 @@ static FProperty* FindPropertyByAuthoredNameEditor(const UStruct* OwnerStruct, F
 	return nullptr;
 }
 
+static bool MatchesFieldByAuthoredNameEditor(const FProperty* Property, const FName FieldName)
+{
+	if (!Property || FieldName.IsNone())
+	{
+		return false;
+	}
+	return Property->GetAuthoredName().Equals(FieldName.ToString(), ESearchCase::IgnoreCase);
+}
+
 static UScriptStruct* ResolveStructFromPathString(const FString& StructPath)
 {
 	if (StructPath.IsEmpty())
@@ -1372,15 +1381,15 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 														.OnComboBoxOpening_Lambda([this]()
 															{
 																TargetPropertyOptions.Reset();
-																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: All")));
-																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: Data Rows")));
-																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("Type: Assets Only")));
+																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("View: All")));
+																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("View: Items from Data Sources")));
+																TargetPropertyOptions.Add(MakeShared<FString>(TEXT("View: Data Sources + Physical Assets")));
 															})
 														.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 															{
 																if (!NewItem.IsValid()) return;
-																if (*NewItem == TEXT("Type: Data Rows")) TypeFilter = EDashTypeFilter::DataTableRows;
-																else if (*NewItem == TEXT("Type: Assets Only")) TypeFilter = EDashTypeFilter::AssetsOnly;
+																if (*NewItem == TEXT("View: Items from Data Sources")) TypeFilter = EDashTypeFilter::DataTableRows;
+																else if (*NewItem == TEXT("View: Data Sources + Physical Assets")) TypeFilter = EDashTypeFilter::AssetsOnly;
 																else TypeFilter = EDashTypeFilter::All;
 																Refresh();
 															})
@@ -1391,9 +1400,9 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																{
 																	switch (TypeFilter)
 																	{
-																	case EDashTypeFilter::DataTableRows: return FText::FromString(TEXT("Type: Data Rows"));
-																	case EDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("Type: Assets Only"));
-																	default: return FText::FromString(TEXT("Type: All"));
+																	case EDashTypeFilter::DataTableRows: return FText::FromString(TEXT("View: Items from Data Sources"));
+																	case EDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("View: Data Sources + Physical Assets"));
+																	default: return FText::FromString(TEXT("View: All"));
 																	}
 																})
 														]
@@ -2313,15 +2322,15 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 								.OnComboBoxOpening_Lambda([this]()
 									{
 										ListTypeOptions.Reset();
-										ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: All")));
-										ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: Data Rows")));
-										ListTypeOptions.Add(MakeShared<FString>(TEXT("Type: Assets Only")));
+										ListTypeOptions.Add(MakeShared<FString>(TEXT("View: All")));
+										ListTypeOptions.Add(MakeShared<FString>(TEXT("View: Items from Data Sources")));
+										ListTypeOptions.Add(MakeShared<FString>(TEXT("View: Data Sources + Physical Assets")));
 									})
 								.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 									{
 										if (!NewItem.IsValid()) return;
-										if (*NewItem == TEXT("Type: Data Rows")) TypeFilter = EDashTypeFilter::DataTableRows;
-										else if (*NewItem == TEXT("Type: Assets Only")) TypeFilter = EDashTypeFilter::AssetsOnly;
+										if (*NewItem == TEXT("View: Items from Data Sources")) TypeFilter = EDashTypeFilter::DataTableRows;
+										else if (*NewItem == TEXT("View: Data Sources + Physical Assets")) TypeFilter = EDashTypeFilter::AssetsOnly;
 										else TypeFilter = EDashTypeFilter::All;
 										Refresh();
 									})
@@ -2332,9 +2341,9 @@ TSharedRef<SWidget> SYIItemDashboard::BuildItemsPanelWidget()
 										{
 											switch (TypeFilter)
 											{
-											case EDashTypeFilter::DataTableRows: return FText::FromString(TEXT("Type: Data Rows"));
-											case EDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("Type: Assets Only"));
-											default: return FText::FromString(TEXT("Type: All"));
+											case EDashTypeFilter::DataTableRows: return FText::FromString(TEXT("View: Items from Data Sources"));
+											case EDashTypeFilter::AssetsOnly: return FText::FromString(TEXT("View: Data Sources + Physical Assets"));
+											default: return FText::FromString(TEXT("View: All"));
 											}
 										})
 								]
@@ -3296,6 +3305,11 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 				return nullptr;
 			}
 
+			if (Entry->bIsDataSourceEntry)
+			{
+				return nullptr;
+			}
+
 			if (!Entry->bIsDataTable)
 			{
 				return Cast<UYIItemDefinition>(Entry->Object.LoadSynchronous());
@@ -3315,6 +3329,14 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 				}
 			}
 
+			if (GEngine)
+			{
+				if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
+				{
+					return Registry->GetByCode(Entry->Code);
+				}
+			}
+
 			return nullptr;
 		};
 
@@ -3323,6 +3345,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 			if (!Entry.IsValid())
 			{
 				return FLinearColor::Gray;
+			}
+			if (Entry->bIsDataSourceEntry)
+			{
+				return FLinearColor(0.45f, 0.24f, 0.85f, 0.9f); // purple tint for source assets
 			}
 			if (Entry->bIsDataTable)
 			{
@@ -3337,6 +3363,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 			if (!Entry.IsValid())
 			{
 				return FText::FromString(TEXT("Unknown"));
+			}
+			if (Entry->bIsDataSourceEntry)
+			{
+				return NSLOCTEXT("YOLOInventory", "Dash_Status_DataSource", "Item data source");
 			}
 			if (Entry->bIsDataTable)
 			{
@@ -3360,7 +3390,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 
 			if (!Entry->bIsDataTable)
 			{
-				return IsDirtyObject(Entry->Object.Get());
+				return IsDirtyObject(Entry->Object.Get()) || IsDirtyObject(Entry->DataSource.Get());
 			}
 
 			return IsDirtyObject(Entry->ItemAsset.Get())
@@ -3409,7 +3439,9 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 				[
 					SNew(STextBlock).Text(Entry->bIsDataTable
 						? NSLOCTEXT("YOLOInventory", "Dash_Type_DataTable", "Data Table")
-						: NSLOCTEXT("YOLOInventory", "Dash_Type_Asset", "Asset"))
+						: (Entry->bIsDataSourceEntry
+							? NSLOCTEXT("YOLOInventory", "Dash_Type_DataSource", "Data Source")
+							: NSLOCTEXT("YOLOInventory", "Dash_Type_Asset", "Asset")))
 						.ColorAndOpacity(StatusColor())
 				]
 				+ SHorizontalBox::Slot().FillWidth(0.3f)
@@ -3418,13 +3450,29 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(2)
 				[
-					Entry->bIsDataTable && Entry->bHasAsset
+					Entry->bIsDataTable
 						? StaticCastSharedRef<SWidget>(
 							SNew(SButton)
 							.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton"))
-							.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_OpenAsset", "Select/Open generated item asset"))
+							.ToolTipText(Entry->bHasAsset
+								? NSLOCTEXT("YOLOInventory", "Dash_OpenAsset", "Select/Open generated item asset")
+								: NSLOCTEXT("YOLOInventory", "Dash_MakeAsset", "Create a physical item asset from this source row"))
 							.OnClicked_Lambda([this, Entry]()
 								{
+									if (!Entry.IsValid())
+									{
+										return FReply::Handled();
+									}
+
+									if (!Entry->bHasAsset)
+									{
+										if (CreateAssetFromEntry(*Entry))
+										{
+											Refresh();
+										}
+										return FReply::Handled();
+									}
+
 									if (!ListView.IsValid())
 									{
 										return FReply::Handled();
@@ -3433,7 +3481,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 									TSharedPtr<FYIItemDashboardEntry> AssetEntry;
 									for (const TSharedPtr<FYIItemDashboardEntry>& It : Items)
 									{
-										if (It.IsValid() && !It->bIsDataTable && It->Code == Entry->Code)
+										if (It.IsValid() && !It->bIsDataTable && !It->bIsDataSourceEntry && It->Code == Entry->Code)
 										{
 											AssetEntry = It;
 											break;
@@ -3460,7 +3508,9 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeRowWidget(TSharedPtr<FYIItemDashboar
 								})
 							.Content()
 							[
-								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "Dash_AssetBadge", "Asset"))
+								SNew(STextBlock).Text(Entry->bHasAsset
+									? NSLOCTEXT("YOLOInventory", "Dash_AssetBadge", "Asset")
+									: NSLOCTEXT("YOLOInventory", "Dash_MakeAssetShort", "Make"))
 							])
 						: StaticCastSharedRef<SWidget>(SNew(SSpacer).Size(FVector2D(40.f, 1.f)))
 				]
@@ -3503,6 +3553,7 @@ void SYIItemDashboard::Refresh()
 				Entry->TemplateId = View.TemplateId;
 				Entry->Source = View.SourcePath;
 				Entry->bIsDataTable = View.bIsDataTable;
+				Entry->bIsDataSourceEntry = false;
 				Entry->RowName = View.RowName;
 				Entry->Object = View.Object;
 				Entry->DataSource = View.DataSource;
@@ -3513,18 +3564,25 @@ void SYIItemDashboard::Refresh()
 
 				if (!Entry->bIsDataTable)
 				{
-					Entry->ItemAsset = TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath());
-					ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
-				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(View.Object.LoadSynchronous()))
-				{
-					Entry->Name = YIItemSchema::GetDisplayName(Def).ToString();
-					Entry->DataSource = Def->SourceDataSource;
-					Entry->RowName = Def->SourceRowName;
-				}
-				else
-				{
-					Entry->Name = View.Object.ToSoftObjectPath().GetAssetName();
-				}
+					UObject* LoadedObject = View.Object.LoadSynchronous();
+					if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(LoadedObject))
+					{
+						Entry->ItemAsset = TSoftObjectPtr<UYIItemDefinition>(View.Object.ToSoftObjectPath());
+						ExistingAssets.Add(Entry->Code, Entry->ItemAsset);
+						Entry->Name = YIItemSchema::GetDisplayName(Def).ToString();
+						Entry->DataSource = Def->SourceDataSource;
+						Entry->RowName = Def->SourceRowName;
+					}
+					else if (UYIDataTableItemSource* SourceAsset = Cast<UYIDataTableItemSource>(LoadedObject))
+					{
+						Entry->bIsDataSourceEntry = true;
+						Entry->Name = SourceAsset->GetName();
+						Entry->DataSource = SourceAsset;
+					}
+					else
+					{
+						Entry->Name = View.Object.ToSoftObjectPath().GetAssetName();
+					}
 				}
 				else
 				{
@@ -3578,6 +3636,7 @@ void SYIItemDashboard::Refresh()
 				SourceEntry->TemplateId = TEXT("DataSource");
 				SourceEntry->Source = SourceObjectPath;
 				SourceEntry->bIsDataTable = false;
+				SourceEntry->bIsDataSourceEntry = true;
 				SourceEntry->Object = Source;
 				SourceEntry->DataSource = Source;
 				Items.Add(SourceEntry);
@@ -3604,7 +3663,7 @@ void SYIItemDashboard::Refresh()
 						const FProperty* Prop = *It;
 						if (!Prop) continue;
 
-						if (Prop->GetFName() == CodeField)
+						if (MatchesFieldByAuthoredNameEditor(Prop, CodeField))
 						{
 							if (const FNumericProperty* Num = CastField<FNumericProperty>(Prop))
 							{
@@ -3615,7 +3674,7 @@ void SYIItemDashboard::Refresh()
 								}
 							}
 						}
-						else if (TemplateField != NAME_None && Prop->GetFName() == TemplateField)
+						else if (TemplateField != NAME_None && MatchesFieldByAuthoredNameEditor(Prop, TemplateField))
 						{
 							if (const FStrProperty* Str = CastField<FStrProperty>(Prop))
 							{
@@ -3647,6 +3706,7 @@ void SYIItemDashboard::Refresh()
 					Entry->Code = CodeValue;
 					Entry->RowName = RowName;
 					Entry->bIsDataTable = true;
+					Entry->bIsDataSourceEntry = false;
 					Entry->DataSource = Source;
 					Entry->DataTable = Table;
 					Entry->TemplateId = TemplateIdValue;
@@ -3710,6 +3770,10 @@ void SYIItemDashboard::Refresh()
 			continue;
 		}
 		if (StatusFilter == EDashStatusFilter::AssetOnly && Entry->bIsDataTable)
+		{
+			continue;
+		}
+		if (StatusFilter == EDashStatusFilter::AssetOnly && Entry->bIsDataSourceEntry)
 		{
 			continue;
 		}
@@ -4410,7 +4474,7 @@ TSharedPtr<SWidget> SYIItemDashboard::BuildListContextMenu()
 
 		const bool bAnyAssets = Selected.ContainsByPredicate([](const TSharedPtr<FYIItemDashboardEntry>& E)
 			{
-				return E.IsValid() && !E->bIsDataTable;
+				return E.IsValid() && !E->bIsDataTable && !E->bIsDataSourceEntry;
 			});
 		const bool bAnyLinkedRows = Selected.ContainsByPredicate([](const TSharedPtr<FYIItemDashboardEntry>& E)
 			{

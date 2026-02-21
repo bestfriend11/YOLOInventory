@@ -19,6 +19,7 @@ struct FYIItemDashboardEntry
 	FString TemplateId;
 	FString Source;
 	bool bIsDataTable = false;
+	bool bIsDataSourceEntry = false;
 	FName RowName = NAME_None;
 	TSoftObjectPtr<UObject> Object;
 	bool bHasAsset = false;
