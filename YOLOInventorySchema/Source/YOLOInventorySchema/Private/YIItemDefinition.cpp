@@ -2,7 +2,6 @@
 
 #include "YIItemRegistrySubsystem.h"
 #include "YIItemSchemaResolver.h"
-#include "YIItemTraitAsset.h"
 #include "Engine/Engine.h"
 #include "UObject/ObjectSaveContext.h"
 
@@ -53,152 +52,11 @@ namespace
 		return nullptr;
 	}
 
-	static const FInstancedStruct* YI_FindResolvedDefinitionFragmentByStruct(
-		const UYIItemDefinition* ItemDef,
-		const UScriptStruct* FragmentStruct,
-		TSet<const UYIItemDefinition*>& VisitedDefinitions)
-	{
-		if (!ItemDef || !FragmentStruct || VisitedDefinitions.Contains(ItemDef))
-		{
-			return nullptr;
-		}
-		VisitedDefinitions.Add(ItemDef);
-
-		// Local fragments have highest precedence.
-		if (const FInstancedStruct* Local = YI_FindDefinitionFragmentByStruct(ItemDef->DefinitionFragments, FragmentStruct))
-		{
-			return Local;
-		}
-
-		// Traits are applied in order; later traits should override earlier traits.
-		for (int32 TraitIndex = ItemDef->Traits.Num() - 1; TraitIndex >= 0; --TraitIndex)
-		{
-			const UYIItemTraitAsset* Trait = ItemDef->Traits[TraitIndex].LoadSynchronous();
-			if (!Trait)
-			{
-				continue;
-			}
-			if (const FInstancedStruct* TraitFragment = YI_FindDefinitionFragmentByStruct(Trait->DefinitionFragments, FragmentStruct))
-			{
-				return TraitFragment;
-			}
-		}
-
-		// Parent definition is the fallback baseline.
-		const UYIItemDefinition* Parent = ItemDef->ParentDefinition.LoadSynchronous();
-		return YI_FindResolvedDefinitionFragmentByStruct(Parent, FragmentStruct, VisitedDefinitions);
-	}
-
-}
-
-const FYIItemUIDefinitionFragment* UYIItemDefinition::GetUIDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemUIDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemUIDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemClassificationDefinitionFragment* UYIItemDefinition::GetClassificationDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemClassificationDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemClassificationDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemAudioDefinitionFragment* UYIItemDefinition::GetAudioDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAudioDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemAudioDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemPickupDefinitionFragment* UYIItemDefinition::GetPickupDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemPickupDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemPickupDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemEquipmentDefinitionFragment* UYIItemDefinition::GetEquipmentDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemEquipmentDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemEquipmentDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemAffixDefinitionFragment* UYIItemDefinition::GetAffixDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAffixDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemAffixDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemLayoutDefinitionFragment* UYIItemDefinition::GetLayoutDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemLayoutDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemLayoutDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemStackingDefinitionFragment* UYIItemDefinition::GetStackingDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemStackingDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemStackingDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemRulesDefinitionFragment* UYIItemDefinition::GetRulesDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemRulesDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemRulesDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemContainerDefinitionFragment* UYIItemDefinition::GetContainerDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemContainerDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemContainerDefinitionFragment>();
-	}
-	return nullptr;
-}
-
-const FYIItemAttributeModsDefinitionFragment* UYIItemDefinition::GetAttributeModsDefinitionFragment() const
-{
-	if (const FInstancedStruct* Fragment = FindResolvedDefinitionFragmentByStruct(FYIItemAttributeModsDefinitionFragment::StaticStruct()))
-	{
-		return Fragment->GetPtr<FYIItemAttributeModsDefinitionFragment>();
-	}
-	return nullptr;
 }
 
 const FInstancedStruct* UYIItemDefinition::FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
 {
 	return YI_FindDefinitionFragmentByStruct(DefinitionFragments, FragmentStruct);
-}
-
-const FInstancedStruct* UYIItemDefinition::FindResolvedDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
-{
-	TSet<const UYIItemDefinition*> VisitedDefinitions;
-	return YI_FindResolvedDefinitionFragmentByStruct(this, FragmentStruct, VisitedDefinitions);
 }
 
 FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct)
@@ -219,83 +77,6 @@ FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const U
 	FInstancedStruct& NewFragment = DefinitionFragments.AddDefaulted_GetRef();
 	NewFragment.InitializeAs(FragmentStruct);
 	return &NewFragment;
-}
-
-bool UYIItemDefinition::EnsureBaselineDefinitionFragments()
-{
-	bool bChanged = false;
-
-	if (!GetClassificationDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Classification = DefinitionFragments.AddDefaulted_GetRef();
-		Classification.InitializeAs<FYIItemClassificationDefinitionFragment>();
-	}
-
-	if (!GetAudioDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Audio = DefinitionFragments.AddDefaulted_GetRef();
-		Audio.InitializeAs<FYIItemAudioDefinitionFragment>();
-	}
-
-	if (!GetUIDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& UI = DefinitionFragments.AddDefaulted_GetRef();
-		UI.InitializeAs<FYIItemUIDefinitionFragment>();
-	}
-
-	if (!GetLayoutDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Layout = DefinitionFragments.AddDefaulted_GetRef();
-		Layout.InitializeAs<FYIItemLayoutDefinitionFragment>();
-	}
-
-	if (!GetStackingDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Stacking = DefinitionFragments.AddDefaulted_GetRef();
-		Stacking.InitializeAs<FYIItemStackingDefinitionFragment>();
-	}
-
-	if (!GetRulesDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Rules = DefinitionFragments.AddDefaulted_GetRef();
-		Rules.InitializeAs<FYIItemRulesDefinitionFragment>();
-	}
-
-	if (!GetContainerDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Container = DefinitionFragments.AddDefaulted_GetRef();
-		Container.InitializeAs<FYIItemContainerDefinitionFragment>();
-	}
-
-	if (!GetAttributeModsDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& AttrMods = DefinitionFragments.AddDefaulted_GetRef();
-		AttrMods.InitializeAs<FYIItemAttributeModsDefinitionFragment>();
-	}
-
-	if (!GetAffixDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Affix = DefinitionFragments.AddDefaulted_GetRef();
-		Affix.InitializeAs<FYIItemAffixDefinitionFragment>();
-	}
-
-	if (!GetEquipmentDefinitionFragment())
-	{
-		bChanged = true;
-		FInstancedStruct& Equip = DefinitionFragments.AddDefaulted_GetRef();
-		Equip.InitializeAs<FYIItemEquipmentDefinitionFragment>();
-	}
-
-	return bChanged;
 }
 
 void UYIItemDefinition::BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const
@@ -393,7 +174,6 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 	YIItemSchema::InvalidateAllSnapshotCaches();
-	EnsureBaselineDefinitionFragments();
 
 	FYIItemStackingDefinitionFragment* Stacking = YI_FindDefinitionFragmentMutable<FYIItemStackingDefinitionFragment>(DefinitionFragments);
 	if (!Stacking || !Stacking->bAllowStacking || !Stacking->bUseRiskChecks)
@@ -445,7 +225,6 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 {
 	Super::PreSave(SaveContext);
 	YIItemSchema::InvalidateSnapshotCache(this);
-	EnsureBaselineDefinitionFragments();
 
 	if (UniqueCode == 0)
 	{

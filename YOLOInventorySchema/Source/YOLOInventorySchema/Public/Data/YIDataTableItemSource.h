@@ -36,7 +36,7 @@ enum class EYITransformMode : uint8
 UENUM(BlueprintType)
 enum class EYIFieldMappingTargetLayer : uint8
 {
-	LegacyProperty UMETA(DisplayName="Legacy Property"),
+	LegacyProperty UMETA(Hidden, DisplayName="Legacy Property (Deprecated)"),
 	StaticDefinitionFragment UMETA(DisplayName="Static Definition Fragment"),
 	DynamicInstanceFragment UMETA(DisplayName="Dynamic Instance Fragment")
 };
@@ -64,7 +64,7 @@ struct FYIFieldMapping
 
 	/** Select where target writes are applied. Legacy keeps existing behavior. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2")
-	EYIFieldMappingTargetLayer TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
+	EYIFieldMappingTargetLayer TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
 
 	/** Fragment struct used when TargetLayer is a fragment layer. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty"))

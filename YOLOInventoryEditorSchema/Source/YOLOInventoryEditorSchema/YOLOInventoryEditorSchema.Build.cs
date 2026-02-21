@@ -34,7 +34,8 @@ public class YOLOInventoryEditorSchema : ModuleRules
             "DataTableEditor",
             "GameplayTags",
             "Kismet",
-            "CSVItemBuilder"
+            "CSVItemBuilder",
+            "YOLOInventoryEquipment"
         });
     }
 }

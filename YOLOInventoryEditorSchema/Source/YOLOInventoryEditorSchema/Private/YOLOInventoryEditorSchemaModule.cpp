@@ -2,6 +2,7 @@
 #include "Modules/ModuleManager.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
+#include "PropertyEditorModule.h"
 #include "AssetTypeActions_Base.h"
 #include "YIEditorSchemaCategory.h"
 #include "AssetTypeActions_YIItemDefinition.h"
@@ -21,6 +22,8 @@
 #include "SYIItemDashboard.h"
 #include "SYIFragmentDashboard.h"
 #include "SYICraftingDashboard.h"
+#include "YIItemDefinition.h"
+#include "YIItemDefinitionDetails.h"
 
 class FYISchemaDashboardBridge final : public IYISchemaDashboardBridge
 {
@@ -91,6 +94,12 @@ public:
 		RegisterAction<FAssetTypeActions_YIItemVariant>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIRarityPalette>(AssetTools);
 
+		FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
+		PropertyEditorModule.RegisterCustomClassLayout(
+			UYIItemDefinition::StaticClass()->GetFName(),
+			FOnGetDetailCustomizationInstance::CreateStatic(&FYIItemDefinitionDetails::MakeInstance));
+		PropertyEditorModule.NotifyCustomizationModuleChanged();
+
 		IYOLOInventoryEditorCoreModule& EditorCoreModule = FModuleManager::LoadModuleChecked<IYOLOInventoryEditorCoreModule>("YOLOInventoryEditorCore");
 		EditorCoreModule.RegisterSchemaDashboardFactory(
 			FYICreateSchemaDashboardBridge::CreateStatic(&FYOLOInventoryEditorSchemaModule::CreateSchemaDashboardBridge));
@@ -98,6 +107,13 @@ public:
 
 	virtual void ShutdownModule() override
 	{
+		if (FModuleManager::Get().IsModuleLoaded("PropertyEditor"))
+		{
+			FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
+			PropertyEditorModule.UnregisterCustomClassLayout(UYIItemDefinition::StaticClass()->GetFName());
+			PropertyEditorModule.NotifyCustomizationModuleChanged();
+		}
+
 		if (IYOLOInventoryEditorCoreModule::IsAvailable())
 		{
 			IYOLOInventoryEditorCoreModule::Get().ClearSchemaDashboardFactory();

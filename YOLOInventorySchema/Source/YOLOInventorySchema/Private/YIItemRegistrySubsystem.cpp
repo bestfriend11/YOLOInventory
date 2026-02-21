@@ -14,6 +14,7 @@
 #include "GameplayTagContainer.h"
 #include "Engine/Texture.h"
 #include "YIInlineMappingResolvers.h"
+#include "YIItemSchemaResolver.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogYIItemRegistry, Log, All);
 
@@ -891,6 +892,11 @@ UYIItemDefinition* UYIItemRegistrySubsystem::TransformRow(FName RowName, const U
 
 	auto CacheAndReturn = [this, bCacheResult, Code](UYIItemDefinition* ResultDef) -> UYIItemDefinition*
 	{
+		if (ResultDef)
+		{
+			YIItemSchema::WarmupDefinition(ResultDef);
+		}
+
 		if (ResultDef && bCacheResult)
 		{
 			CachedGeneratedDefinitions.FindOrAdd(Code) = ResultDef;

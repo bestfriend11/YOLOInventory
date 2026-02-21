@@ -115,6 +115,172 @@ static void CollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray
 	}
 }
 
+static FString MakeReadableFragmentName(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return TEXT("Fragment");
+	}
+
+	const FString MetaDisplayName = FragmentStruct->GetMetaData(TEXT("DisplayName"));
+	if (!MetaDisplayName.IsEmpty())
+	{
+		return MetaDisplayName;
+	}
+
+	FString Name = FragmentStruct->GetName();
+	Name.RemoveFromStart(TEXT("FYI"));
+	Name.RemoveFromStart(TEXT("YI"));
+	Name.RemoveFromEnd(TEXT("DefinitionFragment"));
+	Name.RemoveFromEnd(TEXT("Fragment"));
+	Name.RemoveFromStart(TEXT("Item"));
+	Name = Name.TrimStartAndEnd();
+	if (Name.IsEmpty())
+	{
+		return FragmentStruct->GetName();
+	}
+
+	FString Readable;
+	Readable.Reserve(Name.Len() + 8);
+	for (int32 Index = 0; Index < Name.Len(); ++Index)
+	{
+		const TCHAR C = Name[Index];
+		const bool bUpper = FChar::IsUpper(C);
+		const bool bPrevLower = (Index > 0) ? FChar::IsLower(Name[Index - 1]) : false;
+		if (Index > 0 && bUpper && bPrevLower)
+		{
+			Readable.AppendChar(TEXT(' '));
+		}
+		Readable.AppendChar(C);
+	}
+	return Readable;
+}
+
+static FString MakeReadableFragmentNameFromPath(const FString& StructPath)
+{
+	if (StructPath.IsEmpty())
+	{
+		return TEXT("Fragment");
+	}
+	if (UScriptStruct* Struct = ResolveStructFromPathString(StructPath))
+	{
+		return MakeReadableFragmentName(Struct);
+	}
+
+	FString Leaf = FPackageName::ObjectPathToObjectName(StructPath);
+	if (Leaf.IsEmpty())
+	{
+		Leaf = StructPath;
+	}
+	if (Leaf.RemoveFromStart(TEXT("FYI")))
+	{
+	}
+	Leaf.RemoveFromEnd(TEXT("DefinitionFragment"));
+	Leaf.RemoveFromEnd(TEXT("Fragment"));
+	return Leaf;
+}
+
+static bool IsMappableFragmentField(const FProperty* Property)
+{
+	return Property && !Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated);
+}
+
+static bool IsIdentityMappingProperty(const FName FieldName)
+{
+	return FieldName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode)
+		|| FieldName == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateId);
+}
+
+static bool TryAssignDefaultStaticFragmentTarget(FYIFieldMapping& Mapping)
+{
+	TArray<TSharedPtr<FString>> FragmentOptions;
+	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), FragmentOptions);
+	if (FragmentOptions.Num() == 0 || !FragmentOptions[0].IsValid())
+	{
+		return false;
+	}
+
+	UScriptStruct* FragmentStruct = ResolveStructFromPathString(*FragmentOptions[0]);
+	if (!FragmentStruct)
+	{
+		return false;
+	}
+
+	FName FirstField = NAME_None;
+	for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+	{
+		if (IsMappableFragmentField(*It))
+		{
+			FirstField = FName((*It)->GetAuthoredName());
+			break;
+		}
+	}
+
+	Mapping.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+	Mapping.TargetFragmentStruct = FragmentStruct;
+	Mapping.TargetFragmentField = FirstField;
+	Mapping.TargetProperty = FirstField;
+	return !FirstField.IsNone();
+}
+
+static bool TryPromoteLegacyItemMappingToFragment(FYIFieldMapping& Mapping)
+{
+	if (Mapping.TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty || Mapping.TargetProperty.IsNone())
+	{
+		return false;
+	}
+	if (IsIdentityMappingProperty(Mapping.TargetProperty))
+	{
+		return false;
+	}
+
+	const FString WantedField = Mapping.TargetProperty.ToString();
+	UScriptStruct* MatchStruct = nullptr;
+	FName MatchField = NAME_None;
+	int32 MatchCount = 0;
+
+	TArray<TSharedPtr<FString>> FragmentOptions;
+	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), FragmentOptions);
+	for (const TSharedPtr<FString>& FragmentPath : FragmentOptions)
+	{
+		if (!FragmentPath.IsValid())
+		{
+			continue;
+		}
+		UScriptStruct* FragmentStruct = ResolveStructFromPathString(*FragmentPath);
+		if (!FragmentStruct)
+		{
+			continue;
+		}
+
+		if (FProperty* Field = FindPropertyByAuthoredNameEditor(FragmentStruct, FName(*WantedField)))
+		{
+			if (!IsMappableFragmentField(Field))
+			{
+				continue;
+			}
+			++MatchCount;
+			MatchStruct = FragmentStruct;
+			MatchField = FName(Field->GetAuthoredName());
+			if (MatchCount > 1)
+			{
+				break;
+			}
+		}
+	}
+
+	if (MatchCount != 1 || !MatchStruct || MatchField.IsNone())
+	{
+		return false;
+	}
+
+	Mapping.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+	Mapping.TargetFragmentStruct = MatchStruct;
+	Mapping.TargetFragmentField = MatchField;
+	Mapping.TargetProperty = MatchField;
+	return true;
+}
+
 static void CollectStructFieldOptions(const UStruct* OwnerStruct, TArray<TSharedPtr<FString>>& OutOptions)
 {
 	OutOptions.Reset();
@@ -849,7 +1015,7 @@ static bool HasMappingTargetV2(const FYIFieldMapping& Mapping)
 {
 	if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
 	{
-		return !Mapping.TargetProperty.IsNone();
+		return IsIdentityMappingProperty(Mapping.TargetProperty);
 	}
 
 	return Mapping.TargetFragmentStruct != nullptr && !YIGetResolvedTargetFieldName(Mapping).IsNone();
@@ -1414,13 +1580,14 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 													+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 														[
 															SNew(SButton)
-																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Mapping"))
+																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment Mapping"))
 																.OnClicked_Lambda([this]()
 																	{
 																		if (CurrentMappingSource.IsValid())
 																		{
 																			CurrentMappingSource->Modify();
 																			FYIFieldMapping NewMap;
+																			TryAssignDefaultStaticFragmentTarget(NewMap);
 																			CurrentMappingSource->InlineMappings.Add(NewMap);
 																			RefreshInlineMappingEditor(CurrentMappingSource.Get());
 																		}
@@ -1431,7 +1598,7 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 														[
 															SNew(SButton)
 																.Text(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch", "Auto Match"))
-																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch_TT", "Match fields by name and update missing source fields."))
+																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch_TT", "Match data source columns to fragment fields by name and patch incomplete mappings."))
 																.OnClicked_Lambda([this]()
 																	{
 																		AutoMatchInlineMappings(false);
@@ -1441,8 +1608,8 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 													+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 														[
 															SNew(SButton)
-																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields", "Add All Fields"))
-																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields_TT", "Add mapping rows for every item definition field, and auto-match where possible."))
+																.Text(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields", "Add All Fragment Fields"))
+																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields_TT", "Generate mapping rows for every writable static fragment field and auto-match source columns where possible."))
 																.OnClicked_Lambda([this]()
 																	{
 																		AutoMatchInlineMappings(true);
@@ -2358,13 +2525,14 @@ TSharedRef<SWidget> SYIItemDashboard::BuildMappingPanelWidget()
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 						[
 							SNew(SButton)
-								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Mapping"))
+								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddMapping", "Add Fragment Mapping"))
 								.OnClicked_Lambda([this]()
 									{
 										if (CurrentMappingSource.IsValid())
 										{
 											CurrentMappingSource->Modify();
 											FYIFieldMapping NewMap;
+											TryAssignDefaultStaticFragmentTarget(NewMap);
 											CurrentMappingSource->InlineMappings.Add(NewMap);
 											RefreshInlineMappingEditor(CurrentMappingSource.Get());
 										}
@@ -2375,7 +2543,7 @@ TSharedRef<SWidget> SYIItemDashboard::BuildMappingPanelWidget()
 						[
 							SNew(SButton)
 								.Text(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch", "Auto Match"))
-								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch_TT", "Match fields by name and update missing source fields."))
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch_TT", "Match data source columns to fragment fields by name and patch incomplete mappings."))
 								.OnClicked_Lambda([this]()
 									{
 										AutoMatchInlineMappings(false);
@@ -2385,8 +2553,8 @@ TSharedRef<SWidget> SYIItemDashboard::BuildMappingPanelWidget()
 						+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0)
 						[
 							SNew(SButton)
-								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields", "Add All Fields"))
-								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields_TT", "Add mapping rows for every item definition field, and auto-match where possible."))
+								.Text(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields", "Add All Fragment Fields"))
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_AddAllFields_TT", "Generate mapping rows for every writable static fragment field and auto-match source columns where possible."))
 								.OnClicked_Lambda([this]()
 									{
 										AutoMatchInlineMappings(true);
@@ -4453,8 +4621,9 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 		}
 		return;
 	}
+	Source->Modify();
 
-	// Build options from row struct and item definition properties
+	// Build source-field options from the selected data source table.
 	if (UDataTable* Table = Source->DataTable.LoadSynchronous())
 	{
 		if (UScriptStruct* RowStruct = Table->RowStruct)
@@ -4467,21 +4636,74 @@ void SYIItemDashboard::RefreshInlineMappingEditor(UYIDataTableItemSource* Source
 			}
 		}
 	}
-	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+
+	// Build target cache from static definition fragments only (legacy properties are intentionally excluded).
+	TArray<TSharedPtr<FString>> FragmentStructPaths;
+	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), FragmentStructPaths);
+	for (const TSharedPtr<FString>& StructPathPtr : FragmentStructPaths)
 	{
-		const UClass* OwnerClass = It->GetOwnerClass();
-		if (OwnerClass == UPrimaryDataAsset::StaticClass() || OwnerClass == UObject::StaticClass())
+		if (!StructPathPtr.IsValid())
 		{
 			continue;
 		}
-		const FName FieldName((*It)->GetAuthoredName());
-		TargetPropertyOptions.Add(MakeShared<FString>(FieldName.ToString()));
-		TargetFieldPropCache.Add(FieldName, *It);
+		UScriptStruct* FragmentStruct = ResolveStructFromPathString(*StructPathPtr);
+		if (!FragmentStruct)
+		{
+			continue;
+		}
+		for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+		{
+			if (!IsMappableFragmentField(*It))
+			{
+				continue;
+			}
+			const FName FieldName((*It)->GetAuthoredName());
+			const FString ScopedName = FString::Printf(TEXT("%s.%s"), *MakeReadableFragmentName(FragmentStruct), *FieldName.ToString());
+			TargetPropertyOptions.Add(MakeShared<FString>(ScopedName));
+		}
 	}
+	TargetPropertyOptions.Sort([](const TSharedPtr<FString>& A, const TSharedPtr<FString>& B)
+		{
+			if (!A.IsValid() || !B.IsValid())
+			{
+				return A.IsValid();
+			}
+			return *A < *B;
+		});
 
+	bool bSourceModified = false;
 	for (const FYIFieldMapping& M : Source->InlineMappings)
 	{
-		MappingRows.Add(MakeShared<FYIFieldMapping>(M));
+		FYIFieldMapping Copy = M;
+		if (TryPromoteLegacyItemMappingToFragment(Copy))
+		{
+			bSourceModified = true;
+		}
+		const bool bIdentityLegacy = (Copy.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty) && IsIdentityMappingProperty(Copy.TargetProperty);
+		if (!bIdentityLegacy && Copy.TargetLayer != EYIFieldMappingTargetLayer::StaticDefinitionFragment)
+		{
+			Copy.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+			if (!Copy.TargetFragmentStruct || YIGetResolvedTargetFieldName(Copy).IsNone())
+			{
+				TryAssignDefaultStaticFragmentTarget(Copy);
+			}
+			bSourceModified = true;
+		}
+		MappingRows.Add(MakeShared<FYIFieldMapping>(Copy));
+	}
+
+	if (bSourceModified)
+	{
+		Source->Modify();
+		Source->InlineMappings.Reset();
+		Source->InlineMappings.Reserve(MappingRows.Num());
+		for (const TSharedPtr<FYIFieldMapping>& Row : MappingRows)
+		{
+			if (Row.IsValid())
+			{
+				Source->InlineMappings.Add(*Row);
+			}
+		}
 	}
 
 	BuildTransformFunctionOptions();
@@ -4598,7 +4820,18 @@ void SYIItemDashboard::RefreshMappingPreview()
 	{
 		TSharedPtr<FYIMappingPreviewRow> Row = MakeShared<FYIMappingPreviewRow>();
 		Row->SourceField = Mapping.SourceField;
-		Row->TargetProperty = YIGetResolvedTargetFieldName(Mapping);
+		{
+			const FName ResolvedTargetField = YIGetResolvedTargetFieldName(Mapping);
+			if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::StaticDefinitionFragment && Mapping.TargetFragmentStruct && !ResolvedTargetField.IsNone())
+			{
+				const FString Scoped = FString::Printf(TEXT("%s.%s"), *MakeReadableFragmentName(Mapping.TargetFragmentStruct.Get()), *ResolvedTargetField.ToString());
+				Row->TargetProperty = FName(*Scoped);
+			}
+			else
+			{
+				Row->TargetProperty = ResolvedTargetField;
+			}
+		}
 
 		const FProperty* SourceProp = nullptr;
 		const uint8* SrcPtr = nullptr;
@@ -4840,18 +5073,100 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 		SourceCandidates.Add({ FieldName, Lower, Norm });
 	}
 
-	TSet<FName> ExistingTargets;
-	for (const FYIFieldMapping& M : Source->InlineMappings)
+	struct FTargetCandidate
 	{
-		if (!M.TargetProperty.IsNone())
+		UScriptStruct* FragmentStruct = nullptr;
+		FName FieldName = NAME_None;
+		FProperty* Property = nullptr;
+		FString Lower;
+		FString Norm;
+		FString Key;
+	};
+
+	TArray<FTargetCandidate> TargetCandidates;
+	TMap<FString, int32> TargetByLower;
+	TMap<FString, int32> TargetByNorm;
+
+	TArray<TSharedPtr<FString>> FragmentOptions;
+	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), FragmentOptions);
+	for (const TSharedPtr<FString>& FragmentPath : FragmentOptions)
+	{
+		if (!FragmentPath.IsValid())
 		{
-			ExistingTargets.Add(M.TargetProperty);
+			continue;
+		}
+		UScriptStruct* FragmentStruct = ResolveStructFromPathString(*FragmentPath);
+		if (!FragmentStruct)
+		{
+			continue;
+		}
+
+		for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+		{
+			FProperty* TargetProp = *It;
+			if (!IsMappableFragmentField(TargetProp))
+			{
+				continue;
+			}
+
+			const FName FieldName(TargetProp->GetAuthoredName());
+			const FString FieldString = FieldName.ToString();
+			const FString Lower = FieldString.ToLower();
+			const FString Norm = NormalizeField(FieldString);
+			const FString Key = FString::Printf(TEXT("%s|%s"), *FragmentStruct->GetPathName(), *FieldString);
+			const int32 NewIndex = TargetCandidates.Add({ FragmentStruct, FieldName, TargetProp, Lower, Norm, Key });
+			TargetByLower.Add(Lower, NewIndex);
+			TargetByNorm.Add(Norm, NewIndex);
 		}
 	}
 
-	bool bChanged = false;
+	auto BuildTargetKey = [](const FYIFieldMapping& Mapping) -> FString
+		{
+			if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::StaticDefinitionFragment && Mapping.TargetFragmentStruct)
+			{
+				const FName Resolved = YIGetResolvedTargetFieldName(Mapping);
+				if (!Resolved.IsNone())
+				{
+					return FString::Printf(TEXT("%s|%s"), *Mapping.TargetFragmentStruct->GetPathName(), *Resolved.ToString());
+				}
+			}
+			return FString();
+		};
 
-	auto FindBestMatch = [&](const FName& TargetField)->FName
+	bool bChanged = false;
+	int32 MatchCount = 0;
+	TSet<FString> ExistingTargetKeys;
+	for (FYIFieldMapping& Mapping : Source->InlineMappings)
+	{
+		TryPromoteLegacyItemMappingToFragment(Mapping);
+		if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty && IsIdentityMappingProperty(Mapping.TargetProperty))
+		{
+			if (Mapping.SourceField.IsNone())
+			{
+				if (Mapping.TargetProperty == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode))
+				{
+					Mapping.SourceField = Source->UniqueCodeFieldName;
+				}
+				else if (Mapping.TargetProperty == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateId))
+				{
+					Mapping.SourceField = Source->TemplateIdFieldName;
+				}
+				if (!Mapping.SourceField.IsNone())
+				{
+					Mapping.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(Mapping.SourceField), FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), Mapping.TargetProperty));
+					bChanged = true;
+					++MatchCount;
+				}
+			}
+		}
+		const FString Key = BuildTargetKey(Mapping);
+		if (!Key.IsEmpty())
+		{
+			ExistingTargetKeys.Add(Key);
+		}
+	}
+
+	auto FindBestSourceField = [&](const FName& TargetField)->FName
 		{
 			if (TargetField.IsNone())
 			{
@@ -4901,62 +5216,130 @@ void SYIItemDashboard::AutoMatchInlineMappings(bool bAddAllFields)
 			return BestMatch;
 		};
 
-	int32 MatchCount = 0;
-
-	// First, patch existing mappings that have missing source fields
+	// Patch existing mappings that have missing source fields.
 	for (FYIFieldMapping& M : Source->InlineMappings)
 	{
-		if (M.bUseStaticValue || M.TargetProperty.IsNone() || !M.SourceField.IsNone())
+		if (M.bUseStaticValue)
 		{
 			continue;
 		}
-		const FName Match = FindBestMatch(M.TargetProperty);
+
+		if (M.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty && IsIdentityMappingProperty(M.TargetProperty))
+		{
+			if (M.SourceField.IsNone())
+			{
+				const FName FallbackSource = (M.TargetProperty == GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode))
+					? Source->UniqueCodeFieldName
+					: Source->TemplateIdFieldName;
+				if (!FallbackSource.IsNone())
+				{
+					M.SourceField = FallbackSource;
+					M.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(M.SourceField), FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), M.TargetProperty));
+					bChanged = true;
+					++MatchCount;
+				}
+			}
+			continue;
+		}
+
+		if (M.TargetLayer != EYIFieldMappingTargetLayer::StaticDefinitionFragment)
+		{
+			M.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+			if (!M.TargetFragmentStruct || YIGetResolvedTargetFieldName(M).IsNone())
+			{
+				TryAssignDefaultStaticFragmentTarget(M);
+			}
+			bChanged = true;
+		}
+
+		const FName TargetField = YIGetResolvedTargetFieldName(M);
+		if (TargetField.IsNone() || !M.SourceField.IsNone())
+		{
+			continue;
+		}
+
+		const FName Match = FindBestSourceField(TargetField);
 		if (!Match.IsNone())
 		{
 			M.SourceField = Match;
 			const FProperty* SourceProp = SourceFieldPropCache.FindRef(Match);
-			const FProperty* TargetProp = TargetFieldPropCache.FindRef(M.TargetProperty);
+			const FProperty* TargetProp = nullptr;
+			if (M.TargetFragmentStruct)
+			{
+				TargetProp = FindPropertyByAuthoredNameEditor(M.TargetFragmentStruct.Get(), TargetField);
+			}
 			M.Conversion = GuessConversionForProps(SourceProp, TargetProp);
 			bChanged = true;
 			++MatchCount;
 		}
 	}
 
-	for (TFieldIterator<FProperty> It(UYIItemDefinition::StaticClass()); It; ++It)
+	if (bAddAllFields)
 	{
-		const UClass* OwnerClass = It->GetOwnerClass();
-		if (OwnerClass == UPrimaryDataAsset::StaticClass() || OwnerClass == UObject::StaticClass())
-		{
-			continue;
-		}
-		const FName TargetName((*It)->GetAuthoredName());
-		if (ExistingTargets.Contains(TargetName))
-		{
-			continue;
-		}
-		const FName Match = FindBestMatch(TargetName);
+		auto EnsureIdentityMapping = [&](FName TargetProperty, FName PreferredSource)
+			{
+				if (TargetProperty.IsNone())
+				{
+					return;
+				}
 
-		if (!bAddAllFields && Match.IsNone())
-		{
-			continue;
-		}
+				bool bExists = false;
+				for (const FYIFieldMapping& Existing : Source->InlineMappings)
+				{
+					if (Existing.TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty && Existing.TargetProperty == TargetProperty)
+					{
+						bExists = true;
+						break;
+					}
+				}
+				if (bExists)
+				{
+					return;
+				}
 
-		FYIFieldMapping NewMap;
-		NewMap.TargetProperty = TargetName;
-		NewMap.SourceField = Match;
-		NewMap.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(Match), *It);
-		Source->InlineMappings.Add(NewMap);
-		ExistingTargets.Add(TargetName);
-		bChanged = true;
-		if (!Match.IsNone())
+				FYIFieldMapping IdentityMap;
+				IdentityMap.TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
+				IdentityMap.TargetProperty = TargetProperty;
+				IdentityMap.SourceField = PreferredSource;
+				IdentityMap.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(IdentityMap.SourceField), FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), TargetProperty));
+				Source->InlineMappings.Add(IdentityMap);
+				bChanged = true;
+				if (!IdentityMap.SourceField.IsNone())
+				{
+					++MatchCount;
+				}
+			};
+
+		EnsureIdentityMapping(GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode), Source->UniqueCodeFieldName);
+		EnsureIdentityMapping(GET_MEMBER_NAME_CHECKED(UYIItemDefinition, TemplateId), Source->TemplateIdFieldName);
+
+		for (const FTargetCandidate& Target : TargetCandidates)
 		{
-			++MatchCount;
+			if (!Target.FragmentStruct || Target.FieldName.IsNone() || ExistingTargetKeys.Contains(Target.Key))
+			{
+				continue;
+			}
+
+			FYIFieldMapping NewMap;
+			NewMap.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+			NewMap.TargetFragmentStruct = Target.FragmentStruct;
+			NewMap.TargetFragmentField = Target.FieldName;
+			NewMap.TargetProperty = Target.FieldName;
+			NewMap.SourceField = FindBestSourceField(Target.FieldName);
+			NewMap.Conversion = GuessConversionForProps(SourceFieldPropCache.FindRef(NewMap.SourceField), Target.Property);
+
+			Source->InlineMappings.Add(NewMap);
+			ExistingTargetKeys.Add(Target.Key);
+			bChanged = true;
+			if (!NewMap.SourceField.IsNone())
+			{
+				++MatchCount;
+			}
 		}
 	}
 
 	if (bChanged)
 	{
-		Source->Modify();
 		RefreshInlineMappingEditor(Source);
 		FYIEditorMessageLog::Add(EYIEditorLogSeverity::Info,
 			FText::Format(NSLOCTEXT("YOLOInventory", "Dash_AutoMatch_Done", "Auto-match updated inline mappings. Matched {0} fields."), FText::AsNumber(MatchCount)),
@@ -5036,15 +5419,11 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 
 			if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
 			{
-				if (Mapping->TargetProperty.IsNone())
+				if (!IsIdentityMappingProperty(Mapping->TargetProperty))
 				{
 					return nullptr;
 				}
-				if (FProperty** Found = TargetFieldPropCache.Find(Mapping->TargetProperty))
-				{
-					return *Found;
-				}
-				return nullptr;
+				return FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), Mapping->TargetProperty);
 			}
 
 			const UScriptStruct* FragmentStruct = Mapping->TargetFragmentStruct.Get();
@@ -5157,6 +5536,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		};
 
 	TSharedPtr<TArray<TSharedPtr<FString>>> TargetLayerOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	TSharedPtr<TArray<TSharedPtr<FString>>> IdentityTargetOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	TSharedPtr<TArray<TSharedPtr<FString>>> TargetFragmentStructOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	TSharedPtr<TArray<TSharedPtr<FString>>> TargetFragmentFieldOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 
@@ -5165,20 +5545,25 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			switch (Layer)
 			{
 			case EYIFieldMappingTargetLayer::StaticDefinitionFragment:
-				return TEXT("Static Fragment");
-			case EYIFieldMappingTargetLayer::DynamicInstanceFragment:
-				return TEXT("Dynamic Fragment");
+				return TEXT("Fragment");
 			case EYIFieldMappingTargetLayer::LegacyProperty:
 			default:
-				return TEXT("Legacy");
+				return TEXT("Identity");
 			}
 		};
 
 	auto RefreshTargetLayerOptions = [TargetLayerOptions]()
 		{
 			TargetLayerOptions->Reset();
-			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Legacy")));
-			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Static Fragment")));
+			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Fragment")));
+			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Identity")));
+		};
+
+	auto RefreshIdentityTargetOptions = [IdentityTargetOptions]()
+		{
+			IdentityTargetOptions->Reset();
+			IdentityTargetOptions->Add(MakeShared<FString>(GET_MEMBER_NAME_STRING_CHECKED(UYIItemDefinition, UniqueCode)));
+			IdentityTargetOptions->Add(MakeShared<FString>(GET_MEMBER_NAME_STRING_CHECKED(UYIItemDefinition, TemplateId)));
 		};
 
 	auto RefreshTargetFragmentStructOptions = [TargetFragmentStructOptions]()
@@ -5838,23 +6223,21 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										}
 
 										CurrentMappingSource->Modify();
-										Mapping->TargetLayer = (*NewItem == TEXT("Static Fragment"))
-											? EYIFieldMappingTargetLayer::StaticDefinitionFragment
-											: EYIFieldMappingTargetLayer::LegacyProperty;
-
-										if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+										const bool bIdentity = (*NewItem == TEXT("Identity"));
+										if (bIdentity)
 										{
-											if (Mapping->TargetProperty.IsNone())
+											Mapping->TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
+											if (!IsIdentityMappingProperty(Mapping->TargetProperty))
 											{
-												const FName ResolvedField = YIGetResolvedTargetFieldName(*Mapping);
-												if (!ResolvedField.IsNone())
-												{
-													Mapping->TargetProperty = ResolvedField;
-												}
+												Mapping->TargetProperty = GET_MEMBER_NAME_CHECKED(UYIItemDefinition, UniqueCode);
 											}
+											Mapping->TargetFragmentStruct = nullptr;
+											Mapping->TargetFragmentField = NAME_None;
 										}
 										else
 										{
+											Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+
 											if (!Mapping->TargetFragmentStruct)
 											{
 												RefreshTargetFragmentStructOptions();
@@ -5890,7 +6273,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										{
 											return Mapping.IsValid()
 												? FText::FromString(GetTargetLayerLabel(Mapping->TargetLayer))
-												: FText::FromString(TEXT("Legacy"));
+												: FText::FromString(TEXT("Fragment"));
 										})
 								]
 						]
@@ -5901,27 +6284,26 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 									{
 										if (!Mapping.IsValid())
 										{
-											return 0;
+											return 1;
 										}
 										return (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty) ? 0 : 1;
 									})
 								+ SWidgetSwitcher::Slot()
 								[
 									SNew(SComboBox<TSharedPtr<FString>>)
-										.OptionsSource(&const_cast<SYIItemDashboard*>(this)->TargetPropertyOptions)
+										.OptionsSource(IdentityTargetOptions.Get())
+										.OnComboBoxOpening_Lambda([RefreshIdentityTargetOptions]()
+											{
+												RefreshIdentityTargetOptions();
+											})
 										.OnGenerateWidget_Lambda([this, DropdownText, GetTypeInfo](TSharedPtr<FString> InItem)
 											{
 												const FName FieldName = InItem.IsValid() ? FName(**InItem) : NAME_None;
 												FString Label;
 												FLinearColor Color;
-												FProperty* Prop = nullptr;
-												if (FieldName != NAME_None)
-												{
-													if (FProperty** Found = const_cast<SYIItemDashboard*>(this)->TargetFieldPropCache.Find(FieldName))
-													{
-														Prop = *Found;
-													}
-												}
+												FProperty* Prop = (FieldName != NAME_None)
+													? FindPropertyByAuthoredNameEditor(UYIItemDefinition::StaticClass(), FieldName)
+													: nullptr;
 												GetTypeInfo(Prop, Label, Color);
 												return SNew(SHorizontalBox)
 													+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
@@ -5944,6 +6326,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 												if (CurrentMappingSource.IsValid() && Mapping.IsValid() && NewItem.IsValid())
 												{
 													CurrentMappingSource->Modify();
+													Mapping->TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
 													Mapping->TargetProperty = FName(**NewItem);
 													if (Mapping->Conversion == EYIFieldMappingConversion::None)
 													{
@@ -5956,10 +6339,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 													RefreshMappingUi();
 												}
 											})
-										.InitiallySelectedItem([this, Mapping]()
+										.InitiallySelectedItem([IdentityTargetOptions, Mapping]()
 											{
 												if (!Mapping.IsValid()) return TSharedPtr<FString>();
-												if (const TSharedPtr<FString>* FoundPtr = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+												if (const TSharedPtr<FString>* FoundPtr = IdentityTargetOptions->FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
 													{
 														return Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
 													}))
@@ -5977,9 +6360,9 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 												]
 												+ SHorizontalBox::Slot().FillWidth(1.f).Padding(4, 0)
 												[
-													SNew(STextBlock).Text_Lambda([DropdownText, Mapping, this]()
+													SNew(STextBlock).Text_Lambda([DropdownText, Mapping, IdentityTargetOptions]()
 														{
-															const TSharedPtr<FString>* Found = TargetPropertyOptions.FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
+															const TSharedPtr<FString>* Found = IdentityTargetOptions->FindByPredicate([Mapping](const TSharedPtr<FString>& Opt)
 																{
 																	return Mapping.IsValid() && Opt.IsValid() && FName(**Opt).IsEqual(Mapping->TargetProperty);
 																});
@@ -5997,7 +6380,10 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 												.OptionsSource(TargetFragmentStructOptions.Get())
 												.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
 													{
-														return SNew(STextBlock).Text(InItem.IsValid() ? FText::FromString(*InItem) : FText::GetEmpty());
+														const FString PathString = InItem.IsValid() ? *InItem : FString();
+														return SNew(STextBlock)
+															.Text(FText::FromString(MakeReadableFragmentNameFromPath(PathString)))
+															.ToolTipText(PathString.IsEmpty() ? FText::GetEmpty() : FText::FromString(PathString));
 													})
 												.OnComboBoxOpening_Lambda([RefreshTargetFragmentStructOptions]()
 													{
@@ -6037,7 +6423,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 															{
 																return NSLOCTEXT("YOLOInventory", "Dash_TargetFragmentStructHint", "Select fragment");
 															}
-															return FText::FromString(Mapping->TargetFragmentStruct->GetPathName());
+															return FText::FromString(MakeReadableFragmentName(Mapping->TargetFragmentStruct.Get()));
 														})
 												]
 										]

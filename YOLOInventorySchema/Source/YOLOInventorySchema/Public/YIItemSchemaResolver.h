@@ -12,6 +12,11 @@ class UScriptStruct;
 
 namespace YIItemSchema
 {
+	using FYIItemSchemaSnapshotHandle = TSharedPtr<const FYIItemSchemaSnapshot, ESPMode::ThreadSafe>;
+
+	/** Resolve (and cache) immutable schema snapshot handle for concurrent readers. */
+	YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshotHandle ResolveSnapshotHandle(const UYIItemDefinition* Definition);
+
 	/** Resolve (and cache) the effective schema snapshot for the given item definition. */
 	YOLOINVENTORYSCHEMA_API const FYIItemSchemaSnapshot& ResolveSnapshot(const UYIItemDefinition* Definition);
 
@@ -20,6 +25,9 @@ namespace YIItemSchema
 
 	/** Invalidate all cached snapshots. */
 	YOLOINVENTORYSCHEMA_API void InvalidateAllSnapshotCaches();
+
+	/** Prebuild and cache snapshot for this definition (safe no-op when already cached). */
+	YOLOINVENTORYSCHEMA_API void WarmupDefinition(const UYIItemDefinition* Definition);
 
 	/** Resolve a fragment by struct type using local -> trait -> parent precedence. */
 	YOLOINVENTORYSCHEMA_API const FInstancedStruct* FindResolvedDefinitionFragmentByStruct(const UYIItemDefinition* Definition, const UScriptStruct* FragmentStruct);
@@ -131,4 +139,3 @@ namespace YIItemSchema
 		}
 	}
 }
-

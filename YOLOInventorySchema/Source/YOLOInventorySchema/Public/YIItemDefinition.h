@@ -10,7 +10,6 @@
 
 class UYIDataTableItemSource;
 class UYIItemTraitAsset;
-class UYIRequirement;
 class UScriptStruct;
 
 /**
@@ -38,10 +37,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Authoring", meta=(ToolTip="Optional trait assets that contribute reusable definition fragments"))
 	TArray<TSoftObjectPtr<UYIItemTraitAsset>> Traits;
 
-	/** Optional requirement objects that gate use/equip. */
-	UPROPERTY(EditAnywhere, Instanced, Category="Requirements", meta=(ToolTip="Optional requirement objects (level/quest/etc)"))
-	TArray<TObjectPtr<UYIRequirement>> Requirements;
-
 	/** Optional source linkage for dashboard regeneration. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Source Link", meta=(ToolTip="Source asset this item was generated from"))
 	TSoftObjectPtr<UYIDataTableItemSource> SourceDataSource;
@@ -58,27 +53,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemDefinitionFragmentBase", ExcludeBaseStruct))
 	TArray<FInstancedStruct> DefinitionFragments;
 
-	const FYIItemUIDefinitionFragment* GetUIDefinitionFragment() const;
-	const FYIItemClassificationDefinitionFragment* GetClassificationDefinitionFragment() const;
-	const FYIItemAudioDefinitionFragment* GetAudioDefinitionFragment() const;
-	const FYIItemPickupDefinitionFragment* GetPickupDefinitionFragment() const;
-	const FYIItemEquipmentDefinitionFragment* GetEquipmentDefinitionFragment() const;
-	const FYIItemAffixDefinitionFragment* GetAffixDefinitionFragment() const;
-	const FYIItemLayoutDefinitionFragment* GetLayoutDefinitionFragment() const;
-	const FYIItemStackingDefinitionFragment* GetStackingDefinitionFragment() const;
-	const FYIItemRulesDefinitionFragment* GetRulesDefinitionFragment() const;
-	const FYIItemContainerDefinitionFragment* GetContainerDefinitionFragment() const;
-	const FYIItemAttributeModsDefinitionFragment* GetAttributeModsDefinitionFragment() const;
-
 	/** Find static definition fragment by exact struct type. */
 	const FInstancedStruct* FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
-	const FInstancedStruct* FindResolvedDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 
 	/** Find or add static definition fragment by exact struct type. */
 	FInstancedStruct* FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
-
-	/** Ensure baseline required fragments exist. Returns true when fragment array changed. */
-	bool EnsureBaselineDefinitionFragments();
 
 	/** Export decoupled suite-facing snapshot for non-schema consumers. */
 	void BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const;

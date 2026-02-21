@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "StructUtils/InstancedStruct.h"
 #include "YIItemSchemaTypes.generated.h"
 
 class UTexture2D;
+class UScriptStruct;
 
 /** Schema-facing display payload decoupled from legacy item definition fields. */
 USTRUCT(BlueprintType)
@@ -195,4 +197,28 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshot
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
 	FYIItemSchemaAttributeModsData AttributeMods;
+
+	/**
+	 * Resolved static fragments after inheritance/trait merge.
+	 * This intentionally stores arbitrary fragment structs so future modules can extend
+	 * schema authoring without changing core snapshot types.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema|Fragments")
+	TArray<FInstancedStruct> ResolvedDefinitionFragments;
+
+	/** Fast read index built when the snapshot is materialized. */
+	TMap<const UScriptStruct*, int32> ResolvedFragmentIndexByStruct;
+
+	void RebuildResolvedFragmentIndex();
+	const FInstancedStruct* FindResolvedFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+
+	template<typename TFragmentType>
+	const TFragmentType* FindResolvedFragment() const
+	{
+		if (const FInstancedStruct* Fragment = FindResolvedFragmentByStruct(TFragmentType::StaticStruct()))
+		{
+			return Fragment->GetPtr<TFragmentType>();
+		}
+		return nullptr;
+	}
 };

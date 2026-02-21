@@ -11,6 +11,7 @@ public class YOLOInventorySchema : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
+            "StructUtils",
             "GameplayTags",
             "GameplayAbilities",
             "CSVItemBuilder",
