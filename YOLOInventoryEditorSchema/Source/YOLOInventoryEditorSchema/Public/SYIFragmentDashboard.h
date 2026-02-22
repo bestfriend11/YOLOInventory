@@ -51,6 +51,7 @@ private:
 	TSharedPtr<FString> SelectedAffixDefinitionFragmentStructOption;
 	FText LastActionStatus;
 	bool bLastActionError = false;
+	bool bShowLegacyAffixAuthoring = false;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<SWidget> AssetPanelWidget;
 	TSharedPtr<SWidget> DetailsPanelWidget;

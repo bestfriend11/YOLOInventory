@@ -37,6 +37,43 @@ FInstancedStruct* UYIFragmentAsset::FindOrAddItemDefinitionFragmentByStruct(cons
 	return &NewFragment;
 }
 
+const FInstancedStruct* UYIFragmentAsset::FindItemInstanceFragmentByStruct(const UScriptStruct* FragmentStruct) const
+{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
+	for (const FInstancedStruct& Fragment : ItemInstanceFragments)
+	{
+		if (Fragment.GetScriptStruct() == FragmentStruct)
+		{
+			return &Fragment;
+		}
+	}
+	return nullptr;
+}
+
+FInstancedStruct* UYIFragmentAsset::FindOrAddItemInstanceFragmentByStruct(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
+	for (FInstancedStruct& Fragment : ItemInstanceFragments)
+	{
+		if (Fragment.GetScriptStruct() == FragmentStruct)
+		{
+			return &Fragment;
+		}
+	}
+
+	FInstancedStruct& NewFragment = ItemInstanceFragments.AddDefaulted_GetRef();
+	NewFragment.InitializeAs(FragmentStruct);
+	return &NewFragment;
+}
+
 const FInstancedStruct* UYIFragmentAsset::FindAffixDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const
 {
 	if (!FragmentStruct)
@@ -73,4 +110,3 @@ FInstancedStruct* UYIFragmentAsset::FindOrAddAffixDefinitionFragmentByStruct(con
 	NewFragment.InitializeAs(FragmentStruct);
 	return &NewFragment;
 }
-

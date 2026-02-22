@@ -8,6 +8,7 @@
 #include "YILootTable.h"
 #include "YIRarityProfile.h"
 #include "YIItemGenerator.h"
+#include "YIFragmentPoolRollStrategy.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/SWindow.h"
 
@@ -107,6 +108,30 @@ private:
 	uint32 CategoryBit = EAssetTypeCategories::Misc;
 };
 
+class FAssetTypeActions_YIFragmentPoolRollStrategy_EditorLoot final : public FAssetTypeActions_Base
+{
+public:
+	explicit FAssetTypeActions_YIFragmentPoolRollStrategy_EditorLoot(uint32 InCategoryBit)
+		: CategoryBit(InCategoryBit)
+	{
+	}
+
+	virtual FText GetName() const override { return NSLOCTEXT("YOLOInventory", "FragmentPoolRollStrategyAssetTypeName", "Fragment Pool Roll Strategy"); }
+	virtual FColor GetTypeColor() const override { return FColor(120, 200, 255); }
+	virtual UClass* GetSupportedClass() const override { return UYIFragmentPoolRollStrategy::StaticClass(); }
+	virtual uint32 GetCategories() override { return CategoryBit; }
+	virtual void OpenAssetEditor(const TArray<UObject*>& InObjects, TSharedPtr<IToolkitHost>) override
+	{
+		for (UObject* Obj : InObjects)
+		{
+			YIEditorLoot_OpenAssetInDashboardOrFallback(Obj);
+		}
+	}
+
+private:
+	uint32 CategoryBit = EAssetTypeCategories::Misc;
+};
+
 class FYIGeneratorDashboardBridge final : public IYIGeneratorDashboardBridge
 {
 public:
@@ -166,6 +191,10 @@ public:
 		TSharedRef<FAssetTypeActions_YIItemGenerator_EditorLoot> GeneratorAction = MakeShared<FAssetTypeActions_YIItemGenerator_EditorLoot>(CategoryBit);
 		AssetTools.RegisterAssetTypeActions(GeneratorAction);
 		RegisteredAssetTypeActions.Add(GeneratorAction);
+
+		TSharedRef<FAssetTypeActions_YIFragmentPoolRollStrategy_EditorLoot> FragmentStrategyAction = MakeShared<FAssetTypeActions_YIFragmentPoolRollStrategy_EditorLoot>(CategoryBit);
+		AssetTools.RegisterAssetTypeActions(FragmentStrategyAction);
+		RegisteredAssetTypeActions.Add(FragmentStrategyAction);
 
 		IYOLOInventoryEditorCoreModule& EditorCoreModule = FModuleManager::LoadModuleChecked<IYOLOInventoryEditorCoreModule>("YOLOInventoryEditorCore");
 		EditorCoreModule.RegisterGeneratorDashboardFactory(

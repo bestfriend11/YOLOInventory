@@ -5,6 +5,7 @@
 #include "YIItemSchemaResolver.h"
 #include "YIAffixPoolAsset.h"
 #include "YIAffixAsset.h"
+#include "YIFragmentRollStrategy.h"
 #include "YIInventoryBlueprintLibrary.h"
 
 static int32 ClampLevel(int32 Level, int32 MinLevel, int32 MaxLevel)
@@ -243,6 +244,22 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 		UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(Def, OutItem.Item);
 	}
 
+	UYIFragmentRollStrategy* FragmentStrategy = FragmentRollStrategy.IsValid()
+		? FragmentRollStrategy.Get()
+		: FragmentRollStrategy.LoadSynchronous();
+	auto RunFragmentStrategy = [&]()
+	{
+		if (FragmentStrategy)
+		{
+			FragmentStrategy->ApplyGeneratedFragments(Def, UseLevel, Seed ^ 0x31FA, OutItem);
+		}
+	};
+
+	if (bRunFragmentStrategyBeforeLegacyAffixes)
+	{
+		RunFragmentStrategy();
+	}
+
 	FYIRarityRule RarityRule;
 	if (UYIRarityProfile* Profile = RarityProfile.IsValid() ? RarityProfile.Get() : RarityProfile.LoadSynchronous())
 	{
@@ -258,7 +275,7 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 		}
 	}
 
-	if (bGenerateRandomAffixes && (OutPrefixes > 0 || OutSuffixes > 0))
+	if (bUseLegacyAffixGeneration && bGenerateRandomAffixes && (OutPrefixes > 0 || OutSuffixes > 0))
 	{
 		TArray<TSoftObjectPtr<UYIAffixAsset>> UnusedTemplateAffixes;
 		int32 UnusedMinMods = 0;
@@ -289,6 +306,11 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 
 		OutPrefixes = RollAffixesFromPool(PrefixPool, Def, OutItem, OutPrefixes, UseLevel, RNG, PrefixCriteria, EYIAffixKind::Prefix);
 		OutSuffixes = RollAffixesFromPool(SuffixPool, Def, OutItem, OutSuffixes, UseLevel, RNG, SuffixCriteria, EYIAffixKind::Suffix);
+	}
+
+	if (!bRunFragmentStrategyBeforeLegacyAffixes)
+	{
+		RunFragmentStrategy();
 	}
 
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(OutItem.Item);

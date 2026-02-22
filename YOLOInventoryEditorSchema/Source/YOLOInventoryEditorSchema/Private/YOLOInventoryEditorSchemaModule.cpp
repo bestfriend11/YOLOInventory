@@ -7,6 +7,7 @@
 #include "YIEditorSchemaCategory.h"
 #include "AssetTypeActions_YIItemDefinition.h"
 #include "AssetTypeActions_YIFragmentAsset.h"
+#include "AssetTypeActions_YIFragmentPoolAsset.h"
 #include "AssetTypeActions_YIItemTraitAsset.h"
 #include "AssetTypeActions_YIAffix.h"
 #include "AssetTypeActions_YIAffixPool.h"
@@ -84,6 +85,7 @@ public:
 
 		RegisterAction<FAssetTypeActions_YIItemDefinition>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIFragmentAsset>(AssetTools);
+		RegisterAction<FAssetTypeActions_YIFragmentPoolAsset>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIItemTraitAsset>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIAffix>(AssetTools);
 		RegisterAction<FAssetTypeActions_YIAffixPool>(AssetTools);

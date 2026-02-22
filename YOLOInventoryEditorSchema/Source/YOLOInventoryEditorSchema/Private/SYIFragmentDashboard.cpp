@@ -3,18 +3,25 @@
 #include "YIAffix.h"
 #include "YIAffixAsset.h"
 #include "YIFragmentAsset.h"
+#include "YIFragmentPoolAsset.h"
 #include "YIItemTraitAsset.h"
+#include "YIFragmentAssetFactory.h"
+#include "YIFragmentPoolAssetFactory.h"
+#include "YIItemTraitAssetFactory.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "IDetailsView.h"
 #include "PropertyEditorModule.h"
 #include "PropertyCustomizationHelpers.h"
 #include "Modules/ModuleManager.h"
+#include "AssetToolsModule.h"
+#include "IAssetTools.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/Layout/SSplitter.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Styling/AppStyle.h"
 #include "FileHelpers.h"
 #include "UObject/UObjectIterator.h"
@@ -120,7 +127,7 @@ void SYIFragmentDashboard::Construct(const FArguments& InArgs)
 {
 	LayoutMode = InArgs._LayoutMode;
 	RefreshFragmentStructOptions();
-	LastActionStatus = NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetHint", "Select a Fragment Asset, Affix Asset, or Item Trait Asset.");
+	LastActionStatus = NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetHint", "Select a Fragment Asset or Item Trait Asset to author fragments. Legacy affix assets are optional.");
 
 	FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FDetailsViewArgs DetailsArgs;
@@ -364,6 +371,57 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 		return FReply::Handled();
 	};
 
+	auto CreateFragmentAsset = [this]() -> FReply
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		UYIFragmentAssetFactory* Factory = NewObject<UYIFragmentAssetFactory>();
+		UObject* NewAsset = AssetToolsModule.Get().CreateAsset(TEXT("NewFragmentAsset"), TEXT("/Game"), UYIFragmentAsset::StaticClass(), Factory);
+		if (NewAsset)
+		{
+			SetSelectedAsset(NewAsset);
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatedFragmentAsset", "Created Fragment Asset. Add fragments in this panel and edit values in Details."), false);
+		}
+		else
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateFragmentAssetFailed", "Failed to create Fragment Asset."), true);
+		}
+		return FReply::Handled();
+	};
+
+	auto CreateItemTraitAsset = [this]() -> FReply
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		UYIItemTraitAssetFactory* Factory = NewObject<UYIItemTraitAssetFactory>();
+		UObject* NewAsset = AssetToolsModule.Get().CreateAsset(TEXT("NewItemTraitAsset"), TEXT("/Game"), UYIItemTraitAsset::StaticClass(), Factory);
+		if (NewAsset)
+		{
+			SetSelectedAsset(NewAsset);
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatedTraitAsset", "Created Item Trait Asset. Add fragments in this panel and edit values in Details."), false);
+		}
+		else
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateTraitAssetFailed", "Failed to create Item Trait Asset."), true);
+		}
+		return FReply::Handled();
+	};
+
+	auto CreateFragmentPoolAsset = [this]() -> FReply
+	{
+		FAssetToolsModule& AssetToolsModule = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools");
+		UYIFragmentPoolAssetFactory* Factory = NewObject<UYIFragmentPoolAssetFactory>();
+		UObject* NewAsset = AssetToolsModule.Get().CreateAsset(TEXT("NewFragmentPoolAsset"), TEXT("/Game"), UYIFragmentPoolAsset::StaticClass(), Factory);
+		if (NewAsset)
+		{
+			SetSelectedAsset(NewAsset);
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatedPoolAsset", "Created Fragment Pool Asset. Fill entries to drive strategy-based runtime generation."), false);
+		}
+		else
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatePoolAssetFailed", "Failed to create Fragment Pool Asset."), true);
+		}
+		return FReply::Handled();
+	};
+
 	return SNew(SBorder)
 		.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.GroupBorder"))
 		.Padding(8.f)
@@ -377,17 +435,48 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
 			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0.f, 0.f, 2.f, 0.f)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateFragmentAsset", "Create Fragment Asset"))
+					.ToolTipText(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateFragmentAsset_TT", "Create a generic fragment authoring asset (no C++ required)."))
+					.OnClicked_Lambda([CreateFragmentAsset]() { return CreateFragmentAsset(); })
+				]
+				+ SHorizontalBox::Slot().FillWidth(1.f).Padding(2.f, 0.f, 0.f, 0.f)
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateTraitAsset", "Create Item Trait Asset"))
+					.ToolTipText(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreateTraitAsset_TT", "Create a reusable item-definition fragment bundle asset."))
+					.OnClicked_Lambda([CreateItemTraitAsset]() { return CreateItemTraitAsset(); })
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
+			[
+				SNew(SButton)
+				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatePoolAsset", "Create Fragment Pool Asset"))
+				.ToolTipText(NSLOCTEXT("YOLOInventory", "FragmentDashboard_CreatePoolAsset_TT", "Create a neutral pool asset for runtime fragment roll strategies."))
+				.OnClicked_Lambda([CreateFragmentPoolAsset]() { return CreateFragmentPoolAsset(); })
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
+			[
 				SNew(SObjectPropertyEntryBox)
 				.AllowedClass(UObject::StaticClass())
-				.OnShouldFilterAsset_Lambda([](const FAssetData& AssetData)
+				.OnShouldFilterAsset_Lambda([this](const FAssetData& AssetData)
 				{
 					const UClass* AssetClass = AssetData.GetClass();
 					if (!AssetClass)
 					{
 						return true;
 					}
-					return !(AssetClass->IsChildOf(UYIAffixAsset::StaticClass())
+					const bool bIsLegacyAffix = AssetClass->IsChildOf(UYIAffixAsset::StaticClass());
+					if (bIsLegacyAffix && !bShowLegacyAffixAuthoring)
+					{
+						return true;
+					}
+					return !(bIsLegacyAffix
 						|| AssetClass->IsChildOf(UYIFragmentAsset::StaticClass())
+						|| AssetClass->IsChildOf(UYIFragmentPoolAsset::StaticClass())
 						|| AssetClass->IsChildOf(UYIItemTraitAsset::StaticClass()));
 				})
 				.ObjectPath_Lambda([this]()
@@ -398,6 +487,22 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 				{
 					SetSelectedAsset(AssetData.GetAsset());
 				})
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 4.f)
+			[
+				SNew(SCheckBox)
+				.IsChecked_Lambda([this]() { return bShowLegacyAffixAuthoring ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+				{
+					bShowLegacyAffixAuthoring = (NewState == ECheckBoxState::Checked);
+					if (!bShowLegacyAffixAuthoring && SelectedAsset.IsValid() && SelectedAsset->IsA<UYIAffixAsset>())
+					{
+						SetSelectedAsset(nullptr);
+					}
+				})
+				[
+					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_ShowLegacyAffixes", "Show legacy affix assets"))
+				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
 			[
@@ -512,7 +617,7 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddAffixFragment", "Add Affix Fragment"))
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddAffixFragment", "Add Legacy Affix Fragment"))
 					.OnClicked_Lambda([AddAffixDefinitionFragment]()
 					{
 						return AddAffixDefinitionFragment();
@@ -721,9 +826,26 @@ FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 		return FText::FromString(Summary);
 	}
 
+	if (const UYIFragmentPoolAsset* PoolAsset = Cast<UYIFragmentPoolAsset>(SelectedAsset.Get()))
+	{
+		FString Summary = FString::Printf(
+			TEXT("Fragment Pool Asset\nEntries: %d"),
+			PoolAsset->Entries.Num());
+		for (const FYIFragmentPoolEntry& Entry : PoolAsset->Entries)
+		{
+			Summary += FString::Printf(
+				TEXT("\n- %s (Weight=%.2f, Level=%d..%d)"),
+				*Entry.FragmentAsset.ToSoftObjectPath().GetAssetName(),
+				Entry.Weight,
+				Entry.MinLevel,
+				Entry.MaxLevel);
+		}
+		return FText::FromString(Summary);
+	}
+
 	if (!SelectedAsset.IsValid())
 	{
-		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select an Affix Asset, Fragment Asset, or Item Trait Asset to inspect fragment data.");
+		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select a Fragment Asset or Item Trait Asset to inspect fragment data. Enable legacy affix visibility if needed.");
 	}
 	return FText::FromString(SelectedAsset->GetClass()->GetName());
 }

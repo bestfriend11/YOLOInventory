@@ -32,6 +32,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments|Item", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemDefinitionFragmentBase", ExcludeBaseStruct))
 	TArray<FInstancedStruct> ItemDefinitionFragments;
 
+	/** Runtime item-instance fragments (applied by generation/equip/use pipelines). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments|Item", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemFragmentBase", ExcludeBaseStruct))
+	TArray<FInstancedStruct> ItemInstanceFragments;
+
 	/** Definition-layer affix fragments. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments|Affix", meta=(BaseStruct="/Script/YOLOInventorySchema.YIAffixDefinitionFragmentBase", ExcludeBaseStruct))
 	TArray<FInstancedStruct> AffixDefinitionFragments;
@@ -39,7 +43,9 @@ public:
 	const FInstancedStruct* FindItemDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 	FInstancedStruct* FindOrAddItemDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
 
+	const FInstancedStruct* FindItemInstanceFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+	FInstancedStruct* FindOrAddItemInstanceFragmentByStruct(const UScriptStruct* FragmentStruct);
+
 	const FInstancedStruct* FindAffixDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 	FInstancedStruct* FindOrAddAffixDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
 };
-

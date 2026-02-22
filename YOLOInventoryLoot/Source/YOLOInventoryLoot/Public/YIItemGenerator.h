@@ -10,6 +10,7 @@ class UYIRarityProfile;
 class UYIAffixPoolAsset;
 class UYIItemDefinition;
 class UYIAffixAsset;
+class UYIFragmentRollStrategy;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYLOOT_API FYIAffixRollCriteria
@@ -98,6 +99,21 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator")
 	bool bGenerateRandomAffixes = true;
+
+	/** Backward-compatible affix path. Disable to rely entirely on fragment strategy/custom pipelines. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator")
+	bool bUseLegacyAffixGeneration = true;
+
+	/**
+	 * Optional strategy asset for non-opinionated runtime fragment generation.
+	 * This runs without requiring affix-specific assets.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator|Fragments")
+	TSoftObjectPtr<UYIFragmentRollStrategy> FragmentRollStrategy;
+
+	/** If true, strategy runs before legacy affix generation; otherwise it runs after. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator|Fragments")
+	bool bRunFragmentStrategyBeforeLegacyAffixes = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Generator", meta=(ToolTip="If true, use item definition pools when no overrides are provided"))
 	bool bUseDefinitionAffixPools = true;
