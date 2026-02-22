@@ -4,6 +4,7 @@
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIItemDefinition.h"
 #include "YIItemInstance.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "YIItemPickup.h"
 #include "YIItemRegistrySubsystem.h"
 #include "Engine/Engine.h"
@@ -72,8 +73,7 @@ AYIItemPickup* UYIWorldLootBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		return nullptr;
 	}
 
-	FYIItemInstance LocalInstance = Instance;
-	LocalInstance.SyncCoreFragmentsToLegacy();
+	const FYIItemInstance& LocalInstance = Instance;
 
 	int64 Code = 0;
 	if (LocalInstance.Definition.IsValid())
@@ -101,15 +101,7 @@ AYIItemPickup* UYIWorldLootBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		Pickup->ItemInstance.CustomStackKey = LocalInstance.CustomStackKey;
 		Pickup->ItemInstance.ContainedBagId = LocalInstance.ContainedBagId;
 		Pickup->ItemInstance.bRotated = LocalInstance.bRotated;
-		Pickup->ItemInstance.Affixes = LocalInstance.Affixes;
-		Pickup->ItemInstance.Attributes.Reset();
-		for (const TPair<FName, float>& Pair : LocalInstance.Attributes)
-		{
-			FYIAttributeKV KV;
-			KV.Name = Pair.Key;
-			KV.Value = Pair.Value;
-			Pickup->ItemInstance.Attributes.Add(KV);
-		}
+		YIItemInstanceFragments::ExportLegacyNetPayload(LocalInstance, Pickup->ItemInstance.Affixes, Pickup->ItemInstance.Attributes);
 		UGameplayStatics::FinishSpawningActor(Pickup, Transform);
 		Pickup->RefreshVisuals();
 	}
@@ -217,12 +209,7 @@ bool UYIWorldLootBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	Full.CustomStackKey = NetInstance.CustomStackKey;
 	Full.ContainedBagId = NetInstance.ContainedBagId;
 	Full.bRotated = NetInstance.bRotated;
-	Full.Affixes = NetInstance.Affixes;
-	for (const FYIAttributeKV& KV : NetInstance.Attributes)
-	{
-		Full.Attributes.Add(KV.Name, KV.Value);
-	}
-	Full.SyncLegacyToCoreFragments();
+	YIItemInstanceFragments::ImportLegacyNetPayload(Full, NetInstance.Affixes, NetInstance.Attributes);
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(Bag, Full))
 	{

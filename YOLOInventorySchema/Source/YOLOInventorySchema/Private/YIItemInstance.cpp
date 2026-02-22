@@ -1,28 +1,34 @@
 #include "YIItemInstance.h"
 
-namespace
+const FInstancedStruct* FYIItemInstance::FindFragmentByStruct(const UScriptStruct* FragmentStruct) const
 {
-template<typename TFragment>
-const TFragment* YI_FindFragmentConst(const TArray<FInstancedStruct>& Fragments)
-{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
 	for (const FInstancedStruct& Fragment : Fragments)
 	{
-		if (const TFragment* Value = Fragment.GetPtr<TFragment>())
+		if (Fragment.GetScriptStruct() == FragmentStruct)
 		{
-			return Value;
+			return &Fragment;
 		}
 	}
 	return nullptr;
 }
 
-template<typename TFragment>
-TFragment* YI_FindFragmentMutable(TArray<FInstancedStruct>& Fragments, bool bCreateIfMissing)
+FInstancedStruct* FYIItemInstance::FindMutableFragmentByStruct(const UScriptStruct* FragmentStruct, bool bCreateIfMissing)
 {
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
 	for (FInstancedStruct& Fragment : Fragments)
 	{
-		if (TFragment* Value = Fragment.GetMutablePtr<TFragment>())
+		if (Fragment.GetScriptStruct() == FragmentStruct)
 		{
-			return Value;
+			return &Fragment;
 		}
 	}
 
@@ -32,70 +38,47 @@ TFragment* YI_FindFragmentMutable(TArray<FInstancedStruct>& Fragments, bool bCre
 	}
 
 	FInstancedStruct& NewFragment = Fragments.AddDefaulted_GetRef();
-	NewFragment.InitializeAs<TFragment>();
-	return NewFragment.GetMutablePtr<TFragment>();
-}
+	NewFragment.InitializeAs(FragmentStruct);
+	return &NewFragment;
 }
 
-void FYIItemInstance::SyncLegacyToCoreFragments()
+const FYIItemCustomRuntimeFragment* FYIItemInstance::FindCustomRuntimeFragmentByTag(FGameplayTag FragmentTag) const
 {
-	if (!Affixes.IsEmpty())
+	if (!FragmentTag.IsValid())
 	{
-		if (FYIItemAffixesFragment* AffixFragment = GetMutableAffixesFragment(true))
+		return nullptr;
+	}
+
+	for (const FInstancedStruct& Fragment : Fragments)
+	{
+		if (const FYIItemCustomRuntimeFragment* Custom = Fragment.GetPtr<FYIItemCustomRuntimeFragment>())
 		{
-			AffixFragment->Values = Affixes;
+			if (Custom->FragmentTag == FragmentTag)
+			{
+				return Custom;
+			}
 		}
 	}
+	return nullptr;
+}
 
-	if (!Attributes.IsEmpty())
+FYIItemCustomRuntimeFragment* FYIItemInstance::FindMutableCustomRuntimeFragmentByTag(FGameplayTag FragmentTag)
+{
+	if (!FragmentTag.IsValid())
 	{
-		if (FYIItemAttributesFragment* AttrFragment = GetMutableAttributesFragment(true))
+		return nullptr;
+	}
+
+	for (FInstancedStruct& Fragment : Fragments)
+	{
+		if (FYIItemCustomRuntimeFragment* Custom = Fragment.GetMutablePtr<FYIItemCustomRuntimeFragment>())
 		{
-			AttrFragment->Values = Attributes;
+			if (Custom->FragmentTag == FragmentTag)
+			{
+				return Custom;
+			}
 		}
 	}
-}
-
-void FYIItemInstance::SyncCoreFragmentsToLegacy()
-{
-	if (const FYIItemAffixesFragment* AffixFragment = GetAffixesFragment())
-	{
-		Affixes = AffixFragment->Values;
-	}
-
-	if (const FYIItemAttributesFragment* AttrFragment = GetAttributesFragment())
-	{
-		Attributes = AttrFragment->Values;
-	}
-}
-
-const FYIItemAffixesFragment* FYIItemInstance::GetAffixesFragment() const
-{
-	return YI_FindFragmentConst<FYIItemAffixesFragment>(Fragments);
-}
-
-FYIItemAffixesFragment* FYIItemInstance::GetMutableAffixesFragment(bool bCreateIfMissing)
-{
-	return YI_FindFragmentMutable<FYIItemAffixesFragment>(Fragments, bCreateIfMissing);
-}
-
-const FYIItemAttributesFragment* FYIItemInstance::GetAttributesFragment() const
-{
-	return YI_FindFragmentConst<FYIItemAttributesFragment>(Fragments);
-}
-
-FYIItemAttributesFragment* FYIItemInstance::GetMutableAttributesFragment(bool bCreateIfMissing)
-{
-	return YI_FindFragmentMutable<FYIItemAttributesFragment>(Fragments, bCreateIfMissing);
-}
-
-const FYIItemDurabilityFragment* FYIItemInstance::GetDurabilityFragment() const
-{
-	return YI_FindFragmentConst<FYIItemDurabilityFragment>(Fragments);
-}
-
-FYIItemDurabilityFragment* FYIItemInstance::GetMutableDurabilityFragment(bool bCreateIfMissing)
-{
-	return YI_FindFragmentMutable<FYIItemDurabilityFragment>(Fragments, bCreateIfMissing);
+	return nullptr;
 }
 

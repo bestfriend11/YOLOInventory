@@ -9,6 +9,7 @@ class UYIAttributeModAsset;
 class UYIItemDefinition;
 class UYIItemSFXProfile;
 class UScriptStruct;
+struct FYIItemCustomDefinitionFragment;
 
 namespace YIItemSchema
 {
@@ -31,6 +32,12 @@ namespace YIItemSchema
 
 	/** Resolve a fragment by struct type using local -> trait -> parent precedence. */
 	YOLOINVENTORYSCHEMA_API const FInstancedStruct* FindResolvedDefinitionFragmentByStruct(const UYIItemDefinition* Definition, const UScriptStruct* FragmentStruct);
+
+	/** Resolve the first custom definition fragment for a semantic tag. */
+	YOLOINVENTORYSCHEMA_API const FYIItemCustomDefinitionFragment* FindCustomDefinitionFragment(const UYIItemDefinition* Definition, const FGameplayTag& FragmentTag);
+
+	/** Resolve all custom definition fragments for a semantic tag. */
+	YOLOINVENTORYSCHEMA_API void FindCustomDefinitionFragments(const UYIItemDefinition* Definition, const FGameplayTag& FragmentTag, TArray<const FYIItemCustomDefinitionFragment*>& OutFragments);
 
 	inline FText GetDisplayName(const UYIItemDefinition* Definition)
 	{

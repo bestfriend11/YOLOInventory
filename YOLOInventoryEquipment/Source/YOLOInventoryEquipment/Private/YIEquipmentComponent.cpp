@@ -4,6 +4,7 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "YIItemSchemaResolver.h"
 #include "YIEquipmentSchemaAsset.h"
 #include "YIInventoryBlueprintLibrary.h"
@@ -20,26 +21,15 @@ namespace YIEquipmentPrivate
 {
 	static FYIItemInstanceNet FullToNet(const FYIItemInstance& Full)
 	{
-		FYIItemInstance Runtime = Full;
-		Runtime.SyncCoreFragmentsToLegacy();
-
 		FYIItemInstanceNet Out;
-		Out.Definition = Runtime.Definition;
-		Out.Count = Runtime.Count;
-		Out.InstanceId = Runtime.InstanceId;
-		Out.StackId = Runtime.StackId;
-		Out.CustomStackKey = Runtime.CustomStackKey;
-		Out.ContainedBagId = Runtime.ContainedBagId;
-		Out.bRotated = Runtime.bRotated;
-		Out.Affixes = Runtime.Affixes;
-		Out.Attributes.Reset();
-		for (const TPair<FName, float>& KV : Runtime.Attributes)
-		{
-			FYIAttributeKV OutKV;
-			OutKV.Name = KV.Key;
-			OutKV.Value = KV.Value;
-			Out.Attributes.Add(OutKV);
-		}
+		Out.Definition = Full.Definition;
+		Out.Count = Full.Count;
+		Out.InstanceId = Full.InstanceId;
+		Out.StackId = Full.StackId;
+		Out.CustomStackKey = Full.CustomStackKey;
+		Out.ContainedBagId = Full.ContainedBagId;
+		Out.bRotated = Full.bRotated;
+		YIItemInstanceFragments::ExportLegacyNetPayload(Full, Out.Affixes, Out.Attributes);
 		return Out;
 	}
 
@@ -53,13 +43,7 @@ namespace YIEquipmentPrivate
 		Out.CustomStackKey = Net.CustomStackKey;
 		Out.ContainedBagId = Net.ContainedBagId;
 		Out.bRotated = Net.bRotated;
-		Out.Affixes = Net.Affixes;
-		Out.Attributes.Reset();
-		for (const FYIAttributeKV& KV : Net.Attributes)
-		{
-			Out.Attributes.Add(KV.Name, KV.Value);
-		}
-		Out.SyncLegacyToCoreFragments();
+		YIItemInstanceFragments::ImportLegacyNetPayload(Out, Net.Affixes, Net.Attributes);
 		return Out;
 	}
 

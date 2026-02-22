@@ -6,6 +6,7 @@
 #include "YIRarityProfile.h"
 #include "YIItemGenerator.h"
 #include "YIItemDefinition.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "YIItemSchemaResolver.h"
 #include "YIItemRegistrySubsystem.h"
 #include "YIAffixAsset.h"
@@ -1145,11 +1146,12 @@ bool SYIGeneratorDashboard::RunGeneratorTestInternal(bool bUserInitiated)
 	Detail += LINE_TERMINATOR;
 	Detail += FString::Printf(TEXT("Suffix Criteria: %s"), *CriteriaSummary(Generator->SuffixCriteria));
 
-	if (Item.Item.Affixes.Num() > 0)
+	const FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetAffixes(Item.Item);
+	if (AffixFragment && AffixFragment->Values.Num() > 0)
 	{
 		Detail += LINE_TERMINATOR;
 		Detail += TEXT("Rolled Affixes:");
-		for (const FYIAffixInstance& Inst : Item.Item.Affixes)
+		for (const FYIAffixInstance& Inst : AffixFragment->Values)
 		{
 			const UYIAffixAsset* Src = Inst.Source.IsValid() ? Inst.Source.Get() : Inst.Source.LoadSynchronous();
 			const FString Name = Src && !Src->DisplayName.IsEmpty() ? Src->DisplayName.ToString() : Inst.DisplayNameCache.ToString();

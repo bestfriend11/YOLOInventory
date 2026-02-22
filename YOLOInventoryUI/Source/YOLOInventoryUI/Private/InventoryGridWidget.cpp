@@ -5,6 +5,7 @@
 #include "YIInventoryBlueprintLibrary.h"
 #include "InventoryUtils.h"
 #include "YIItemDefinition.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "AbilitySystemComponent.h"
 #include "YIRequirement.h"
 #include "YITradeSessionActor.h"
@@ -179,15 +180,7 @@ static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 	Net.CustomStackKey = Item.CustomStackKey;
 	Net.ContainedBagId = Item.ContainedBagId;
 	Net.bRotated = Item.bRotated;
-	Net.Affixes = Item.Affixes;
-	Net.Attributes.Reset();
-	for (const TPair<FName, float>& KV : Item.Attributes)
-	{
-		FYIAttributeKV Entry;
-		Entry.Name = KV.Key;
-		Entry.Value = KV.Value;
-		Net.Attributes.Add(Entry);
-	}
+	YIItemInstanceFragments::ExportLegacyNetPayload(Item, Net.Affixes, Net.Attributes);
 	return Net;
 }
 

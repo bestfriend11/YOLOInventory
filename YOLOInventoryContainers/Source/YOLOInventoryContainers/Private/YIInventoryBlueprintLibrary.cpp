@@ -5,6 +5,7 @@
 #include "YIAffixAsset.h"
 #include "YIAffixPoolAsset.h"
 #include "YIItemInstance.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "StructUtils/InstancedStruct.h"
 #include "GameplayTagContainer.h"
 #include "YIInventoryTypes.h"
@@ -169,7 +170,13 @@ bool UYIInventoryBlueprintLibrary::ApplyAffixSnapshot(FYIBagItem& Item, const FY
 
 	if (!Snapshot.ConflictGroupCache.IsNone())
 	{
-		for (const FYIAffixInstance& Existing : Item.Item.Affixes)
+		const TArray<FYIAffixInstance>* ExistingAffixes = nullptr;
+		if (const FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetAffixes(Item.Item))
+		{
+			ExistingAffixes = &AffixFragment->Values;
+		}
+		static const TArray<FYIAffixInstance> EmptyAffixes;
+		for (const FYIAffixInstance& Existing : (ExistingAffixes ? *ExistingAffixes : EmptyAffixes))
 		{
 			if (Existing.ConflictGroupCache == Snapshot.ConflictGroupCache)
 			{
@@ -185,8 +192,10 @@ bool UYIInventoryBlueprintLibrary::ApplyAffixSnapshot(FYIBagItem& Item, const FY
 		return false;
 	}
 
-	Item.Item.Affixes.Add(Snapshot);
-	Item.Item.SyncLegacyToCoreFragments();
+	if (FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetMutableAffixes(Item.Item, true))
+	{
+		AffixFragment->Values.Add(Snapshot);
+	}
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Item.Item);
 	return true;
 }
@@ -246,7 +255,13 @@ int32 UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(const UYIItem
 			if (!EffectiveAffixData.ConflictGroup.IsNone())
 			{
 				bool bFound = false;
-				for (const FYIAffixInstance& Existing : Instance.Affixes)
+				const TArray<FYIAffixInstance>* ExistingAffixes = nullptr;
+				if (const FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetAffixes(Instance))
+				{
+					ExistingAffixes = &AffixFragment->Values;
+				}
+				static const TArray<FYIAffixInstance> EmptyAffixes;
+				for (const FYIAffixInstance& Existing : (ExistingAffixes ? *ExistingAffixes : EmptyAffixes))
 				{
 					if (Existing.ConflictGroupCache == EffectiveAffixData.ConflictGroup) { bFound = true; break; }
 				}
@@ -258,11 +273,13 @@ int32 UYIInventoryBlueprintLibrary::ApplyTemplateAffixesToInstance(const UYIItem
 			{
 				continue;
 			}
-			Instance.Affixes.Add(Snapshot);
+			if (FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetMutableAffixes(Instance, true))
+			{
+				AffixFragment->Values.Add(Snapshot);
+			}
 			++Added;
 		}
 	}
-	Instance.SyncLegacyToCoreFragments();
 	// Recompute custom stack key after applying templates
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Instance);
 	return Added;
@@ -510,14 +527,16 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	UYIItemDefinition* Def = It.Item.Definition.IsValid()? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
 	if (!Def) return false;
 
-	const TArray<FYIAffixInstance>* RuntimeAffixes = &It.Item.Affixes;
-	if (const FYIItemAffixesFragment* AffixFragment = It.Item.GetAffixesFragment())
+	static const TArray<FYIAffixInstance> EmptyAffixes;
+	static const TMap<FName, float> EmptyAttributes;
+	const TArray<FYIAffixInstance>* RuntimeAffixes = &EmptyAffixes;
+	if (const FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetAffixes(It.Item))
 	{
 		RuntimeAffixes = &AffixFragment->Values;
 	}
 
-	const TMap<FName, float>* RuntimeAttributes = &It.Item.Attributes;
-	if (const FYIItemAttributesFragment* AttrFragment = It.Item.GetAttributesFragment())
+	const TMap<FName, float>* RuntimeAttributes = &EmptyAttributes;
+	if (const FYIItemAttributesFragment* AttrFragment = YIItemInstanceFragments::GetAttributes(It.Item))
 	{
 		RuntimeAttributes = &AttrFragment->Values;
 	}
@@ -690,18 +709,11 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 		if (Instance.bRotated) Sz = FIntPoint(Sz.Y, Sz.X);
 	}
 	Desc += FString::Printf(TEXT("|S%d,%d"), Sz.X, Sz.Y);
-	const TArray<FYIAffixInstance>* AffixSource = &Instance.Affixes;
-	TArray<FYIAffixInstance> AffixScratch;
-	if (const FYIItemAffixesFragment* AffixFragment = Instance.GetAffixesFragment())
+	static const TArray<FYIAffixInstance> EmptyAffixSource;
+	const TArray<FYIAffixInstance>* AffixSource = &EmptyAffixSource;
+	if (const FYIItemAffixesFragment* AffixFragment = YIItemInstanceFragments::GetAffixes(Instance))
 	{
 		AffixSource = &AffixFragment->Values;
-	}
-	else if (!Instance.Fragments.IsEmpty())
-	{
-		FYIItemInstance Copy = Instance;
-		Copy.SyncCoreFragmentsToLegacy();
-		AffixScratch = MoveTemp(Copy.Affixes);
-		AffixSource = &AffixScratch;
 	}
 
 	TArray<FString> Parts;
@@ -717,18 +729,11 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 	Parts.Sort();
 	for (const FString& P : Parts) Desc += TEXT("|") + P;
 
-	const TMap<FName, float>* AttrSource = &Instance.Attributes;
-	TMap<FName, float> AttrScratch;
-	if (const FYIItemAttributesFragment* AttrFragment = Instance.GetAttributesFragment())
+	static const TMap<FName, float> EmptyAttrSource;
+	const TMap<FName, float>* AttrSource = &EmptyAttrSource;
+	if (const FYIItemAttributesFragment* AttrFragment = YIItemInstanceFragments::GetAttributes(Instance))
 	{
 		AttrSource = &AttrFragment->Values;
-	}
-	else if (!Instance.Fragments.IsEmpty())
-	{
-		FYIItemInstance Copy = Instance;
-		Copy.SyncCoreFragmentsToLegacy();
-		AttrScratch = MoveTemp(Copy.Attributes);
-		AttrSource = &AttrScratch;
 	}
 
 	TArray<FName> AttrKeys;
@@ -745,7 +750,7 @@ int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance&
 		}
 	}
 
-	if (const FYIItemDurabilityFragment* Dur = Instance.GetDurabilityFragment())
+	if (const FYIItemDurabilityFragment* Dur = YIItemInstanceFragments::GetDurability(Instance))
 	{
 		Desc += FString::Printf(TEXT("|D:%d:%.4f:%.4f"), Dur->bEnabled ? 1 : 0, Dur->Current, Dur->Max);
 	}
@@ -760,12 +765,14 @@ void UYIInventoryBlueprintLibrary::UpdateCustomStackKey(FYIItemInstance& Instanc
 
 void UYIInventoryBlueprintLibrary::InitializeFragmentsFromLegacy(FYIItemInstance& Instance)
 {
-	Instance.SyncLegacyToCoreFragments();
+	// Fragment-first architecture: no legacy payload fields remain on FYIItemInstance.
+	(void)Instance;
 }
 
 void UYIInventoryBlueprintLibrary::SyncLegacyFromFragments(FYIItemInstance& Instance)
 {
-	Instance.SyncCoreFragmentsToLegacy();
+	// Fragment-first architecture: no legacy payload fields remain on FYIItemInstance.
+	(void)Instance;
 }
 
 bool UYIInventoryBlueprintLibrary::GetItemDurability(const FYIItemInstance& Instance, float& OutCurrent, float& OutMax)
@@ -773,7 +780,7 @@ bool UYIInventoryBlueprintLibrary::GetItemDurability(const FYIItemInstance& Inst
 	OutCurrent = 0.f;
 	OutMax = 0.f;
 
-	if (const FYIItemDurabilityFragment* Dur = Instance.GetDurabilityFragment())
+	if (const FYIItemDurabilityFragment* Dur = YIItemInstanceFragments::GetDurability(Instance))
 	{
 		if (!Dur->bEnabled)
 		{
@@ -788,17 +795,19 @@ bool UYIInventoryBlueprintLibrary::GetItemDurability(const FYIItemInstance& Inst
 
 void UYIInventoryBlueprintLibrary::SetItemDurability(FYIItemInstance& Instance, float Current, float Max, bool bEnabled)
 {
-	if (FYIItemDurabilityFragment* Dur = Instance.GetMutableDurabilityFragment(true))
+	if (FYIItemDurabilityFragment* Dur = YIItemInstanceFragments::GetMutableDurability(Instance, true))
 	{
 		Dur->bEnabled = bEnabled;
 		Dur->Current = FMath::Max(0.f, Current);
 		Dur->Max = FMath::Max(0.f, Max);
 	}
 
-	// Legacy mirror for compatibility with existing tooltips/editor code paths.
-	Instance.Attributes.Add(TEXT("Durability"), FMath::Max(0.f, Current));
-	Instance.Attributes.Add(TEXT("DurabilityMax"), FMath::Max(0.f, Max));
-	Instance.SyncLegacyToCoreFragments();
+	// Optional attribute mirror for generic tooltip pipelines that read attribute fragment values.
+	if (FYIItemAttributesFragment* Attr = YIItemInstanceFragments::GetMutableAttributes(Instance, true))
+	{
+		Attr->Values.Add(TEXT("Durability"), FMath::Max(0.f, Current));
+		Attr->Values.Add(TEXT("DurabilityMax"), FMath::Max(0.f, Max));
+	}
 	UpdateCustomStackKey(Instance);
 }
 
@@ -894,7 +903,6 @@ bool UYIInventoryBlueprintLibrary::AddItemInstanceToBag(UYIInventoryBag* Bag, co
 	}
 	FYIBagItem NewItem;
 	NewItem.Item = Instance;
-	NewItem.Item.SyncLegacyToCoreFragments();
 	NewItem.Size = YIItemSchema::GetDefaultSize(Def);
 	int32 AddedIdx = Bag->AddBagItem(NewItem);
 	return AddedIdx != INDEX_NONE;

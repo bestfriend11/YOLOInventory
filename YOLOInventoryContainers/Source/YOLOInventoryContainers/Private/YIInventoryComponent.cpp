@@ -2,6 +2,7 @@
 #include "YIItemSchemaResolver.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "Net/UnrealNetwork.h"
 #include "YIItemRegistrySubsystem.h"
 #include "UObject/Package.h"
@@ -1248,7 +1249,6 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	}
 	// Client: send net-safe version
 	FYIItemInstance RuntimeItem = Item.Item;
-	RuntimeItem.SyncCoreFragmentsToLegacy();
 	FYIItemInstanceNet Net;
 	Net.Definition = RuntimeItem.Definition;
 	Net.Count = RuntimeItem.Count;
@@ -1257,12 +1257,7 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	Net.CustomStackKey = RuntimeItem.CustomStackKey;
 	Net.ContainedBagId = RuntimeItem.ContainedBagId;
 	Net.bRotated = RuntimeItem.bRotated;
-	Net.Affixes = RuntimeItem.Affixes;
-	Net.Attributes.Reset();
-	for (const TPair<FName, float>& KV : RuntimeItem.Attributes)
-	{
-		FYIAttributeKV OutKV; OutKV.Name = KV.Key; OutKV.Value = KV.Value; Net.Attributes.Add(OutKV);
-	}
+	YIItemInstanceFragments::ExportLegacyNetPayload(RuntimeItem, Net.Affixes, Net.Attributes);
 	ServerAddBagItem(Net, Item.Pos, Item.Size);
 	return 0; // optimistic dummy index; OnRep will refresh actual layout
 }
@@ -1277,13 +1272,7 @@ static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
 	Out.CustomStackKey = Net.CustomStackKey;
 	Out.ContainedBagId = Net.ContainedBagId;
 	Out.bRotated = Net.bRotated;
-	Out.Affixes = Net.Affixes;
-	Out.Attributes.Reset();
-	for (const FYIAttributeKV& KV : Net.Attributes)
-	{
-		Out.Attributes.Add(KV.Name, KV.Value);
-	}
-	Out.SyncLegacyToCoreFragments();
+	YIItemInstanceFragments::ImportLegacyNetPayload(Out, Net.Affixes, Net.Attributes);
 	return Out;
 }
 

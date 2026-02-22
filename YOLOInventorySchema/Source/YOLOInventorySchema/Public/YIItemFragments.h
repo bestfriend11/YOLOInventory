@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "StructUtils/PropertyBag.h"
 #include "YIAffix.h"
 #include "YIItemFragments.generated.h"
 
@@ -19,6 +20,28 @@ struct YOLOINVENTORYSCHEMA_API FYIItemFragmentBase
 	GENERATED_BODY()
 };
 
+/**
+ * Generic editor-authored runtime fragment.
+ * Use this for per-instance mutable payloads without introducing new C++ structs.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="Custom Runtime Fragment"))
+struct YOLOINVENTORYSCHEMA_API FYIItemCustomRuntimeFragment : public FYIItemFragmentBase
+{
+	GENERATED_BODY()
+
+	/** Optional semantic tag used by gameplay systems to query this runtime payload. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTag FragmentTag;
+
+	/** Optional human-readable key (e.g. CooldownState, ChargesState). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FName FragmentName = NAME_None;
+
+	/** Designer-defined runtime fields and values (fully data-driven). */
+	UPROPERTY(EditAnywhere, Category="Fragment")
+	FInstancedPropertyBag Properties;
+};
+
 /** Marker base for static definition fragments (shared by all instances of a definition). */
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemDefinitionFragmentBase
@@ -31,6 +54,34 @@ struct YOLOINVENTORYSCHEMA_API FYIItemDefinitionFragmentBase
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment|Policy", AdvancedDisplay, meta=(YIInlineMapIgnore="true"))
 	bool bIsUniqueFragment = true;
+};
+
+/**
+ * Generic editor-authored definition fragment.
+ * Designers can add arbitrary typed fields in the embedded property bag without C++.
+ */
+USTRUCT(BlueprintType, meta=(DisplayName="Custom Definition Fragment"))
+struct YOLOINVENTORYSCHEMA_API FYIItemCustomDefinitionFragment : public FYIItemDefinitionFragmentBase
+{
+	GENERATED_BODY()
+
+	FYIItemCustomDefinitionFragment()
+	{
+		// Custom fragments are intentionally multi-instance by default.
+		bIsUniqueFragment = false;
+	}
+
+	/** Optional semantic tag used by runtime systems to query this fragment. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FGameplayTag FragmentTag;
+
+	/** Optional human-readable key (e.g. Cooldown, Charges, Durability). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
+	FName FragmentName = NAME_None;
+
+	/** Designer-defined fields and values (fully data-driven). */
+	UPROPERTY(EditAnywhere, Category="Fragment")
+	FInstancedPropertyBag Properties;
 };
 
 /** Shared UI metadata for an item definition. */

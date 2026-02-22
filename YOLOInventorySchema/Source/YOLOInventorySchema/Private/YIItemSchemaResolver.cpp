@@ -12,12 +12,22 @@
 void FYIItemSchemaSnapshot::RebuildResolvedFragmentIndex()
 {
 	ResolvedFragmentIndexByStruct.Reset();
+	ResolvedCustomFragmentIndexByTag.Reset();
 	for (int32 Index = 0; Index < ResolvedDefinitionFragments.Num(); ++Index)
 	{
-		const UScriptStruct* FragmentStruct = ResolvedDefinitionFragments[Index].GetScriptStruct();
+		const FInstancedStruct& Fragment = ResolvedDefinitionFragments[Index];
+		const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
 		if (FragmentStruct)
 		{
 			ResolvedFragmentIndexByStruct.Add(FragmentStruct, Index);
+		}
+
+		if (const FYIItemCustomDefinitionFragment* CustomFragment = Fragment.GetPtr<FYIItemCustomDefinitionFragment>())
+		{
+			if (CustomFragment->FragmentTag.IsValid())
+			{
+				ResolvedCustomFragmentIndexByTag.Add(CustomFragment->FragmentTag, Index);
+			}
 		}
 	}
 }
@@ -34,6 +44,50 @@ const FInstancedStruct* FYIItemSchemaSnapshot::FindResolvedFragmentByStruct(cons
 		return ResolvedDefinitionFragments.IsValidIndex(*Index) ? &ResolvedDefinitionFragments[*Index] : nullptr;
 	}
 	return nullptr;
+}
+
+const FYIItemCustomDefinitionFragment* FYIItemSchemaSnapshot::FindResolvedCustomFragmentByTag(const FGameplayTag& FragmentTag) const
+{
+	if (!FragmentTag.IsValid())
+	{
+		return nullptr;
+	}
+
+	TArray<int32> Indices;
+	ResolvedCustomFragmentIndexByTag.MultiFind(FragmentTag, Indices);
+	if (Indices.Num() > 0)
+	{
+		if (ResolvedDefinitionFragments.IsValidIndex(Indices[0]))
+		{
+			return ResolvedDefinitionFragments[Indices[0]].GetPtr<FYIItemCustomDefinitionFragment>();
+		}
+	}
+	return nullptr;
+}
+
+void FYIItemSchemaSnapshot::FindResolvedCustomFragmentsByTag(const FGameplayTag& FragmentTag, TArray<const FYIItemCustomDefinitionFragment*>& OutFragments) const
+{
+	OutFragments.Reset();
+	if (!FragmentTag.IsValid())
+	{
+		return;
+	}
+
+	TArray<int32> Indices;
+	ResolvedCustomFragmentIndexByTag.MultiFind(FragmentTag, Indices);
+	OutFragments.Reserve(Indices.Num());
+	for (const int32 Index : Indices)
+	{
+		if (!ResolvedDefinitionFragments.IsValidIndex(Index))
+		{
+			continue;
+		}
+
+		if (const FYIItemCustomDefinitionFragment* Custom = ResolvedDefinitionFragments[Index].GetPtr<FYIItemCustomDefinitionFragment>())
+		{
+			OutFragments.Add(Custom);
+		}
+	}
 }
 
 namespace
@@ -89,15 +143,27 @@ namespace
 				continue;
 			}
 
-			if (const int32* ExistingIndex = InOutIndexByStruct.Find(FragmentStruct))
+			bool bTreatAsUnique = true;
+			if (const FYIItemDefinitionFragmentBase* FragmentPolicy = Fragment.GetPtr<FYIItemDefinitionFragmentBase>())
 			{
-				InOutResolvedFragments[*ExistingIndex] = Fragment;
+				bTreatAsUnique = FragmentPolicy->bIsUniqueFragment;
 			}
-			else
+
+			if (bTreatAsUnique)
 			{
-				const int32 NewIndex = InOutResolvedFragments.Add(Fragment);
-				InOutIndexByStruct.Add(FragmentStruct, NewIndex);
+				if (const int32* ExistingIndex = InOutIndexByStruct.Find(FragmentStruct))
+				{
+					InOutResolvedFragments[*ExistingIndex] = Fragment;
+				}
+				else
+				{
+					const int32 NewIndex = InOutResolvedFragments.Add(Fragment);
+					InOutIndexByStruct.Add(FragmentStruct, NewIndex);
+				}
+				continue;
 			}
+
+			InOutResolvedFragments.Add(Fragment);
 		}
 	}
 
@@ -393,4 +459,25 @@ const FInstancedStruct* YIItemSchema::FindResolvedDefinitionFragmentByStruct(con
 		return nullptr;
 	}
 	return GThreadLocalFragmentHandle->FindResolvedFragmentByStruct(FragmentStruct);
+}
+
+const FYIItemCustomDefinitionFragment* YIItemSchema::FindCustomDefinitionFragment(const UYIItemDefinition* Definition, const FGameplayTag& FragmentTag)
+{
+	GThreadLocalFragmentHandle = ResolveSnapshotHandle(Definition);
+	if (!GThreadLocalFragmentHandle.IsValid())
+	{
+		return nullptr;
+	}
+	return GThreadLocalFragmentHandle->FindResolvedCustomFragmentByTag(FragmentTag);
+}
+
+void YIItemSchema::FindCustomDefinitionFragments(const UYIItemDefinition* Definition, const FGameplayTag& FragmentTag, TArray<const FYIItemCustomDefinitionFragment*>& OutFragments)
+{
+	OutFragments.Reset();
+	GThreadLocalFragmentHandle = ResolveSnapshotHandle(Definition);
+	if (!GThreadLocalFragmentHandle.IsValid())
+	{
+		return;
+	}
+	GThreadLocalFragmentHandle->FindResolvedCustomFragmentsByTag(FragmentTag, OutFragments);
 }

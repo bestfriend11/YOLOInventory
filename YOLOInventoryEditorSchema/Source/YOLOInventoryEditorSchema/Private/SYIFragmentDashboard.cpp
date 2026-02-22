@@ -4,6 +4,7 @@
 #include "YIAffixAsset.h"
 #include "YIFragmentAsset.h"
 #include "YIFragmentPoolAsset.h"
+#include "YIItemFragments.h"
 #include "YIItemTraitAsset.h"
 #include "YIFragmentAssetFactory.h"
 #include "YIFragmentPoolAssetFactory.h"
@@ -224,6 +225,7 @@ void SYIFragmentDashboard::SaveCurrentAssetFromToolbar()
 void SYIFragmentDashboard::RefreshFragmentStructOptions()
 {
 	YICollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), ItemDefinitionFragmentStructOptions);
+	YICollectFragmentStructOptions(FYIItemFragmentBase::StaticStruct(), ItemRuntimeFragmentStructOptions);
 	YICollectFragmentStructOptions(FYIAffixDefinitionFragmentBase::StaticStruct(), AffixDefinitionFragmentStructOptions);
 
 	if (!SelectedItemDefinitionFragmentStructOption.IsValid()
@@ -247,6 +249,17 @@ void SYIFragmentDashboard::RefreshFragmentStructOptions()
 			? AffixDefinitionFragmentStructOptions[0]
 			: nullptr;
 	}
+
+	if (!SelectedItemRuntimeFragmentStructOption.IsValid()
+		|| !ItemRuntimeFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
+		{
+			return Entry.IsValid() && SelectedItemRuntimeFragmentStructOption.IsValid() && *Entry == *SelectedItemRuntimeFragmentStructOption;
+		}))
+	{
+		SelectedItemRuntimeFragmentStructOption = ItemRuntimeFragmentStructOptions.Num() > 0
+			? ItemRuntimeFragmentStructOptions[0]
+			: nullptr;
+	}
 }
 
 void SYIFragmentDashboard::SetActionStatus(const FText& InStatus, bool bIsError)
@@ -267,6 +280,11 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 	{
 		const UObject* Asset = SelectedAsset.Get();
 		return Asset && (Asset->IsA<UYIAffixAsset>() || Asset->IsA<UYIFragmentAsset>());
+	};
+
+	auto CanAuthorItemRuntimeFragments = [this]() -> bool
+	{
+		return Cast<UYIFragmentAsset>(SelectedAsset.Get()) != nullptr;
 	};
 
 	auto AddItemDefinitionFragment = [this]() -> FReply
@@ -368,6 +386,46 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentAddFailed", "Could not add affix fragment to selected asset type."), true);
 		}
 
+		return FReply::Handled();
+	};
+
+	auto AddItemRuntimeFragment = [this]() -> FReply
+	{
+		UYIFragmentAsset* FragmentAsset = Cast<UYIFragmentAsset>(SelectedAsset.Get());
+		if (!FragmentAsset)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_RuntimeNeedsFragmentAsset", "Select a Fragment Asset to author runtime fragments."), true);
+			return FReply::Handled();
+		}
+		if (!SelectedItemRuntimeFragmentStructOption.IsValid())
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoRuntimeFragmentType", "No runtime fragment type is available."), true);
+			return FReply::Handled();
+		}
+
+		UScriptStruct* FragmentStruct = YIResolveStructFromPath(*SelectedItemRuntimeFragmentStructOption);
+		if (!FragmentStruct)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_RuntimeFragmentInvalid", "Selected runtime fragment type is invalid."), true);
+			return FReply::Handled();
+		}
+
+		const bool bAdded = FragmentAsset->FindOrAddItemInstanceFragmentByStruct(FragmentStruct) != nullptr;
+		if (!bAdded)
+		{
+			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_RuntimeFragmentAddFailed", "Could not add runtime fragment to selected Fragment Asset."), true);
+			return FReply::Handled();
+		}
+
+		FragmentAsset->Modify();
+		FragmentAsset->MarkPackageDirty();
+		if (DetailsView.IsValid())
+		{
+			DetailsView->SetObject(FragmentAsset, true);
+		}
+		SetActionStatus(FText::Format(
+			NSLOCTEXT("YOLOInventory", "FragmentDashboard_RuntimeFragmentAdded", "Added runtime fragment: {0}"),
+			FText::FromString(YIMakeReadableFragmentName(FragmentStruct))), false);
 		return FReply::Handled();
 	};
 
@@ -577,6 +635,61 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
 			[
 				SNew(SVerticalBox)
+				.Visibility_Lambda([CanAuthorItemRuntimeFragments]()
+				{
+					return CanAuthorItemRuntimeFragments() ? EVisibility::Visible : EVisibility::Collapsed;
+				})
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(STextBlock)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_RuntimeHeader", "Item Runtime Fragments (dynamic payload templates)"))
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 2.f, 0.f, 2.f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(&ItemRuntimeFragmentStructOptions)
+					.OnComboBoxOpening_Lambda([this]()
+					{
+						RefreshFragmentStructOptions();
+					})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+					{
+						if (NewItem.IsValid())
+						{
+							SelectedItemRuntimeFragmentStructOption = NewItem;
+						}
+					})
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+					{
+						const FString Path = InItem.IsValid() ? *InItem : FString();
+						return SNew(STextBlock).Text(FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(Path))));
+					})
+					.Content()
+					[
+						SNew(STextBlock)
+						.Text_Lambda([this]()
+						{
+							if (!SelectedItemRuntimeFragmentStructOption.IsValid())
+							{
+								return NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectRuntimeFragment", "Select runtime fragment");
+							}
+							return FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(*SelectedItemRuntimeFragmentStructOption)));
+						})
+					]
+				]
+				+ SVerticalBox::Slot().AutoHeight()
+				[
+					SNew(SButton)
+					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddRuntimeFragment", "Add Runtime Fragment"))
+					.OnClicked_Lambda([AddItemRuntimeFragment]()
+					{
+						return AddItemRuntimeFragment();
+					})
+				]
+			]
+			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
+			[
+				SNew(SVerticalBox)
 				.Visibility_Lambda([CanAuthorAffixDefinitionFragments]()
 				{
 					return CanAuthorAffixDefinitionFragments() ? EVisibility::Visible : EVisibility::Collapsed;
@@ -713,7 +826,7 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildMappingPanelWidget()
 			[
 				SNew(STextBlock)
 				.AutoWrapText(true)
-				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_MappingHelp", "Definition fragments are static authoring data stored on assets. Runtime/dynamic fragments are created per item instance at generation/equip time and are not authored directly here."))
+				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_MappingHelp", "Definition fragments are static authoring data. Runtime fragments can be authored on Fragment Assets as payload templates and copied into item instances by generators/equipment/use pipelines. Use the Custom Definition/Runtime Fragment types to create fragment data without C++."))
 			]
 		];
 }
@@ -791,8 +904,9 @@ FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 	if (const UYIFragmentAsset* FragmentAsset = Cast<UYIFragmentAsset>(SelectedAsset.Get()))
 	{
 		FString Summary = FString::Printf(
-			TEXT("Fragment Asset\nItem Fragments: %d\nAffix Fragments: %d"),
+			TEXT("Fragment Asset\nItem Definition Fragments: %d\nItem Runtime Fragments: %d\nAffix Fragments: %d"),
 			FragmentAsset->ItemDefinitionFragments.Num(),
+			FragmentAsset->ItemInstanceFragments.Num(),
 			FragmentAsset->AffixDefinitionFragments.Num());
 		Summary += TEXT("\n\nAffix Fragment Types:");
 		for (const FInstancedStruct& Fragment : FragmentAsset->AffixDefinitionFragments)
@@ -803,6 +917,13 @@ FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 		}
 		Summary += TEXT("\n\nItem Fragment Types:");
 		for (const FInstancedStruct& Fragment : FragmentAsset->ItemDefinitionFragments)
+		{
+			const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
+			Summary += TEXT("\n- ");
+			Summary += FragmentStruct ? FragmentStruct->GetName() : TEXT("<Invalid Fragment>");
+		}
+		Summary += TEXT("\n\nItem Runtime Fragment Types:");
+		for (const FInstancedStruct& Fragment : FragmentAsset->ItemInstanceFragments)
 		{
 			const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
 			Summary += TEXT("\n- ");

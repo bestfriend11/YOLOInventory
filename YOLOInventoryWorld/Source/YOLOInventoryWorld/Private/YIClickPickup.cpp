@@ -3,6 +3,7 @@
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 
@@ -64,12 +65,7 @@ void AYIClickPickup::ServerPickup_Implementation(APlayerController* PC)
 	Full.CustomStackKey = ItemInstance.CustomStackKey;
 	Full.ContainedBagId = ItemInstance.ContainedBagId;
 	Full.bRotated = ItemInstance.bRotated;
-	Full.Affixes = ItemInstance.Affixes;
-	for (const FYIAttributeKV& KV : ItemInstance.Attributes)
-	{
-		Full.Attributes.Add(KV.Name, KV.Value);
-	}
-	Full.SyncLegacyToCoreFragments();
+	YIItemInstanceFragments::ImportLegacyNetPayload(Full, ItemInstance.Affixes, ItemInstance.Attributes);
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(InvComp->EquippedBag, Full))
 	{

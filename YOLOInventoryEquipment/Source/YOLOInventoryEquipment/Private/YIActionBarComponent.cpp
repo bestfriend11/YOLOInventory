@@ -7,6 +7,7 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIItemInstanceFragmentAccess.h"
 #include "YIItemSchemaResolver.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
@@ -26,15 +27,7 @@ namespace YIActionBarPrivate
 		Out.CustomStackKey = Full.CustomStackKey;
 		Out.ContainedBagId = Full.ContainedBagId;
 		Out.bRotated = Full.bRotated;
-		Out.Affixes = Full.Affixes;
-		Out.Attributes.Reset();
-		for (const TPair<FName, float>& KV : Full.Attributes)
-		{
-			FYIAttributeKV OutKV;
-			OutKV.Name = KV.Key;
-			OutKV.Value = KV.Value;
-			Out.Attributes.Add(OutKV);
-		}
+		YIItemInstanceFragments::ExportLegacyNetPayload(Full, Out.Affixes, Out.Attributes);
 		return Out;
 	}
 }

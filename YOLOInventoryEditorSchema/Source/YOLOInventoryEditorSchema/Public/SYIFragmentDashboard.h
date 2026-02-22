@@ -46,8 +46,10 @@ private:
 	EYIFragmentDashboardLayout LayoutMode = EYIFragmentDashboardLayout::Full;
 	TWeakObjectPtr<UObject> SelectedAsset;
 	TArray<TSharedPtr<FString>> ItemDefinitionFragmentStructOptions;
+	TArray<TSharedPtr<FString>> ItemRuntimeFragmentStructOptions;
 	TArray<TSharedPtr<FString>> AffixDefinitionFragmentStructOptions;
 	TSharedPtr<FString> SelectedItemDefinitionFragmentStructOption;
+	TSharedPtr<FString> SelectedItemRuntimeFragmentStructOption;
 	TSharedPtr<FString> SelectedAffixDefinitionFragmentStructOption;
 	FText LastActionStatus;
 	bool bLastActionError = false;

@@ -7,6 +7,7 @@
 
 class UTexture2D;
 class UScriptStruct;
+struct FYIItemCustomDefinitionFragment;
 
 /** Schema-facing display payload decoupled from legacy item definition fields. */
 USTRUCT(BlueprintType)
@@ -208,9 +209,12 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaSnapshot
 
 	/** Fast read index built when the snapshot is materialized. */
 	TMap<const UScriptStruct*, int32> ResolvedFragmentIndexByStruct;
+	TMultiMap<FGameplayTag, int32> ResolvedCustomFragmentIndexByTag;
 
 	void RebuildResolvedFragmentIndex();
 	const FInstancedStruct* FindResolvedFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+	const FYIItemCustomDefinitionFragment* FindResolvedCustomFragmentByTag(const FGameplayTag& FragmentTag) const;
+	void FindResolvedCustomFragmentsByTag(const FGameplayTag& FragmentTag, TArray<const FYIItemCustomDefinitionFragment*>& OutFragments) const;
 
 	template<typename TFragmentType>
 	const TFragmentType* FindResolvedFragment() const

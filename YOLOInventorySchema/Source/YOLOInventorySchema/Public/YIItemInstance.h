@@ -1,7 +1,6 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
-#include "YIAffix.h"
 #include "StructUtils/InstancedStruct.h"
 #include "YIItemFragments.h"
 #include "YIItemInstance.generated.h"
@@ -43,19 +42,11 @@ struct YOLOINVENTORYSCHEMA_API FYIItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Layout")
 	bool bRotated = false; 
 
-	// Per-instance dynamic attributes
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attributes")
-	TMap<FName,float> Attributes;
-
-	// Affixes rolled on this instance
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Affixes")
-	TArray<FYIAffixInstance> Affixes;
-
 	/**
 	 * Modular runtime payloads (fragment-style), using FInstancedStruct to avoid UObject-per-item overhead.
 	 * Authoring stays in shared data assets; only per-instance mutable payload lives here.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventory.YIItemFragmentBase", ExcludeBaseStruct))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemFragmentBase", ExcludeBaseStruct))
 	TArray<FInstancedStruct> Fragments;
 
 	// Runtime capability states (if needed by systems)
@@ -69,18 +60,11 @@ struct YOLOINVENTORYSCHEMA_API FYIItemInstance
 		StackId = FGuid::NewGuid();
 	}
 
-	/** Copies legacy Affixes/Attributes into fragment payloads (non-destructive). */
-	void SyncLegacyToCoreFragments();
+	/** Generic fragment lookup by exact struct type. */
+	const FInstancedStruct* FindFragmentByStruct(const UScriptStruct* FragmentStruct) const;
+	FInstancedStruct* FindMutableFragmentByStruct(const UScriptStruct* FragmentStruct, bool bCreateIfMissing);
 
-	/** Copies fragment payloads back into legacy Affixes/Attributes for compatibility with old code paths. */
-	void SyncCoreFragmentsToLegacy();
-
-	const FYIItemAffixesFragment* GetAffixesFragment() const;
-	FYIItemAffixesFragment* GetMutableAffixesFragment(bool bCreateIfMissing);
-
-	const FYIItemAttributesFragment* GetAttributesFragment() const;
-	FYIItemAttributesFragment* GetMutableAttributesFragment(bool bCreateIfMissing);
-
-	const FYIItemDurabilityFragment* GetDurabilityFragment() const;
-	FYIItemDurabilityFragment* GetMutableDurabilityFragment(bool bCreateIfMissing);
+	/** Finds the first custom runtime fragment matching a semantic tag. */
+	const FYIItemCustomRuntimeFragment* FindCustomRuntimeFragmentByTag(FGameplayTag FragmentTag) const;
+	FYIItemCustomRuntimeFragment* FindMutableCustomRuntimeFragmentByTag(FGameplayTag FragmentTag);
 };
