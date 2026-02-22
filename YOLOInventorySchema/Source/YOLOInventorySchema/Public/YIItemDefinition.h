@@ -53,11 +53,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemDefinitionFragmentBase", ExcludeBaseStruct))
 	TArray<FInstancedStruct> DefinitionFragments;
 
+	/** Optional runtime-fragment templates copied into generated item instances by runtime systems. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragments", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemFragmentBase", ExcludeBaseStruct))
+	TArray<FInstancedStruct> DefaultInstanceFragments;
+
 	/** Find static definition fragment by exact struct type. */
 	const FInstancedStruct* FindDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct) const;
 
 	/** Find or add static definition fragment by exact struct type. */
 	FInstancedStruct* FindOrAddDefinitionFragmentByStruct(const UScriptStruct* FragmentStruct);
+
+	/** Find or add runtime-fragment template by exact struct type. */
+	FInstancedStruct* FindOrAddDefaultInstanceFragmentByStruct(const UScriptStruct* FragmentStruct);
 
 	/** Export decoupled suite-facing snapshot for non-schema consumers. */
 	void BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const;

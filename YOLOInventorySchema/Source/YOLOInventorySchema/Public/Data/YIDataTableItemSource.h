@@ -4,6 +4,7 @@
 #include "Engine/DataAsset.h"
 #include "CSVDataTransformer.h"
 #include "UObject/SoftObjectPtr.h"
+#include "StructUtils/PropertyBag.h"
 #include "YIDataTableItemSource.generated.h"
 
 class UBlueprintFunctionLibrary;
@@ -74,6 +75,22 @@ struct FYIFieldMapping
 	/** Field inside the fragment struct. Falls back to TargetProperty when empty. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty"))
 	FName TargetFragmentField = NAME_None;
+
+	/** If true, target writes go into a PropertyBag field inside a custom fragment's Properties bag. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="TargetLayer != EYIFieldMappingTargetLayer::LegacyProperty"))
+	bool bTargetPropertyBagField = false;
+
+	/** PropertyBag field name (inside Custom Definition/Runtime Fragment.Properties) when bTargetPropertyBagField is true. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="bTargetPropertyBagField"))
+	FName TargetPropertyBagFieldName = NAME_None;
+
+	/** PropertyBag field type preset used to create/validate the target bag field. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="bTargetPropertyBagField"))
+	EPropertyBagPropertyType TargetPropertyBagFieldType = EPropertyBagPropertyType::String;
+
+	/** Optional type object for enum/struct/object/class bag fields. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping|V2", meta=(EditCondition="bTargetPropertyBagField"))
+	TSoftObjectPtr<UObject> TargetPropertyBagFieldTypeObject;
 
 	/** Optional conversion applied before assigning to the target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Mapping")

@@ -79,6 +79,26 @@ FInstancedStruct* UYIItemDefinition::FindOrAddDefinitionFragmentByStruct(const U
 	return &NewFragment;
 }
 
+FInstancedStruct* UYIItemDefinition::FindOrAddDefaultInstanceFragmentByStruct(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return nullptr;
+	}
+
+	for (FInstancedStruct& Fragment : DefaultInstanceFragments)
+	{
+		if (Fragment.GetScriptStruct() == FragmentStruct)
+		{
+			return &Fragment;
+		}
+	}
+
+	FInstancedStruct& NewFragment = DefaultInstanceFragments.AddDefaulted_GetRef();
+	NewFragment.InitializeAs(FragmentStruct);
+	return &NewFragment;
+}
+
 void UYIItemDefinition::BuildSchemaSnapshot(FYIItemSchemaSnapshot& OutSnapshot) const
 {
 	OutSnapshot = YIItemSchema::ResolveSnapshot(this);

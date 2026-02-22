@@ -4,6 +4,7 @@
 #include "YIItemDefinition.h"
 #include "YIItemFragments.h"
 #include "StructUtils/InstancedStruct.h"
+#include "StructUtils/PropertyBag.h"
 #include "UObject/UnrealType.h"
 
 namespace
@@ -132,10 +133,132 @@ namespace
 		OutValuePtr = const_cast<uint8*>(ConstPtr);
 		return true;
 	}
+
+	static bool YIIsCustomItemDefinitionFragmentStruct(const UScriptStruct* Struct)
+	{
+		return Struct && Struct->IsChildOf(FYIItemCustomDefinitionFragment::StaticStruct());
+	}
+
+	static bool YIIsCustomItemRuntimeFragmentStruct(const UScriptStruct* Struct)
+	{
+		return Struct && Struct->IsChildOf(FYIItemCustomRuntimeFragment::StaticStruct());
+	}
+
+	static EPropertyBagAlterationResult YIEnsurePropertyBagField(
+		FInstancedPropertyBag& Bag,
+		const FYIFieldMapping& Mapping,
+		FString* OutError)
+	{
+		if (Mapping.TargetPropertyBagFieldName.IsNone())
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag field name is not set."));
+			return EPropertyBagAlterationResult::PropertyNameEmpty;
+		}
+
+		const FName SafeFieldName = FInstancedPropertyBag::SanitizePropertyName(Mapping.TargetPropertyBagFieldName);
+		if (SafeFieldName.IsNone())
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag field name is invalid."));
+			return EPropertyBagAlterationResult::PropertyNameInvalidCharacters;
+		}
+
+		UObject* TypeObject = nullptr;
+		if (Mapping.TargetPropertyBagFieldTypeObject.ToSoftObjectPath().IsValid())
+		{
+			TypeObject = Mapping.TargetPropertyBagFieldTypeObject.LoadSynchronous();
+		}
+
+		const EPropertyBagPropertyType FieldType = Mapping.TargetPropertyBagFieldType;
+		if (FieldType == EPropertyBagPropertyType::None || FieldType == EPropertyBagPropertyType::Count)
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag field type preset is invalid."));
+			return EPropertyBagAlterationResult::InternalError;
+		}
+
+		const EPropertyBagAlterationResult AddResult = Bag.AddProperty(SafeFieldName, FieldType, TypeObject, true);
+		if (AddResult == EPropertyBagAlterationResult::Success || AddResult == EPropertyBagAlterationResult::NoOperation)
+		{
+			return EPropertyBagAlterationResult::Success;
+		}
+
+		if (AddResult == EPropertyBagAlterationResult::TargetPropertyAlreadyExists)
+		{
+			if (const FPropertyBagPropertyDesc* Existing = Bag.FindPropertyDescByName(SafeFieldName))
+			{
+				const FPropertyBagPropertyDesc Requested(SafeFieldName, FieldType, TypeObject);
+				if (Existing->CompatibleType(Requested))
+				{
+					return EPropertyBagAlterationResult::Success;
+				}
+
+				YISetResolveError(OutError, FString::Printf(
+					TEXT("PropertyBag field '%s' already exists with incompatible type."),
+					*SafeFieldName.ToString()));
+				return AddResult;
+			}
+		}
+
+		return AddResult;
+	}
+
+	static bool YIResolvePropertyBagFieldTarget(
+		FInstancedPropertyBag& Bag,
+		const FYIFieldMapping& Mapping,
+		FYIResolvedMappingTarget& OutTarget,
+		FString* OutError)
+	{
+		if (YIEnsurePropertyBagField(Bag, Mapping, OutError) != EPropertyBagAlterationResult::Success)
+		{
+			return false;
+		}
+
+		const UPropertyBag* BagStruct = Bag.GetPropertyBagStruct();
+		if (!BagStruct)
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag struct could not be created."));
+			return false;
+		}
+
+		FStructView BagValue = Bag.GetMutableValue();
+		uint8* BagMemory = BagValue.GetMemory();
+		if (!BagMemory)
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag value memory is invalid."));
+			return false;
+		}
+
+		FProperty* TargetProperty = YIFindPropertyByAuthoredName(BagStruct, Mapping.TargetPropertyBagFieldName);
+		if (!TargetProperty)
+		{
+			// Some bags sanitize names; retry with sanitized field name.
+			TargetProperty = YIFindPropertyByAuthoredName(BagStruct, FInstancedPropertyBag::SanitizePropertyName(Mapping.TargetPropertyBagFieldName));
+		}
+		if (!TargetProperty)
+		{
+			YISetResolveError(OutError, FString::Printf(TEXT("PropertyBag field '%s' not found after creation."), *Mapping.TargetPropertyBagFieldName.ToString()));
+			return false;
+		}
+
+		uint8* TargetValuePtr = TargetProperty->ContainerPtrToValuePtr<uint8>(BagMemory);
+		if (!TargetValuePtr)
+		{
+			YISetResolveError(OutError, TEXT("PropertyBag field value pointer is invalid."));
+			return false;
+		}
+
+		OutTarget.Property = TargetProperty;
+		OutTarget.ValuePtr = TargetValuePtr;
+		OutTarget.OwnerStruct = BagStruct;
+		return true;
+	}
 }
 
 FName YIGetResolvedTargetFieldName(const FYIFieldMapping& Mapping)
 {
+	if (Mapping.bTargetPropertyBagField && !Mapping.TargetPropertyBagFieldName.IsNone())
+	{
+		return FName(*FString::Printf(TEXT("Properties.%s"), *Mapping.TargetPropertyBagFieldName.ToString()));
+	}
 	return Mapping.TargetFragmentField.IsNone() ? Mapping.TargetProperty : Mapping.TargetFragmentField;
 }
 
@@ -209,8 +332,11 @@ bool YIResolveMappingTarget(
 
 	if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::DynamicInstanceFragment)
 	{
-		YISetResolveError(OutError, TEXT("Dynamic instance fragment targets are not valid for definition/asset mapping."));
-		return false;
+		if (!Cast<UYIItemDefinition>(TargetObject))
+		{
+			YISetResolveError(OutError, TEXT("Dynamic instance fragment targets require UYIItemDefinition."));
+			return false;
+		}
 	}
 
 	const UScriptStruct* FragmentStruct = Mapping.TargetFragmentStruct.Get();
@@ -230,13 +356,25 @@ bool YIResolveMappingTarget(
 	FInstancedStruct* Fragment = nullptr;
 	if (UYIItemDefinition* ItemDefinition = Cast<UYIItemDefinition>(TargetObject))
 	{
-		if (!FragmentStruct->IsChildOf(FYIItemDefinitionFragmentBase::StaticStruct()))
+		if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::DynamicInstanceFragment)
+		{
+			if (!FragmentStruct->IsChildOf(FYIItemFragmentBase::StaticStruct()))
+			{
+				YISetResolveError(OutError, FString::Printf(TEXT("Fragment struct '%s' must derive from FYIItemFragmentBase."), *FragmentStruct->GetName()));
+				return false;
+			}
+			Fragment = ItemDefinition->FindOrAddDefaultInstanceFragmentByStruct(FragmentStruct);
+		}
+		else if (!FragmentStruct->IsChildOf(FYIItemDefinitionFragmentBase::StaticStruct()))
 		{
 			YISetResolveError(OutError, FString::Printf(TEXT("Fragment struct '%s' must derive from FYIItemDefinitionFragmentBase."),
 				*FragmentStruct->GetName()));
 			return false;
 		}
-		Fragment = ItemDefinition->FindOrAddDefinitionFragmentByStruct(FragmentStruct);
+		else
+		{
+			Fragment = ItemDefinition->FindOrAddDefinitionFragmentByStruct(FragmentStruct);
+		}
 	}
 	else if (UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(TargetObject))
 	{
@@ -257,6 +395,27 @@ bool YIResolveMappingTarget(
 	if (!Fragment || !Fragment->IsValid())
 	{
 		YISetResolveError(OutError, TEXT("Unable to create/resolve target fragment instance."));
+		return false;
+	}
+
+	if (Mapping.bTargetPropertyBagField)
+	{
+		if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::StaticDefinitionFragment && YIIsCustomItemDefinitionFragmentStruct(FragmentStruct))
+		{
+			if (FYIItemCustomDefinitionFragment* Custom = Fragment->GetMutablePtr<FYIItemCustomDefinitionFragment>())
+			{
+				return YIResolvePropertyBagFieldTarget(Custom->Properties, Mapping, OutTarget, OutError);
+			}
+		}
+		else if (Mapping.TargetLayer == EYIFieldMappingTargetLayer::DynamicInstanceFragment && YIIsCustomItemRuntimeFragmentStruct(FragmentStruct))
+		{
+			if (FYIItemCustomRuntimeFragment* Custom = Fragment->GetMutablePtr<FYIItemCustomRuntimeFragment>())
+			{
+				return YIResolvePropertyBagFieldTarget(Custom->Properties, Mapping, OutTarget, OutError);
+			}
+		}
+
+		YISetResolveError(OutError, TEXT("PropertyBag field target requires a Custom Definition Fragment or Custom Runtime Fragment."));
 		return false;
 	}
 

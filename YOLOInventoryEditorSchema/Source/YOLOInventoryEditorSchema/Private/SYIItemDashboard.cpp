@@ -369,9 +369,13 @@ static void CollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray
 	}
 
 	// Fallback: ensure core schema fragment structs are available even before first asset usage.
-	auto AddIfMissing = [&Paths, &SeenPaths](UScriptStruct* Struct)
+	auto AddIfMissing = [&Paths, &SeenPaths, BaseStruct](UScriptStruct* Struct)
 	{
 		if (!Struct)
+		{
+			return;
+		}
+		if (BaseStruct && !Struct->IsChildOf(BaseStruct))
 		{
 			return;
 		}
@@ -395,6 +399,8 @@ static void CollectFragmentStructOptions(const UScriptStruct* BaseStruct, TArray
 	AddIfMissing(FYIItemWeightDefinitionFragment::StaticStruct());
 	AddIfMissing(FYIItemEquipmentDefinitionFragment::StaticStruct());
 	AddIfMissing(FYIItemAffixDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemCustomDefinitionFragment::StaticStruct());
+	AddIfMissing(FYIItemCustomRuntimeFragment::StaticStruct());
 
 	Paths.Sort();
 	for (const FString& Path : Paths)
@@ -633,6 +639,10 @@ static void CollectStructFieldOptions(const UStruct* OwnerStruct, TArray<TShared
 		{
 			return false;
 		}
+		if (StructType == FInstancedPropertyBag::StaticStruct())
+		{
+			return false;
+		}
 		return true;
 	};
 
@@ -671,6 +681,139 @@ static void CollectStructFieldOptions(const UStruct* OwnerStruct, TArray<TShared
 	{
 		OutOptions.Add(MakeShared<FString>(Name));
 	}
+}
+
+static bool IsCustomDefinitionFragmentStructEditor(const UScriptStruct* FragmentStruct)
+{
+	return FragmentStruct && FragmentStruct->IsChildOf(FYIItemCustomDefinitionFragment::StaticStruct());
+}
+
+static bool IsCustomRuntimeFragmentStructEditor(const UScriptStruct* FragmentStruct)
+{
+	return FragmentStruct && FragmentStruct->IsChildOf(FYIItemCustomRuntimeFragment::StaticStruct());
+}
+
+static bool IsCustomFragmentStructEditor(const UScriptStruct* FragmentStruct)
+{
+	return IsCustomDefinitionFragmentStructEditor(FragmentStruct) || IsCustomRuntimeFragmentStructEditor(FragmentStruct);
+}
+
+static FString MakePropertyBagFieldPathEditor(const FName FieldName)
+{
+	return FString::Printf(TEXT("Properties.%s"), *FieldName.ToString());
+}
+
+static bool TryParsePropertyBagFieldPathEditor(const FString& FieldPath, FName& OutFieldName)
+{
+	OutFieldName = NAME_None;
+	FString Remainder;
+	if (!FieldPath.Split(TEXT("."), nullptr, &Remainder))
+	{
+		return false;
+	}
+	if (!FieldPath.StartsWith(TEXT("Properties.")) || Remainder.IsEmpty())
+	{
+		return false;
+	}
+	OutFieldName = FName(*Remainder);
+	return !OutFieldName.IsNone();
+}
+
+static void CollectPropertyBagFieldOptionsForFragmentMappingEditor(
+	const UYIDataTableItemSource* Source,
+	const UScriptStruct* FragmentStruct,
+	const UObject* DetailObject,
+	TArray<TSharedPtr<FString>>& InOutOptions)
+{
+	TSet<FString> ExistingPaths;
+	for (const TSharedPtr<FString>& Opt : InOutOptions)
+	{
+		if (Opt.IsValid())
+		{
+			ExistingPaths.Add(*Opt);
+		}
+	}
+
+	auto AddBagFieldName = [&ExistingPaths, &InOutOptions](FName BagFieldName)
+	{
+		if (BagFieldName.IsNone())
+		{
+			return;
+		}
+		const FString Path = MakePropertyBagFieldPathEditor(BagFieldName);
+		if (!ExistingPaths.Contains(Path))
+		{
+			ExistingPaths.Add(Path);
+			InOutOptions.Add(MakeShared<FString>(Path));
+		}
+	};
+
+	if (Source)
+	{
+		for (const FYIFieldMapping& Mapping : Source->InlineMappings)
+		{
+			if (Mapping.TargetFragmentStruct.Get() != FragmentStruct || !Mapping.bTargetPropertyBagField)
+			{
+				continue;
+			}
+			AddBagFieldName(Mapping.TargetPropertyBagFieldName);
+		}
+	}
+
+	if (const UYIItemDefinition* ItemDef = Cast<UYIItemDefinition>(DetailObject))
+	{
+		const TArray<FInstancedStruct>* FragmentArray = nullptr;
+		if (IsCustomDefinitionFragmentStructEditor(FragmentStruct))
+		{
+			FragmentArray = &ItemDef->DefinitionFragments;
+		}
+		else if (IsCustomRuntimeFragmentStructEditor(FragmentStruct))
+		{
+			FragmentArray = &ItemDef->DefaultInstanceFragments;
+		}
+
+		if (FragmentArray)
+		{
+			for (const FInstancedStruct& FragmentInst : *FragmentArray)
+			{
+				if (FragmentInst.GetScriptStruct() != FragmentStruct)
+				{
+					continue;
+				}
+
+				const FInstancedPropertyBag* Bag = nullptr;
+				if (const FYIItemCustomDefinitionFragment* CustomDef = FragmentInst.GetPtr<FYIItemCustomDefinitionFragment>())
+				{
+					Bag = &CustomDef->Properties;
+				}
+				else if (const FYIItemCustomRuntimeFragment* CustomRt = FragmentInst.GetPtr<FYIItemCustomRuntimeFragment>())
+				{
+					Bag = &CustomRt->Properties;
+				}
+
+				if (!Bag)
+				{
+					continue;
+				}
+
+				if (const UPropertyBag* BagStruct = Bag->GetPropertyBagStruct())
+				{
+					for (TFieldIterator<FProperty> It(BagStruct); It; ++It)
+					{
+						if (FProperty* Prop = *It)
+						{
+							AddBagFieldName(FName(*Prop->GetAuthoredName()));
+						}
+					}
+				}
+			}
+		}
+	}
+
+	InOutOptions.Sort([](const TSharedPtr<FString>& A, const TSharedPtr<FString>& B)
+	{
+		return (A.IsValid() ? *A : FString()) < (B.IsValid() ? *B : FString());
+	});
 }
 
 static FProperty* FindPropertyByAuthoredPathEditor(const UStruct* OwnerStruct, const FString& FieldPath)
@@ -5513,6 +5656,9 @@ void SYIItemDashboard::RefreshAddFragmentStructOptions()
 {
 	AddFragmentStructOptions.Reset();
 	CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), AddFragmentStructOptions);
+	TArray<TSharedPtr<FString>> RuntimeOptions;
+	CollectFragmentStructOptions(FYIItemFragmentBase::StaticStruct(), RuntimeOptions);
+	AddFragmentStructOptions.Append(RuntimeOptions);
 
 	if (!SelectedAddFragmentStructOption.IsValid()
 		|| !AddFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
@@ -5543,6 +5689,10 @@ void SYIItemDashboard::AddFragmentMappingsForStruct(UYIDataTableItemSource* Sour
 	CollectStructFieldOptions(FragmentStruct, FragmentFields);
 
 	bool bAddedAny = false;
+	const bool bRuntimeFragmentStruct = FragmentStruct->IsChildOf(FYIItemFragmentBase::StaticStruct());
+	const EYIFieldMappingTargetLayer TargetLayer = bRuntimeFragmentStruct
+		? EYIFieldMappingTargetLayer::DynamicInstanceFragment
+		: EYIFieldMappingTargetLayer::StaticDefinitionFragment;
 	for (const TSharedPtr<FString>& FieldPathPtr : FragmentFields)
 	{
 		if (!FieldPathPtr.IsValid())
@@ -5556,11 +5706,21 @@ void SYIItemDashboard::AddFragmentMappingsForStruct(UYIDataTableItemSource* Sour
 		{
 			continue;
 		}
+		if (bRuntimeFragmentStruct && FieldPath == TEXT("Properties"))
+		{
+			continue;
+		}
+		if (!bRuntimeFragmentStruct && FieldPath == TEXT("Properties") && IsCustomDefinitionFragmentStructEditor(FragmentStruct))
+		{
+			continue;
+		}
 
 		const FName TargetFieldName(*FieldPath);
 		const bool bAlreadyMapped = Source->InlineMappings.ContainsByPredicate([FragmentStruct, TargetFieldName](const FYIFieldMapping& Existing)
 			{
-				if (Existing.TargetLayer != EYIFieldMappingTargetLayer::StaticDefinitionFragment)
+				if (Existing.TargetLayer != (FragmentStruct->IsChildOf(FYIItemFragmentBase::StaticStruct())
+					? EYIFieldMappingTargetLayer::DynamicInstanceFragment
+					: EYIFieldMappingTargetLayer::StaticDefinitionFragment))
 				{
 					return false;
 				}
@@ -5576,7 +5736,7 @@ void SYIItemDashboard::AddFragmentMappingsForStruct(UYIDataTableItemSource* Sour
 		}
 
 		FYIFieldMapping Mapping;
-		Mapping.TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+		Mapping.TargetLayer = TargetLayer;
 		Mapping.TargetFragmentStruct = const_cast<UScriptStruct*>(FragmentStruct);
 		Mapping.TargetFragmentField = TargetFieldName;
 		Mapping.TargetProperty = TargetFieldName;
@@ -6347,7 +6507,111 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			return nullptr;
 		};
 
-	auto GetTargetProp = [this, Mapping]() -> FProperty*
+	TSharedPtr<FInstancedPropertyBag> TargetPropertyBagScratch = MakeShared<FInstancedPropertyBag>();
+
+	auto IsPropertyBagTarget = [Mapping]() -> bool
+		{
+			return Mapping.IsValid() && Mapping->bTargetPropertyBagField && !Mapping->TargetPropertyBagFieldName.IsNone();
+		};
+
+	auto IsCustomFragmentTarget = [Mapping]() -> bool
+		{
+			return Mapping.IsValid() && IsCustomFragmentStructEditor(Mapping->TargetFragmentStruct.Get());
+		};
+
+	auto InferPropertyBagTypeFromSourceProp = [](const FProperty* SourceProp, EPropertyBagPropertyType& OutType, UObject*& OutTypeObject) -> bool
+		{
+			OutType = EPropertyBagPropertyType::String;
+			OutTypeObject = nullptr;
+			if (!SourceProp)
+			{
+				return false;
+			}
+
+			if (CastField<FBoolProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::Bool;
+				return true;
+			}
+			if (const FIntProperty* IntProp = CastField<FIntProperty>(SourceProp))
+			{
+				(void)IntProp;
+				OutType = EPropertyBagPropertyType::Int32;
+				return true;
+			}
+			if (const FInt64Property* Int64Prop = CastField<FInt64Property>(SourceProp))
+			{
+				(void)Int64Prop;
+				OutType = EPropertyBagPropertyType::Int64;
+				return true;
+			}
+			if (const FFloatProperty* FloatProp = CastField<FFloatProperty>(SourceProp))
+			{
+				(void)FloatProp;
+				OutType = EPropertyBagPropertyType::Float;
+				return true;
+			}
+			if (const FDoubleProperty* DoubleProp = CastField<FDoubleProperty>(SourceProp))
+			{
+				(void)DoubleProp;
+				OutType = EPropertyBagPropertyType::Double;
+				return true;
+			}
+			if (CastField<FNameProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::Name;
+				return true;
+			}
+			if (CastField<FStrProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::String;
+				return true;
+			}
+			if (CastField<FTextProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::Text;
+				return true;
+			}
+			if (const FStructProperty* StructProp = CastField<FStructProperty>(SourceProp))
+			{
+				if (StructProp->Struct == FGameplayTag::StaticStruct())
+				{
+					OutType = EPropertyBagPropertyType::Struct;
+					OutTypeObject = StructProp->Struct.Get();
+					return true;
+				}
+				OutType = EPropertyBagPropertyType::Struct;
+				OutTypeObject = StructProp->Struct.Get();
+				return true;
+			}
+			if (const FSoftObjectProperty* SoftObj = CastField<FSoftObjectProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::SoftObject;
+				OutTypeObject = SoftObj->PropertyClass.Get();
+				return true;
+			}
+			if (const FObjectPropertyBase* Obj = CastField<FObjectPropertyBase>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::Object;
+				OutTypeObject = Obj->PropertyClass.Get();
+				return true;
+			}
+			if (const FEnumProperty* EnumProp = CastField<FEnumProperty>(SourceProp))
+			{
+				OutType = EPropertyBagPropertyType::Enum;
+				OutTypeObject = const_cast<UEnum*>(EnumProp->GetEnum());
+				return true;
+			}
+			if (const FByteProperty* ByteProp = CastField<FByteProperty>(SourceProp); ByteProp && ByteProp->Enum)
+			{
+				OutType = EPropertyBagPropertyType::Enum;
+				OutTypeObject = ByteProp->Enum.Get();
+				return true;
+			}
+			return false;
+		};
+
+	auto GetTargetProp = [this, Mapping, TargetPropertyBagScratch]() -> FProperty*
 		{
 			if (!Mapping.IsValid())
 			{
@@ -6367,6 +6631,29 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			if (!FragmentStruct)
 			{
 				return nullptr;
+			}
+
+			if (Mapping->bTargetPropertyBagField && !Mapping->TargetPropertyBagFieldName.IsNone() && IsCustomFragmentStructEditor(FragmentStruct))
+			{
+				TargetPropertyBagScratch->Reset();
+				const FName SafeName = FInstancedPropertyBag::SanitizePropertyName(Mapping->TargetPropertyBagFieldName);
+				const EPropertyBagPropertyType BagType = Mapping->TargetPropertyBagFieldType;
+				if (SafeName.IsNone() || BagType == EPropertyBagPropertyType::None || BagType == EPropertyBagPropertyType::Count)
+				{
+					return nullptr;
+				}
+
+				UObject* TypeObject = nullptr;
+				if (Mapping->TargetPropertyBagFieldTypeObject.ToSoftObjectPath().IsValid())
+				{
+					TypeObject = Mapping->TargetPropertyBagFieldTypeObject.LoadSynchronous();
+				}
+				if (TargetPropertyBagScratch->AddProperty(SafeName, BagType, TypeObject, true) != EPropertyBagAlterationResult::Success)
+				{
+					return nullptr;
+				}
+				const UPropertyBag* BagStruct = TargetPropertyBagScratch->GetPropertyBagStruct();
+				return BagStruct ? FindPropertyByAuthoredPathEditor(BagStruct, SafeName.ToString()) : nullptr;
 			}
 
 			return FindPropertyByAuthoredPathEditor(FragmentStruct, YIGetResolvedTargetFieldName(*Mapping).ToString());
@@ -6481,6 +6768,8 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		{
 			switch (Layer)
 			{
+			case EYIFieldMappingTargetLayer::DynamicInstanceFragment:
+				return TEXT("Runtime Fragment");
 			case EYIFieldMappingTargetLayer::StaticDefinitionFragment:
 				return TEXT("Fragment");
 			case EYIFieldMappingTargetLayer::LegacyProperty:
@@ -6493,6 +6782,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 		{
 			TargetLayerOptions->Reset();
 			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Fragment")));
+			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Runtime Fragment")));
 			TargetLayerOptions->Add(MakeShared<FString>(TEXT("Identity")));
 		};
 
@@ -6503,12 +6793,18 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 			IdentityTargetOptions->Add(MakeShared<FString>(GET_MEMBER_NAME_STRING_CHECKED(UYIItemDefinition, TemplateId)));
 		};
 
-	auto RefreshTargetFragmentStructOptions = [TargetFragmentStructOptions]()
+	auto RefreshTargetFragmentStructOptions = [Mapping, TargetFragmentStructOptions]()
 		{
+			TargetFragmentStructOptions->Reset();
+			if (Mapping.IsValid() && Mapping->TargetLayer == EYIFieldMappingTargetLayer::DynamicInstanceFragment)
+			{
+				CollectFragmentStructOptions(FYIItemFragmentBase::StaticStruct(), *TargetFragmentStructOptions);
+				return;
+			}
 			CollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), *TargetFragmentStructOptions);
 		};
 
-	auto RefreshTargetFragmentFieldOptions = [Mapping, TargetFragmentFieldOptions]()
+	auto RefreshTargetFragmentFieldOptions = [this, Mapping, TargetFragmentFieldOptions]()
 		{
 			TargetFragmentFieldOptions->Reset();
 			if (!Mapping.IsValid())
@@ -6521,10 +6817,96 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 				return;
 			}
 			CollectStructFieldOptions(FragmentStruct, *TargetFragmentFieldOptions);
+			if (IsCustomFragmentStructEditor(FragmentStruct))
+			{
+				TargetFragmentFieldOptions->RemoveAll([](const TSharedPtr<FString>& Entry)
+				{
+					return Entry.IsValid() && *Entry == TEXT("Properties");
+				});
+				CollectPropertyBagFieldOptionsForFragmentMappingEditor(CurrentMappingSource.Get(), FragmentStruct, LastDetailObject.Get(), *TargetFragmentFieldOptions);
+			}
 		};
 
 	RefreshTargetFragmentStructOptions();
 	RefreshTargetFragmentFieldOptions();
+
+	TSharedPtr<TArray<TSharedPtr<FString>>> PropertyBagTypePresetOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	auto RefreshPropertyBagTypePresetOptions = [PropertyBagTypePresetOptions]()
+		{
+			PropertyBagTypePresetOptions->Reset();
+			const TCHAR* Labels[] =
+			{
+				TEXT("Bool"),
+				TEXT("Int32"),
+				TEXT("Int64"),
+				TEXT("Float"),
+				TEXT("Double"),
+				TEXT("Name"),
+				TEXT("String"),
+				TEXT("Text"),
+				TEXT("GameplayTag"),
+				TEXT("SoftObject")
+			};
+			for (const TCHAR* Label : Labels)
+			{
+				PropertyBagTypePresetOptions->Add(MakeShared<FString>(Label));
+			}
+		};
+	RefreshPropertyBagTypePresetOptions();
+
+	auto ApplyPropertyBagPresetByLabel = [](const FString& Label, FYIFieldMapping& InOutMapping)
+		{
+			InOutMapping.TargetPropertyBagFieldTypeObject.Reset();
+			if (Label == TEXT("Bool")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Bool; return; }
+			if (Label == TEXT("Int32")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Int32; return; }
+			if (Label == TEXT("Int64")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Int64; return; }
+			if (Label == TEXT("Float")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Float; return; }
+			if (Label == TEXT("Double")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Double; return; }
+			if (Label == TEXT("Name")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Name; return; }
+			if (Label == TEXT("String")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::String; return; }
+			if (Label == TEXT("Text")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Text; return; }
+			if (Label == TEXT("SoftObject")) { InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::SoftObject; return; }
+			if (Label == TEXT("GameplayTag"))
+			{
+				InOutMapping.TargetPropertyBagFieldType = EPropertyBagPropertyType::Struct;
+				InOutMapping.TargetPropertyBagFieldTypeObject = TSoftObjectPtr<UObject>(FGameplayTag::StaticStruct());
+				return;
+			}
+		};
+
+	auto GetPropertyBagPresetLabel = [Mapping]() -> FString
+		{
+			if (!Mapping.IsValid())
+			{
+				return TEXT("String");
+			}
+			if (Mapping->TargetPropertyBagFieldType == EPropertyBagPropertyType::Struct)
+			{
+				UObject* TypeObject = Mapping->TargetPropertyBagFieldTypeObject.Get();
+				if (!TypeObject && Mapping->TargetPropertyBagFieldTypeObject.ToSoftObjectPath().IsValid())
+				{
+					TypeObject = Mapping->TargetPropertyBagFieldTypeObject.LoadSynchronous();
+				}
+				if (TypeObject == FGameplayTag::StaticStruct())
+				{
+					return TEXT("GameplayTag");
+				}
+			}
+
+			switch (Mapping->TargetPropertyBagFieldType)
+			{
+			case EPropertyBagPropertyType::Bool: return TEXT("Bool");
+			case EPropertyBagPropertyType::Int32: return TEXT("Int32");
+			case EPropertyBagPropertyType::Int64: return TEXT("Int64");
+			case EPropertyBagPropertyType::Float: return TEXT("Float");
+			case EPropertyBagPropertyType::Double: return TEXT("Double");
+			case EPropertyBagPropertyType::Name: return TEXT("Name");
+			case EPropertyBagPropertyType::String: return TEXT("String");
+			case EPropertyBagPropertyType::Text: return TEXT("Text");
+			case EPropertyBagPropertyType::SoftObject: return TEXT("SoftObject");
+			default: return TEXT("String");
+			}
+		};
 
 	auto PersistCurrentMapping = [this, Mapping]()
 		{
@@ -7164,6 +7546,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 
 										CurrentMappingSource->Modify();
 										const bool bIdentity = (*NewItem == TEXT("Identity"));
+										const bool bRuntime = (*NewItem == TEXT("Runtime Fragment"));
 										if (bIdentity)
 										{
 											Mapping->TargetLayer = EYIFieldMappingTargetLayer::LegacyProperty;
@@ -7176,7 +7559,9 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 										}
 										else
 										{
-											Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+											Mapping->TargetLayer = bRuntime
+												? EYIFieldMappingTargetLayer::DynamicInstanceFragment
+												: EYIFieldMappingTargetLayer::StaticDefinitionFragment;
 
 											if (!Mapping->TargetFragmentStruct)
 											{
@@ -7195,6 +7580,8 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 											{
 												Mapping->TargetFragmentField = FName(**(*TargetFragmentFieldOptions)[0]);
 											}
+											Mapping->bTargetPropertyBagField = false;
+											Mapping->TargetPropertyBagFieldName = NAME_None;
 											Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
 										}
 
@@ -7337,9 +7724,14 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 														}
 
 														CurrentMappingSource->Modify();
-														Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+														if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+														{
+															Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+														}
 														Mapping->TargetFragmentStruct = ResolveStructFromPathString(**NewItem);
 														Mapping->TargetFragmentField = NAME_None;
+														Mapping->bTargetPropertyBagField = false;
+														Mapping->TargetPropertyBagFieldName = NAME_None;
 														RefreshTargetFragmentFieldOptions();
 														if (TargetFragmentFieldOptions->Num() > 0 && (*TargetFragmentFieldOptions)[0].IsValid())
 														{
@@ -7379,7 +7771,7 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 													{
 														RefreshTargetFragmentFieldOptions();
 													})
-												.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, PersistCurrentMapping, RefreshMappingUi](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+												.OnSelectionChanged_Lambda([this, Mapping, GetSourceProp, GetTargetProp, PersistCurrentMapping, RefreshMappingUi, InferPropertyBagTypeFromSourceProp](TSharedPtr<FString> NewItem, ESelectInfo::Type)
 													{
 														if (!CurrentMappingSource.IsValid() || !Mapping.IsValid() || !NewItem.IsValid())
 														{
@@ -7387,9 +7779,35 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 														}
 
 														CurrentMappingSource->Modify();
-														Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
-														Mapping->TargetFragmentField = FName(**NewItem);
-														Mapping->TargetProperty = Mapping->TargetFragmentField;
+														if (Mapping->TargetLayer == EYIFieldMappingTargetLayer::LegacyProperty)
+														{
+															Mapping->TargetLayer = EYIFieldMappingTargetLayer::StaticDefinitionFragment;
+														}
+														const FString SelectedField = **NewItem;
+														FName BagFieldName = NAME_None;
+														if (TryParsePropertyBagFieldPathEditor(SelectedField, BagFieldName))
+														{
+															Mapping->bTargetPropertyBagField = true;
+															Mapping->TargetPropertyBagFieldName = BagFieldName;
+															Mapping->TargetFragmentField = FName(TEXT("Properties"));
+															if (const FProperty* SourceProp = GetSourceProp())
+															{
+																EPropertyBagPropertyType InferredType = Mapping->TargetPropertyBagFieldType;
+																UObject* InferredTypeObject = nullptr;
+																if (InferPropertyBagTypeFromSourceProp(SourceProp, InferredType, InferredTypeObject))
+																{
+																	Mapping->TargetPropertyBagFieldType = InferredType;
+																	Mapping->TargetPropertyBagFieldTypeObject = InferredTypeObject;
+																}
+															}
+														}
+														else
+														{
+															Mapping->bTargetPropertyBagField = false;
+															Mapping->TargetPropertyBagFieldName = NAME_None;
+															Mapping->TargetFragmentField = FName(*SelectedField);
+														}
+														Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
 														if (Mapping->Conversion == EYIFieldMappingConversion::None)
 														{
 															const FProperty* SourceProp = GetSourceProp();
@@ -7419,6 +7837,131 @@ TSharedRef<ITableRow> SYIItemDashboard::MakeMappingRow(TSharedPtr<FYIFieldMappin
 																		? NSLOCTEXT("YOLOInventory", "Dash_TargetFragmentFieldHint", "Select field")
 																		: FText::FromName(ResolvedField);
 																})
+														]
+												]
+										]
+										+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0, 0, 0)
+										[
+											SNew(SWidgetSwitcher)
+												.WidgetIndex_Lambda([IsCustomFragmentTarget]()
+													{
+														return IsCustomFragmentTarget() ? 1 : 0;
+													})
+												+ SWidgetSwitcher::Slot()
+												[
+													SNew(SSpacer)
+												]
+												+ SWidgetSwitcher::Slot()
+												[
+													SNew(SHorizontalBox)
+														+ SHorizontalBox::Slot().FillWidth(0.42f).Padding(0, 0, 4, 0)
+														[
+															SNew(SEditableTextBox)
+																.MinDesiredWidth(110.f)
+																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_PropertyBagFieldName_TT", "PropertyBag field name inside Custom Fragment.Properties."))
+																.Text_Lambda([Mapping]()
+																	{
+																		return (Mapping.IsValid() && Mapping->bTargetPropertyBagField && !Mapping->TargetPropertyBagFieldName.IsNone())
+																			? FText::FromName(Mapping->TargetPropertyBagFieldName)
+																			: FText::GetEmpty();
+																	})
+																.HintText(NSLOCTEXT("YOLOInventory", "Dash_PropertyBagFieldNameHint", "Bag field"))
+																.OnTextCommitted_Lambda([this, Mapping, PersistCurrentMapping, RefreshMappingUi](const FText& NewText, ETextCommit::Type)
+																	{
+																		if (!CurrentMappingSource.IsValid() || !Mapping.IsValid())
+																		{
+																			return;
+																		}
+
+																		CurrentMappingSource->Modify();
+																		const FName Sanitized = FInstancedPropertyBag::SanitizePropertyName(NewText.ToString());
+																		Mapping->TargetPropertyBagFieldName = Sanitized;
+																		if (Mapping->bTargetPropertyBagField && !Sanitized.IsNone())
+																		{
+																			Mapping->TargetFragmentField = FName(TEXT("Properties"));
+																			Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
+																		}
+																		PersistCurrentMapping();
+																		RefreshMappingUi();
+																	})
+														]
+														+ SHorizontalBox::Slot().FillWidth(0.30f).Padding(0, 0, 4, 0)
+														[
+															SNew(SComboBox<TSharedPtr<FString>>)
+																.OptionsSource(PropertyBagTypePresetOptions.Get())
+																.OnGenerateWidget_Lambda([DropdownText](TSharedPtr<FString> InItem)
+																	{
+																		return SNew(STextBlock).Text(DropdownText(InItem));
+																	})
+																.OnComboBoxOpening_Lambda([RefreshPropertyBagTypePresetOptions]()
+																	{
+																		RefreshPropertyBagTypePresetOptions();
+																	})
+																.OnSelectionChanged_Lambda([this, Mapping, PersistCurrentMapping, RefreshMappingUi, ApplyPropertyBagPresetByLabel](TSharedPtr<FString> NewItem, ESelectInfo::Type)
+																	{
+																		if (!CurrentMappingSource.IsValid() || !Mapping.IsValid() || !NewItem.IsValid())
+																		{
+																			return;
+																		}
+																		CurrentMappingSource->Modify();
+																		ApplyPropertyBagPresetByLabel(*NewItem, *Mapping);
+																		PersistCurrentMapping();
+																		RefreshMappingUi();
+																	})
+																.Content()
+																[
+																	SNew(STextBlock).Text_Lambda([GetPropertyBagPresetLabel]()
+																		{
+																			return FText::FromString(GetPropertyBagPresetLabel());
+																		})
+																]
+														]
+														+ SHorizontalBox::Slot().AutoWidth()
+														[
+															SNew(SButton)
+																.ToolTipText(NSLOCTEXT("YOLOInventory", "Dash_PropertyBagBind_TT", "Bind/create a PropertyBag field target on the selected custom fragment."))
+																.Text(NSLOCTEXT("YOLOInventory", "Dash_PropertyBagBind", "+Bag"))
+																.OnClicked_Lambda([this, Mapping, GetSourceProp, GetTargetProp, PersistCurrentMapping, RefreshMappingUi, RefreshTargetFragmentFieldOptions, InferPropertyBagTypeFromSourceProp]()
+																	{
+																		if (!CurrentMappingSource.IsValid() || !Mapping.IsValid())
+																		{
+																			return FReply::Handled();
+																		}
+
+																		CurrentMappingSource->Modify();
+																		Mapping->bTargetPropertyBagField = true;
+																		Mapping->TargetFragmentField = FName(TEXT("Properties"));
+
+																		if (Mapping->TargetPropertyBagFieldName.IsNone())
+																		{
+																			FName WantedName = !Mapping->SourceField.IsNone() ? Mapping->SourceField : FName(TEXT("Field"));
+																			Mapping->TargetPropertyBagFieldName = FInstancedPropertyBag::SanitizePropertyName(WantedName);
+																		}
+
+																		if (const FProperty* SourceProp = GetSourceProp())
+																		{
+																			EPropertyBagPropertyType InferredType = Mapping->TargetPropertyBagFieldType;
+																			UObject* InferredTypeObject = nullptr;
+																			if (InferPropertyBagTypeFromSourceProp(SourceProp, InferredType, InferredTypeObject))
+																			{
+																				Mapping->TargetPropertyBagFieldType = InferredType;
+																				Mapping->TargetPropertyBagFieldTypeObject = InferredTypeObject;
+																			}
+																		}
+
+																		Mapping->TargetProperty = YIGetResolvedTargetFieldName(*Mapping);
+																		if (Mapping->Conversion == EYIFieldMappingConversion::None)
+																		{
+																			const FProperty* SourceProp = GetSourceProp();
+																			const FProperty* TargetProp = GetTargetProp();
+																			Mapping->Conversion = GuessConversionForProps(SourceProp, TargetProp);
+																		}
+
+																		RefreshTargetFragmentFieldOptions();
+																		PersistCurrentMapping();
+																		RefreshMappingUi();
+																		return FReply::Handled();
+																	})
 														]
 												]
 										]
