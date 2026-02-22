@@ -26,7 +26,9 @@
 #include "YIItemDefinition.h"
 #include "YIItemDefinitionDetails.h"
 #include "YIDataTableItemSourceDetails.h"
+#include "YIFragmentStructCustomization.h"
 #include "Data/YIDataTableItemSource.h"
+#include "YIItemFragments.h"
 
 class FYISchemaDashboardBridge final : public IYISchemaDashboardBridge
 {
@@ -105,6 +107,7 @@ public:
 		PropertyEditorModule.RegisterCustomClassLayout(
 			UYIDataTableItemSource::StaticClass()->GetFName(),
 			FOnGetDetailCustomizationInstance::CreateStatic(&FYIDataTableItemSourceDetails::MakeInstance));
+		RegisterFragmentPropertyTypeCustomizations(PropertyEditorModule);
 		PropertyEditorModule.NotifyCustomizationModuleChanged();
 
 		IYOLOInventoryEditorCoreModule& EditorCoreModule = FModuleManager::LoadModuleChecked<IYOLOInventoryEditorCoreModule>("YOLOInventoryEditorCore");
@@ -119,6 +122,11 @@ public:
 			FPropertyEditorModule& PropertyEditorModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 			PropertyEditorModule.UnregisterCustomClassLayout(UYIItemDefinition::StaticClass()->GetFName());
 			PropertyEditorModule.UnregisterCustomClassLayout(UYIDataTableItemSource::StaticClass()->GetFName());
+			for (const FName& TypeName : RegisteredFragmentPropertyTypeCustomizations)
+			{
+				PropertyEditorModule.UnregisterCustomPropertyTypeLayout(TypeName);
+			}
+			RegisteredFragmentPropertyTypeCustomizations.Empty();
 			PropertyEditorModule.NotifyCustomizationModuleChanged();
 		}
 
@@ -155,8 +163,44 @@ private:
 		return MakeShared<FYISchemaDashboardBridge>();
 	}
 
+	void RegisterFragmentPropertyTypeCustomizations(FPropertyEditorModule& PropertyEditorModule)
+	{
+		auto Register = [this, &PropertyEditorModule](const UScriptStruct* StructType)
+		{
+			if (!StructType)
+			{
+				return;
+			}
+
+			const FName TypeName = StructType->GetFName();
+			PropertyEditorModule.RegisterCustomPropertyTypeLayout(
+				TypeName,
+				FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FYIFragmentStructCustomization::MakeInstance));
+			RegisteredFragmentPropertyTypeCustomizations.AddUnique(TypeName);
+		};
+
+		Register(FYIItemCustomRuntimeFragment::StaticStruct());
+		Register(FYIItemCustomDefinitionFragment::StaticStruct());
+		Register(FYIItemUIDefinitionFragment::StaticStruct());
+		Register(FYIItemClassificationDefinitionFragment::StaticStruct());
+		Register(FYIItemAudioDefinitionFragment::StaticStruct());
+		Register(FYIItemLayoutDefinitionFragment::StaticStruct());
+		Register(FYIItemStackingDefinitionFragment::StaticStruct());
+		Register(FYIItemRulesDefinitionFragment::StaticStruct());
+		Register(FYIItemContainerDefinitionFragment::StaticStruct());
+		Register(FYIItemAttributeModsDefinitionFragment::StaticStruct());
+		Register(FYIItemPickupDefinitionFragment::StaticStruct());
+		Register(FYIItemWeightDefinitionFragment::StaticStruct());
+		Register(FYIItemEquipmentDefinitionFragment::StaticStruct());
+		Register(FYIItemAffixDefinitionFragment::StaticStruct());
+		Register(FYIItemAttributesFragment::StaticStruct());
+		Register(FYIItemAffixesFragment::StaticStruct());
+		Register(FYIItemDurabilityFragment::StaticStruct());
+	}
+
 private:
 	TArray<TSharedPtr<FAssetTypeActions_Base>> RegisteredAssetTypeActions;
+	TArray<FName> RegisteredFragmentPropertyTypeCustomizations;
 };
 
 IMPLEMENT_MODULE(FYOLOInventoryEditorSchemaModule, YOLOInventoryEditorSchema)
