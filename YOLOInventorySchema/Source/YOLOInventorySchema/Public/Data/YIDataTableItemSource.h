@@ -8,6 +8,7 @@
 #include "YIDataTableItemSource.generated.h"
 
 class UBlueprintFunctionLibrary;
+class UYIFragmentAsset;
 class UScriptStruct;
 UENUM(BlueprintType)
 enum class EYIFieldMappingConversion : uint8
@@ -160,6 +161,10 @@ public:
 	/** Mappings from data table columns to item definition properties (type-compatible copies). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
 	TArray<FYIFieldMapping> InlineMappings;
+
+	/** Optional fragment-asset presets copied into generated items before inline mappings are applied (later assets override earlier by fragment struct). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inline Mapping")
+	TArray<TSoftObjectPtr<UYIFragmentAsset>> PresetFragmentAssets;
 
 	/** Name of the field in the row struct that holds the UniqueCode (int32/int64). Defaults to 'UniqueCode'. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="ItemSource")

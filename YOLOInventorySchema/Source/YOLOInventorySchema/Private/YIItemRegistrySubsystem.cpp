@@ -1,5 +1,6 @@
 #include "YIItemRegistrySubsystem.h"
 #include "YIItemDefinition.h"
+#include "YIFragmentAsset.h"
 #include "Data/YIDataTableItemSource.h"
 #include "CSVDataTransformer.h"
 #include "RowData.h"
@@ -867,6 +868,49 @@ static bool ApplyInlineMappings(const UYIDataTableItemSource* Source, const UDat
 	if (!Def)
 	{
 		return false;
+	}
+
+	auto MergeFragmentsByStruct = [](const TArray<FInstancedStruct>& InFragments, TArray<FInstancedStruct>& InOutTarget)
+	{
+		for (const FInstancedStruct& SrcFragment : InFragments)
+		{
+			if (!SrcFragment.IsValid())
+			{
+				continue;
+			}
+
+			const UScriptStruct* Struct = SrcFragment.GetScriptStruct();
+			if (!Struct)
+			{
+				continue;
+			}
+
+			FInstancedStruct* Existing = InOutTarget.FindByPredicate([Struct](const FInstancedStruct& It)
+			{
+				return It.GetScriptStruct() == Struct;
+			});
+
+			if (Existing)
+			{
+				*Existing = SrcFragment;
+			}
+			else
+			{
+				InOutTarget.Add(SrcFragment);
+			}
+		}
+	};
+
+	for (const TSoftObjectPtr<UYIFragmentAsset>& FragmentAssetSoft : Source->PresetFragmentAssets)
+	{
+		UYIFragmentAsset* FragmentAsset = FragmentAssetSoft.IsValid() ? FragmentAssetSoft.Get() : FragmentAssetSoft.LoadSynchronous();
+		if (!FragmentAsset)
+		{
+			continue;
+		}
+
+		MergeFragmentsByStruct(FragmentAsset->ItemDefinitionFragments, Def->DefinitionFragments);
+		MergeFragmentsByStruct(FragmentAsset->ItemInstanceFragments, Def->DefaultInstanceFragments);
 	}
 
 	for (const FYIFieldMapping& Mapping : Source->InlineMappings)

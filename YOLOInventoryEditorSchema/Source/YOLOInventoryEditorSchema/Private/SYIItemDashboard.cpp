@@ -2,6 +2,7 @@
 #include "YIItemRegistrySubsystem.h"
 #include "Data/YIDataTableItemSource.h"
 #include "YIItemDefinition.h"
+#include "YIFragmentAsset.h"
 #include "YIItemSchemaResolver.h"
 #include "CSVBPFunctionLibrary.h"
 #include "RowData.h"
@@ -757,6 +758,59 @@ static void CollectPropertyBagFieldOptionsForFragmentMappingEditor(
 				continue;
 			}
 			AddBagFieldName(Mapping.TargetPropertyBagFieldName);
+		}
+
+		for (const TSoftObjectPtr<UYIFragmentAsset>& FragmentAssetSoft : Source->PresetFragmentAssets)
+		{
+			const UYIFragmentAsset* FragmentAsset = FragmentAssetSoft.IsValid() ? FragmentAssetSoft.Get() : FragmentAssetSoft.LoadSynchronous();
+			if (!FragmentAsset)
+			{
+				continue;
+			}
+
+			const TArray<FInstancedStruct>* FragmentArray = nullptr;
+			if (IsCustomDefinitionFragmentStructEditor(FragmentStruct))
+			{
+				FragmentArray = &FragmentAsset->ItemDefinitionFragments;
+			}
+			else if (IsCustomRuntimeFragmentStructEditor(FragmentStruct))
+			{
+				FragmentArray = &FragmentAsset->ItemInstanceFragments;
+			}
+
+			if (!FragmentArray)
+			{
+				continue;
+			}
+
+			for (const FInstancedStruct& FragmentInst : *FragmentArray)
+			{
+				if (FragmentInst.GetScriptStruct() != FragmentStruct)
+				{
+					continue;
+				}
+
+				const FInstancedPropertyBag* Bag = nullptr;
+				if (const FYIItemCustomDefinitionFragment* CustomDef = FragmentInst.GetPtr<FYIItemCustomDefinitionFragment>())
+				{
+					Bag = &CustomDef->Properties;
+				}
+				else if (const FYIItemCustomRuntimeFragment* CustomRt = FragmentInst.GetPtr<FYIItemCustomRuntimeFragment>())
+				{
+					Bag = &CustomRt->Properties;
+				}
+
+				if (const UPropertyBag* BagStruct = Bag ? Bag->GetPropertyBagStruct() : nullptr)
+				{
+					for (TFieldIterator<FProperty> It(BagStruct); It; ++It)
+					{
+						if (FProperty* Prop = *It)
+						{
+							AddBagFieldName(FName(*Prop->GetAuthoredName()));
+						}
+					}
+				}
+			}
 		}
 	}
 

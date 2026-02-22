@@ -1,6 +1,5 @@
 #include "YIInlineMappingResolvers.h"
 
-#include "YIAffixAsset.h"
 #include "YIItemDefinition.h"
 #include "YIItemFragments.h"
 #include "StructUtils/InstancedStruct.h"
@@ -376,19 +375,9 @@ bool YIResolveMappingTarget(
 			Fragment = ItemDefinition->FindOrAddDefinitionFragmentByStruct(FragmentStruct);
 		}
 	}
-	else if (UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(TargetObject))
-	{
-		if (!FragmentStruct->IsChildOf(FYIAffixDefinitionFragmentBase::StaticStruct()))
-		{
-			YISetResolveError(OutError, FString::Printf(TEXT("Fragment struct '%s' must derive from FYIAffixDefinitionFragmentBase."),
-				*FragmentStruct->GetName()));
-			return false;
-		}
-		Fragment = AffixAsset->FindOrAddDefinitionFragmentByStruct(FragmentStruct);
-	}
 	else
 	{
-		YISetResolveError(OutError, TEXT("Static fragment target requires UYIItemDefinition or UYIAffixAsset."));
+		YISetResolveError(OutError, TEXT("Static fragment target requires UYIItemDefinition."));
 		return false;
 	}
 

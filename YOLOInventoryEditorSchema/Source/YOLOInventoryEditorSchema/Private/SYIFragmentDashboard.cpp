@@ -1,7 +1,5 @@
 #include "SYIFragmentDashboard.h"
 
-#include "YIAffix.h"
-#include "YIAffixAsset.h"
 #include "YIFragmentAsset.h"
 #include "YIFragmentPoolAsset.h"
 #include "YIItemFragments.h"
@@ -9,7 +7,6 @@
 #include "YIFragmentAssetFactory.h"
 #include "YIFragmentPoolAssetFactory.h"
 #include "YIItemTraitAssetFactory.h"
-#include "YIInventoryBlueprintLibrary.h"
 #include "IDetailsView.h"
 #include "PropertyEditorModule.h"
 #include "PropertyCustomizationHelpers.h"
@@ -128,7 +125,7 @@ void SYIFragmentDashboard::Construct(const FArguments& InArgs)
 {
 	LayoutMode = InArgs._LayoutMode;
 	RefreshFragmentStructOptions();
-	LastActionStatus = NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetHint", "Select a Fragment Asset or Item Trait Asset to author fragments. Legacy affix assets are optional.");
+	LastActionStatus = NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAssetHint", "Select a Fragment Asset or Item Trait Asset to author fragments.");
 
 	FPropertyEditorModule& PropertyEditorModule = FModuleManager::LoadModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	FDetailsViewArgs DetailsArgs;
@@ -226,7 +223,6 @@ void SYIFragmentDashboard::RefreshFragmentStructOptions()
 {
 	YICollectFragmentStructOptions(FYIItemDefinitionFragmentBase::StaticStruct(), ItemDefinitionFragmentStructOptions);
 	YICollectFragmentStructOptions(FYIItemFragmentBase::StaticStruct(), ItemRuntimeFragmentStructOptions);
-	YICollectFragmentStructOptions(FYIAffixDefinitionFragmentBase::StaticStruct(), AffixDefinitionFragmentStructOptions);
 
 	if (!SelectedItemDefinitionFragmentStructOption.IsValid()
 		|| !ItemDefinitionFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
@@ -236,17 +232,6 @@ void SYIFragmentDashboard::RefreshFragmentStructOptions()
 	{
 		SelectedItemDefinitionFragmentStructOption = ItemDefinitionFragmentStructOptions.Num() > 0
 			? ItemDefinitionFragmentStructOptions[0]
-			: nullptr;
-	}
-
-	if (!SelectedAffixDefinitionFragmentStructOption.IsValid()
-		|| !AffixDefinitionFragmentStructOptions.ContainsByPredicate([this](const TSharedPtr<FString>& Entry)
-		{
-			return Entry.IsValid() && SelectedAffixDefinitionFragmentStructOption.IsValid() && *Entry == *SelectedAffixDefinitionFragmentStructOption;
-		}))
-	{
-		SelectedAffixDefinitionFragmentStructOption = AffixDefinitionFragmentStructOptions.Num() > 0
-			? AffixDefinitionFragmentStructOptions[0]
 			: nullptr;
 	}
 
@@ -274,12 +259,6 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 	{
 		const UObject* Asset = SelectedAsset.Get();
 		return Asset && (Asset->IsA<UYIItemTraitAsset>() || Asset->IsA<UYIFragmentAsset>());
-	};
-
-	auto CanAuthorAffixDefinitionFragments = [this]() -> bool
-	{
-		const UObject* Asset = SelectedAsset.Get();
-		return Asset && (Asset->IsA<UYIAffixAsset>() || Asset->IsA<UYIFragmentAsset>());
 	};
 
 	auto CanAuthorItemRuntimeFragments = [this]() -> bool
@@ -333,57 +312,6 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 		else
 		{
 			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_ItemFragmentAddFailed", "Could not add item fragment to selected asset type."), true);
-		}
-
-		return FReply::Handled();
-	};
-
-	auto AddAffixDefinitionFragment = [this]() -> FReply
-	{
-		UObject* Asset = SelectedAsset.Get();
-		if (!Asset)
-		{
-			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoAsset", "Select an asset first."), true);
-			return FReply::Handled();
-		}
-		if (!SelectedAffixDefinitionFragmentStructOption.IsValid())
-		{
-			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoAffixFragmentType", "No affix-definition fragment type is available."), true);
-			return FReply::Handled();
-		}
-
-		UScriptStruct* FragmentStruct = YIResolveStructFromPath(*SelectedAffixDefinitionFragmentStructOption);
-		if (!FragmentStruct)
-		{
-			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentInvalid", "Selected affix fragment type is invalid."), true);
-			return FReply::Handled();
-		}
-
-		bool bAdded = false;
-		if (UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(Asset))
-		{
-			bAdded = AffixAsset->FindOrAddDefinitionFragmentByStruct(FragmentStruct) != nullptr;
-		}
-		else if (UYIFragmentAsset* FragmentAsset = Cast<UYIFragmentAsset>(Asset))
-		{
-			bAdded = FragmentAsset->FindOrAddAffixDefinitionFragmentByStruct(FragmentStruct) != nullptr;
-		}
-
-		if (bAdded)
-		{
-			Asset->Modify();
-			Asset->MarkPackageDirty();
-			if (DetailsView.IsValid())
-			{
-				DetailsView->SetObject(Asset, true);
-			}
-			SetActionStatus(FText::Format(
-				NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentAdded", "Added affix fragment: {0}"),
-				FText::FromString(YIMakeReadableFragmentName(FragmentStruct))), false);
-		}
-		else
-		{
-			SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AffixFragmentAddFailed", "Could not add affix fragment to selected asset type."), true);
 		}
 
 		return FReply::Handled();
@@ -527,13 +455,7 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 					{
 						return true;
 					}
-					const bool bIsLegacyAffix = AssetClass->IsChildOf(UYIAffixAsset::StaticClass());
-					if (bIsLegacyAffix && !bShowLegacyAffixAuthoring)
-					{
-						return true;
-					}
-					return !(bIsLegacyAffix
-						|| AssetClass->IsChildOf(UYIFragmentAsset::StaticClass())
+					return !(AssetClass->IsChildOf(UYIFragmentAsset::StaticClass())
 						|| AssetClass->IsChildOf(UYIFragmentPoolAsset::StaticClass())
 						|| AssetClass->IsChildOf(UYIItemTraitAsset::StaticClass()));
 				})
@@ -545,22 +467,6 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 				{
 					SetSelectedAsset(AssetData.GetAsset());
 				})
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 4.f)
-			[
-				SNew(SCheckBox)
-				.IsChecked_Lambda([this]() { return bShowLegacyAffixAuthoring ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-				.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
-				{
-					bShowLegacyAffixAuthoring = (NewState == ECheckBoxState::Checked);
-					if (!bShowLegacyAffixAuthoring && SelectedAsset.IsValid() && SelectedAsset->IsA<UYIAffixAsset>())
-					{
-						SetSelectedAsset(nullptr);
-					}
-				})
-				[
-					SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_ShowLegacyAffixes", "Show legacy affix assets"))
-				]
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
 			[
@@ -687,91 +593,6 @@ TSharedRef<SWidget> SYIFragmentDashboard::BuildAssetPanelWidget()
 					})
 				]
 			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
-			[
-				SNew(SVerticalBox)
-				.Visibility_Lambda([CanAuthorAffixDefinitionFragments]()
-				{
-					return CanAuthorAffixDefinitionFragments() ? EVisibility::Visible : EVisibility::Collapsed;
-				})
-				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
-				[
-					SNew(SComboBox<TSharedPtr<FString>>)
-					.OptionsSource(&AffixDefinitionFragmentStructOptions)
-					.OnComboBoxOpening_Lambda([this]()
-					{
-						RefreshFragmentStructOptions();
-					})
-					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewItem, ESelectInfo::Type)
-					{
-						if (NewItem.IsValid())
-						{
-							SelectedAffixDefinitionFragmentStructOption = NewItem;
-						}
-					})
-					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-					{
-						const FString Path = InItem.IsValid() ? *InItem : FString();
-						return SNew(STextBlock).Text(FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(Path))));
-					})
-					.Content()
-					[
-						SNew(STextBlock)
-						.Text_Lambda([this]()
-						{
-							if (!SelectedAffixDefinitionFragmentStructOption.IsValid())
-							{
-								return NSLOCTEXT("YOLOInventory", "FragmentDashboard_SelectAffixFragment", "Select affix fragment");
-							}
-							return FText::FromString(YIMakeReadableFragmentName(YIResolveStructFromPath(*SelectedAffixDefinitionFragmentStructOption)));
-						})
-					]
-				]
-				+ SVerticalBox::Slot().AutoHeight()
-				[
-					SNew(SButton)
-					.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_AddAffixFragment", "Add Legacy Affix Fragment"))
-					.OnClicked_Lambda([AddAffixDefinitionFragment]()
-					{
-						return AddAffixDefinitionFragment();
-					})
-				]
-			]
-			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 2.f)
-			[
-				SNew(SButton)
-				.Text(NSLOCTEXT("YOLOInventory", "FragmentDashboard_BuildSnapshot", "Build Runtime Snapshot (Preview)"))
-				.IsEnabled_Lambda([this]()
-				{
-					return Cast<UYIAffixAsset>(SelectedAsset.Get()) != nullptr;
-				})
-				.OnClicked_Lambda([this]()
-				{
-					UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(SelectedAsset.Get());
-					if (!AffixAsset)
-					{
-						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotNeedsAffix", "Runtime snapshot preview requires an Affix Asset selection."), true);
-						return FReply::Handled();
-					}
-
-					FYIAffixInstance Snapshot;
-					const bool bBuilt = UYIInventoryBlueprintLibrary::BuildAffixSnapshot(
-						AffixAsset,
-						1,
-						1337,
-						true,
-						Snapshot);
-					if (bBuilt)
-					{
-						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotBuilt", "Runtime snapshot built. Check Preview panel for rolled values."), false);
-					}
-					else
-					{
-						SetActionStatus(NSLOCTEXT("YOLOInventory", "FragmentDashboard_SnapshotFailed", "Runtime snapshot build failed for selected Affix Asset."), true);
-					}
-					return FReply::Handled();
-				})
-			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
 			[
 				SNew(STextBlock)
@@ -868,53 +689,12 @@ void SYIFragmentDashboard::SetSelectedAsset(UObject* InAsset)
 
 FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 {
-	if (const UYIAffixAsset* AffixAsset = Cast<UYIAffixAsset>(SelectedAsset.Get()))
-	{
-		FYIAffixResolvedDefinitionData Effective;
-		AffixAsset->GetEffectiveDefinitionData(Effective);
-
-		FYIAffixInstance Snapshot;
-		const bool bSnapshotBuilt = UYIInventoryBlueprintLibrary::BuildAffixSnapshot(AffixAsset, 1, 1337, true, Snapshot);
-
-		FString Summary = FString::Printf(TEXT("Definition Fragments: %d"), AffixAsset->DefinitionFragments.Num());
-		for (const FInstancedStruct& Fragment : AffixAsset->DefinitionFragments)
-		{
-			const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
-			Summary += TEXT("\n- ");
-			Summary += FragmentStruct ? FragmentStruct->GetName() : TEXT("<Invalid Fragment>");
-		}
-		Summary += FString::Printf(TEXT("\n\nEffective Tier: %d\nEffective Min/Max: %.2f / %.2f"),
-			Effective.Tier,
-			Effective.MinValue,
-			Effective.MaxValue);
-		if (bSnapshotBuilt)
-		{
-			Summary += FString::Printf(TEXT("\nSnapshot RolledValue: %.2f\nSnapshot Seed: %d"),
-				Snapshot.RolledValue,
-				Snapshot.Seed);
-		}
-		else
-		{
-			Summary += TEXT("\nSnapshot build failed.");
-		}
-
-		return FText::FromString(Summary);
-	}
-
 	if (const UYIFragmentAsset* FragmentAsset = Cast<UYIFragmentAsset>(SelectedAsset.Get()))
 	{
 		FString Summary = FString::Printf(
-			TEXT("Fragment Asset\nItem Definition Fragments: %d\nItem Runtime Fragments: %d\nAffix Fragments: %d"),
+			TEXT("Fragment Asset\nItem Definition Fragments: %d\nItem Runtime Fragments: %d"),
 			FragmentAsset->ItemDefinitionFragments.Num(),
-			FragmentAsset->ItemInstanceFragments.Num(),
-			FragmentAsset->AffixDefinitionFragments.Num());
-		Summary += TEXT("\n\nAffix Fragment Types:");
-		for (const FInstancedStruct& Fragment : FragmentAsset->AffixDefinitionFragments)
-		{
-			const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
-			Summary += TEXT("\n- ");
-			Summary += FragmentStruct ? FragmentStruct->GetName() : TEXT("<Invalid Fragment>");
-		}
+			FragmentAsset->ItemInstanceFragments.Num());
 		Summary += TEXT("\n\nItem Fragment Types:");
 		for (const FInstancedStruct& Fragment : FragmentAsset->ItemDefinitionFragments)
 		{
@@ -966,7 +746,7 @@ FText SYIFragmentDashboard::BuildFragmentSummaryText() const
 
 	if (!SelectedAsset.IsValid())
 	{
-		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select a Fragment Asset or Item Trait Asset to inspect fragment data. Enable legacy affix visibility if needed.");
+		return NSLOCTEXT("YOLOInventory", "FragmentDashboard_NoSelection", "Select a Fragment Asset or Item Trait Asset to inspect fragment data.");
 	}
 	return FText::FromString(SelectedAsset->GetClass()->GetName());
 }

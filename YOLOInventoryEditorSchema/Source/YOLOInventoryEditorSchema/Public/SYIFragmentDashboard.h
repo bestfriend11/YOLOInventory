@@ -4,7 +4,6 @@
 #include "Widgets/SCompoundWidget.h"
 
 class IDetailsView;
-class UYIAffixAsset;
 class UYIFragmentAsset;
 
 enum class EYIFragmentDashboardLayout : uint8
@@ -47,13 +46,10 @@ private:
 	TWeakObjectPtr<UObject> SelectedAsset;
 	TArray<TSharedPtr<FString>> ItemDefinitionFragmentStructOptions;
 	TArray<TSharedPtr<FString>> ItemRuntimeFragmentStructOptions;
-	TArray<TSharedPtr<FString>> AffixDefinitionFragmentStructOptions;
 	TSharedPtr<FString> SelectedItemDefinitionFragmentStructOption;
 	TSharedPtr<FString> SelectedItemRuntimeFragmentStructOption;
-	TSharedPtr<FString> SelectedAffixDefinitionFragmentStructOption;
 	FText LastActionStatus;
 	bool bLastActionError = false;
-	bool bShowLegacyAffixAuthoring = false;
 	TSharedPtr<IDetailsView> DetailsView;
 	TSharedPtr<SWidget> AssetPanelWidget;
 	TSharedPtr<SWidget> DetailsPanelWidget;
