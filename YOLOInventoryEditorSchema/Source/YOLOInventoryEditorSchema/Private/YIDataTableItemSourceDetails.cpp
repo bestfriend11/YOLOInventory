@@ -13,10 +13,12 @@
 #include "Framework/Application/SlateApplication.h"
 #include "IDetailChildrenBuilder.h"
 #include "Misc/PackageName.h"
+#include "SourceCodeNavigation.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SComboBox.h"
 #include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SHyperlink.h"
 #include "Widgets/Input/SNumericEntryBox.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SExpandableArea.h"
@@ -393,6 +395,121 @@ static EYIFieldMappingConversion GuessConversionForPropsLocal(const FProperty* S
 		return EYIFieldMappingConversion::ToSoftObject;
 	}
 	return EYIFieldMappingConversion::None;
+}
+
+static bool TryGetFragmentFieldGuidanceLocal(const FProperty* Property, FString& OutGuidance)
+{
+	OutGuidance.Reset();
+	if (!Property)
+	{
+		return false;
+	}
+
+	const UStruct* Owner = Property->GetOwnerStruct();
+	const FString OwnerName = Owner ? Owner->GetName() : FString();
+	const FName FieldName = Property->GetFName();
+
+	auto Set = [&OutGuidance](const TCHAR* Text)
+	{
+		OutGuidance = Text;
+		return true;
+	};
+
+	if (FieldName == TEXT("bIsUniqueFragment"))
+	{
+		return Set(TEXT("Authoring policy flag. Controls whether duplicate fragments of this type should be avoided in editor authoring. Usually ON for typed definition fragments."));
+	}
+	if (FieldName == TEXT("FragmentTag"))
+	{
+		return Set(TEXT("Semantic lookup key for runtime systems. Bind when gameplay resolves fragments by tag. Optional if systems resolve by exact fragment type."));
+	}
+	if (FieldName == TEXT("FragmentName"))
+	{
+		return Set(TEXT("Designer/debug label. Usually optional. Useful when multiple custom fragments are present."));
+	}
+	if (FieldName == TEXT("Properties"))
+	{
+		return Set(TEXT("PropertyBag payload for no-C++ fragment authoring. Inline mappings can target Properties.<FieldName>. Bind only fields your runtime systems actually consume."));
+	}
+
+	if (OwnerName == TEXT("YIItemUIDefinitionFragment"))
+	{
+		if (FieldName == TEXT("DisplayName")) return Set(TEXT("Primary player-facing item name. Usually bind this. Dashboards and tooltips rely on it."));
+		if (FieldName == TEXT("Description")) return Set(TEXT("Long description / flavor text. Optional unless your UI displays inspect/tooltips."));
+		if (FieldName == TEXT("Icon")) return Set(TEXT("UI icon soft reference. Bind for inventory/shop/tooltips with images."));
+	}
+	if (OwnerName == TEXT("YIItemClassificationDefinitionFragment"))
+	{
+		if (FieldName == TEXT("ItemType")) return Set(TEXT("Primary gameplay classification tag (e.g., Item.Weapon.Sword). Bind when systems branch on type."));
+		if (FieldName == TEXT("Tags")) return Set(TEXT("Additional classification tags. Optional; bind only tags used by your systems."));
+		if (FieldName == TEXT("RarityTag")) return Set(TEXT("Rarity tag used by UI/economy/drop rules. Optional if your game has no rarity system."));
+	}
+	if (OwnerName == TEXT("YIItemLayoutDefinitionFragment"))
+	{
+		if (FieldName == TEXT("DefaultSize")) return Set(TEXT("Grid footprint size. Required for grid inventories; irrelevant for list inventories."));
+		if (FieldName == TEXT("bAllowRotation")) return Set(TEXT("Grid rotation support flag. Ignore if your inventory UI does not support rotation."));
+	}
+	if (OwnerName == TEXT("YIItemEquipmentDefinitionFragment"))
+	{
+		if (FieldName == TEXT("PrimaryEquipSlot")) return Set(TEXT("Preferred slot tag for equip logic. Bind for equipable items."));
+		if (FieldName == TEXT("OccupiedSlots")) return Set(TEXT("All occupied equipment slots. Optional for single-slot items; important for multi-slot gear."));
+	}
+	if (OwnerName == TEXT("YIItemStackingDefinitionFragment"))
+	{
+		if (FieldName == TEXT("bAllowStacking")) return Set(TEXT("Enables stacking. Turn off for mutable/randomized/container items."));
+		if (FieldName == TEXT("MaxStackCount")) return Set(TEXT("Max stack size. Relevant only when stacking is enabled."));
+		if (FieldName == TEXT("bUseRiskChecks")) return Set(TEXT("Safety checks for stackability of mutable items. Keep enabled unless you intentionally bypass safeguards."));
+	}
+	if (OwnerName == TEXT("YIItemContainerDefinitionFragment"))
+	{
+		if (FieldName == TEXT("bIsContainerItem")) return Set(TEXT("Marks item as nested container (bag-in-bag). Bind when item should hold another bag."));
+		if (FieldName == TEXT("ContainerTemplateBag")) return Set(TEXT("Optional template nested bag. Use for predefined container layouts."));
+		if (FieldName == TEXT("ContainerDefaultGridSize")) return Set(TEXT("Fallback nested bag size when no template bag is assigned."));
+	}
+
+	return false;
+}
+
+static FText BuildInlineMappingTargetFieldTooltipLocal(const FYIFieldMapping* Mapping, const FProperty* TargetProperty)
+{
+	FString Text;
+	if (TargetProperty)
+	{
+		const FString NativeTooltip = TargetProperty->GetToolTipText().ToString();
+		if (!NativeTooltip.IsEmpty())
+		{
+			Text += NativeTooltip;
+		}
+
+		if (!Text.IsEmpty()) Text += TEXT("\n\n");
+		Text += FString::Printf(TEXT("Type: %s"), *TargetProperty->GetCPPType());
+
+		FString Guidance;
+		if (TryGetFragmentFieldGuidanceLocal(TargetProperty, Guidance) && !Guidance.IsEmpty())
+		{
+			Text += TEXT("\n\nUsage / Binding Guidance:\n");
+			Text += Guidance;
+		}
+	}
+
+	if (Mapping)
+	{
+		if (!Text.IsEmpty()) Text += TEXT("\n\n");
+		Text += TEXT("Inline Mapping Notes:\n");
+		Text += TEXT("- Bind this from CSV only if your game/system consumes it.\n");
+		Text += TEXT("- Use Static when the value should be constant across rows.\n");
+		if (Mapping->bTargetPropertyBagField)
+		{
+			Text += TEXT("- This row targets a Custom Fragment PropertyBag field (Properties.<FieldName>).\n");
+		}
+	}
+
+	if (!Text.IsEmpty())
+	{
+		Text += TEXT("\n\nClick to open native source.");
+	}
+
+	return FText::FromString(Text);
 }
 }
 
@@ -1089,16 +1206,41 @@ TSharedRef<SWidget> FYIDataTableItemSourceDetails::BuildMappingRowWidget(int32 M
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot().FillWidth(1.f)
 				[
-					SNew(STextBlock).Text_Lambda([GetMappingConst]()
-						{
-							const FYIFieldMapping* Mapping = GetMappingConst();
-							if (!Mapping)
+					SNew(SHyperlink)
+						.Style(&FAppStyle::Get().GetWidgetStyle<FHyperlinkStyle>("Common.GotoNativeCodeHyperlink"))
+						.Text_Lambda([GetMappingConst]()
 							{
-								return FText::GetEmpty();
-							}
-							const FString Fragment = MakeReadableFragmentNameLocal(Mapping->TargetFragmentStruct.Get());
-							return FText::FromString(FString::Printf(TEXT("%s.%s"), *Fragment, *YIGetResolvedTargetFieldName(*Mapping).ToString()));
-						})
+								const FYIFieldMapping* Mapping = GetMappingConst();
+								if (!Mapping)
+								{
+									return FText::GetEmpty();
+								}
+								const FString Fragment = MakeReadableFragmentNameLocal(Mapping->TargetFragmentStruct.Get());
+								return FText::FromString(FString::Printf(TEXT("%s.%s"), *Fragment, *YIGetResolvedTargetFieldName(*Mapping).ToString()));
+							})
+						.ToolTipText_Lambda([GetMappingConst, GetTargetProp]()
+							{
+								return BuildInlineMappingTargetFieldTooltipLocal(GetMappingConst(), GetTargetProp());
+							})
+						.OnNavigate_Lambda([GetTargetProp, GetMappingConst]()
+							{
+								if (const FProperty* TargetProp = GetTargetProp())
+								{
+									if (FSourceCodeNavigation::CanNavigateToProperty(TargetProp))
+									{
+										FSourceCodeNavigation::NavigateToProperty(const_cast<FProperty*>(TargetProp));
+										return;
+									}
+								}
+
+								if (const FYIFieldMapping* Mapping = GetMappingConst())
+								{
+									if (const UScriptStruct* FragmentStruct = Mapping->TargetFragmentStruct.Get())
+									{
+										FSourceCodeNavigation::NavigateToStruct(const_cast<UScriptStruct*>(FragmentStruct));
+									}
+								}
+							})
 				]
 				+ SHorizontalBox::Slot().AutoWidth().Padding(6.f, 0.f, 0.f, 0.f)
 				[
