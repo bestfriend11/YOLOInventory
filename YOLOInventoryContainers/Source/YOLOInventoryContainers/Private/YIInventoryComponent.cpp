@@ -263,7 +263,89 @@ UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
 			return Bag;
 		}
 	}
+
+	// Client-side UI mirrors (owner-only, not authoritative).
+	if (ClientPreviewBag && ClientPreviewBag->BagId == BagId)
+	{
+		return ClientPreviewBag;
+	}
+	if (UYIInventoryBag* ContextPreview = FindClientContextPreviewBagById(BagId))
+	{
+		return ContextPreview;
+	}
 	return nullptr;
+}
+
+UYIInventoryBag* UYIInventoryComponent::FindClientContextPreviewBagById(const FGuid& BagId) const
+{
+	if (!BagId.IsValid())
+	{
+		return nullptr;
+	}
+	for (UYIInventoryBag* Bag : ClientContextPreviewBags)
+	{
+		if (Bag && Bag->BagId == BagId)
+		{
+			return Bag;
+		}
+	}
+	return nullptr;
+}
+
+UYIInventoryBag* UYIInventoryComponent::FindOrCreateClientContextPreviewBagById(const FGuid& BagId)
+{
+	if (!BagId.IsValid())
+	{
+		return nullptr;
+	}
+	if (UYIInventoryBag* Existing = FindClientContextPreviewBagById(BagId))
+	{
+		return Existing;
+	}
+	UYIInventoryBag* NewPreview = NewObject<UYIInventoryBag>(this);
+	if (!NewPreview)
+	{
+		return nullptr;
+	}
+	NewPreview->BagId = BagId;
+	ClientContextPreviewBags.Add(NewPreview);
+	return NewPreview;
+}
+
+void UYIInventoryComponent::RebuildClientPreviewBagFromNet(UYIInventoryBag* TargetBag, const TArray<FYINetBagItem>& InItems, const FIntPoint& InGridSize, const FGuid& InBagId)
+{
+	if (!TargetBag)
+	{
+		return;
+	}
+
+	TargetBag->GridSize = InGridSize;
+	TargetBag->BagId = InBagId;
+	TargetBag->Items.Reset();
+
+	for (const FYINetBagItem& Net : InItems)
+	{
+		if (Net.Code == 0 || Net.Count <= 0)
+		{
+			continue;
+		}
+
+		FYIBagItem Item;
+		Item.Item = YIInventoryComp_MakeItemInstanceByCode(Net.Code, Net.Count);
+		if (Net.InstanceId.IsValid())
+		{
+			Item.Item.InstanceId = Net.InstanceId;
+		}
+		if (Net.StackId.IsValid())
+		{
+			Item.Item.StackId = Net.StackId;
+		}
+		Item.Item.CustomStackKey = Net.CustomStackKey;
+		Item.Item.ContainedBagId = Net.ContainedBagId;
+		Item.Pos = Net.Pos;
+		Item.Size = Net.Size;
+		TargetBag->Items.Add(Item);
+	}
 }
 
 int32 UYIInventoryComponent::FindActiveContextIndex(FGameplayTag ContextTag) const
@@ -1172,6 +1254,7 @@ void UYIInventoryComponent::SyncNetState()
 
 	NetBagItems.Reset();
 	NetBagDescriptors.Reset();
+	NetContextBagMirrors.Reset();
 	NetBagDescriptors.Reserve(Bags.Num());
 
 	for (UYIInventoryBag* Bag : Bags)
@@ -1221,6 +1304,57 @@ void UYIInventoryComponent::SyncNetState()
 		}
 	}
 
+	// Mirror only active context bags (owner-only) to keep bandwidth bounded.
+	// Deduplicate by BagId and skip the primary active bag because it is already mirrored by NetBagItems.
+	TSet<FGuid> MirroredContextBagIds;
+	for (const FYIActiveBagContextEntry& ContextEntry : ActiveBagContexts)
+	{
+		if (!ContextEntry.BagId.IsValid() || ContextEntry.BagId == ActiveBagId || MirroredContextBagIds.Contains(ContextEntry.BagId))
+		{
+			continue;
+		}
+
+		UYIInventoryBag* ContextBag = GetBagById(ContextEntry.BagId);
+		if (!ContextBag)
+		{
+			continue;
+		}
+
+		ContextBag->EnsureBagId();
+		MirroredContextBagIds.Add(ContextEntry.BagId);
+
+		FYINetBagMirrorView& Mirror = NetContextBagMirrors.AddDefaulted_GetRef();
+		Mirror.BagId = ContextBag->BagId;
+		Mirror.GridSize = ContextBag->GridSize;
+		Mirror.Items.Reserve(ContextBag->Items.Num());
+
+		for (const FYIBagItem& It : ContextBag->Items)
+		{
+			if (It.Item.Count <= 0)
+			{
+				continue;
+			}
+
+			FYINetBagItem Net;
+			Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
+			if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
+			{
+				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
+				{
+					Net.Code = Def->UniqueCode;
+				}
+			}
+			Net.Count = It.Item.Count;
+			Net.InstanceId = It.Item.InstanceId;
+			Net.StackId = It.Item.StackId;
+			Net.Pos = It.Pos;
+			Net.Size = It.Size;
+			Net.CustomStackKey = It.Item.CustomStackKey;
+			Net.ContainedBagId = It.Item.ContainedBagId;
+			Mirror.Items.Add(Net);
+		}
+	}
+
 	// Force Net update
 	if (AActor* OwnerActor = GetOwner())
 	{
@@ -1237,30 +1371,7 @@ void UYIInventoryComponent::OnRep_NetBag()
 		if (!ClientPreviewBag) return;
 	}
 
-	ClientPreviewBag->GridSize = NetBagGridSize;
-	ClientPreviewBag->BagId = ActiveBagId;
-
-	ClientPreviewBag->Items.Reset();
-
-	for (const FYINetBagItem& Net : NetBagItems)
-	{
-		if (Net.Code == 0 || Net.Count <= 0) continue;
-		FYIBagItem Item;
-		Item.Item = YIInventoryComp_MakeItemInstanceByCode(Net.Code, Net.Count);
-		if (Net.InstanceId.IsValid())
-		{
-			Item.Item.InstanceId = Net.InstanceId;
-		}
-		if (Net.StackId.IsValid())
-		{
-			Item.Item.StackId = Net.StackId;
-		}
-		Item.Item.CustomStackKey = Net.CustomStackKey;
-		Item.Item.ContainedBagId = Net.ContainedBagId;
-		Item.Pos = Net.Pos;
-		Item.Size = Net.Size;
-		ClientPreviewBag->Items.Add(Item);
-	}
+	RebuildClientPreviewBagFromNet(ClientPreviewBag, NetBagItems, NetBagGridSize, ActiveBagId);
 
 	// Notify UI bound to this bag
 	ClientPreviewBag->OnChanged.Broadcast();
@@ -1293,11 +1404,50 @@ void UYIInventoryComponent::OnRep_ActiveBagContexts()
 	}
 }
 
+void UYIInventoryComponent::OnRep_NetContextBagMirrors()
+{
+	TSet<FGuid> IncomingBagIds;
+	for (const FYINetBagMirrorView& Mirror : NetContextBagMirrors)
+	{
+		if (!Mirror.BagId.IsValid())
+		{
+			continue;
+		}
+
+		IncomingBagIds.Add(Mirror.BagId);
+		if (UYIInventoryBag* PreviewBag = FindOrCreateClientContextPreviewBagById(Mirror.BagId))
+		{
+			RebuildClientPreviewBagFromNet(PreviewBag, Mirror.Items, Mirror.GridSize, Mirror.BagId);
+			PreviewBag->OnChanged.Broadcast();
+			OnBagOpened.Broadcast(PreviewBag);
+		}
+	}
+
+	for (int32 Index = ClientContextPreviewBags.Num() - 1; Index >= 0; --Index)
+	{
+		UYIInventoryBag* PreviewBag = ClientContextPreviewBags[Index];
+		if (!PreviewBag || !PreviewBag->BagId.IsValid() || IncomingBagIds.Contains(PreviewBag->BagId))
+		{
+			continue;
+		}
+
+		OnBagClosed.Broadcast(PreviewBag);
+		ClientContextPreviewBags.RemoveAtSwap(Index, 1, EAllowShrinking::No);
+	}
+}
+
 void UYIInventoryComponent::OnRep_LockedBagItems()
 {
 	if (ClientPreviewBag)
 	{
 		ClientPreviewBag->OnChanged.Broadcast();
+	}
+	for (UYIInventoryBag* ContextPreviewBag : ClientContextPreviewBags)
+	{
+		if (ContextPreviewBag)
+		{
+			ContextPreviewBag->OnChanged.Broadcast();
+		}
 	}
 	if (EquippedBag)
 	{
@@ -1313,6 +1463,7 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagDescriptors, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagId, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagContexts, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetContextBagMirrors, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, LockedBagItems, COND_OwnerOnly);
 }
 

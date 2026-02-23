@@ -57,6 +57,24 @@ struct YOLOINVENTORYCONTAINERS_API FYIActiveBagContextEntry
 	FGuid BagId;
 };
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYCONTAINERS_API FYINetBagMirrorView
+{
+	GENERATED_BODY()
+
+	/** Bag identity this mirror payload represents. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid BagId;
+
+	/** Lightweight UI grid size for the mirrored bag. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FIntPoint GridSize = FIntPoint::ZeroValue;
+
+	/** Minimal item payloads for the mirrored bag. Owner-only replicated. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	TArray<FYINetBagItem> Items;
+};
+
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORYCONTAINERS_API UYIInventoryComponent : public UActorComponent
 {
@@ -272,6 +290,8 @@ protected:
 	FGuid ActiveBagId;
 	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
 	TArray<FYIActiveBagContextEntry> ActiveBagContexts;
+	UPROPERTY(ReplicatedUsing=OnRep_NetContextBagMirrors, Transient)
+	TArray<FYINetBagMirrorView> NetContextBagMirrors;
 
 	UFUNCTION()
 	void OnRep_NetBag();
@@ -279,6 +299,8 @@ protected:
 	void OnRep_NetBagDescriptors();
 	UFUNCTION()
 	void OnRep_ActiveBagContexts();
+	UFUNCTION()
+	void OnRep_NetContextBagMirrors();
 	UFUNCTION()
 	void OnRep_LockedBagItems();
 
@@ -288,6 +310,9 @@ protected:
 	/** Client-only preview bag built from NetBagItems (not authoritative). */
 	UPROPERTY(Transient)
 	TObjectPtr<UYIInventoryBag> ClientPreviewBag = nullptr;
+	/** Client-only preview bags for active context mirrors (not authoritative). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UYIInventoryBag>> ClientContextPreviewBags;
 
 private:
 	FDelegateHandle BagChangedHandle;
@@ -325,5 +350,8 @@ private:
 	bool TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex);
 	bool SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked);
 	int32 FindActiveContextIndex(FGameplayTag ContextTag) const;
+	UYIInventoryBag* FindClientContextPreviewBagById(const FGuid& BagId) const;
+	UYIInventoryBag* FindOrCreateClientContextPreviewBagById(const FGuid& BagId);
+	void RebuildClientPreviewBagFromNet(UYIInventoryBag* TargetBag, const TArray<FYINetBagItem>& InItems, const FIntPoint& InGridSize, const FGuid& InBagId);
 };
 
