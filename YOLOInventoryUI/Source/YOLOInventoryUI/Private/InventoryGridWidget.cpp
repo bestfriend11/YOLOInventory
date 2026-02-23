@@ -833,6 +833,9 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (!YI_IsGlobalDragValid(GetWorld())) return false;
 	if (!Bag) return false;
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
+	// InventoryComponent net-safe mutation helpers currently target the active/main bag only.
+	// For secondary context grids (e.g. spellbook), mutate the actual bound bag directly.
+	const bool bCanUseOwnerCompForThisBag = OwnerComp && (OwnerComp->GetBag() == Bag);
 	auto PlayDropSound = [this]()
 	{
 		if (!IsDragSoundEnabled())
@@ -969,10 +972,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			UpdateBoundTooltip();
 			return true;
 		}
-		if (!(OwnerComp ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell)))
+		if (!((bCanUseOwnerCompForThisBag ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
 		{
 			// Non-authority clients should not attempt in-place swaps; let the server resolve.
-			if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+			if (bCanUseOwnerCompForThisBag && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
 			{
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
 				PlayInvalidMoveSound();
@@ -990,12 +993,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			}
 			// Remove victim, adjust source index if needed, then attempt move again
 			FYIBagItem SavedVictim = Bag->Items[Victim];
-			if (OwnerComp) OwnerComp->RemoveItem(Victim); else Bag->RemoveItem(Victim);
+			if (bCanUseOwnerCompForThisBag) OwnerComp->RemoveItem(Victim); else Bag->RemoveItem(Victim);
 			if (Victim < GInventoryDrag.SourceIndex)
 			{
 				GInventoryDrag.SourceIndex -= 1;
 			}
-			if (!(OwnerComp ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell)))
+			if (!((bCanUseOwnerCompForThisBag ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
 			{
 			// Failed even after clearing victim; restore it in-place to avoid merge/stack side-effects
 			Bag->Items.Insert(SavedVictim, Victim);
