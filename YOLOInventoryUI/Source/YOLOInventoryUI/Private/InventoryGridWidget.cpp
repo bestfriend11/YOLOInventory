@@ -833,9 +833,43 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (!YI_IsGlobalDragValid(GetWorld())) return false;
 	if (!Bag) return false;
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
-	// InventoryComponent net-safe mutation helpers currently target the active/main bag only.
-	// For secondary context grids (non-primary bag contexts), mutate the actual bound bag directly.
-	const bool bCanUseOwnerCompForThisBag = OwnerComp && (OwnerComp->GetBag() == Bag);
+	const bool bHasOwnerComp = (OwnerComp != nullptr);
+	const bool bOwnerCompHasAuthority = bHasOwnerComp && OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority();
+	const auto TryOwnerMoveItem = [OwnerComp, this](int32 Index, const FIntPoint& NewPos) -> bool
+	{
+		if (!OwnerComp || !Bag || !Bag->Items.IsValidIndex(Index))
+		{
+			return false;
+		}
+		const FYIBagItem& ItemToMove = Bag->Items[Index];
+		if (ItemToMove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
+		{
+			return OwnerComp->MoveItemInBag(Bag->BagId, ItemToMove.Item.InstanceId, NewPos);
+		}
+		// Fallback only for primary bag / legacy edge cases
+		if (OwnerComp->GetBag() == Bag)
+		{
+			return OwnerComp->MoveItem(Index, NewPos);
+		}
+		return false;
+	};
+	const auto TryOwnerRemoveItem = [OwnerComp, this](int32 Index) -> bool
+	{
+		if (!OwnerComp || !Bag || !Bag->Items.IsValidIndex(Index))
+		{
+			return false;
+		}
+		const FYIBagItem& ItemToRemove = Bag->Items[Index];
+		if (ItemToRemove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
+		{
+			return OwnerComp->RemoveItemFromBag(Bag->BagId, ItemToRemove.Item.InstanceId);
+		}
+		if (OwnerComp->GetBag() == Bag)
+		{
+			return OwnerComp->RemoveItem(Index);
+		}
+		return false;
+	};
 	auto PlayDropSound = [this]()
 	{
 		if (!IsDragSoundEnabled())
@@ -972,10 +1006,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			UpdateBoundTooltip();
 			return true;
 		}
-		if (!((bCanUseOwnerCompForThisBag ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
+		if (!((bHasOwnerComp ? TryOwnerMoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
 		{
 			// Non-authority clients should not attempt in-place swaps; let the server resolve.
-			if (bCanUseOwnerCompForThisBag && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
+			if (bHasOwnerComp && !bOwnerCompHasAuthority)
 			{
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
 				PlayInvalidMoveSound();
@@ -993,12 +1027,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			}
 			// Remove victim, adjust source index if needed, then attempt move again
 			FYIBagItem SavedVictim = Bag->Items[Victim];
-			if (bCanUseOwnerCompForThisBag) OwnerComp->RemoveItem(Victim); else Bag->RemoveItem(Victim);
+			if (bHasOwnerComp) TryOwnerRemoveItem(Victim); else Bag->RemoveItem(Victim);
 			if (Victim < GInventoryDrag.SourceIndex)
 			{
 				GInventoryDrag.SourceIndex -= 1;
 			}
-			if (!((bCanUseOwnerCompForThisBag ? OwnerComp->MoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
+			if (!((bHasOwnerComp ? TryOwnerMoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
 			{
 			// Failed even after clearing victim; restore it in-place to avoid merge/stack side-effects
 			Bag->Items.Insert(SavedVictim, Victim);
@@ -1562,8 +1596,12 @@ bool UInventoryGridWidget::BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, 
 	bool bRemovedFromBag = false;
 	if (UYIInventoryComponent* OwnerComp = InBag->GetTypedOuter<UYIInventoryComponent>())
 	{
-		// Prefer authority mutation through inventory component when this bag is the active one.
-		if (OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority() && OwnerComp->GetBag() == InBag)
+		// Prefer explicit bag-targeted server-authoritative mutation for inventory-owned bags.
+		if (InBag->BagId.IsValid() && DraggedItem.Item.InstanceId.IsValid())
+		{
+			bRemovedFromBag = OwnerComp->RemoveItemFromBag(InBag->BagId, DraggedItem.Item.InstanceId);
+		}
+		else if (OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority() && OwnerComp->GetBag() == InBag)
 		{
 			bRemovedFromBag = OwnerComp->RemoveItem(ItemIndex);
 		}
@@ -1695,6 +1733,29 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 
 	// Non-trade: only allow direct transfer on authority.
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
+	UYIInventoryComponent* OtherOwnerComp = Other->Bag->GetTypedOuter<UYIInventoryComponent>();
+
+	// Prefer explicit bag-targeted component API when both bags belong to the same inventory component.
+	if (OwnerComp && OwnerComp == OtherOwnerComp &&
+		Bag->BagId.IsValid() && Other->Bag->BagId.IsValid() &&
+		Bag->Items.IsValidIndex(SourceIndex) && Bag->Items[SourceIndex].Item.InstanceId.IsValid())
+	{
+		const bool bTransferred = OwnerComp->TransferItemBetweenBagsById(
+			Bag->BagId,
+			Bag->Items[SourceIndex].Item.InstanceId,
+			Other->Bag->BagId,
+			Count,
+			OutDestIndex);
+		if (bTransferred)
+		{
+			UpdateBoundTooltip();
+			Other->RefreshBoundTooltip();
+			OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
+			Other->OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
+		}
+		return bTransferred;
+	}
+
 	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
 	{
 		return false;

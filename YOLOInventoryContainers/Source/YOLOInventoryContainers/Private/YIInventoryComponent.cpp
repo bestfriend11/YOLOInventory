@@ -5,6 +5,7 @@
 #include "YIItemInstanceFragmentAccess.h"
 #include "Net/UnrealNetwork.h"
 #include "YIItemRegistrySubsystem.h"
+#include "YIInventoryBlueprintLibrary.h"
 #include "UObject/Package.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
@@ -1493,6 +1494,47 @@ void UYIInventoryComponent::ServerMoveItem_Implementation(int32 Index, FIntPoint
 	MoveItem(Index, NewPos); // will take authority branch
 }
 
+bool UYIInventoryComponent::MoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 ItemIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, ItemIndex))
+		{
+			return false;
+		}
+		if (TargetBag->MoveItem(ItemIndex, NewPos))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerMoveItemInBag(BagId, ItemInstanceId, NewPos);
+	return true; // optimistic; owner-only mirrors will reconcile
+}
+
+void UYIInventoryComponent::ServerMoveItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos)
+{
+	MoveItemInBag(BagId, ItemInstanceId, NewPos);
+}
+
 bool UYIInventoryComponent::RotateItem(int32 Index)
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
@@ -1515,6 +1557,47 @@ bool UYIInventoryComponent::RotateItem(int32 Index)
 void UYIInventoryComponent::ServerRotateItem_Implementation(int32 Index)
 {
 	RotateItem(Index); // authority branch
+}
+
+bool UYIInventoryComponent::RotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 ItemIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, ItemIndex))
+		{
+			return false;
+		}
+		if (TargetBag->RotateItem(ItemIndex))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerRotateItemInBag(BagId, ItemInstanceId);
+	return true;
+}
+
+void UYIInventoryComponent::ServerRotateItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	RotateItemInBag(BagId, ItemInstanceId);
 }
 
 int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
@@ -1608,9 +1691,219 @@ bool UYIInventoryComponent::RemoveItem(int32 Index)
 	return true;
 }
 
+bool UYIInventoryComponent::RemoveItemFromBag(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 ItemIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, ItemIndex))
+		{
+			return false;
+		}
+		if (TargetBag->RemoveItem(ItemIndex))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerRemoveItemFromBag(BagId, ItemInstanceId);
+	return true;
+}
+
 void UYIInventoryComponent::ServerRemoveItem_Implementation(int32 Index)
 {
 	RemoveItem(Index);
+}
+
+void UYIInventoryComponent::ServerRemoveItemFromBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	RemoveItemFromBag(BagId, ItemInstanceId);
+}
+
+bool UYIInventoryComponent::TransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count, int32& OutDestIndex)
+{
+	OutDestIndex = INDEX_NONE;
+	if (!SourceBagId.IsValid() || !DestBagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+	if (SourceBagId == DestBagId)
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* SourceBag = GetBagById(SourceBagId);
+		UYIInventoryBag* DestBag = GetBagById(DestBagId);
+		if (!SourceBag || !DestBag)
+		{
+			return false;
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(SourceBag, ItemInstanceId, SourceIndex) || !SourceBag->Items.IsValidIndex(SourceIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(SourceBag, SourceIndex))
+		{
+			return false;
+		}
+
+		const FYIBagItem& SourceItem = SourceBag->Items[SourceIndex];
+		if (SourceItem.Item.ContainedBagId.IsValid() && DestBag->BagId.IsValid() &&
+			IsBagDescendantOf(DestBag->BagId, SourceItem.Item.ContainedBagId))
+		{
+			// Prevent placing a container into one of its descendants.
+			return false;
+		}
+
+		if (UYIItemDefinition* Def = SourceItem.Item.Definition.IsValid()
+			? SourceItem.Item.Definition.Get()
+			: SourceItem.Item.Definition.LoadSynchronous())
+		{
+			if (!DestBag->CanAcceptItemDefinition(Def))
+			{
+				return false;
+			}
+		}
+
+		if (UYIInventoryBlueprintLibrary::TransferItemBetweenBags(SourceBag, DestBag, SourceIndex, Count, OutDestIndex))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerTransferItemBetweenBagsById(SourceBagId, ItemInstanceId, DestBagId, Count);
+	return true;
+}
+
+void UYIInventoryComponent::ServerTransferItemBetweenBagsById_Implementation(
+	const FGuid& SourceBagId,
+	const FGuid& ItemInstanceId,
+	const FGuid& DestBagId,
+	int32 Count)
+{
+	int32 IgnoredDestIndex = INDEX_NONE;
+	TransferItemBetweenBagsById(SourceBagId, ItemInstanceId, DestBagId, Count, IgnoredDestIndex);
+}
+
+bool UYIInventoryComponent::CombineItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex) || !TargetBag->Items.IsValidIndex(SourceIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, SourceIndex))
+		{
+			return false;
+		}
+
+		int32 TargetIndex = TargetBag->FindExistingStackIndexForItem(TargetBag->Items[SourceIndex]);
+		if (TargetIndex == INDEX_NONE || TargetIndex == SourceIndex)
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, TargetIndex))
+		{
+			return false;
+		}
+
+		if (TargetBag->CombineStacks(TargetIndex, SourceIndex))
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerCombineItemInBag(BagId, ItemInstanceId);
+	return true;
+}
+
+void UYIInventoryComponent::ServerCombineItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId)
+{
+	CombineItemInBag(BagId, ItemInstanceId);
+}
+
+bool UYIInventoryComponent::SplitStackInBag(const FGuid& BagId, const FGuid& ItemInstanceId, int32 Amount, FIntPoint DesiredPos)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid() || Amount <= 0)
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, SourceIndex))
+		{
+			return false;
+		}
+
+		if (TargetBag->SplitStack(SourceIndex, Amount, DesiredPos) != INDEX_NONE)
+		{
+			SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	ServerSplitStackInBag(BagId, ItemInstanceId, Amount, DesiredPos);
+	return true;
+}
+
+void UYIInventoryComponent::ServerSplitStackInBag_Implementation(
+	const FGuid& BagId,
+	const FGuid& ItemInstanceId,
+	int32 Amount,
+	FIntPoint DesiredPos)
+{
+	SplitStackInBag(BagId, ItemInstanceId, Amount, DesiredPos);
 }
 
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)

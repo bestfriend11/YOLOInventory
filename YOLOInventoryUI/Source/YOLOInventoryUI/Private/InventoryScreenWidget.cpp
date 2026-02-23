@@ -446,16 +446,71 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 			OnItemUse(ItemIdx);
 			break;
 		case 1: // Rotate
-			if (Grid && Grid->Bag) { Grid->Bag->RotateItem(ItemIdx); }
+			if (Grid && Grid->Bag)
+			{
+				bool bHandled = false;
+				if (UYIInventoryComponent* OwnerComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>())
+				{
+					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
+					{
+						bHandled = OwnerComp->RotateItemInBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+					}
+					else if (OwnerComp->GetBag() == Grid->Bag)
+					{
+						bHandled = OwnerComp->RotateItem(ItemIdx);
+					}
+				}
+				if (!bHandled)
+				{
+					Grid->Bag->RotateItem(ItemIdx);
+				}
+			}
 			break;
 		case 2: // Drop
-			if (Grid && Grid->Bag) { Grid->Bag->RemoveItem(ItemIdx); OnItemDropped(ItemIdx); }
+			if (Grid && Grid->Bag)
+			{
+				bool bHandled = false;
+				if (UYIInventoryComponent* OwnerComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>())
+				{
+					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
+					{
+						bHandled = OwnerComp->RemoveItemFromBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+					}
+					else if (OwnerComp->GetBag() == Grid->Bag)
+					{
+						bHandled = OwnerComp->RemoveItem(ItemIdx);
+					}
+				}
+				if (!bHandled)
+				{
+					bHandled = Grid->Bag->RemoveItem(ItemIdx);
+				}
+				if (bHandled)
+				{
+					OnItemDropped(ItemIdx);
+				}
+			}
 			break;
 		case 3: // Combine
 			if (Grid && Grid->Bag)
 			{
-				int32 Target = Grid->Bag->FindExistingStackIndexForItem(Grid->Bag->Items[ItemIdx]);
-				if (Target != INDEX_NONE && Target != ItemIdx) { Grid->Bag->CombineStacks(Target, ItemIdx); OnItemCombined(ItemIdx, Target); }
+				int32 Target = Grid->Bag->Items.IsValidIndex(ItemIdx) ? Grid->Bag->FindExistingStackIndexForItem(Grid->Bag->Items[ItemIdx]) : INDEX_NONE;
+				bool bHandled = false;
+				if (UYIInventoryComponent* OwnerComp = Grid->Bag->GetTypedOuter<UYIInventoryComponent>())
+				{
+					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
+					{
+						bHandled = OwnerComp->CombineItemInBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+					}
+				}
+				if (!bHandled && Target != INDEX_NONE && Target != ItemIdx)
+				{
+					bHandled = Grid->Bag->CombineStacks(Target, ItemIdx);
+				}
+				if (bHandled && Target != INDEX_NONE && Target != ItemIdx)
+				{
+					OnItemCombined(ItemIdx, Target);
+				}
 			}
 			break;
 	case 4: // Sell

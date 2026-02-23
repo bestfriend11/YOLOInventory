@@ -199,10 +199,22 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItem(int32 Index, FIntPoint NewPos);
 
+	/** Move a specific item in a specific bag (explicit target, safer for multi-grid/context UIs). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Move item by explicit bag + item instance identity.\nArgs:\n- BagId: target bag.\n- ItemInstanceId: runtime item identity.\n- NewPos: destination cell.\nClient calls forward to ServerMoveItemInBag RPC."))
+	bool MoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos);
+	UFUNCTION(Server, Reliable)
+	void ServerMoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos);
+
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item in active bag.\nClient calls forward to ServerRotateItem RPC."))
 	bool RotateItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRotateItem(int32 Index);
+
+	/** Rotate a specific item in a specific bag (explicit target, safer for multi-grid/context UIs). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item by explicit bag + item instance identity.\nClient calls forward to ServerRotateItemInBag RPC."))
+	bool RotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
+	UFUNCTION(Server, Reliable)
+	void ServerRotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
 
 	/** Add an already-built bag item (e.g., from drag/drop). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Add an already-built bag item into active bag.\nClient calls forward to ServerAddBagItem RPC.\nReturns inserted index or INDEX_NONE."))
@@ -214,6 +226,30 @@ public:
 	bool RemoveItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(int32 Index);
+
+	/** Remove a specific item from a specific bag (explicit target, safer for multi-grid/context UIs). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Remove item by explicit bag + item instance identity.\nClient calls forward to ServerRemoveItemFromBag RPC."))
+	bool RemoveItemFromBag(const FGuid& BagId, const FGuid& ItemInstanceId);
+	UFUNCTION(Server, Reliable)
+	void ServerRemoveItemFromBag(const FGuid& BagId, const FGuid& ItemInstanceId);
+
+	/** Transfer an item between two explicit bags. Uses server-authoritative validation and stack/fit rules. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Transfer item between explicit bags.\nArgs:\n- SourceBagId: source bag.\n- ItemInstanceId: runtime item identity in source bag.\n- DestBagId: destination bag.\n- Count: optional split count for stackable items (<=0 moves whole stack).\nReturns true when request is accepted (client optimistic) or succeeds on authority.\nOutDestIndex is only authoritative locally (client usually gets INDEX_NONE until replication updates)."))
+	bool TransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count, int32& OutDestIndex);
+	UFUNCTION(Server, Reliable)
+	void ServerTransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count);
+
+	/** Combine a stack into another matching stack in the same explicit bag (server-authoritative). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Combine item stack into an existing matching stack in the same explicit bag.\nClient calls forward to ServerCombineItemInBag RPC."))
+	bool CombineItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
+	UFUNCTION(Server, Reliable)
+	void ServerCombineItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
+
+	/** Split a stack in an explicit bag. DesiredPos may be (-1,-1) to auto-place using first fit. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Split stack in explicit bag.\nArgs:\n- BagId: target bag.\n- ItemInstanceId: source stack identity.\n- Amount: quantity to split out.\n- DesiredPos: preferred cell, use (-1,-1) for auto-fit.\nClient calls forward to ServerSplitStackInBag RPC."))
+	bool SplitStackInBag(const FGuid& BagId, const FGuid& ItemInstanceId, int32 Amount, FIntPoint DesiredPos);
+	UFUNCTION(Server, Reliable)
+	void ServerSplitStackInBag(const FGuid& BagId, const FGuid& ItemInstanceId, int32 Amount, FIntPoint DesiredPos);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetActiveBagById(const FGuid& InBagId);
