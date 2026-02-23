@@ -1868,7 +1868,7 @@ void UInventoryGridWidget::RefreshBagFromBinding()
 		ResolvedBag = BoundInventoryComponent->GetBagByRoleTag(BoundBagRoleTag);
 	}
 
-	if (ResolvedBag && ResolvedBag != Bag)
+	if (ResolvedBag != Bag)
 	{
 		SetBag(ResolvedBag);
 	}

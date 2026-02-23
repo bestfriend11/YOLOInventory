@@ -139,6 +139,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Context", meta=(ToolTip="Set active bag context by semantic context tag + bag role tag. Returns true on success."))
 	bool SetActiveContextBagByRoleTag(FGameplayTag ContextTag, FGameplayTag InBagRoleTag);
 
+	UFUNCTION(BlueprintCallable, Category="Inventory|Context", meta=(ToolTip="Clear active bag for a semantic context tag. Returns true when a mapping was removed."))
+	bool ClearActiveContextBag(FGameplayTag ContextTag);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Context", meta=(ToolTip="Clear all active context mappings that point to the specified bag id. Returns number of mappings removed."))
+	int32 ClearActiveContextsForBagId(const FGuid& InBagId);
+
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Copy replicated bag descriptors for owner UI listing."))
 	void GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const;
 
@@ -196,6 +202,9 @@ public:
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetActiveContextBagById(FGameplayTag ContextTag, const FGuid& InBagId);
+
+	UFUNCTION(Server, Reliable)
+	void ServerClearActiveContextBag(FGameplayTag ContextTag);
 
 	UFUNCTION(Server, Reliable)
 	void ServerOpenContainedBagByInstance(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId);

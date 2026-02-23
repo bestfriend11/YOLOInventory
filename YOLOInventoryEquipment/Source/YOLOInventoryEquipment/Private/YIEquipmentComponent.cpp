@@ -1132,6 +1132,14 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	{
 		RemovedSlots.Add(SlotTag);
 	}
+
+	// If the unequipped item carried a nested bag (container/spellbook/etc), detach any UI/context bindings
+	// that point at that contained bag. Contexts can be re-associated explicitly when needed.
+	if (UnequippedItem.ContainedBagId.IsValid())
+	{
+		DestInventory->ClearActiveContextsForBagId(UnequippedItem.ContainedBagId);
+	}
+
 	for (const FGameplayTag& RemovedSlot : RemovedSlots)
 	{
 		OnEquipmentChanged.Broadcast(RemovedSlot, UnequippedItem);

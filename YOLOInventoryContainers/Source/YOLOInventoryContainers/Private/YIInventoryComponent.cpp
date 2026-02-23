@@ -146,6 +146,7 @@ void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 {
 	if (!Bag) return;
+	Bag->EnsureBagId();
 	if (EquippedBag == Bag)
 	{
 		if (BagChangedHandle.IsValid())
@@ -169,7 +170,11 @@ void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 			SyncNetState();
 		}
 	}
-	OnBagClosed.Broadcast(Bag);
+	const int32 ClearedContextCount = ClearActiveContextsForBagId(Bag->BagId);
+	if (ClearedContextCount == 0)
+	{
+		OnBagClosed.Broadcast(Bag);
+	}
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBag() const
@@ -397,9 +402,14 @@ bool UYIInventoryComponent::SetActiveContextBagById(FGameplayTag ContextTag, con
 	if (UYIInventoryBag* Bag = GetBagById(InBagId))
 	{
 		Bag->EnsureBagId();
+		UYIInventoryBag* PreviousBag = nullptr;
 		const int32 ExistingIndex = FindActiveContextIndex(ContextTag);
 		if (ExistingIndex != INDEX_NONE)
 		{
+			if (ActiveBagContexts[ExistingIndex].BagId != Bag->BagId)
+			{
+				PreviousBag = GetBagById(ActiveBagContexts[ExistingIndex].BagId);
+			}
 			ActiveBagContexts[ExistingIndex].BagId = Bag->BagId;
 		}
 		else
@@ -412,6 +422,11 @@ bool UYIInventoryComponent::SetActiveContextBagById(FGameplayTag ContextTag, con
 		{
 			SyncNetState();
 		}
+		if (PreviousBag && PreviousBag != Bag)
+		{
+			OnBagClosed.Broadcast(PreviousBag);
+		}
+		OnBagOpened.Broadcast(Bag);
 		return true;
 	}
 	return false;
@@ -432,6 +447,71 @@ bool UYIInventoryComponent::SetActiveContextBagByRoleTag(FGameplayTag ContextTag
 	return false;
 }
 
+bool UYIInventoryComponent::ClearActiveContextBag(FGameplayTag ContextTag)
+{
+	if (!ContextTag.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		ServerClearActiveContextBag(ContextTag);
+		return true;
+	}
+
+	const int32 ExistingIndex = FindActiveContextIndex(ContextTag);
+	if (ExistingIndex == INDEX_NONE)
+	{
+		return false;
+	}
+
+	UYIInventoryBag* ClosedBag = GetBagById(ActiveBagContexts[ExistingIndex].BagId);
+	ActiveBagContexts.RemoveAt(ExistingIndex);
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		SyncNetState();
+	}
+	if (ClosedBag)
+	{
+		OnBagClosed.Broadcast(ClosedBag);
+	}
+	return true;
+}
+
+int32 UYIInventoryComponent::ClearActiveContextsForBagId(const FGuid& InBagId)
+{
+	if (!InBagId.IsValid())
+	{
+		return 0;
+	}
+
+	int32 RemovedCount = 0;
+	for (int32 Index = ActiveBagContexts.Num() - 1; Index >= 0; --Index)
+	{
+		if (ActiveBagContexts[Index].BagId == InBagId)
+		{
+			ActiveBagContexts.RemoveAtSwap(Index, 1, EAllowShrinking::No);
+			++RemovedCount;
+		}
+	}
+
+	if (RemovedCount > 0)
+	{
+		if (GetOwner() && GetOwner()->HasAuthority())
+		{
+			SyncNetState();
+		}
+		if (UYIInventoryBag* ClosedBag = GetBagById(InBagId))
+		{
+			OnBagClosed.Broadcast(ClosedBag);
+		}
+	}
+
+	return RemovedCount;
+}
+
 void UYIInventoryComponent::ServerSetActiveBagById_Implementation(const FGuid& InBagId)
 {
 	SetActiveBagById(InBagId);
@@ -440,6 +520,11 @@ void UYIInventoryComponent::ServerSetActiveBagById_Implementation(const FGuid& I
 void UYIInventoryComponent::ServerSetActiveContextBagById_Implementation(FGameplayTag ContextTag, const FGuid& InBagId)
 {
 	SetActiveContextBagById(ContextTag, InBagId);
+}
+
+void UYIInventoryComponent::ServerClearActiveContextBag_Implementation(FGameplayTag ContextTag)
+{
+	ClearActiveContextBag(ContextTag);
 }
 
 void UYIInventoryComponent::ServerOpenContainedBagByInstance_Implementation(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId)
@@ -849,10 +934,7 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 	{
 		ActiveBagId.Invalidate();
 	}
-	ActiveBagContexts.RemoveAllSwap([Bag](const FYIActiveBagContextEntry& Entry)
-	{
-		return Entry.BagId.IsValid() && Entry.BagId == Bag->BagId;
-	}, EAllowShrinking::No);
+	ClearActiveContextsForBagId(Bag->BagId);
 	const bool bWasEquipped = (EquippedBag == Bag);
 	if (bWasEquipped)
 	{
