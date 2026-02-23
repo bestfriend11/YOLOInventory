@@ -53,9 +53,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
 	bool bBindToActiveBagContext = false;
 
-	/** If active-context binding is enabled, use ActiveSpellbookBagId instead of ActiveBagId. */
+	/** Optional semantic active-context tag. Empty = primary active bag (ActiveBagId); set to bind this grid to a named context bag. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(EditCondition="bBindToActiveBagContext", EditConditionHides))
-	bool bUseActiveSpellbookContext = false;
+	FGameplayTag BoundActiveContextTag;
 
 	/** Set/replace the bag shown by this grid at runtime. Ensures Slate and delegates are rebound. */
 	UFUNCTION(BlueprintCallable, Category="Inventory")
@@ -68,7 +68,7 @@ public:
 	void SetBagBindingByRole(UYIInventoryComponent* InInventoryComponent, FGameplayTag InBagRoleTag);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
-	void SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, bool bSpellbookContext);
+	void SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, FGameplayTag InContextTag);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
 	void ClearBagBinding();

@@ -41,6 +41,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void BindInventoryBagContexts(class UYIInventoryComponent* InInventoryComponent);
 
+	/** Semantic active context tag used by the secondary grid (SpellbookGrid). Empty disables active-context binding for that grid. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
+	FGameplayTag SecondaryGridContextTag;
+
 	/** Resolve and wire inventory/equipment UI pieces automatically (widgets, bag contexts, equipment slots). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Setup")
 	bool AutoWireScreen(bool bRebuildEquipmentPane = true);

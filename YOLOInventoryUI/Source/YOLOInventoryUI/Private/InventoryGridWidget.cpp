@@ -1787,7 +1787,7 @@ void UInventoryGridWidget::SetBagBindingById(UYIInventoryComponent* InInventoryC
 	BoundBagId = InBagId;
 	BoundBagRoleTag = FGameplayTag();
 	bBindToActiveBagContext = false;
-	bUseActiveSpellbookContext = false;
+	BoundActiveContextTag = FGameplayTag();
 	RebindInventoryContextDelegates();
 	RefreshBagFromBinding();
 }
@@ -1798,18 +1798,18 @@ void UInventoryGridWidget::SetBagBindingByRole(UYIInventoryComponent* InInventor
 	BoundBagId.Invalidate();
 	BoundBagRoleTag = InBagRoleTag;
 	bBindToActiveBagContext = false;
-	bUseActiveSpellbookContext = false;
+	BoundActiveContextTag = FGameplayTag();
 	RebindInventoryContextDelegates();
 	RefreshBagFromBinding();
 }
 
-void UInventoryGridWidget::SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, bool bSpellbookContext)
+void UInventoryGridWidget::SetBagBindingToActiveContext(UYIInventoryComponent* InInventoryComponent, FGameplayTag InContextTag)
 {
 	BoundInventoryComponent = InInventoryComponent;
 	BoundBagId.Invalidate();
 	BoundBagRoleTag = FGameplayTag();
 	bBindToActiveBagContext = true;
-	bUseActiveSpellbookContext = bSpellbookContext;
+	BoundActiveContextTag = InContextTag;
 	RebindInventoryContextDelegates();
 	RefreshBagFromBinding();
 }
@@ -1819,7 +1819,7 @@ void UInventoryGridWidget::ClearBagBinding()
 	BoundBagId.Invalidate();
 	BoundBagRoleTag = FGameplayTag();
 	bBindToActiveBagContext = false;
-	bUseActiveSpellbookContext = false;
+	BoundActiveContextTag = FGameplayTag();
 	BoundInventoryComponent = nullptr;
 	RebindInventoryContextDelegates();
 }
@@ -1851,10 +1851,10 @@ void UInventoryGridWidget::RefreshBagFromBinding()
 	UYIInventoryBag* ResolvedBag = nullptr;
 	if (bBindToActiveBagContext)
 	{
-		ResolvedBag = bUseActiveSpellbookContext
-			? BoundInventoryComponent->GetActiveSpellbookBag()
+		ResolvedBag = BoundActiveContextTag.IsValid()
+			? BoundInventoryComponent->GetActiveContextBag(BoundActiveContextTag)
 			: BoundInventoryComponent->GetBagById(BoundInventoryComponent->GetActiveBagId());
-		if (!ResolvedBag && !bUseActiveSpellbookContext)
+		if (!ResolvedBag && !BoundActiveContextTag.IsValid())
 		{
 			ResolvedBag = BoundInventoryComponent->GetBag();
 		}

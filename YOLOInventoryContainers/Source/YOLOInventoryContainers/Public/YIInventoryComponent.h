@@ -43,6 +43,20 @@ struct YOLOINVENTORYCONTAINERS_API FYINetBagDescriptor
 	bool bIsActive = false;
 };
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYCONTAINERS_API FYIActiveBagContextEntry
+{
+	GENERATED_BODY()
+
+	/** Semantic UI/gameplay context tag (for example UI.Context.Spellbook, UI.Context.CraftingSource). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGameplayTag ContextTag;
+
+	/** Runtime bag currently assigned to this context. Owner-only replicated. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid BagId;
+};
+
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORYCONTAINERS_API UYIInventoryComponent : public UActorComponent
 {
@@ -95,11 +109,11 @@ public:
 	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active bag id for owner UI context wiring."))
 	FGuid GetActiveBagId() const { return ActiveBagId; }
 
-	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active spellbook bag id for owner UI context wiring."))
-	FGuid GetActiveSpellbookBagId() const { return ActiveSpellbookBagId; }
+	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve owner-replicated active bag id for a semantic context tag (for example UI.Context.Spellbook)."))
+	FGuid GetActiveContextBagId(FGameplayTag ContextTag) const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Resolve active spellbook bag pointer from replicated spellbook context."))
-	UYIInventoryBag* GetActiveSpellbookBag() const;
+	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve runtime bag pointer for a semantic context tag from the owner-replicated active context list."))
+	UYIInventoryBag* GetActiveContextBag(FGameplayTag ContextTag) const;
 
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active bag by BagId. Returns true on success."))
 	bool SetActiveBagById(const FGuid& InBagId);
@@ -119,11 +133,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Open parent bag for current nested active bag. Returns false if current bag has no parent."))
 	bool OpenParentBag();
 
-	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active spellbook bag by BagId. Returns true on success."))
-	bool SetActiveSpellbookBagById(const FGuid& InBagId);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Context", meta=(ToolTip="Set active bag context by semantic context tag + BagId. Returns true on success."))
+	bool SetActiveContextBagById(FGameplayTag ContextTag, const FGuid& InBagId);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Set active spellbook bag by role tag. Returns true on success."))
-	bool SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRoleTag);
+	UFUNCTION(BlueprintCallable, Category="Inventory|Context", meta=(ToolTip="Set active bag context by semantic context tag + bag role tag. Returns true on success."))
+	bool SetActiveContextBagByRoleTag(FGameplayTag ContextTag, FGameplayTag InBagRoleTag);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Copy replicated bag descriptors for owner UI listing."))
 	void GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const;
@@ -181,7 +195,7 @@ public:
 	void ServerSetActiveBagById(const FGuid& InBagId);
 
 	UFUNCTION(Server, Reliable)
-	void ServerSetActiveSpellbookBagById(const FGuid& InBagId);
+	void ServerSetActiveContextBagById(FGameplayTag ContextTag, const FGuid& InBagId);
 
 	UFUNCTION(Server, Reliable)
 	void ServerOpenContainedBagByInstance(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId);
@@ -248,7 +262,7 @@ protected:
 	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
 	FGuid ActiveBagId;
 	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
-	FGuid ActiveSpellbookBagId;
+	TArray<FYIActiveBagContextEntry> ActiveBagContexts;
 
 	UFUNCTION()
 	void OnRep_NetBag();
@@ -301,5 +315,6 @@ private:
 	UYIInventoryBag* EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag);
 	bool TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex);
 	bool SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked);
+	int32 FindActiveContextIndex(FGameplayTag ContextTag) const;
 };
 

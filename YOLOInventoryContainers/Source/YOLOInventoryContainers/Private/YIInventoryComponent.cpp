@@ -213,13 +213,27 @@ UYIInventoryBag* UYIInventoryComponent::GetBag() const
 	return ResolvePrimaryBag();
 }
 
-UYIInventoryBag* UYIInventoryComponent::GetActiveSpellbookBag() const
+FGuid UYIInventoryComponent::GetActiveContextBagId(FGameplayTag ContextTag) const
 {
-	if (!ActiveSpellbookBagId.IsValid())
+	if (!ContextTag.IsValid())
 	{
-		return nullptr;
+		return FGuid();
 	}
-	return GetBagById(ActiveSpellbookBagId);
+
+	for (const FYIActiveBagContextEntry& Entry : ActiveBagContexts)
+	{
+		if (Entry.ContextTag == ContextTag)
+		{
+			return Entry.BagId;
+		}
+	}
+	return FGuid();
+}
+
+UYIInventoryBag* UYIInventoryComponent::GetActiveContextBag(FGameplayTag ContextTag) const
+{
+	const FGuid ContextBagId = GetActiveContextBagId(ContextTag);
+	return ContextBagId.IsValid() ? GetBagById(ContextBagId) : nullptr;
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
@@ -245,6 +259,23 @@ UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
 		}
 	}
 	return nullptr;
+}
+
+int32 UYIInventoryComponent::FindActiveContextIndex(FGameplayTag ContextTag) const
+{
+	if (!ContextTag.IsValid())
+	{
+		return INDEX_NONE;
+	}
+
+	for (int32 Index = 0; Index < ActiveBagContexts.Num(); ++Index)
+	{
+		if (ActiveBagContexts[Index].ContextTag == ContextTag)
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
 }
 
 bool UYIInventoryComponent::SetActiveBagById(const FGuid& InBagId)
@@ -350,23 +381,33 @@ bool UYIInventoryComponent::OpenParentBag()
 	return SetActiveBagById(ParentBagId);
 }
 
-bool UYIInventoryComponent::SetActiveSpellbookBagById(const FGuid& InBagId)
+bool UYIInventoryComponent::SetActiveContextBagById(FGameplayTag ContextTag, const FGuid& InBagId)
 {
-	if (!InBagId.IsValid())
+	if (!ContextTag.IsValid() || !InBagId.IsValid())
 	{
 		return false;
 	}
 
 	if (GetOwner() && !GetOwner()->HasAuthority())
 	{
-		ServerSetActiveSpellbookBagById(InBagId);
+		ServerSetActiveContextBagById(ContextTag, InBagId);
 		return true;
 	}
 
 	if (UYIInventoryBag* Bag = GetBagById(InBagId))
 	{
 		Bag->EnsureBagId();
-		ActiveSpellbookBagId = Bag->BagId;
+		const int32 ExistingIndex = FindActiveContextIndex(ContextTag);
+		if (ExistingIndex != INDEX_NONE)
+		{
+			ActiveBagContexts[ExistingIndex].BagId = Bag->BagId;
+		}
+		else
+		{
+			FYIActiveBagContextEntry& NewEntry = ActiveBagContexts.AddDefaulted_GetRef();
+			NewEntry.ContextTag = ContextTag;
+			NewEntry.BagId = Bag->BagId;
+		}
 		if (GetOwner() && GetOwner()->HasAuthority())
 		{
 			SyncNetState();
@@ -376,9 +417,9 @@ bool UYIInventoryComponent::SetActiveSpellbookBagById(const FGuid& InBagId)
 	return false;
 }
 
-bool UYIInventoryComponent::SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRoleTag)
+bool UYIInventoryComponent::SetActiveContextBagByRoleTag(FGameplayTag ContextTag, FGameplayTag InBagRoleTag)
 {
-	if (!InBagRoleTag.IsValid())
+	if (!ContextTag.IsValid() || !InBagRoleTag.IsValid())
 	{
 		return false;
 	}
@@ -386,12 +427,7 @@ bool UYIInventoryComponent::SetActiveSpellbookBagByRoleTag(FGameplayTag InBagRol
 	if (UYIInventoryBag* Bag = GetBagByRoleTag(InBagRoleTag))
 	{
 		Bag->EnsureBagId();
-		ActiveSpellbookBagId = Bag->BagId;
-		if (GetOwner() && GetOwner()->HasAuthority())
-		{
-			SyncNetState();
-		}
-		return true;
+		return SetActiveContextBagById(ContextTag, Bag->BagId);
 	}
 	return false;
 }
@@ -401,9 +437,9 @@ void UYIInventoryComponent::ServerSetActiveBagById_Implementation(const FGuid& I
 	SetActiveBagById(InBagId);
 }
 
-void UYIInventoryComponent::ServerSetActiveSpellbookBagById_Implementation(const FGuid& InBagId)
+void UYIInventoryComponent::ServerSetActiveContextBagById_Implementation(FGameplayTag ContextTag, const FGuid& InBagId)
 {
-	SetActiveSpellbookBagById(InBagId);
+	SetActiveContextBagById(ContextTag, InBagId);
 }
 
 void UYIInventoryComponent::ServerOpenContainedBagByInstance_Implementation(const FGuid& ParentBagId, const FGuid& ParentItemInstanceId)
@@ -813,10 +849,10 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 	{
 		ActiveBagId.Invalidate();
 	}
-	if (ActiveSpellbookBagId.IsValid() && ActiveSpellbookBagId == Bag->BagId)
+	ActiveBagContexts.RemoveAllSwap([Bag](const FYIActiveBagContextEntry& Entry)
 	{
-		ActiveSpellbookBagId.Invalidate();
-	}
+		return Entry.BagId.IsValid() && Entry.BagId == Bag->BagId;
+	}, EAllowShrinking::No);
 	const bool bWasEquipped = (EquippedBag == Bag);
 	if (bWasEquipped)
 	{
@@ -1166,9 +1202,12 @@ void UYIInventoryComponent::OnRep_ActiveBagContexts()
 		OnBagOpened.Broadcast(ClientPreviewBag);
 	}
 
-	if (UYIInventoryBag* SpellbookBag = GetBagById(ActiveSpellbookBagId))
+	for (const FYIActiveBagContextEntry& ContextEntry : ActiveBagContexts)
 	{
-		OnBagOpened.Broadcast(SpellbookBag);
+		if (UYIInventoryBag* ContextBag = GetBagById(ContextEntry.BagId))
+		{
+			OnBagOpened.Broadcast(ContextBag);
+		}
 	}
 }
 
@@ -1191,7 +1230,7 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagDescriptors, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagId, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveSpellbookBagId, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagContexts, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, LockedBagItems, COND_OwnerOnly);
 }
 
