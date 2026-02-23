@@ -25,7 +25,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UInventoryGridWidget* GetGrid() const { return Grid; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
-	UInventoryGridWidget* GetSpellbookGrid() const { return SpellbookGrid; }
+	UInventoryGridWidget* GetSecondaryContextGrid() const { return SecondaryContextGrid; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	UInventoryTooltipView* GetTooltip() const { return Tooltip; }
 	UFUNCTION(BlueprintCallable, Category="Inventory")
@@ -37,11 +37,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
 	void RebuildEquipmentSlotPaneFromLayout();
 
-	/** Bind inventory grids (main + optional spellbook) to inventory active bag contexts. */
+	/** Bind inventory grids (main + optional secondary/context grid) to inventory active bag contexts. */
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void BindInventoryBagContexts(class UYIInventoryComponent* InInventoryComponent);
 
-	/** Semantic active context tag used by the secondary grid (SpellbookGrid). Empty disables active-context binding for that grid. */
+	/** Semantic active context tag used by the secondary/context grid. Empty disables active-context binding for that grid. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
 	FGameplayTag SecondaryGridContextTag;
 
@@ -55,9 +55,9 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UInventoryGridWidget* Grid;
 
-	/** Optional second grid used for spellbook/context bags. */
+	/** Optional second grid used for additional named bag contexts (crafting source, spell loadout, companion bag, etc.). */
 	UPROPERTY(meta = (BindWidgetOptional))
-	UInventoryGridWidget* SpellbookGrid;
+	UInventoryGridWidget* SecondaryContextGrid;
 
 	/** The tooltip widget that will receive data for the selected cell. */
 	UPROPERTY(meta = (BindWidget))
@@ -101,7 +101,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Equipment")
 	bool bAutoGenerateEquipmentSlotPane = false;
 
-	/** If true, missing widget bindings are auto-resolved by name/type (Grid, SpellbookGrid, Tooltip, ActionMenu, equipment panels). */
+	/** If true, missing widget bindings are auto-resolved by name/type (Grid, SecondaryContextGrid/ContextGrid, Tooltip, ActionMenu, equipment panels). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Setup")
 	bool bAutoResolveWidgetReferences = true;
 

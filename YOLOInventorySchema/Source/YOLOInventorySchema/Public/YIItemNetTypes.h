@@ -1,22 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "YIAffix.h"
+#include "StructUtils/InstancedStruct.h"
 #include "YIItemNetTypes.generated.h"
 
 class UYIItemDefinition;
-
-USTRUCT(BlueprintType)
-struct YOLOINVENTORYSCHEMA_API FYIAttributeKV
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
-	FName Name;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
-	float Value = 0.f;
-};
 
 /** Net-safe version of item instance for replication/UI payloads (avoids TMap replication). */
 USTRUCT(BlueprintType)
@@ -47,9 +35,7 @@ struct YOLOINVENTORYSCHEMA_API FYIItemInstanceNet
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
 	bool bRotated = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
-	TArray<FYIAffixInstance> Affixes;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item")
-	TArray<FYIAttributeKV> Attributes;
+	/** Fragment-first runtime payload for replication/UI transport. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Item|Fragments", meta=(BaseStruct="/Script/YOLOInventorySchema.YIItemFragmentBase", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Fragments;
 };

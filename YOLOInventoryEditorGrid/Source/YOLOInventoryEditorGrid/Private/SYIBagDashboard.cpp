@@ -229,7 +229,7 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							SNew(SHorizontalBox)
 							+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 8, 0)
 							[
-								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeSlotTag", "Spellbook Slot Tag"))
+								SNew(STextBlock).Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeSlotTag", "Context Slot Tag"))
 							]
 							+ SHorizontalBox::Slot().FillWidth(1.f)
 							[
@@ -271,8 +271,8 @@ void SYIBagDashboard::Construct(const FArguments& InArgs)
 							+ SHorizontalBox::Slot().AutoWidth().Padding(2)
 							[
 								SNew(SButton)
-								.Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset", "Apply Spellbook Preset"))
-								.ToolTipText(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset_TT", "Runs on the current PIE player pawn and ensures inventory/equipment/actionbar setup + spellbook autobind."))
+								.Text(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset", "Apply Context Preset"))
+								.ToolTipText(NSLOCTEXT("YOLOInventory", "BagDash_RuntimeApplyPreset_TT", "Runs on the current PIE player pawn and ensures inventory/equipment/actionbar setup + context-grid autobind."))
 								.OnClicked_Lambda([this]()
 								{
 									ApplyRuntimeSpellbookPresetFromToolbar();

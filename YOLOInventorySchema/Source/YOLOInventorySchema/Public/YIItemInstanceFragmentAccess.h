@@ -61,50 +61,13 @@ namespace YIItemInstanceFragments
 		return nullptr;
 	}
 
-	inline void ExportLegacyNetPayload(const FYIItemInstance& Item, TArray<FYIAffixInstance>& OutAffixes, TArray<FYIAttributeKV>& OutAttributes)
+	inline void ExportNetFragmentPayload(const FYIItemInstance& Item, TArray<FInstancedStruct>& OutFragments)
 	{
-		OutAffixes.Reset();
-		OutAttributes.Reset();
-
-		if (const FYIItemAffixesFragment* Affixes = GetAffixes(Item))
-		{
-			OutAffixes = Affixes->Values;
-		}
-
-		if (const FYIItemAttributesFragment* Attributes = GetAttributes(Item))
-		{
-			OutAttributes.Reserve(Attributes->Values.Num());
-			for (const TPair<FName, float>& KV : Attributes->Values)
-			{
-				FYIAttributeKV OutKV;
-				OutKV.Name = KV.Key;
-				OutKV.Value = KV.Value;
-				OutAttributes.Add(OutKV);
-			}
-		}
+		OutFragments = Item.Fragments;
 	}
 
-	inline void ImportLegacyNetPayload(FYIItemInstance& Item, const TArray<FYIAffixInstance>& InAffixes, const TArray<FYIAttributeKV>& InAttributes)
+	inline void ImportNetFragmentPayload(FYIItemInstance& Item, const TArray<FInstancedStruct>& InFragments)
 	{
-		if (InAffixes.Num() > 0)
-		{
-			if (FYIItemAffixesFragment* Affixes = GetMutableAffixes(Item, true))
-			{
-				Affixes->Values = InAffixes;
-			}
-		}
-
-		if (InAttributes.Num() > 0)
-		{
-			if (FYIItemAttributesFragment* Attributes = GetMutableAttributes(Item, true))
-			{
-				Attributes->Values.Reset();
-				for (const FYIAttributeKV& KV : InAttributes)
-				{
-					Attributes->Values.Add(KV.Name, KV.Value);
-				}
-			}
-		}
+		Item.Fragments = InFragments;
 	}
 }
-

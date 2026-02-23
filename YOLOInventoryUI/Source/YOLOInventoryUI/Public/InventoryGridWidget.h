@@ -46,7 +46,7 @@ public:
 	FGuid BoundBagId;
 
 	/** Optional role tag binding when BoundBagId is not set. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag role binding fallback (for example Bag.Role.Spellbook)"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag role binding fallback (for example Bag.Role.Context.Secondary)"))
 	FGameplayTag BoundBagRoleTag;
 
 	/** If true, this grid always resolves from inventory active bag contexts instead of a fixed role/id. */

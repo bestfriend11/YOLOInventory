@@ -180,7 +180,7 @@ static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 	Net.CustomStackKey = Item.CustomStackKey;
 	Net.ContainedBagId = Item.ContainedBagId;
 	Net.bRotated = Item.bRotated;
-	YIItemInstanceFragments::ExportLegacyNetPayload(Item, Net.Affixes, Net.Attributes);
+	YIItemInstanceFragments::ExportNetFragmentPayload(Item, Net.Fragments);
 	return Net;
 }
 
@@ -834,7 +834,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	if (!Bag) return false;
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 	// InventoryComponent net-safe mutation helpers currently target the active/main bag only.
-	// For secondary context grids (e.g. spellbook), mutate the actual bound bag directly.
+	// For secondary context grids (non-primary bag contexts), mutate the actual bound bag directly.
 	const bool bCanUseOwnerCompForThisBag = OwnerComp && (OwnerComp->GetBag() == Bag);
 	auto PlayDropSound = [this]()
 	{

@@ -48,7 +48,7 @@ struct YOLOINVENTORYCONTAINERS_API FYIActiveBagContextEntry
 {
 	GENERATED_BODY()
 
-	/** Semantic UI/gameplay context tag (for example UI.Context.Spellbook, UI.Context.CraftingSource). */
+	/** Semantic UI/gameplay context tag (for example UI.Context.Secondary, UI.Context.CraftingSource). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FGameplayTag ContextTag;
 
@@ -109,7 +109,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active bag id for owner UI context wiring."))
 	FGuid GetActiveBagId() const { return ActiveBagId; }
 
-	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve owner-replicated active bag id for a semantic context tag (for example UI.Context.Spellbook)."))
+	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve owner-replicated active bag id for a semantic context tag (for example UI.Context.Secondary)."))
 	FGuid GetActiveContextBagId(FGameplayTag ContextTag) const;
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve runtime bag pointer for a semantic context tag from the owner-replicated active context list."))

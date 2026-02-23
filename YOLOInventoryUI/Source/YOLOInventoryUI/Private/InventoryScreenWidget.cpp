@@ -124,10 +124,10 @@ void UInventoryScreenWidget::BindInventoryBagContexts(UYIInventoryComponent* InI
 		Grid->SetBagBindingToActiveContext(InInventoryComponent, FGameplayTag());
 		Grid->RefreshBoundTooltip();
 	}
-	if (SpellbookGrid)
+	if (SecondaryContextGrid)
 	{
-		SpellbookGrid->SetBagBindingToActiveContext(InInventoryComponent, SecondaryGridContextTag);
-		SpellbookGrid->RefreshBoundTooltip();
+		SecondaryContextGrid->SetBagBindingToActiveContext(InInventoryComponent, SecondaryGridContextTag);
+		SecondaryContextGrid->RefreshBoundTooltip();
 	}
 }
 
@@ -148,13 +148,22 @@ void UInventoryScreenWidget::AutoResolveWidgetReferences()
 		Excluded.Add(Grid);
 	}
 
-	if (!SpellbookGrid)
+	if (!SecondaryContextGrid)
 	{
-		SpellbookGrid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("SpellbookGrid"), Excluded);
+		SecondaryContextGrid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("SecondaryContextGrid"), Excluded);
 	}
-	if (SpellbookGrid)
+	if (!SecondaryContextGrid)
 	{
-		Excluded.Add(SpellbookGrid);
+		SecondaryContextGrid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("ContextGrid"), Excluded);
+	}
+	if (!SecondaryContextGrid)
+	{
+		// Legacy UMG name fallback.
+		SecondaryContextGrid = YIInventoryScreenPrivate::FindWidgetByNameOrType<UInventoryGridWidget>(WidgetTree, TEXT("SpellbookGrid"), Excluded);
+	}
+	if (SecondaryContextGrid)
+	{
+		Excluded.Add(SecondaryContextGrid);
 	}
 
 	if (!Tooltip)
@@ -262,9 +271,9 @@ void UInventoryScreenWidget::EnsureGlobalDragOverlay()
 		{
 			Grid->SetUseGlobalDragGhost(false);
 		}
-		if (SpellbookGrid)
+		if (SecondaryContextGrid)
 		{
-			SpellbookGrid->SetUseGlobalDragGhost(false);
+			SecondaryContextGrid->SetUseGlobalDragGhost(false);
 		}
 		return;
 	}
@@ -305,7 +314,7 @@ void UInventoryScreenWidget::EnsureGlobalDragOverlay()
 		}
 		DragOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
 		DragOverlay->LeftGrid = Grid;
-		DragOverlay->RightGrid = SpellbookGrid;
+		DragOverlay->RightGrid = SecondaryContextGrid;
 	}
 
 	const bool bHasOverlay = (DragOverlay != nullptr);
@@ -313,9 +322,9 @@ void UInventoryScreenWidget::EnsureGlobalDragOverlay()
 	{
 		Grid->SetUseGlobalDragGhost(bHasOverlay);
 	}
-	if (SpellbookGrid)
+	if (SecondaryContextGrid)
 	{
-		SpellbookGrid->SetUseGlobalDragGhost(bHasOverlay);
+		SecondaryContextGrid->SetUseGlobalDragGhost(bHasOverlay);
 	}
 }
 

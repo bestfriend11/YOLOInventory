@@ -101,7 +101,7 @@ AYIItemPickup* UYIWorldLootBlueprintLibrary::SpawnItemPickupFromInstance(UObject
 		Pickup->ItemInstance.CustomStackKey = LocalInstance.CustomStackKey;
 		Pickup->ItemInstance.ContainedBagId = LocalInstance.ContainedBagId;
 		Pickup->ItemInstance.bRotated = LocalInstance.bRotated;
-		YIItemInstanceFragments::ExportLegacyNetPayload(LocalInstance, Pickup->ItemInstance.Affixes, Pickup->ItemInstance.Attributes);
+		YIItemInstanceFragments::ExportNetFragmentPayload(LocalInstance, Pickup->ItemInstance.Fragments);
 		UGameplayStatics::FinishSpawningActor(Pickup, Transform);
 		Pickup->RefreshVisuals();
 	}
@@ -209,7 +209,7 @@ bool UYIWorldLootBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	Full.CustomStackKey = NetInstance.CustomStackKey;
 	Full.ContainedBagId = NetInstance.ContainedBagId;
 	Full.bRotated = NetInstance.bRotated;
-	YIItemInstanceFragments::ImportLegacyNetPayload(Full, NetInstance.Affixes, NetInstance.Attributes);
+	YIItemInstanceFragments::ImportNetFragmentPayload(Full, NetInstance.Fragments);
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(Bag, Full))
 	{

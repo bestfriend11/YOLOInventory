@@ -1328,7 +1328,7 @@ int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 	Net.CustomStackKey = RuntimeItem.CustomStackKey;
 	Net.ContainedBagId = RuntimeItem.ContainedBagId;
 	Net.bRotated = RuntimeItem.bRotated;
-	YIItemInstanceFragments::ExportLegacyNetPayload(RuntimeItem, Net.Affixes, Net.Attributes);
+	YIItemInstanceFragments::ExportNetFragmentPayload(RuntimeItem, Net.Fragments);
 	ServerAddBagItem(Net, Item.Pos, Item.Size);
 	return 0; // optimistic dummy index; OnRep will refresh actual layout
 }
@@ -1343,7 +1343,7 @@ static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
 	Out.CustomStackKey = Net.CustomStackKey;
 	Out.ContainedBagId = Net.ContainedBagId;
 	Out.bRotated = Net.bRotated;
-	YIItemInstanceFragments::ImportLegacyNetPayload(Out, Net.Affixes, Net.Attributes);
+	YIItemInstanceFragments::ImportNetFragmentPayload(Out, Net.Fragments);
 	return Out;
 }
 

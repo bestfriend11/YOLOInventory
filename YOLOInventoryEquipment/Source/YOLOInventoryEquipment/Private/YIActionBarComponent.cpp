@@ -27,7 +27,7 @@ namespace YIActionBarPrivate
 		Out.CustomStackKey = Full.CustomStackKey;
 		Out.ContainedBagId = Full.ContainedBagId;
 		Out.bRotated = Full.bRotated;
-		YIItemInstanceFragments::ExportLegacyNetPayload(Full, Out.Affixes, Out.Attributes);
+		YIItemInstanceFragments::ExportNetFragmentPayload(Full, Out.Fragments);
 		return Out;
 	}
 }

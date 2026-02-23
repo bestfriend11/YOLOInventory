@@ -94,7 +94,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Bag|Identity")
 	FGuid BagId;
 
-	/** Optional semantic role (for example Bag.Role.Main, Bag.Role.Spellbook). */
+	/** Optional semantic role (for example Bag.Role.Main, Bag.Role.Context.Secondary). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Identity")
 	FGameplayTag BagRoleTag;
 
@@ -178,7 +178,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules", meta=(ToolTip="Auto-merge incoming items into existing stacks when compatible"))
 	bool bAutoMergeOnAdd = true;
 
-	/** Enables hard acceptance rules so this bag can act like an equipment/spellbook slot set. */
+	/** Enables hard acceptance rules so this bag can act like a rule-constrained slot set (equipment/context-specific). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Bag|Rules|Acceptance", meta=(ToolTip="If enabled, incoming items must pass acceptance filters below"))
 	bool bEnforceAcceptanceRules = false;
 

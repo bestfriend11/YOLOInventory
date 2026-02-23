@@ -29,7 +29,7 @@ namespace YIEquipmentPrivate
 		Out.CustomStackKey = Full.CustomStackKey;
 		Out.ContainedBagId = Full.ContainedBagId;
 		Out.bRotated = Full.bRotated;
-		YIItemInstanceFragments::ExportLegacyNetPayload(Full, Out.Affixes, Out.Attributes);
+		YIItemInstanceFragments::ExportNetFragmentPayload(Full, Out.Fragments);
 		return Out;
 	}
 
@@ -43,7 +43,7 @@ namespace YIEquipmentPrivate
 		Out.CustomStackKey = Net.CustomStackKey;
 		Out.ContainedBagId = Net.ContainedBagId;
 		Out.bRotated = Net.bRotated;
-		YIItemInstanceFragments::ImportLegacyNetPayload(Out, Net.Affixes, Net.Attributes);
+		YIItemInstanceFragments::ImportNetFragmentPayload(Out, Net.Fragments);
 		return Out;
 	}
 

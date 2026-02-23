@@ -65,7 +65,7 @@ void AYIClickPickup::ServerPickup_Implementation(APlayerController* PC)
 	Full.CustomStackKey = ItemInstance.CustomStackKey;
 	Full.ContainedBagId = ItemInstance.ContainedBagId;
 	Full.bRotated = ItemInstance.bRotated;
-	YIItemInstanceFragments::ImportLegacyNetPayload(Full, ItemInstance.Affixes, ItemInstance.Attributes);
+	YIItemInstanceFragments::ImportNetFragmentPayload(Full, ItemInstance.Fragments);
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(InvComp->EquippedBag, Full))
 	{
