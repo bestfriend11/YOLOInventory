@@ -1824,6 +1824,13 @@ void UInventoryGridWidget::ClearBagBinding()
 	RebindInventoryContextDelegates();
 }
 
+void UInventoryGridWidget::SetBindingInventoryComponent(UYIInventoryComponent* InInventoryComponent)
+{
+	BoundInventoryComponent = InInventoryComponent;
+	RebindInventoryContextDelegates();
+	RefreshBagFromBinding();
+}
+
 void UInventoryGridWidget::RebindInventoryContextDelegates()
 {
 	if (CachedBoundInventoryComponent.IsValid())

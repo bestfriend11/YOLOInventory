@@ -73,6 +73,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
 	void ClearBagBinding();
 
+	/** Reuse the grid's existing binding configuration (active-context/id/role) but swap the inventory component source. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Binding")
+	void SetBindingInventoryComponent(UYIInventoryComponent* InInventoryComponent);
+
 	/** Size of one grid cell in pixels. Designers can clamp this between 8 and 128 for readability. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ClampMin="8.0", ClampMax="128.0", ToolTip="Pixel size of each grid cell"))
 	float CellPixelSize = 32.f;

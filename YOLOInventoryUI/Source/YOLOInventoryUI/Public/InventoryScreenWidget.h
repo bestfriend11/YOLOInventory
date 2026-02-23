@@ -10,7 +10,7 @@
  *
  * Composite UMG screen that composes the inventory grid, tooltip and (optionally) an action menu.
  * - Designed to be the primary in-game inventory screen; blueprintable hooks let game logic respond to Use/Drop/Combine.
- * - Designers: create a UMG widget with named children `Grid`, `Tooltip`, and optionally `ActionMenu` and bind them.
+ * - Designers: bind widgets explicitly or enable auto-resolve as a convenience (preferred names are optional, not required).
  */
 UCLASS(meta = (DisplayName = "YOLO Inventory Screen"))
 class YOLOINVENTORYUI_API UInventoryScreenWidget : public UWidgetScreen
@@ -37,13 +37,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment")
 	void RebuildEquipmentSlotPaneFromLayout();
 
-	/** Bind inventory grids (main + optional secondary/context grid) to inventory active bag contexts. */
+	/** Supply the inventory component to grids so each grid can resolve its own configured binding (active context/id/role). */
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void BindInventoryBagContexts(class UYIInventoryComponent* InInventoryComponent);
-
-	/** Semantic active context tag used by the secondary/context grid. Empty disables active-context binding for that grid. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
-	FGameplayTag SecondaryGridContextTag;
 
 	/** Resolve and wire inventory/equipment UI pieces automatically (widgets, bag contexts, equipment slots). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Setup")
@@ -55,7 +51,7 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	UInventoryGridWidget* Grid;
 
-	/** Optional second grid used for additional named bag contexts (crafting source, spell loadout, companion bag, etc.). */
+	/** Optional second grid used for additional named bag contexts (crafting source, loadout, companion bag, etc.). */
 	UPROPERTY(meta = (BindWidgetOptional))
 	UInventoryGridWidget* SecondaryContextGrid;
 

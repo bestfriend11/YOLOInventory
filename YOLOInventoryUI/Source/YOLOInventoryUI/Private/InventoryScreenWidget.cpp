@@ -121,12 +121,12 @@ void UInventoryScreenWidget::BindInventoryBagContexts(UYIInventoryComponent* InI
 
 	if (Grid)
 	{
-		Grid->SetBagBindingToActiveContext(InInventoryComponent, FGameplayTag());
+		Grid->SetBindingInventoryComponent(InInventoryComponent);
 		Grid->RefreshBoundTooltip();
 	}
 	if (SecondaryContextGrid)
 	{
-		SecondaryContextGrid->SetBagBindingToActiveContext(InInventoryComponent, SecondaryGridContextTag);
+		SecondaryContextGrid->SetBindingInventoryComponent(InInventoryComponent);
 		SecondaryContextGrid->RefreshBoundTooltip();
 	}
 }
