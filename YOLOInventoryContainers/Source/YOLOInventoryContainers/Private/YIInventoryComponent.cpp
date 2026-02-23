@@ -305,6 +305,22 @@ bool UYIInventoryComponent::OpenContainedBagAtIndex(int32 ItemIndex)
 	return TryOpenContainedBagInternal(ActiveBag, ItemIndex);
 }
 
+UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagAtIndex(int32 ItemIndex)
+{
+	UYIInventoryBag* ActiveBag = GetBag();
+	if (!ActiveBag || !ActiveBag->Items.IsValidIndex(ItemIndex))
+	{
+		return nullptr;
+	}
+
+	UYIInventoryBag* Contained = EnsureContainedBagForItem(ActiveBag->Items[ItemIndex], ActiveBag);
+	if (Contained && GetOwner() && GetOwner()->HasAuthority())
+	{
+		SyncNetState();
+	}
+	return Contained;
+}
+
 bool UYIInventoryComponent::OpenParentBag()
 {
 	UYIInventoryBag* ActiveBag = GetBag();
@@ -920,6 +936,22 @@ void UYIInventoryComponent::BeginPlay()
 			{
 				Bags.Insert(EquippedBag, 0);
 			}
+
+			// Materialize nested runtime bags for any pre-authored container items copied from bag templates
+			// so equipped/net payloads immediately carry valid ContainedBagId values.
+			for (int32 BagIndex = 0; BagIndex < Bags.Num(); ++BagIndex)
+			{
+				UYIInventoryBag* RuntimeBag = Bags[BagIndex];
+				if (!RuntimeBag)
+				{
+					continue;
+				}
+				for (int32 ItemIndex = 0; ItemIndex < RuntimeBag->Items.Num(); ++ItemIndex)
+				{
+					EnsureContainedBagForItem(RuntimeBag->Items[ItemIndex], RuntimeBag);
+				}
+			}
+
 			OpenBag(EquippedBag); // binds events + net sync consistently
 		}
 	}

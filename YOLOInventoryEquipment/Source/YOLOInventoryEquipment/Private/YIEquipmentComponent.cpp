@@ -669,6 +669,20 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 		return false;
 	}
 
+	// Container items authored in bag templates may not have their runtime nested bag materialized yet.
+	// Ensure ContainedBagId exists before we snapshot to FYIItemInstanceNet for equipment replication/events.
+	if (YIItemSchema::IsContainerItem(Definition) && !SourceBagItem.Item.ContainedBagId.IsValid())
+	{
+		if (UYIInventoryBag* MaterializedBag = SourceInventory->EnsureContainedBagAtIndex(SourceIndex))
+		{
+			(void)MaterializedBag;
+			if (SourceBag->Items.IsValidIndex(SourceIndex))
+			{
+				SourceBagItem = SourceBag->Items[SourceIndex];
+			}
+		}
+	}
+
 	FGameplayTag SlotTag = RequestedSlotTag;
 	if (!SlotTag.IsValid())
 	{

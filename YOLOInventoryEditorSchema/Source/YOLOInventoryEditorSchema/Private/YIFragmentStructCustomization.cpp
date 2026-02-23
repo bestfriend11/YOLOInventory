@@ -252,19 +252,32 @@ void FYIFragmentStructCustomization::CustomizeChildren(
 		}
 
 		IDetailPropertyRow& Row = StructBuilder.AddProperty(ChildHandle.ToSharedRef());
-		Row.CustomWidget()
-		.NameContent()
-		.MinDesiredWidth(220.f)
-		.MaxDesiredWidth(420.f)
-		[
-			MakeClickableFieldLabelWidget(ChildHandle.ToSharedRef())
-		]
-		.ValueContent()
-		.MinDesiredWidth(280.f)
-		.MaxDesiredWidth(800.f)
-		[
-			ChildHandle->CreatePropertyValueWidget(true)
-		];
+		TSharedPtr<SWidget> DefaultNameWidget;
+		TSharedPtr<SWidget> DefaultValueWidget;
+		Row.GetDefaultWidgets(DefaultNameWidget, DefaultValueWidget, false);
+
+		Row.CustomWidget(false);
+		if (FDetailWidgetDecl* NameWidgetDecl = Row.CustomNameWidget())
+		{
+			NameWidgetDecl
+				->MinDesiredWidth(220.f)
+				.MaxDesiredWidth(420.f)
+			[
+				MakeClickableFieldLabelWidget(ChildHandle.ToSharedRef())
+			];
+		}
+
+		if (FDetailWidgetDecl* ValueWidgetDecl = Row.CustomValueWidget())
+		{
+			ValueWidgetDecl
+				->MinDesiredWidth(280.f)
+				.MaxDesiredWidth(800.f)
+			[
+				DefaultValueWidget.IsValid()
+					? DefaultValueWidget.ToSharedRef()
+					: ChildHandle->CreatePropertyValueWidget(true)
+			];
+		}
 	}
 }
 

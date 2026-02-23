@@ -111,6 +111,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Open nested container bag from item in current active bag. Server-authoritative in multiplayer."))
 	bool OpenContainedBagAtIndex(int32 ItemIndex);
 
+	/** Ensure a runtime nested bag exists for the container item at index in the active bag and return it. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Materialize/resolve contained runtime bag for the item at ItemIndex in the current active bag.\nReturns null if item is not a container item or index is invalid.\nServer is authoritative in multiplayer; client calls forward to server only through higher-level flows."))
+	UYIInventoryBag* EnsureContainedBagAtIndex(int32 ItemIndex);
+
 	/** Navigate back to parent bag when active bag is nested. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Containers", meta=(ToolTip="Open parent bag for current nested active bag. Returns false if current bag has no parent."))
 	bool OpenParentBag();
