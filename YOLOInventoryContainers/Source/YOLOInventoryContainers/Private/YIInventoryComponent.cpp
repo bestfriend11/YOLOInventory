@@ -114,6 +114,23 @@ namespace
 		Bag->bAutoMergeOnAdd = bSavedAutoMerge;
 		return NewIndex;
 	}
+
+	static void YIInventoryComp_ReassignRuntimeItemIdentitiesForClonedBag(UYIInventoryBag* Bag)
+	{
+		if (!Bag)
+		{
+			return;
+		}
+
+		// Template bag items are copied by value. That means runtime identities (InstanceId/StackId/ContainedBagId)
+		// would also be copied and can collide across pawns/sessions. Reassign on clone so every runtime bag owns unique items.
+		for (FYIBagItem& ItemEntry : Bag->Items)
+		{
+			ItemEntry.Item.InstanceId = FGuid::NewGuid();
+			ItemEntry.Item.StackId = FGuid::NewGuid();
+			ItemEntry.Item.ContainedBagId.Invalidate();
+		}
+	}
 }
 
 UYIInventoryComponent::UYIInventoryComponent()
@@ -1253,6 +1270,7 @@ UYIInventoryBag* UYIInventoryComponent::CloneBagTemplate(const UYIInventoryBag* 
 
 	// Copy items
 	NewBag->Items = TemplateBag->Items;
+	YIInventoryComp_ReassignRuntimeItemIdentitiesForClonedBag(NewBag);
 	return NewBag;
 }
 
