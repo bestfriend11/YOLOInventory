@@ -693,6 +693,19 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 			bGhostHasIcon = false;
 		}
 		GhostIgnoreIndex = INDEX_NONE;
+		// Non-destructive drag keeps the source item in the bag while dragging.
+		// Ignore that source item for ghost overlap/highlight evaluation so the drag preview behaves as if the item was picked up locally.
+		if (Bag.IsValid() && SrcBag == Bag && DragItem.Item.InstanceId.IsValid())
+		{
+			for (int32 ItemIndex = 0; ItemIndex < Bag->Items.Num(); ++ItemIndex)
+			{
+				if (Bag->Items[ItemIndex].Item.InstanceId == DragItem.Item.InstanceId)
+				{
+					GhostIgnoreIndex = ItemIndex;
+					break;
+				}
+			}
+		}
 	}
 
 	if (bGhostActive || bDragActive)

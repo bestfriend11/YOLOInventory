@@ -17,6 +17,26 @@
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
+namespace
+{
+	static bool YIEquipmentSlot_BeginPostUnequipDrag(UYIInventoryComponent* InventoryComponent, UYIInventoryBag* Bag, int32 ItemIndex, const UWorld* World)
+	{
+		if (!Bag || ItemIndex == INDEX_NONE)
+		{
+			return false;
+		}
+
+		// Client detached-drag currently removes the item from the authoritative bag before the local drag flow is finalized.
+		// That can desync/destroy items when the drag is not consumed. Use non-destructive grid drag semantics on clients.
+		if (InventoryComponent && InventoryComponent->GetOwner() && !InventoryComponent->GetOwner()->HasAuthority())
+		{
+			return UInventoryGridWidget::BeginDragFromBagItem(Bag, ItemIndex, World);
+		}
+
+		return UInventoryGridWidget::BeginDetachedDragFromBagItem(Bag, ItemIndex, World);
+	}
+}
+
 void UInventoryEquipmentSlotWidget::SetEquipmentComponent(UYIEquipmentComponent* InEquipmentComponent)
 {
 	if (EquipmentComponent == InEquipmentComponent)
@@ -32,7 +52,13 @@ void UInventoryEquipmentSlotWidget::SetEquipmentComponent(UYIEquipmentComponent*
 
 void UInventoryEquipmentSlotWidget::SetInventoryComponent(UYIInventoryComponent* InInventoryComponent)
 {
+	if (InventoryComponent == InInventoryComponent)
+	{
+		return;
+	}
+	UnbindInventoryEvents();
 	InventoryComponent = InInventoryComponent;
+	BindInventoryEvents();
 	RefreshSlot();
 }
 
@@ -83,6 +109,7 @@ bool UInventoryEquipmentSlotWidget::ResolveComponents()
 	}
 
 	BindEquipmentEvents();
+	BindInventoryEvents();
 	return EquipmentComponent != nullptr;
 }
 
@@ -104,6 +131,26 @@ void UInventoryEquipmentSlotWidget::UnbindEquipmentEvents()
 	}
 	EquipmentComponent->OnEquipmentChanged.RemoveDynamic(this, &UInventoryEquipmentSlotWidget::HandleEquipmentChanged);
 	bBoundEquipmentEvents = false;
+}
+
+void UInventoryEquipmentSlotWidget::BindInventoryEvents()
+{
+	if (bBoundInventoryEvents || !InventoryComponent)
+	{
+		return;
+	}
+	InventoryComponent->OnBagOpened.AddDynamic(this, &UInventoryEquipmentSlotWidget::HandleInventoryBagOpened);
+	bBoundInventoryEvents = true;
+}
+
+void UInventoryEquipmentSlotWidget::UnbindInventoryEvents()
+{
+	if (!bBoundInventoryEvents || !InventoryComponent)
+	{
+		return;
+	}
+	InventoryComponent->OnBagOpened.RemoveDynamic(this, &UInventoryEquipmentSlotWidget::HandleInventoryBagOpened);
+	bBoundInventoryEvents = false;
 }
 
 void UInventoryEquipmentSlotWidget::BroadcastResult(bool bSuccess, const FString& Message)
@@ -242,23 +289,30 @@ FReply UInventoryEquipmentSlotWidget::HandleMouseButtonDown(const FGeometry& Geo
 		{
 			return FReply::Handled();
 		}
-		(void)IgnoredItem;
 
 		UYIInventoryBag* AddedBag = nullptr;
 		int32 AddedIndex = INDEX_NONE;
+		// Capture identity before unequip so client RPC flow can resume a detached drag after replication.
+		PendingDetachedUnequipItemInstanceId = IgnoredItem.InstanceId;
+		bPendingDetachedUnequipDrag = PendingDetachedUnequipItemInstanceId.IsValid();
 		const bool bUnequipped = TryUnequipToInventoryResolved(AddedBag, AddedIndex);
 		if (!bUnequipped)
 		{
+			bPendingDetachedUnequipDrag = false;
+			PendingDetachedUnequipItemInstanceId.Invalidate();
 			return FReply::Handled();
 		}
 
 		// For non-authority RPC flow, result index may not be available immediately.
 		if (!AddedBag || AddedIndex == INDEX_NONE)
 		{
+			// Wait for owner-only bag mirror update; HandleInventoryBagOpened will start detached drag.
 			return FReply::Handled();
 		}
 
-		UInventoryGridWidget::BeginDetachedDragFromBagItem(AddedBag, AddedIndex, GetWorld());
+		bPendingDetachedUnequipDrag = false;
+		PendingDetachedUnequipItemInstanceId.Invalidate();
+		YIEquipmentSlot_BeginPostUnequipDrag(InventoryComponent, AddedBag, AddedIndex, GetWorld());
 		return FReply::Handled();
 	}
 
@@ -275,7 +329,49 @@ void UInventoryEquipmentSlotWidget::HandleEquipmentChanged(FGameplayTag ChangedS
 	(void)Item;
 	if (!SlotTag.IsValid() || ChangedSlotTag == SlotTag)
 	{
+		if (bPendingDetachedUnequipDrag && EquipmentComponent)
+		{
+			FYIItemInstanceNet CurrentItem;
+			// If slot was refilled before we consumed the pending drag, cancel the pending state.
+			if (EquipmentComponent->GetEquippedItem(SlotTag, CurrentItem))
+			{
+				bPendingDetachedUnequipDrag = false;
+				PendingDetachedUnequipItemInstanceId.Invalidate();
+			}
+		}
 		UpdateVisualState(false);
+	}
+}
+
+void UInventoryEquipmentSlotWidget::HandleInventoryBagOpened(UYIInventoryBag* Bag)
+{
+	TryConsumePendingDetachedUnequipDrag(Bag);
+}
+
+void UInventoryEquipmentSlotWidget::TryConsumePendingDetachedUnequipDrag(UYIInventoryBag* CandidateBag)
+{
+	if (!bPendingDetachedUnequipDrag || !PendingDetachedUnequipItemInstanceId.IsValid() || !CandidateBag)
+	{
+		return;
+	}
+	if (UInventoryGridWidget::IsItemDragActive(GetWorld()))
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < CandidateBag->Items.Num(); ++Index)
+	{
+		if (CandidateBag->Items[Index].Item.InstanceId != PendingDetachedUnequipItemInstanceId)
+		{
+			continue;
+		}
+
+		if (YIEquipmentSlot_BeginPostUnequipDrag(InventoryComponent, CandidateBag, Index, GetWorld()))
+		{
+			bPendingDetachedUnequipDrag = false;
+			PendingDetachedUnequipItemInstanceId.Invalidate();
+		}
+		return;
 	}
 }
 
@@ -325,6 +421,7 @@ void UInventoryEquipmentSlotWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
 	UnbindEquipmentEvents();
+	UnbindInventoryEvents();
 	RootBorder.Reset();
 	IconWidget.Reset();
 	LabelWidget.Reset();

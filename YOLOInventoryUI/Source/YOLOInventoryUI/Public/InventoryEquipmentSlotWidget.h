@@ -91,14 +91,19 @@ private:
 	bool ResolveComponents();
 	void BindEquipmentEvents();
 	void UnbindEquipmentEvents();
+	void BindInventoryEvents();
+	void UnbindInventoryEvents();
 	void UpdateVisualState(bool bForceInvalidTint = false);
 	void BroadcastResult(bool bSuccess, const FString& Message);
 	bool TryUnequipToInventoryResolved(UYIInventoryBag*& OutBag, int32& OutItemIndex);
+	void TryConsumePendingDetachedUnequipDrag(UYIInventoryBag* CandidateBag);
 
 	FReply HandleMouseButtonDown(const FGeometry& Geometry, const FPointerEvent& MouseEvent);
 
 	UFUNCTION()
 	void HandleEquipmentChanged(FGameplayTag ChangedSlotTag, FYIItemInstanceNet Item);
+	UFUNCTION()
+	void HandleInventoryBagOpened(UYIInventoryBag* Bag);
 
 	TSharedPtr<SBorder> RootBorder;
 	TSharedPtr<SImage> IconWidget;
@@ -106,4 +111,7 @@ private:
 	FSlateBrush IconBrush;
 	TObjectPtr<UTexture2D> CachedIcon = nullptr;
 	bool bBoundEquipmentEvents = false;
+	bool bBoundInventoryEvents = false;
+	bool bPendingDetachedUnequipDrag = false;
+	FGuid PendingDetachedUnequipItemInstanceId;
 };

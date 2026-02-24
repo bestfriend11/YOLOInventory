@@ -205,6 +205,12 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos);
 
+	/** Move/swap an item within an explicit bag to an exact cell (optional single-overlap swap, server-authoritative). */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Move item to an exact cell in an explicit bag.\nIf direct move fails and bAllowSingleOverlapSwap is true, server may perform an atomic single-overlap swap.\nClient calls forward to ServerMoveItemInBagAtCell RPC."))
+	bool MoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap = true);
+	UFUNCTION(Server, Reliable)
+	void ServerMoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap);
+
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item in active bag.\nClient calls forward to ServerRotateItem RPC."))
 	bool RotateItem(int32 Index);
 	UFUNCTION(Server, Reliable)
@@ -238,6 +244,18 @@ public:
 	bool TransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count, int32& OutDestIndex);
 	UFUNCTION(Server, Reliable)
 	void ServerTransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count);
+
+	/** Transfer an item into an explicit cell in another bag. Optional single-overlap swap keeps the operation atomic on the server. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Transfer item between explicit bags to an exact destination cell.\nArgs:\n- SourceBagId: source bag.\n- ItemInstanceId: runtime item identity in source bag.\n- DestBagId: destination bag.\n- DestCell: exact target cell.\n- Count: optional split count for stackable items (<=0 moves whole stack).\n- bAllowSingleOverlapSwap: if true, server may perform an atomic single-item swap when destination cell is occupied by exactly one overlapping item.\nReturns true when request is accepted (client optimistic) or succeeds on authority."))
+	bool TransferItemBetweenBagsAtCellById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, FIntPoint DestCell, int32 Count, bool bAllowSingleOverlapSwap = false);
+	UFUNCTION(Server, Reliable)
+	void ServerTransferItemBetweenBagsAtCellById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, FIntPoint DestCell, int32 Count, bool bAllowSingleOverlapSwap);
+
+	/** Explicit swap-focused wrapper: same as TransferItemBetweenBagsAtCellById with single-overlap swap enabled. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Swap-capable transfer into an exact destination cell using explicit bag + item identity. Server performs an atomic transfer-or-single-overlap-swap."))
+	bool SwapItemIntoBagCellById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, FIntPoint DestCell);
+	UFUNCTION(Server, Reliable)
+	void ServerSwapItemIntoBagCellById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, FIntPoint DestCell);
 
 	/** Combine a stack into another matching stack in the same explicit bag (server-authoritative). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Combine item stack into an existing matching stack in the same explicit bag.\nClient calls forward to ServerCombineItemInBag RPC."))

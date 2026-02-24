@@ -936,6 +936,27 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid.Get() == this)
 	{
+		// Client same-bag drops should use server-authoritative exact-cell move/swap and avoid local mutation/self-collision desync.
+		if (bHasOwnerComp && !bOwnerCompHasAuthority && !GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceIndex != INDEX_NONE &&
+			Bag->Items.IsValidIndex(GInventoryDrag.SourceIndex))
+		{
+			const FYIBagItem& SourceItem = Bag->Items[GInventoryDrag.SourceIndex];
+			if (Bag->BagId.IsValid() && SourceItem.Item.InstanceId.IsValid())
+			{
+				const bool bRequested = OwnerComp->MoveItemInBagAtCell(Bag->BagId, SourceItem.Item.InstanceId, Cell, true);
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bRequested);
+				if (!bRequested)
+				{
+					PlayInvalidMoveSound();
+					return false;
+				}
+				PlayDropSound();
+				GInventoryDrag.Reset();
+				UpdateBoundTooltip();
+				return true;
+			}
+		}
+
 		if (!bAllowSelfMove)
 		{
 			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
@@ -1008,7 +1029,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		}
 		if (!((bHasOwnerComp ? TryOwnerMoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
 		{
-			// Non-authority clients should not attempt in-place swaps; let the server resolve.
+			// Non-authority clients should not attempt local in-place swaps; server-authoritative path above handles exact-cell move/swap.
 			if (bHasOwnerComp && !bOwnerCompHasAuthority)
 			{
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
@@ -1174,6 +1195,50 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
 		PlayInvalidMoveSound();
 		return false;
+	}
+
+	// Inventory-owned cross-bag transfer/swap path (server-authoritative, explicit bag-targeted RPC).
+	if (UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get())
+	{
+		UYIInventoryBag* SourceBag = DragSourceGrid->Bag;
+		UYIInventoryComponent* DestOwnerComp = Bag ? Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+		UYIInventoryComponent* SourceOwnerComp = SourceBag ? SourceBag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
+		if (DestOwnerComp && DestOwnerComp == SourceOwnerComp &&
+			SourceBag && SourceBag != Bag &&
+			!GInventoryDrag.bRemovedFromSource &&
+			GInventoryDrag.SourceIndex != INDEX_NONE &&
+			SourceBag->Items.IsValidIndex(GInventoryDrag.SourceIndex) &&
+			SourceBag->BagId.IsValid() && Bag->BagId.IsValid())
+		{
+			const FYIBagItem& SourceItem = SourceBag->Items[GInventoryDrag.SourceIndex];
+			if (SourceItem.Item.InstanceId.IsValid())
+			{
+				const bool bTransferred = DestOwnerComp->TransferItemBetweenBagsAtCellById(
+					SourceBag->BagId,
+					SourceItem.Item.InstanceId,
+					Bag->BagId,
+					Cell,
+					0,
+					true);
+				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bTransferred);
+				if (!bTransferred)
+				{
+					PlayInvalidMoveSound();
+					return false;
+				}
+
+				PlayDropSound();
+				DragSourceGrid->RefreshBoundTooltip();
+				RefreshBoundTooltip();
+				OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, INDEX_NONE);
+				if (DragSourceGrid != this)
+				{
+					DragSourceGrid->OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, INDEX_NONE);
+				}
+				GInventoryDrag.Reset();
+				return true;
+			}
+		}
 	}
 	
 	// If we are not authoritative, do not mutate bags directly for cross-bag operations.

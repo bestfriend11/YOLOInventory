@@ -60,6 +60,116 @@ static void CopyBagToNetView(const UYIInventoryComponent* Inv, TArray<FYINetBagI
     }
 }
 
+static void CollectTradeContainedBagSubtree(UYIInventoryComponent* Inventory, const FGuid& RootBagId, TArray<UYIInventoryBag*>& OutBags)
+{
+	OutBags.Reset();
+	if (!Inventory || !RootBagId.IsValid())
+	{
+		return;
+	}
+
+	TSet<FGuid> Visited;
+	TArray<FGuid> Pending;
+	Pending.Add(RootBagId);
+
+	while (Pending.Num() > 0)
+	{
+		const FGuid BagId = Pending.Pop(EAllowShrinking::No);
+		if (!BagId.IsValid() || Visited.Contains(BagId))
+		{
+			continue;
+		}
+		Visited.Add(BagId);
+
+		UYIInventoryBag* Bag = Inventory->GetBagById(BagId);
+		if (!Bag)
+		{
+			continue;
+		}
+
+		OutBags.Add(Bag);
+		for (const FYIBagItem& Item : Bag->Items)
+		{
+			if (Item.Item.ContainedBagId.IsValid())
+			{
+				Pending.Add(Item.Item.ContainedBagId);
+			}
+		}
+	}
+}
+
+static bool MoveTradeContainedBagSubtree(UYIInventoryComponent* SourceInv, UYIInventoryComponent* DestInv, const FGuid& RootBagId)
+{
+	if (!SourceInv || !DestInv || !RootBagId.IsValid() || SourceInv == DestInv)
+	{
+		return true;
+	}
+
+	TArray<UYIInventoryBag*> SubtreeBags;
+	CollectTradeContainedBagSubtree(SourceInv, RootBagId, SubtreeBags);
+	if (SubtreeBags.Num() == 0)
+	{
+		return false;
+	}
+
+	TSet<FGuid> SubtreeIds;
+	for (UYIInventoryBag* Bag : SubtreeBags)
+	{
+		if (Bag)
+		{
+			Bag->EnsureBagId();
+			if (Bag->BagId.IsValid())
+			{
+				SubtreeIds.Add(Bag->BagId);
+			}
+		}
+	}
+
+	if (SourceInv->EquippedBag && SourceInv->EquippedBag->BagId.IsValid() && SubtreeIds.Contains(SourceInv->EquippedBag->BagId))
+	{
+		SourceInv->CloseBag(SourceInv->EquippedBag);
+	}
+	for (const FGuid& BagId : SubtreeIds)
+	{
+		SourceInv->ClearActiveContextsForBagId(BagId);
+	}
+
+	for (UYIInventoryBag* Bag : SubtreeBags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+
+		if (DestInv->GetBagById(Bag->BagId))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Trade move failed: destination inventory already has nested bag %s"), *Bag->BagId.ToString());
+			return false;
+		}
+	}
+
+	for (UYIInventoryBag* Bag : SubtreeBags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+		SourceInv->Bags.RemoveSingleSwap(Bag, EAllowShrinking::No);
+	}
+
+	for (UYIInventoryBag* Bag : SubtreeBags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+		Bag->Rename(nullptr, DestInv, REN_DontCreateRedirectors | REN_NonTransactional);
+		DestInv->Bags.AddUnique(Bag);
+	}
+
+	return true;
+}
+
 FYITradeOffer& AYITradeSessionActor::GetOffer(ETradeSide Side)
 {
     return (Side == ETradeSide::SideA) ? OfferA : OfferB;
@@ -275,6 +385,8 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
         return;
     }
 
+    const bool bMovesWholeItem = (MoveCount >= SrcItem.Item.Count);
+
     // Exact placement for the dragged item.
     FYIBagItem ToPlace = SrcItem;
     ToPlace.Item.Count = MoveCount;
@@ -303,6 +415,28 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
     else
     {
         SrcBag->RemoveItem(SourceIndex);
+    }
+
+    if (bMovesWholeItem && ToPlace.Item.ContainedBagId.IsValid())
+    {
+        if (!MoveTradeContainedBagSubtree(SrcInv, DstInv, ToPlace.Item.ContainedBagId))
+        {
+            // Roll back item movement to avoid orphaned/foreign nested-bag references.
+            DstBag->RemoveItem(NewIdx);
+            SrcItem.Pos = SrcBag->Items.IsValidIndex(SourceIndex) ? SrcBag->Items[SourceIndex].Pos : SrcItem.Pos;
+            const bool bSavedSrcAutoMerge = SrcBag->bAutoMergeOnAdd;
+            SrcBag->bAutoMergeOnAdd = false;
+            const int32 RollbackIdx = SrcBag->AddBagItem(SrcItem);
+            SrcBag->bAutoMergeOnAdd = bSavedSrcAutoMerge;
+            if (RollbackIdx == INDEX_NONE)
+            {
+                UE_LOG(LogTemp, Error, TEXT("Trade rollback failed after nested bag subtree migration failure for %s"), *ToPlace.Item.ContainedBagId.ToString());
+            }
+            SrcInv->SyncNetState();
+            DstInv->SyncNetState();
+            RefreshInventoryViews();
+            return;
+        }
     }
 
     SrcInv->SyncNetState();
@@ -370,6 +504,14 @@ bool AYITradeSessionActor::ApplyOffersToSide(ETradeSide From, ETradeSide To, FTe
         {
             OutError = FText::FromString(TEXT("Destination bag full"));
             return false;
+        }
+
+        if (ToAdd.Item.ContainedBagId.IsValid())
+        {
+            if (!MoveTradeContainedBagSubtree(SrcInv, DestInv, ToAdd.Item.ContainedBagId))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Trade commit moved container item but failed to migrate nested bag subtree %s"), *ToAdd.Item.ContainedBagId.ToString());
+            }
         }
     }
 

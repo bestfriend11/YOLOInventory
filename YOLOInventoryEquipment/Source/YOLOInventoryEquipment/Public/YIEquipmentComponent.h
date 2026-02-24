@@ -210,4 +210,7 @@ private:
 	void PlayEquipSound(UYIItemDefinition* Definition) const;
 
 	int32 NextEquipGroupId = 1;
+	/** Client-side cache used by OnRep_EquippedItems to emit removal notifications for slots that disappeared. */
+	UPROPERTY(Transient)
+	TArray<FYIEquippedItemEntry> LastReplicatedEquippedItems;
 };

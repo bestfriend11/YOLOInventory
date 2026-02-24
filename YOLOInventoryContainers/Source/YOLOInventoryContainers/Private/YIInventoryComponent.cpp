@@ -57,6 +57,63 @@ namespace
 		}
 		return Out;
 	}
+
+	static bool YIInventoryComp_RectsOverlap(const FIntPoint& APos, const FIntPoint& ASize, const FIntPoint& BPos, const FIntPoint& BSize)
+	{
+		return !(APos.X + ASize.X <= BPos.X || BPos.X + BSize.X <= APos.X ||
+				 APos.Y + ASize.Y <= BPos.Y || BPos.Y + BSize.Y <= APos.Y);
+	}
+
+	static bool YIInventoryComp_FindSingleOverlapAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell, const FIntPoint& Size, int32& OutVictimIndex, int32 IgnoreIndex = INDEX_NONE)
+	{
+		OutVictimIndex = INDEX_NONE;
+		if (!Bag)
+		{
+			return false;
+		}
+
+		const FIntPoint Footprint = Bag->GetEffectiveSize(Size);
+		for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
+		{
+			if (Index == IgnoreIndex)
+			{
+				continue;
+			}
+			const FYIBagItem& Existing = Bag->Items[Index];
+			const FIntPoint ExistingSize = Bag->GetEffectiveSize(Existing.Size);
+			if (!YIInventoryComp_RectsOverlap(Cell, Footprint, Existing.Pos, ExistingSize))
+			{
+				continue;
+			}
+
+			if (OutVictimIndex != INDEX_NONE)
+			{
+				OutVictimIndex = INDEX_NONE;
+				return false; // more than one overlap -> not a single-swap candidate
+			}
+			OutVictimIndex = Index;
+		}
+
+		return OutVictimIndex != INDEX_NONE;
+	}
+
+	static int32 YIInventoryComp_AddBagItemExact(UYIInventoryBag* Bag, const FYIBagItem& ItemAtExactPos)
+	{
+		if (!Bag)
+		{
+			return INDEX_NONE;
+		}
+		if (!Bag->CanPlaceAt(ItemAtExactPos.Pos, ItemAtExactPos.Size))
+		{
+			return INDEX_NONE;
+		}
+
+		const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
+		Bag->bAutoMergeOnAdd = false;
+		const int32 NewIndex = Bag->AddBagItem(ItemAtExactPos);
+		Bag->bAutoMergeOnAdd = bSavedAutoMerge;
+		return NewIndex;
+	}
 }
 
 UYIInventoryComponent::UYIInventoryComponent()
@@ -1535,6 +1592,120 @@ void UYIInventoryComponent::ServerMoveItemInBag_Implementation(const FGuid& BagI
 	MoveItemInBag(BagId, ItemInstanceId, NewPos);
 }
 
+bool UYIInventoryComponent::MoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap)
+{
+	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* TargetBag = GetBagById(BagId);
+		if (!TargetBag)
+		{
+			return false;
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex) || !TargetBag->Items.IsValidIndex(SourceIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, SourceIndex))
+		{
+			return false;
+		}
+
+		if (TargetBag->MoveItem(SourceIndex, DestCell))
+		{
+			SyncNetState();
+			return true;
+		}
+		if (!bAllowSingleOverlapSwap)
+		{
+			return false;
+		}
+
+		int32 VictimIndex = INDEX_NONE;
+		const FYIBagItem SourceItemCopy = TargetBag->Items[SourceIndex];
+		if (!YIInventoryComp_FindSingleOverlapAtCell(TargetBag, DestCell, SourceItemCopy.Size, VictimIndex, SourceIndex) ||
+			!TargetBag->Items.IsValidIndex(VictimIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(TargetBag, VictimIndex))
+		{
+			return false;
+		}
+
+		const FYIBagItem VictimItemCopy = TargetBag->Items[VictimIndex];
+		const FIntPoint SourceOriginalPos = SourceItemCopy.Pos;
+		const FIntPoint VictimOriginalPos = VictimItemCopy.Pos;
+
+		// Remove victim first, then source (re-find source index because indices may shift).
+		if (!TargetBag->RemoveItem(VictimIndex))
+		{
+			return false;
+		}
+
+		int32 SourceIndexAfterVictimRemove = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndexAfterVictimRemove) ||
+			!TargetBag->Items.IsValidIndex(SourceIndexAfterVictimRemove))
+		{
+			// Best effort restore victim.
+			FYIBagItem RestoreVictim = VictimItemCopy;
+			RestoreVictim.Pos = VictimOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
+			return false;
+		}
+
+		if (!TargetBag->RemoveItem(SourceIndexAfterVictimRemove))
+		{
+			FYIBagItem RestoreVictim = VictimItemCopy;
+			RestoreVictim.Pos = VictimOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
+			return false;
+		}
+
+		FYIBagItem PlacedSource = SourceItemCopy;
+		PlacedSource.Pos = DestCell;
+		const int32 NewSourceIdx = YIInventoryComp_AddBagItemExact(TargetBag, PlacedSource);
+		if (NewSourceIdx == INDEX_NONE)
+		{
+			FYIBagItem RestoreSource = SourceItemCopy; RestoreSource.Pos = SourceOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreSource);
+			FYIBagItem RestoreVictim = VictimItemCopy; RestoreVictim.Pos = VictimOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
+			return false;
+		}
+
+		FYIBagItem PlacedVictim = VictimItemCopy;
+		PlacedVictim.Pos = SourceOriginalPos;
+		const int32 NewVictimIdx = YIInventoryComp_AddBagItemExact(TargetBag, PlacedVictim);
+		if (NewVictimIdx == INDEX_NONE)
+		{
+			TargetBag->RemoveItem(NewSourceIdx);
+			FYIBagItem RestoreSource = SourceItemCopy; RestoreSource.Pos = SourceOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreSource);
+			FYIBagItem RestoreVictim = VictimItemCopy; RestoreVictim.Pos = VictimOriginalPos;
+			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
+			return false;
+		}
+
+		SyncNetState();
+		return true;
+	}
+
+	ServerMoveItemInBagAtCell(BagId, ItemInstanceId, DestCell, bAllowSingleOverlapSwap);
+	return true;
+}
+
+void UYIInventoryComponent::ServerMoveItemInBagAtCell_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap)
+{
+	MoveItemInBagAtCell(BagId, ItemInstanceId, DestCell, bAllowSingleOverlapSwap);
+}
+
 bool UYIInventoryComponent::RotateItem(int32 Index)
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
@@ -1806,6 +1977,233 @@ void UYIInventoryComponent::ServerTransferItemBetweenBagsById_Implementation(
 {
 	int32 IgnoredDestIndex = INDEX_NONE;
 	TransferItemBetweenBagsById(SourceBagId, ItemInstanceId, DestBagId, Count, IgnoredDestIndex);
+}
+
+bool UYIInventoryComponent::TransferItemBetweenBagsAtCellById(
+	const FGuid& SourceBagId,
+	const FGuid& ItemInstanceId,
+	const FGuid& DestBagId,
+	FIntPoint DestCell,
+	int32 Count,
+	bool bAllowSingleOverlapSwap)
+{
+	if (!SourceBagId.IsValid() || !DestBagId.IsValid() || !ItemInstanceId.IsValid())
+	{
+		return false;
+	}
+	if (SourceBagId == DestBagId)
+	{
+		return false;
+	}
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		UYIInventoryBag* SourceBag = GetBagById(SourceBagId);
+		UYIInventoryBag* DestBag = GetBagById(DestBagId);
+		if (!SourceBag || !DestBag)
+		{
+			return false;
+		}
+
+		int32 SourceIndex = INDEX_NONE;
+		if (!FindItemIndexByInstanceId(SourceBag, ItemInstanceId, SourceIndex) || !SourceBag->Items.IsValidIndex(SourceIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(SourceBag, SourceIndex))
+		{
+			return false;
+		}
+
+		const FYIBagItem SourceBagItem = SourceBag->Items[SourceIndex];
+		FYIBagItem ToPlace = SourceBagItem;
+		const FIntPoint SourceOriginalPos = SourceBagItem.Pos;
+
+		UYIItemDefinition* Def = ToPlace.Item.Definition.IsValid()
+			? ToPlace.Item.Definition.Get()
+			: ToPlace.Item.Definition.LoadSynchronous();
+		if (!Def || !DestBag->CanAcceptItemDefinition(Def))
+		{
+			return false;
+		}
+
+		if (SourceBagItem.Item.ContainedBagId.IsValid() && DestBag->BagId.IsValid() &&
+			IsBagDescendantOf(DestBag->BagId, SourceBagItem.Item.ContainedBagId))
+		{
+			return false;
+		}
+
+		const bool bStacking = Def->IsRuntimeStackingAllowed();
+		const bool bPartialTransferRequested = (bStacking && Count > 0 && Count < SourceBagItem.Item.Count);
+		if (Count > 0 && bStacking)
+		{
+			ToPlace.Item.Count = FMath::Clamp(Count, 1, SourceBagItem.Item.Count);
+		}
+		ToPlace.Pos = DestCell;
+
+		// Exact transfer path (no overlap required)
+		if (DestBag->CanPlaceAt(DestCell, ToPlace.Size))
+		{
+			const int32 DestInsertIndex = YIInventoryComp_AddBagItemExact(DestBag, ToPlace);
+			if (DestInsertIndex == INDEX_NONE)
+			{
+				return false;
+			}
+
+			if (bPartialTransferRequested)
+			{
+				if (!SourceBag->Items.IsValidIndex(SourceIndex))
+				{
+					DestBag->RemoveItem(DestInsertIndex);
+					return false;
+				}
+
+				SourceBag->Items[SourceIndex].Item.Count -= ToPlace.Item.Count;
+				if (SourceBag->Items[SourceIndex].Item.Count <= 0)
+				{
+					if (!SourceBag->RemoveItem(SourceIndex))
+					{
+						DestBag->RemoveItem(DestInsertIndex);
+						return false;
+					}
+				}
+				else
+				{
+					SourceBag->MarkPackageDirty();
+					SourceBag->OnChanged.Broadcast();
+				}
+			}
+			else
+			{
+				if (!SourceBag->RemoveItem(SourceIndex))
+				{
+					DestBag->RemoveItem(DestInsertIndex);
+					return false;
+				}
+			}
+
+			SourceBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestInsertIndex);
+			DestBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestInsertIndex);
+			SyncNetState();
+			return true;
+		}
+
+		if (!bAllowSingleOverlapSwap)
+		{
+			return false;
+		}
+
+		// Swap path is only supported for whole-item moves (partial stack swap is ambiguous UX/network-wise).
+		if (bPartialTransferRequested || (Count > 0 && Count != SourceBagItem.Item.Count))
+		{
+			return false;
+		}
+
+		int32 VictimIndex = INDEX_NONE;
+		if (!YIInventoryComp_FindSingleOverlapAtCell(DestBag, DestCell, ToPlace.Size, VictimIndex) || !DestBag->Items.IsValidIndex(VictimIndex))
+		{
+			return false;
+		}
+		if (IsBagItemLocked(DestBag, VictimIndex))
+		{
+			return false;
+		}
+
+		const FYIBagItem VictimItem = DestBag->Items[VictimIndex];
+		if (VictimItem.Item.ContainedBagId.IsValid() && SourceBag->BagId.IsValid() &&
+			IsBagDescendantOf(SourceBag->BagId, VictimItem.Item.ContainedBagId))
+		{
+			return false;
+		}
+
+		UYIItemDefinition* VictimDef = VictimItem.Item.Definition.IsValid()
+			? VictimItem.Item.Definition.Get()
+			: VictimItem.Item.Definition.LoadSynchronous();
+		if (!VictimDef || !SourceBag->CanAcceptItemDefinition(VictimDef))
+		{
+			return false;
+		}
+
+		if (!SourceBag->CanPlaceAtIgnoring(SourceOriginalPos, VictimItem.Size, SourceIndex))
+		{
+			return false;
+		}
+
+		// Atomic-ish swap with rollback.
+		if (!DestBag->RemoveItem(VictimIndex))
+		{
+			return false;
+		}
+
+		FYIBagItem PlacedSource = SourceBagItem;
+		PlacedSource.Pos = DestCell;
+		const int32 DestPlacedIndex = YIInventoryComp_AddBagItemExact(DestBag, PlacedSource);
+		if (DestPlacedIndex == INDEX_NONE)
+		{
+			FYIBagItem RestoreVictim = VictimItem;
+			RestoreVictim.Pos = VictimItem.Pos;
+			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
+			return false;
+		}
+
+		if (!SourceBag->RemoveItem(SourceIndex))
+		{
+			DestBag->RemoveItem(DestPlacedIndex);
+			FYIBagItem RestoreVictim = VictimItem;
+			RestoreVictim.Pos = VictimItem.Pos;
+			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
+			return false;
+		}
+
+		FYIBagItem PlacedVictim = VictimItem;
+		PlacedVictim.Pos = SourceOriginalPos;
+		const int32 SourcePlacedIndex = YIInventoryComp_AddBagItemExact(SourceBag, PlacedVictim);
+		if (SourcePlacedIndex == INDEX_NONE)
+		{
+			// Best-effort rollback.
+			DestBag->RemoveItem(DestPlacedIndex);
+			FYIBagItem RestoreSource = SourceBagItem;
+			RestoreSource.Pos = SourceOriginalPos;
+			YIInventoryComp_AddBagItemExact(SourceBag, RestoreSource);
+			FYIBagItem RestoreVictim = VictimItem;
+			RestoreVictim.Pos = VictimItem.Pos;
+			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
+			return false;
+		}
+
+		SourceBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestPlacedIndex);
+		DestBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestPlacedIndex);
+		SyncNetState();
+		return true;
+	}
+
+	ServerTransferItemBetweenBagsAtCellById(SourceBagId, ItemInstanceId, DestBagId, DestCell, Count, bAllowSingleOverlapSwap);
+	return true;
+}
+
+void UYIInventoryComponent::ServerTransferItemBetweenBagsAtCellById_Implementation(
+	const FGuid& SourceBagId,
+	const FGuid& ItemInstanceId,
+	const FGuid& DestBagId,
+	FIntPoint DestCell,
+	int32 Count,
+	bool bAllowSingleOverlapSwap)
+{
+	TransferItemBetweenBagsAtCellById(SourceBagId, ItemInstanceId, DestBagId, DestCell, Count, bAllowSingleOverlapSwap);
+}
+
+bool UYIInventoryComponent::SwapItemIntoBagCellById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, FIntPoint DestCell)
+{
+	return TransferItemBetweenBagsAtCellById(SourceBagId, ItemInstanceId, DestBagId, DestCell, 0, true);
+}
+
+void UYIInventoryComponent::ServerSwapItemIntoBagCellById_Implementation(
+	const FGuid& SourceBagId,
+	const FGuid& ItemInstanceId,
+	const FGuid& DestBagId,
+	FIntPoint DestCell)
+{
+	SwapItemIntoBagCellById(SourceBagId, ItemInstanceId, DestBagId, DestCell);
 }
 
 bool UYIInventoryComponent::CombineItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId)

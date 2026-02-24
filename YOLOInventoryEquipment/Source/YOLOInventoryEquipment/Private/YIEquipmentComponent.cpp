@@ -78,10 +78,25 @@ void UYIEquipmentComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 
 void UYIEquipmentComponent::OnRep_EquippedItems()
 {
+	// Emit removal notifications first so slot UIs can clear visuals for entries that no longer exist.
+	for (const FYIEquippedItemEntry& PreviousEntry : LastReplicatedEquippedItems)
+	{
+		const bool bStillPresent = EquippedItems.ContainsByPredicate([&PreviousEntry](const FYIEquippedItemEntry& CurrentEntry)
+		{
+			return CurrentEntry.SlotTag == PreviousEntry.SlotTag;
+		});
+		if (!bStillPresent)
+		{
+			OnEquipmentChanged.Broadcast(PreviousEntry.SlotTag, PreviousEntry.Item);
+		}
+	}
+
 	for (const FYIEquippedItemEntry& Entry : EquippedItems)
 	{
 		OnEquipmentChanged.Broadcast(Entry.SlotTag, Entry.Item);
 	}
+
+	LastReplicatedEquippedItems = EquippedItems;
 }
 
 int32 UYIEquipmentComponent::FindEntryIndex(FGameplayTag SlotTag) const
@@ -1143,6 +1158,13 @@ bool UYIEquipmentComponent::UnequipToInventoryInternal(UYIInventoryComponent* De
 	for (const FGameplayTag& RemovedSlot : RemovedSlots)
 	{
 		OnEquipmentChanged.Broadcast(RemovedSlot, UnequippedItem);
+	}
+
+	// Unequip mutates inventory bags directly (AddBagItem / unlock), so push owner UI mirrors explicitly.
+	// Without this, clients can see stale/ghost inventory state until a later unrelated inventory mutation syncs.
+	if (DestInventory->GetOwner() && DestInventory->GetOwner()->HasAuthority())
+	{
+		DestInventory->SyncNetState();
 	}
 
 	if (bInventoryLockedGroup)
