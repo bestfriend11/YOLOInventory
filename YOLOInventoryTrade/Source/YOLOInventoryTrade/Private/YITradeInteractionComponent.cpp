@@ -177,6 +177,14 @@ void UYITradeInteractionComponent::RequestTradeTransfer(ETradeSide FromSide, ETr
 	(void)RequestTradeTransferEx(Req);
 }
 
+void UYITradeInteractionComponent::RequestTradeSetReady(ETradeSide Side, bool bReady)
+{
+	FYITradeSetReadyRequest Req;
+	Req.Side = Side;
+	Req.bReady = bReady;
+	(void)RequestTradeSetReadyEx(Req);
+}
+
 void UYITradeInteractionComponent::RequestShop(UYIShopComponent* Shop)
 {
 	FYIShopOpenRequest Req;
@@ -279,6 +287,29 @@ FYITradeOpResult UYITradeInteractionComponent::RequestTradeTransferEx(const FYIT
 	}
 	Server_RequestTradeTransferEx_Implementation(Request);
 	return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
+}
+
+FYITradeOpResult UYITradeInteractionComponent::RequestTradeSetReadyEx(const FYITradeSetReadyRequest& InRequest)
+{
+	FYITradeSetReadyRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+	if (!IsOwnerValidForTrade(true))
+	{
+		FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::SetReady, Request.RequestId, false, false, EYITradeOpError::InvalidOwner,
+			NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Trade component must be on PlayerController"));
+		OnTradeOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestTradeSetReadyEx(Request);
+		return MakeTradeOpResult(EYITradeOpKind::SetReady, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
+	}
+	Server_RequestTradeSetReadyEx_Implementation(Request);
+	return MakeTradeOpResult(EYITradeOpKind::SetReady, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
 }
 
 FYIShopOpResult UYITradeInteractionComponent::RequestShopOpenEx(const FYIShopOpenRequest& InRequest)
@@ -697,6 +728,50 @@ void UYITradeInteractionComponent::Server_RequestTradeTransferEx_Implementation(
 	{
 		Result.Error = EYITradeOpError::None;
 	}
+	Client_TradeOpResult(Result);
+}
+
+void UYITradeInteractionComponent::Server_RequestTradeSetReadyEx_Implementation(FYITradeSetReadyRequest Request)
+{
+	FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::SetReady, Request.RequestId, false, false, EYITradeOpError::InvalidRequest, FText::GetEmpty());
+	if (!IsOwnerValidForTrade(false) || !CurrentSession)
+	{
+		Result.Error = EYITradeOpError::NoSession;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_NoSession", "No active trade session");
+		Client_TradeOpResult(Result);
+		return;
+	}
+
+	APlayerController* PC = GetOwningPC();
+	if (!PC || !PC->PlayerState)
+	{
+		Result.Error = EYITradeOpError::InvalidOwner;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Invalid player controller");
+		Client_TradeOpResult(Result);
+		return;
+	}
+
+	const ETradeSide CallerSide = CurrentSession->GetSideForPlayer(PC->PlayerState);
+	if (CallerSide != ETradeSide::SideA && CallerSide != ETradeSide::SideB)
+	{
+		Result.Error = EYITradeOpError::NotParticipant;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_NotParticipant", "You are not part of this trade");
+		Client_TradeOpResult(Result);
+		return;
+	}
+
+	if (Request.Side != CallerSide)
+	{
+		Result.Error = EYITradeOpError::ValidationFailed;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_SetReady_WrongSide", "Cannot change readiness for the other side");
+		Client_TradeOpResult(Result);
+		return;
+	}
+
+	Result.bRequestAccepted = true;
+	CurrentSession->ServerSetReady(Request.Side, Request.bReady);
+	Result.bSucceeded = true;
+	Result.Error = EYITradeOpError::None;
 	Client_TradeOpResult(Result);
 }
 

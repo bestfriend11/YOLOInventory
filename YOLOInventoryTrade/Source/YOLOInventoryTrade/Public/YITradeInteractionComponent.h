@@ -50,7 +50,7 @@ public:
     FOnTradeFailed OnTradeFailed;
 
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeOpResultReceived, const FYITradeOpResult&, Result);
-    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Structured trade request/result feedback for RequestTradeEx / RequestTradeTransferEx.")) 
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Structured trade request/result feedback for RequestTradeEx / RequestTradeTransferEx / RequestTradeSetReadyEx.")) 
     FOnTradeOpResultReceived OnTradeOpResultReceived;
 
     /** Client call: request a server-authoritative item transfer during an active trade session. */
@@ -61,6 +61,10 @@ public:
     /** Standardized request/result contract for trade transfer. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
     FYITradeOpResult RequestTradeTransferEx(const FYITradeTransferRequest& Request);
+
+    /** Standardized request/result contract for trade readiness / commit initiation (commit is still implicit when both sides are ready). */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeSetReadyEx(const FYITradeSetReadyRequest& Request);
 
     /** Client call: request shop stock for a given shop component. */
     /** Optional Blueprint/CPP hook to accept or reject a shop request before it is sent to the server. */
@@ -202,6 +206,9 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestTradeTransferEx(FYITradeTransferRequest Request);
 
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeSetReadyEx(FYITradeSetReadyRequest Request);
+
     // Client notifications
     UFUNCTION(Client, Reliable)
     void Client_TradeSessionStarted(AYITradeSessionActor* Session);
@@ -282,6 +289,7 @@ private:
     // Legacy C++ wrappers kept for suite internals while public/BP API migrates to *Ex request/result methods.
     void RequestTrade(AActor* Target, bool bTargetIsNPC);
     void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
+    void RequestTradeSetReady(ETradeSide Side, bool bReady);
     void RequestShop(UYIShopComponent* Shop);
     void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
     void RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);

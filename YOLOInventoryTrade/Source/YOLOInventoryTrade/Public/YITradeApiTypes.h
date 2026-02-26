@@ -26,6 +26,7 @@ enum class EYITradeOpKind : uint8
 	Unknown UMETA(DisplayName="Unknown"),
 	Open UMETA(DisplayName="Open Trade"),
 	Transfer UMETA(DisplayName="Transfer Trade Item"),
+	SetReady UMETA(DisplayName="Set Trade Ready"),
 	Commit UMETA(DisplayName="Commit Trade"),
 	Close UMETA(DisplayName="Close Trade")
 };
@@ -91,4 +92,19 @@ struct YOLOINVENTORYTRADE_API FYITradeTransferRequest
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
 	int32 Count = 0;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYTRADE_API FYITradeSetReadyRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	ETradeSide Side = ETradeSide::SideA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	bool bReady = true;
 };
