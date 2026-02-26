@@ -44,12 +44,14 @@ Standard result:
 
 - `FYIInventoryOpResult`
 - `EYIInventoryOpError`
+- `EYIInventoryOpKind` (for UI/debug routing)
 
 Notes:
 
 - `bRequestAccepted` means accepted locally / queued to server
 - `bSucceeded` is authoritative success when executed on authority
 - clients typically rely on replication for final state reconciliation
+- request structs carry `RequestId` for correlation; wrappers auto-fill when omitted
 
 ## 4) Authority Rules
 
@@ -140,6 +142,7 @@ Phase B (next)
 Phase B progress (implemented)
 
 - request-struct server RPC wrappers added on `UYIInventoryComponent` so client-originated `Request*` flows execute server-side revision checks
+- owner-only client result notifications for failed `Request*` executions via `OnInventoryOpResultReceived` (BlueprintAssignable on `UYIInventoryComponent`)
 
 Phase C
 

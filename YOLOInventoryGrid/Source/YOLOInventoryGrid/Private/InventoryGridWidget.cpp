@@ -1640,7 +1640,11 @@ bool UInventoryGridWidget::BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, 
 		// Prefer explicit bag-targeted server-authoritative mutation for inventory-owned bags.
 		if (InBag->BagId.IsValid() && DraggedItem.Item.InstanceId.IsValid())
 		{
-			bRemovedFromBag = OwnerComp->RemoveItemFromBag(InBag->BagId, DraggedItem.Item.InstanceId);
+			FYIInventoryRemoveItemRequest Request;
+			Request.ItemRef.Bag.BagId = InBag->BagId;
+			Request.ItemRef.Item.ItemInstanceId = DraggedItem.Item.InstanceId;
+			Request.ExpectedSourceBagRevision = InBag->RuntimeRevision;
+			bRemovedFromBag = OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 		}
 		else if (OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority() && OwnerComp->GetBag() == InBag)
 		{

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "YIInventoryBag.h"
+#include "YIInventoryApiTypes.h"
 #include "YIInventoryEventTypes.generated.h"
 
 class UYIInventoryBag;
@@ -21,3 +22,6 @@ UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIOnInventoryItemRotated, UYIInventoryBag*, Bag, int32, Index);
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FYIOnInventoryItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
+
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FYIOnInventoryOpResultReceived, const FYIInventoryOpResult&, Result);

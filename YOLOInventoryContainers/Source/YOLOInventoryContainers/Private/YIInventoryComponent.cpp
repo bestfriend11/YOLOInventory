@@ -529,130 +529,170 @@ void UYIInventoryComponent::ServerSplitStackInBag_Implementation(
 
 FYIInventoryOpResult UYIInventoryComponent::RequestMoveItem(const FYIInventoryMoveItemRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	FYIInventoryMoveItemRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Move;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Move;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestMoveItem(Request);
+		ServerRequestMoveItem(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
 		return Result;
 	}
 
-	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+	if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != INDEX_NONE &&
-		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 	{
 		Result.Error = EYIInventoryOpError::RevisionMismatch;
 		return Result;
 	}
 
-	const bool bOpResult = Request.bUseExactCell
-		? MoveItemInBagAtCell(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.TargetCell, Request.bAllowSingleOverlapSwap)
-		: MoveItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.TargetCell);
+	const bool bOpResult = EffectiveRequest.bUseExactCell
+		? MoveItemInBagAtCell(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId, EffectiveRequest.TargetCell, EffectiveRequest.bAllowSingleOverlapSwap)
+		: MoveItemInBag(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId, EffectiveRequest.TargetCell);
 
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	return Result;
 }
 
 FYIInventoryOpResult UYIInventoryComponent::RequestRotateItem(const FYIInventoryRotateItemRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	FYIInventoryRotateItemRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Rotate;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Rotate;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestRotateItem(Request);
+		ServerRequestRotateItem(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
 		return Result;
 	}
-	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+	if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != INDEX_NONE &&
-		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 	{
 		Result.Error = EYIInventoryOpError::RevisionMismatch;
 		return Result;
 	}
 
-	const bool bOpResult = RotateItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	const bool bOpResult = RotateItemInBag(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId);
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	return Result;
 }
 
 FYIInventoryOpResult UYIInventoryComponent::RequestRemoveItem(const FYIInventoryRemoveItemRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	FYIInventoryRemoveItemRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Remove;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Remove;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestRemoveItem(Request);
+		ServerRequestRemoveItem(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
 		return Result;
 	}
-	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+	if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != INDEX_NONE &&
-		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 	{
 		Result.Error = EYIInventoryOpError::RevisionMismatch;
 		return Result;
 	}
 
-	const bool bOpResult = RemoveItemFromBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	const bool bOpResult = RemoveItemFromBag(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId);
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	return Result;
 }
 
 FYIInventoryOpResult UYIInventoryComponent::RequestTransferItem(const FYIInventoryTransferItemRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid() || !Request.DestBagId.IsValid())
+	FYIInventoryTransferItemRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid() || !EffectiveRequest.DestBagId.IsValid())
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Transfer;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
-	Result.DestBagRevision = GetBagRuntimeRevisionById(Request.DestBagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Transfer;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
+	Result.DestBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.DestBagId);
 
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestTransferItem(Request);
+		ServerRequestTransferItem(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
@@ -660,16 +700,16 @@ FYIInventoryOpResult UYIInventoryComponent::RequestTransferItem(const FYIInvento
 	}
 
 	{
-		if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 			Result.SourceBagRevision != INDEX_NONE &&
-			Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+			Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 		{
 			Result.Error = EYIInventoryOpError::RevisionMismatch;
 			return Result;
 		}
-		if (Request.ExpectedDestBagRevision != INDEX_NONE &&
+		if (EffectiveRequest.ExpectedDestBagRevision != INDEX_NONE &&
 			Result.DestBagRevision != INDEX_NONE &&
-			Result.DestBagRevision != Request.ExpectedDestBagRevision)
+			Result.DestBagRevision != EffectiveRequest.ExpectedDestBagRevision)
 		{
 			Result.Error = EYIInventoryOpError::RevisionMismatch;
 			return Result;
@@ -677,133 +717,182 @@ FYIInventoryOpResult UYIInventoryComponent::RequestTransferItem(const FYIInvento
 	}
 
 	bool bOpResult = false;
-	if (Request.bUseExactCell)
+	if (EffectiveRequest.bUseExactCell)
 	{
 		bOpResult = TransferItemBetweenBagsAtCellById(
-			Request.ItemRef.Bag.BagId,
-			Request.ItemRef.Item.ItemInstanceId,
-			Request.DestBagId,
-			Request.DestCell,
-			Request.Count,
-			Request.bAllowSingleOverlapSwap);
+			EffectiveRequest.ItemRef.Bag.BagId,
+			EffectiveRequest.ItemRef.Item.ItemInstanceId,
+			EffectiveRequest.DestBagId,
+			EffectiveRequest.DestCell,
+			EffectiveRequest.Count,
+			EffectiveRequest.bAllowSingleOverlapSwap);
 	}
 	else
 	{
 		int32 IgnoredDestIndex = INDEX_NONE;
 		bOpResult = TransferItemBetweenBagsById(
-			Request.ItemRef.Bag.BagId,
-			Request.ItemRef.Item.ItemInstanceId,
-			Request.DestBagId,
-			Request.Count,
+			EffectiveRequest.ItemRef.Bag.BagId,
+			EffectiveRequest.ItemRef.Item.ItemInstanceId,
+			EffectiveRequest.DestBagId,
+			EffectiveRequest.Count,
 			IgnoredDestIndex);
 	}
 
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
-	Result.DestBagRevision = GetBagRuntimeRevisionById(Request.DestBagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
+	Result.DestBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.DestBagId);
 	return Result;
 }
 
 FYIInventoryOpResult UYIInventoryComponent::RequestSplitStack(const FYIInventorySplitStackRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid() || Request.Amount <= 0)
+	FYIInventorySplitStackRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRequest, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid() || EffectiveRequest.Amount <= 0)
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRequest, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Split;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Split;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestSplitStack(Request);
+		ServerRequestSplitStack(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
 		return Result;
 	}
-	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+	if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != INDEX_NONE &&
-		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 	{
 		Result.Error = EYIInventoryOpError::RevisionMismatch;
 		return Result;
 	}
 
-	const bool bOpResult = SplitStackInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.Amount, Request.DesiredPos);
+	const bool bOpResult = SplitStackInBag(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId, EffectiveRequest.Amount, EffectiveRequest.DesiredPos);
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	return Result;
 }
 
 FYIInventoryOpResult UYIInventoryComponent::RequestCombineItem(const FYIInventoryCombineItemRequest& Request)
 {
-	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	FYIInventoryCombineItemRequest EffectiveRequest = Request;
+	if (!EffectiveRequest.RequestId.IsValid())
 	{
-		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+		EffectiveRequest.RequestId = FGuid::NewGuid();
+	}
+
+	if (!EffectiveRequest.ItemRef.Bag.BagId.IsValid() || !EffectiveRequest.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		FYIInventoryOpResult Result = YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &EffectiveRequest.ItemRef);
+		Result.TransactionId = EffectiveRequest.RequestId;
+		Result.OpKind = EYIInventoryOpKind::Combine;
+		return Result;
 	}
 
 	FYIInventoryOpResult Result;
-	YIInventory_PopulateResultIds(Result, Request.ItemRef);
-	Result.TransactionId = FGuid::NewGuid();
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	YIInventory_PopulateResultIds(Result, EffectiveRequest.ItemRef);
+	Result.TransactionId = EffectiveRequest.RequestId;
+	Result.OpKind = EYIInventoryOpKind::Combine;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	if (!(GetOwner() && GetOwner()->HasAuthority()))
 	{
-		ServerRequestCombineItem(Request);
+		ServerRequestCombineItem(EffectiveRequest);
 		Result.bRequestAccepted = true;
 		Result.bSucceeded = false;
 		Result.Error = EYIInventoryOpError::None;
 		return Result;
 	}
-	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+	if (EffectiveRequest.ExpectedSourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != INDEX_NONE &&
-		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		Result.SourceBagRevision != EffectiveRequest.ExpectedSourceBagRevision)
 	{
 		Result.Error = EYIInventoryOpError::RevisionMismatch;
 		return Result;
 	}
 
-	const bool bOpResult = CombineItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	const bool bOpResult = CombineItemInBag(EffectiveRequest.ItemRef.Bag.BagId, EffectiveRequest.ItemRef.Item.ItemInstanceId);
 	Result.bRequestAccepted = bOpResult;
 	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
-	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(EffectiveRequest.ItemRef.Bag.BagId);
 	return Result;
 }
 
 void UYIInventoryComponent::ServerRequestMoveItem_Implementation(FYIInventoryMoveItemRequest Request)
 {
-	RequestMoveItem(Request);
+	const FYIInventoryOpResult Result = RequestMoveItem(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
 }
 
 void UYIInventoryComponent::ServerRequestRotateItem_Implementation(FYIInventoryRotateItemRequest Request)
 {
-	RequestRotateItem(Request);
+	const FYIInventoryOpResult Result = RequestRotateItem(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
 }
 
 void UYIInventoryComponent::ServerRequestRemoveItem_Implementation(FYIInventoryRemoveItemRequest Request)
 {
-	RequestRemoveItem(Request);
+	const FYIInventoryOpResult Result = RequestRemoveItem(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
 }
 
 void UYIInventoryComponent::ServerRequestTransferItem_Implementation(FYIInventoryTransferItemRequest Request)
 {
-	RequestTransferItem(Request);
+	const FYIInventoryOpResult Result = RequestTransferItem(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
 }
 
 void UYIInventoryComponent::ServerRequestSplitStack_Implementation(FYIInventorySplitStackRequest Request)
 {
-	RequestSplitStack(Request);
+	const FYIInventoryOpResult Result = RequestSplitStack(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
 }
 
 void UYIInventoryComponent::ServerRequestCombineItem_Implementation(FYIInventoryCombineItemRequest Request)
 {
-	RequestCombineItem(Request);
+	const FYIInventoryOpResult Result = RequestCombineItem(Request);
+	if (!Result.bSucceeded)
+	{
+		ClientReceiveInventoryOpResult(Result);
+	}
+}
+
+void UYIInventoryComponent::ClientReceiveInventoryOpResult_Implementation(const FYIInventoryOpResult& Result)
+{
+	OnInventoryOpResultReceived.Broadcast(Result);
 }
 
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)

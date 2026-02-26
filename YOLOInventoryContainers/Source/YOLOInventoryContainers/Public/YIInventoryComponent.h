@@ -289,6 +289,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item transfers between bags."))
 	FYIOnInventoryItemTransferred OnInventoryItemTransferred;
 
+	/** Owner-only authoritative command result notifications (primarily failures) for client-originated Request* calls. */
+	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Authoritative inventory command result notifications for the owning client. Useful for UI error feedback (for example revision mismatch, no space, locked item)."))
+	FYIOnInventoryOpResultReceived OnInventoryOpResultReceived;
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -318,6 +322,9 @@ protected:
 	void OnRep_NetContextBagMirrors();
 	UFUNCTION()
 	void OnRep_LockedBagItems();
+
+	UFUNCTION(Client, Reliable)
+	void ClientReceiveInventoryOpResult(const FYIInventoryOpResult& Result);
 
 	UPROPERTY(ReplicatedUsing=OnRep_LockedBagItems, Transient)
 	TArray<FYIInventoryLockRef> LockedBagItems;

@@ -26,6 +26,18 @@ enum class EYIInventoryOpError : uint8
 	Unsupported UMETA(DisplayName="Unsupported"),
 };
 
+UENUM(BlueprintType)
+enum class EYIInventoryOpKind : uint8
+{
+	Unknown UMETA(DisplayName="Unknown"),
+	Move UMETA(DisplayName="Move"),
+	Rotate UMETA(DisplayName="Rotate"),
+	Remove UMETA(DisplayName="Remove"),
+	Transfer UMETA(DisplayName="Transfer"),
+	Split UMETA(DisplayName="Split"),
+	Combine UMETA(DisplayName="Combine"),
+};
+
 /**
  * Standard result envelope for inventory commands.
  * bRequestAccepted indicates whether the request was accepted locally (or queued to server).
@@ -44,6 +56,9 @@ struct YOLOINVENTORYCORE_API FYIInventoryOpResult
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	EYIInventoryOpError Error = EYIInventoryOpError::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	EYIInventoryOpKind OpKind = EYIInventoryOpKind::Unknown;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FGuid TransactionId;
@@ -74,6 +89,10 @@ struct YOLOINVENTORYCORE_API FYIInventoryMoveItemRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FYIInventoryItemRef ItemRef;
 
+	/** Optional client-generated correlation id; auto-filled by Request* wrappers when empty. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FIntPoint TargetCell = FIntPoint::ZeroValue;
 
@@ -97,6 +116,9 @@ struct YOLOINVENTORYCORE_API FYIInventoryRotateItemRequest
 	FYIInventoryItemRef ItemRef;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 ExpectedSourceBagRevision = INDEX_NONE;
 };
 
@@ -109,6 +131,9 @@ struct YOLOINVENTORYCORE_API FYIInventoryRemoveItemRequest
 	FYIInventoryItemRef ItemRef;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 ExpectedSourceBagRevision = INDEX_NONE;
 };
 
@@ -119,6 +144,9 @@ struct YOLOINVENTORYCORE_API FYIInventoryTransferItemRequest
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FYIInventoryItemRef ItemRef;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	FGuid DestBagId;
@@ -152,6 +180,9 @@ struct YOLOINVENTORYCORE_API FYIInventorySplitStackRequest
 	FYIInventoryItemRef ItemRef;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 Amount = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
@@ -170,6 +201,8 @@ struct YOLOINVENTORYCORE_API FYIInventoryCombineItemRequest
 	FYIInventoryItemRef ItemRef;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 ExpectedSourceBagRevision = INDEX_NONE;
 };
-
