@@ -596,7 +596,8 @@ void UYITradeInteractionComponent::Server_TransferItem_Implementation(ETradeSide
     }
 
     // Allow any direction during an active trade (shop-style or free trade).
-    CurrentSession->ServerTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count);
+	FText UnusedError;
+	(void)CurrentSession->TryTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count, UnusedError);
 }
 
 void UYITradeInteractionComponent::Server_RequestShopBuyEx_Implementation(FYIShopBuyRequest Request)

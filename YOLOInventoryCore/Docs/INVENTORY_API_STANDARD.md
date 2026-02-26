@@ -91,6 +91,16 @@ Future requirement:
 
 - container topology/placement policy abstraction in container runtime
 
+## 6.1) View Adapter Contract (interface-based)
+
+View plugins (Grid/List/Tile/etc.) must integrate feature behavior through interfaces, not concrete feature components.
+
+Current rule:
+
+- view integrations use `YIInventoryGridAdapterInterface` (or equivalent per view plugin)
+- adapters can live in feature/UI plugins
+- runtime view plugins must not hard-reference trade/shop/equipment/world modules
+
 ## 7) Performance Constraints
 
 For MMO-scale scenarios (including very large grids such as `100x100`):
@@ -121,7 +131,7 @@ Preferred Blueprint path:
 2. Use by-ref command helpers or `UYIInventoryComponent::Request*`
 3. Listen to inventory events / replication-driven UI updates
 
-Avoid new usage of deprecated active-bag index-based mutation methods except for compatibility.
+Non-standard mutation paths are no longer part of the public/BP mutation surface in core inventory component.
 
 ## 10) Phased Migration Plan (ongoing)
 
@@ -143,6 +153,9 @@ Phase B progress (implemented)
 
 - request-struct server RPC wrappers added on `UYIInventoryComponent` so client-originated `Request*` flows execute server-side revision checks
 - owner-only client result notifications for failed `Request*` executions via `OnInventoryOpResultReceived` (BlueprintAssignable on `UYIInventoryComponent`)
+- trade readiness/commit initiation standardized through `RequestTradeSetReadyEx` + structured result callbacks
+- non-standard public trade session mutation helpers removed from public API surface
+- view adapter path converted to interface-based contract for cleaner plugin decoupling
 
 Phase C
 

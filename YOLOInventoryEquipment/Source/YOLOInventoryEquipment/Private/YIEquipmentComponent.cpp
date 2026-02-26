@@ -967,22 +967,36 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 			return false;
 		}
 	}
-	const bool bKeepInInventoryLocked = (EquipInventoryBehavior == EYIEquipInventoryBehavior::KeepInInventoryLocked);
-	if (bKeepInInventoryLocked)
-	{
-		SourceBag->EnsureBagId();
-		if (!SourceInventory->SetBagItemLocked(SourceBag, SourceIndex, true))
+		const bool bKeepInInventoryLocked = (EquipInventoryBehavior == EYIEquipInventoryBehavior::KeepInInventoryLocked);
+		if (bKeepInInventoryLocked)
 		{
-			OutMessage = TEXT("Equip failed: Could not lock source inventory item.");
-			return false;
+			SourceBag->EnsureBagId();
+			FYIInventoryItemRef SourceItemRef;
+			if (!SourceInventory->GetBagItemCoreRef(SourceBag, SourceIndex, SourceItemRef) ||
+				!SourceInventory->SetBagItemLockedByCoreRef(SourceItemRef, true))
+			{
+				OutMessage = TEXT("Equip failed: Could not lock source inventory item.");
+				return false;
+			}
+			SourceBagItem = SourceBag->Items[SourceIndex];
 		}
-		SourceBagItem = SourceBag->Items[SourceIndex];
-	}
-	else if (!SourceInventory->RemoveItem(SourceIndex))
-	{
-		OutMessage = TEXT("Equip failed: Could not remove source item from bag.");
-		return false;
-	}
+		else
+		{
+			FYIInventoryItemRef SourceItemRef;
+			if (!SourceInventory->GetBagItemCoreRef(SourceBag, SourceIndex, SourceItemRef))
+			{
+				OutMessage = TEXT("Equip failed: Could not resolve source item identity.");
+				return false;
+			}
+			FYIInventoryRemoveItemRequest RemoveRequest;
+			RemoveRequest.ItemRef = SourceItemRef;
+			RemoveRequest.ExpectedSourceBagRevision = SourceBag->RuntimeRevision;
+			if (!SourceInventory->RequestRemoveItem(RemoveRequest).bRequestAccepted)
+			{
+				OutMessage = TEXT("Equip failed: Could not remove source item from bag.");
+				return false;
+			}
+		}
 
 	TSet<int32> ReplaceGroupIds;
 	for (const FGameplayTag& OccupiedSlot : TargetSlots)

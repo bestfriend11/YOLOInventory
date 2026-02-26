@@ -476,11 +476,7 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 						Request.ExpectedSourceBagRevision = Grid->Bag->RuntimeRevision;
 						bHandled = OwnerComp->RequestRotateItem(Request).bRequestAccepted;
 					}
-					else if (OwnerComp->GetBag() == Grid->Bag)
-					{
-						bHandled = OwnerComp->RotateItem(ItemIdx);
 					}
-				}
 				if (!bHandled)
 				{
 					Grid->Bag->RotateItem(ItemIdx);
@@ -501,11 +497,7 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 						Request.ExpectedSourceBagRevision = Grid->Bag->RuntimeRevision;
 						bHandled = OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 					}
-					else if (OwnerComp->GetBag() == Grid->Bag)
-					{
-						bHandled = OwnerComp->RemoveItem(ItemIdx);
 					}
-				}
 				if (!bHandled)
 				{
 					bHandled = Grid->Bag->RemoveItem(ItemIdx);

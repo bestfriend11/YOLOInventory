@@ -251,21 +251,14 @@ FYILootDropResult UYILootDropComponent::TriggerDropInternal(const FYILootDropCon
 				TargetBag = Inventory->GetBag();
 			}
 
-			if (TargetBag)
-			{
-				bool bAdded = false;
-				if (Inventory && TargetBag == Inventory->GetBag())
+				if (TargetBag)
 				{
-					bAdded = (Inventory->AddBagItem(Item) != INDEX_NONE);
-				}
-				else
-				{
+					bool bAdded = false;
 					bAdded = (TargetBag->AddBagItem(Item) != INDEX_NONE);
 					if (bAdded && Inventory && TargetBag == Inventory->GetBag())
 					{
 						Inventory->SyncNetState();
 					}
-				}
 
 				if (bAdded)
 				{

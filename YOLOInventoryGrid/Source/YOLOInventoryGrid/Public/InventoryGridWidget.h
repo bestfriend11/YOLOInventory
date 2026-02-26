@@ -14,6 +14,8 @@ class UYIItemSFXLibrary;
 class UYIInventoryComponent;
 class UYIInventoryGridStyleAsset;
 class UYIInventoryGridFeatureAdapter;
+class UYIInventoryGridAdapterInterface;
+class IYIInventoryGridAdapterInterface;
 
 /**
  * UInventoryGridWidget
@@ -349,9 +351,9 @@ public:
 
 	/** Optional integration adapter (trade/shop/equip/world). Grid core remains view/runtime and delegates feature-specific behavior here. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Integration")
-	void SetFeatureAdapter(UYIInventoryGridFeatureAdapter* InAdapter);
+	void SetFeatureAdapter(UObject* InAdapter);
 	UFUNCTION(BlueprintPure, Category="Inventory|Integration")
-	UYIInventoryGridFeatureAdapter* GetFeatureAdapter() const { return FeatureAdapter; }
+	UObject* GetFeatureAdapter() const { return FeatureAdapter; }
 	/** Fill OutData for the currently selected cell if an item exists there (returns true on success). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get tooltip data for the currently selected cell"))
 	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext) const;
@@ -377,7 +379,9 @@ private:
 	UPROPERTY(Transient)
 	bool bAllowSelfMove = true;
 	UPROPERTY(Transient, Instanced)
-	TObjectPtr<UYIInventoryGridFeatureAdapter> FeatureAdapter = nullptr;
+	TObjectPtr<UObject> FeatureAdapter = nullptr;
+
+	IYIInventoryGridAdapterInterface* ResolveFeatureAdapterInterface() const;
 
 	static TSet<TWeakObjectPtr<UInventoryGridWidget>> GRegisteredGrids;
 	TSharedPtr<SInventoryGridWidget> MySlateWidget;

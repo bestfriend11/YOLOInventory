@@ -123,23 +123,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Trade")
 	FTradeInventoryEvent OnInventoriesUpdated;
 
-	// --- RPCs ---
-	/** Server: add from source bag slot (partial count allowed). */
-	UFUNCTION(Server, Reliable)
-	void ServerAddItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count);
-
-	UFUNCTION(Server, Reliable)
-	void ServerRemoveItem(ETradeSide Side, int32 Index);
-
-	UFUNCTION(Server, Reliable)
-	void ServerSetResource(ETradeSide Side, FName Resource, int64 Amount);
-
+	// --- Session internals ---
 	UFUNCTION(Server, Reliable)
 	void ServerCancel();
-
-	/** Server: transfer an item between sides using exact drop position (full stack if Count<=0). */
-	UFUNCTION(Server, Reliable)
-	void ServerTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
 
 	/** Authority helper with explicit success/failure reason for structured request APIs. */
 	bool TryTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count, FText& OutError);
@@ -147,25 +133,8 @@ public:
 	/** Authority helper for readiness / commit initiation. Prefer UYITradeInteractionComponent::RequestTradeSetReadyEx. */
 	bool TrySetReady(ETradeSide Side, bool bReady, APlayerController* RequestingPC, FText& OutError);
 
-	// --- Client-facing Blueprint helpers (call on owning client; they proxy to server RPCs) ---
-	UFUNCTION(BlueprintCallable, Category="Trade")
-	void AddOfferFromBag(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count) { ServerAddItem(Side, SourceInv, SlotIndex, Count); }
-
-	UFUNCTION(BlueprintCallable, Category="Trade")
-	void RemoveOfferItem(ETradeSide Side, int32 Index) { ServerRemoveItem(Side, Index); }
-
-	UFUNCTION(BlueprintCallable, Category="Trade")
-	void SetResourceOffer(ETradeSide Side, FName Resource, int64 Amount) { ServerSetResource(Side, Resource, Amount); }
-
 	UFUNCTION(BlueprintCallable, Category="Trade")
 	void CancelTrade() { ServerCancel(); }
-
-	/** Client helper: request a direct item transfer between sides (bypasses offers). */
-	UFUNCTION(BlueprintCallable, Category="Trade")
-	void TransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0)
-	{
-		ServerTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count);
-	}
 
 	/** Blueprint: resolve which side a given player state represents (defaults to SideA if unknown). */
 	UFUNCTION(BlueprintPure, Category="Trade")
@@ -215,6 +184,16 @@ protected:
 
 	bool ApplyOffersToSide(ETradeSide From, ETradeSide To, FText& OutError);
 	UYIInventoryComponent* GetInventoryForSide(ETradeSide Side) const;
+
+	// Legacy session mutation RPCs retained for internal compatibility; standardized callers should use UYITradeInteractionComponent Request*Ex API.
+	UFUNCTION(Server, Reliable)
+	void ServerAddItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count);
+	UFUNCTION(Server, Reliable)
+	void ServerRemoveItem(ETradeSide Side, int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerSetResource(ETradeSide Side, FName Resource, int64 Amount);
+	UFUNCTION(Server, Reliable)
+	void ServerTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
 
 	// Internal legacy session RPC retained for compatibility; standardized callers should use UYITradeInteractionComponent::RequestTradeSetReadyEx.
 	UFUNCTION(Server, Reliable)

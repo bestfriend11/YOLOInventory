@@ -119,18 +119,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Remove bag from this component. Returns false if invalid/not owned/in use."))
 	bool RemoveBag(UYIInventoryBag* Bag);
 
-	/** Runtime lock used by keep-in-inventory equip mode. Locked items cannot be moved/rotated/removed. */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(DeprecatedFunction, DeprecationMessage="Use SetBagItemLockedByCoreRef (build ref with UYIInventoryCommandLibrary::BuildItemRef / BuildActiveBagItemRef / BuildContextBagItemRef).", ToolTip="Legacy convenience lock/unlock by bag+index.\nPrefer canonical item refs to avoid index drift bugs."))
-	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
-
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by canonical core identity reference (Bag + Item handles)."))
 	bool SetBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef, bool bLocked);
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Build canonical core item reference for a bag item index.\nReturns false when bag/index is invalid or identity cannot be resolved."))
 	bool GetBagItemCoreRef(UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutItemRef) const;
-
-	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(DeprecatedFunction, DeprecationMessage="Use IsBagItemLockedByCoreRef (build ref with UYIInventoryCommandLibrary helpers).", ToolTip="Legacy convenience lock query by bag+index.\nPrefer canonical item refs to avoid index drift bugs."))
-	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified canonical item ref is currently lock-protected."))
 	bool IsBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef) const;
@@ -139,11 +132,6 @@ public:
 	void SyncNetState();
 
 	// --------- Authority-safe inventory mutations (RPC-backed) ----------
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use explicit bag-targeted APIs (MoveItemInBag/MoveItemInBagAtCell) or UYIInventoryCommandLibrary::MoveItemByRef.", ToolTip="Legacy convenience move in active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
-	bool MoveItem(int32 Index, FIntPoint NewPos);
-	UFUNCTION(Server, Reliable)
-	void ServerMoveItem(int32 Index, FIntPoint NewPos);
-
 	/** Move a specific item in a specific bag (explicit target, safer for multi-grid/context UIs). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Move item by explicit bag + item instance identity.\nArgs:\n- BagId: target bag.\n- ItemInstanceId: runtime item identity.\n- NewPos: destination cell.\nClient calls forward to ServerMoveItemInBag RPC."))
 	bool MoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos);
@@ -156,27 +144,11 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use RotateItemInBag or UYIInventoryCommandLibrary::RotateItemByRef.", ToolTip="Legacy convenience rotate in active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
-	bool RotateItem(int32 Index);
-	UFUNCTION(Server, Reliable)
-	void ServerRotateItem(int32 Index);
-
 	/** Rotate a specific item in a specific bag (explicit target, safer for multi-grid/context UIs). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item by explicit bag + item instance identity.\nClient calls forward to ServerRotateItemInBag RPC."))
 	bool RotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
 	UFUNCTION(Server, Reliable)
 	void ServerRotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
-
-	/** Add an already-built bag item (e.g., from drag/drop). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="UI/internal convenience. Prefer AddItemToBag (definitions) or explicit transfer commands. For runtime item identity-safe flows, use bag-targeted commands.", ToolTip="Legacy convenience add of a prebuilt bag item into the active bag.\nPrimarily used by internal UI drag flows."))
-	int32 AddBagItem(const FYIBagItem& Item);
-	UFUNCTION(Server, Reliable)
-	void ServerAddBagItem(const struct FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size);
-
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use RemoveItemFromBag or UYIInventoryCommandLibrary::RemoveItemByRef.", ToolTip="Legacy convenience remove from active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
-	bool RemoveItem(int32 Index);
-	UFUNCTION(Server, Reliable)
-	void ServerRemoveItem(int32 Index);
 
 	/** Remove a specific item from a specific bag (explicit target, safer for multi-grid/context UIs). */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Remove item by explicit bag + item instance identity.\nClient calls forward to ServerRemoveItemFromBag RPC."))
@@ -372,6 +344,20 @@ private:
 	void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
 
 	bool GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutIdentity) const;
+	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
+	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
+	bool MoveItem(int32 Index, FIntPoint NewPos);
+	UFUNCTION(Server, Reliable)
+	void ServerMoveItem(int32 Index, FIntPoint NewPos);
+	bool RotateItem(int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerRotateItem(int32 Index);
+	int32 AddBagItem(const FYIBagItem& Item);
+	UFUNCTION(Server, Reliable)
+	void ServerAddBagItem(const struct FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size);
+	bool RemoveItem(int32 Index);
+	UFUNCTION(Server, Reliable)
+	void ServerRemoveItem(int32 Index);
 	bool IsBagItemLockedByIdentity(const FYIInventoryItemRef& Identity) const;
 	bool FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const;
 	bool FindContainerParentForBag(const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId) const;

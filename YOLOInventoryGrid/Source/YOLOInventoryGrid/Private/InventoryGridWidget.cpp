@@ -736,12 +736,30 @@ void UInventoryGridWidget::HandleGhostPlacementChanged(const FIntPoint& TopLeftC
 	}
 }
 
-void UInventoryGridWidget::SetFeatureAdapter(UYIInventoryGridFeatureAdapter* InAdapter)
+IYIInventoryGridAdapterInterface* UInventoryGridWidget::ResolveFeatureAdapterInterface() const
 {
-	FeatureAdapter = InAdapter;
-	if (FeatureAdapter)
+	if (!FeatureAdapter)
 	{
-		FeatureAdapter->OnAssignedToGrid(this);
+		return nullptr;
+	}
+	if (!FeatureAdapter->GetClass()->ImplementsInterface(UYIInventoryGridAdapterInterface::StaticClass()))
+	{
+		return nullptr;
+	}
+	return Cast<IYIInventoryGridAdapterInterface>(FeatureAdapter);
+}
+
+void UInventoryGridWidget::SetFeatureAdapter(UObject* InAdapter)
+{
+	if (InAdapter && !InAdapter->GetClass()->ImplementsInterface(UYIInventoryGridAdapterInterface::StaticClass()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("InventoryGridWidget: Ignoring feature adapter '%s' because it does not implement YIInventoryGridAdapterInterface."), *GetNameSafe(InAdapter));
+		return;
+	}
+	FeatureAdapter = InAdapter;
+	if (IYIInventoryGridAdapterInterface* Adapter = ResolveFeatureAdapterInterface())
+	{
+		Adapter->OnAssignedToGrid(this);
 	}
 }
 
@@ -851,12 +869,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
 			return OwnerComp->RequestMoveItem(Request).bRequestAccepted;
 		}
-		// Fallback only for primary bag / legacy edge cases
-		if (OwnerComp->GetBag() == Bag)
-		{
-			return OwnerComp->MoveItem(Index, NewPos);
-		}
-		return false;
+			return false;
 	};
 	const auto TryOwnerRemoveItem = [OwnerComp, this](int32 Index) -> bool
 	{
@@ -873,11 +886,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
 			return OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 		}
-		if (OwnerComp->GetBag() == Bag)
-		{
-			return OwnerComp->RemoveItem(Index);
-		}
-		return false;
+			return false;
 	};
 	auto PlayDropSound = [this]()
 	{
@@ -1102,10 +1111,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Optional feature adapters can intercept cross-grid drops (trade/shop/etc) before core bag transfer logic.
 	if (UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get())
 	{
-		auto TryAdapterDrop = [&](UYIInventoryGridFeatureAdapter* Adapter) -> TOptional<bool>
-		{
-			if (!Adapter)
+			auto TryAdapterDrop = [&](IYIInventoryGridAdapterInterface* Adapter) -> TOptional<bool>
 			{
+				if (!Adapter)
+				{
 				return {};
 			}
 			const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleCrossGridDrop(
@@ -1134,16 +1143,16 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			return bSuccess;
 		};
 
-		if (const TOptional<bool> DestHandled = TryAdapterDrop(FeatureAdapter))
-		{
-			return DestHandled.GetValue();
-		}
-		if (SourceGrid != this)
-		{
-			if (const TOptional<bool> SrcHandled = TryAdapterDrop(SourceGrid->FeatureAdapter))
+			if (const TOptional<bool> DestHandled = TryAdapterDrop(ResolveFeatureAdapterInterface()))
 			{
-				return SrcHandled.GetValue();
+				return DestHandled.GetValue();
 			}
+			if (SourceGrid != this)
+			{
+				if (const TOptional<bool> SrcHandled = TryAdapterDrop(SourceGrid->ResolveFeatureAdapterInterface()))
+				{
+					return SrcHandled.GetValue();
+				}
 		}
 	}
 
@@ -1428,11 +1437,13 @@ void UInventoryGridWidget::CancelDrag()
 						{
 							const FVector SpawnLoc = Owner->GetActorLocation() + Owner->GetActorForwardVector() * 80.f;
 							const FTransform SpawnTransform(Owner->GetActorRotation(), SpawnLoc);
-							if (DragSourceGrid->FeatureAdapter &&
-								DragSourceGrid->FeatureAdapter->TrySpawnWorldDropFromInstance(this, Restore.Item, SpawnTransform))
-							{
-								bDroppedToWorld = true;
-							}
+								if (IYIInventoryGridAdapterInterface* Adapter = DragSourceGrid->ResolveFeatureAdapterInterface())
+								{
+									if (Adapter->TrySpawnWorldDropFromInstance(this, Restore.Item, SpawnTransform))
+									{
+										bDroppedToWorld = true;
+									}
+								}
 						}
 					}
 				}
@@ -1533,7 +1544,7 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UObject* EquipmentContextOb
 		return false;
 	}
 
-	UYIInventoryGridFeatureAdapter* Adapter = SourceGrid->GetFeatureAdapter();
+	IYIInventoryGridAdapterInterface* Adapter = SourceGrid->ResolveFeatureAdapterInterface();
 	if (!Adapter)
 	{
 		if (TempInsertedIndex != INDEX_NONE)
@@ -1556,10 +1567,18 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UObject* EquipmentContextOb
 	if (TempInsertedIndex != INDEX_NONE)
 	{
 		bool bRemovedRollback = false;
-		if (SourceInventory->GetOwner() && SourceInventory->GetOwner()->HasAuthority() && SourceInventory->GetBag() == SourceGrid->Bag)
-		{
-			bRemovedRollback = SourceInventory->RemoveItem(TempInsertedIndex);
-		}
+			if (SourceInventory->GetOwner() && SourceInventory->GetOwner()->HasAuthority() && SourceInventory->GetBag() == SourceGrid->Bag)
+			{
+				if (SourceGrid->Bag && SourceGrid->Bag->Items.IsValidIndex(TempInsertedIndex) &&
+					SourceGrid->Bag->BagId.IsValid() && SourceGrid->Bag->Items[TempInsertedIndex].Item.InstanceId.IsValid())
+				{
+					FYIInventoryRemoveItemRequest RemoveRequest;
+					RemoveRequest.ItemRef.Bag.BagId = SourceGrid->Bag->BagId;
+					RemoveRequest.ItemRef.Item.ItemInstanceId = SourceGrid->Bag->Items[TempInsertedIndex].Item.InstanceId;
+					RemoveRequest.ExpectedSourceBagRevision = SourceGrid->Bag->RuntimeRevision;
+					bRemovedRollback = SourceInventory->RequestRemoveItem(RemoveRequest).bRequestAccepted;
+				}
+			}
 		if (!bRemovedRollback)
 		{
 			SourceGrid->Bag->RemoveItem(TempInsertedIndex);
@@ -1646,11 +1665,7 @@ bool UInventoryGridWidget::BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, 
 			Request.ExpectedSourceBagRevision = InBag->RuntimeRevision;
 			bRemovedFromBag = OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 		}
-		else if (OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority() && OwnerComp->GetBag() == InBag)
-		{
-			bRemovedFromBag = OwnerComp->RemoveItem(ItemIndex);
 		}
-	}
 	if (!bRemovedFromBag)
 	{
 		bRemovedFromBag = InBag->RemoveItem(ItemIndex);
@@ -1689,7 +1704,17 @@ bool UInventoryGridWidget::IsItemIndexLockedForUI(int32 ItemIndex) const
 	const UYIInventoryComponent* OwnerInventory = BoundInventoryComponent
 		? BoundInventoryComponent.Get()
 		: Bag->GetTypedOuter<UYIInventoryComponent>();
-	return OwnerInventory && OwnerInventory->IsBagItemLocked(Bag, ItemIndex);
+	if (!OwnerInventory)
+	{
+		return false;
+	}
+
+	FYIInventoryItemRef ItemRef;
+	if (!OwnerInventory->GetBagItemCoreRef(Bag, ItemIndex, ItemRef))
+	{
+		return false;
+	}
+	return OwnerInventory->IsBagItemLockedByCoreRef(ItemRef);
 }
 
 void UInventoryGridWidget::HandleCellClicked(const FIntPoint& Cell)
@@ -1751,7 +1776,7 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 	if (SourceIndex == INDEX_NONE) return false;
 
 	// Feature adapters can route transfer actions (trade/shop/etc) before core bag transfer logic.
-	auto TryAdapterTransfer = [&](UYIInventoryGridFeatureAdapter* Adapter) -> TOptional<bool>
+	auto TryAdapterTransfer = [&](IYIInventoryGridAdapterInterface* Adapter) -> TOptional<bool>
 	{
 		if (!Adapter)
 		{
@@ -1772,13 +1797,13 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 		}
 		return bSuccess;
 	};
-	if (const TOptional<bool> Handled = TryAdapterTransfer(FeatureAdapter))
+	if (const TOptional<bool> Handled = TryAdapterTransfer(ResolveFeatureAdapterInterface()))
 	{
 		return Handled.GetValue();
 	}
 	if (Other != this)
 	{
-		if (const TOptional<bool> OtherHandled = TryAdapterTransfer(Other->FeatureAdapter))
+		if (const TOptional<bool> OtherHandled = TryAdapterTransfer(Other->ResolveFeatureAdapterInterface()))
 		{
 			return OtherHandled.GetValue();
 		}
