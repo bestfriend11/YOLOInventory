@@ -30,6 +30,16 @@ void UYIInventoryBag::EnsureBagId()
 	}
 }
 
+void UYIInventoryBag::MarkBagChanged()
+{
+	++RuntimeRevision;
+	if (ShouldMarkDirty())
+	{
+		MarkPackageDirty();
+	}
+	OnChanged.Broadcast();
+}
+
 bool UYIInventoryBag::CanAcceptItemDefinition(const UYIItemDefinition* Definition) const
 {
 	if (!Definition)
@@ -146,8 +156,7 @@ bool UYIInventoryBag::MoveItem(int32 Index, const FIntPoint NewPos)
 	Items.Insert(Tmp, Index);
 	if (!bCan) return false;
 	Items[Index].Pos = NewPos;
-	if (ShouldMarkDirty()) { MarkPackageDirty(); }
-	OnChanged.Broadcast();
+	MarkBagChanged();
 	OnItemMoved.Broadcast(Index, NewPos);
 	return true;
 }
@@ -244,7 +253,8 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 			if (Room > 0)
 			{
 				Items[Existing].Item.Count = FMath::Clamp(Items[Existing].Item.Count + FMath::Max(1, NewItem.Item.Count), 1, MaxStackCount);
-				if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();				return Existing;
+				MarkBagChanged();
+				return Existing;
 			}
 			// If stack is full, fall through to creating a new stack of the same item
 		}
@@ -263,7 +273,7 @@ int32 UYIInventoryBag::AddBagItem(const FYIBagItem& NewItem)
 		Copy.Item.Count = FMath::Clamp(Copy.Item.Count, 1, YIItemSchema::GetMaxStackCount(Def));
 	}
 	int32 OutIndex = Items.Add(Copy);
-	if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
+	MarkBagChanged();
 	OnItemAdded.Broadcast(OutIndex, Items[OutIndex]);
 	return OutIndex;
 }
@@ -287,12 +297,12 @@ bool UYIInventoryBag::CombineStacks(int32 IndexA, int32 IndexB)
 	{
 		FYIBagItem RemovedB = B;
 		Items.RemoveAt(IndexB);
-		if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
+		MarkBagChanged();
 		OnItemRemoved.Broadcast(IndexB, RemovedB);
 	}
 	else
 	{
-		if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
+		MarkBagChanged();
 	}
 	return Moved > 0;
 }
@@ -313,7 +323,7 @@ int32 UYIInventoryBag::SplitStack(int32 Index, int32 Amount, const FIntPoint Pos
 	}
 	Src.Item.Count -= Amount;
 	int32 OutIdx = Items.Add(New);
-	if (ShouldMarkDirty()) { MarkPackageDirty(); } OnChanged.Broadcast();
+	MarkBagChanged();
 	return OutIdx;
 }
 
@@ -384,8 +394,7 @@ bool UYIInventoryBag::RotateItem(int32 Index)
 	Items[Index].Size = Rot;
 	// Update stack key to reflect rotation change
 	UYIInventoryBlueprintLibrary::UpdateCustomStackKey(Items[Index].Item);
-	MarkPackageDirty();
-	OnChanged.Broadcast();
+	MarkBagChanged();
 	return true;
 }
 
@@ -418,7 +427,7 @@ void UYIInventoryBag::ApplyMinifyScale(float NewScale, TArray<FYIBagItem>& Dropp
 	if (DroppedItems.Num() > 0)
 	{
 		Items = Kept;
-		MarkPackageDirty(); OnChanged.Broadcast();
+		MarkBagChanged();
 	}
 }
 
@@ -427,8 +436,7 @@ bool UYIInventoryBag::RemoveItem(int32 Index)
 	if (!Items.IsValidIndex(Index)) return false;
 	FYIBagItem Removed = Items[Index];
 	Items.RemoveAt(Index);
-	MarkPackageDirty();
-	OnChanged.Broadcast();
+	MarkBagChanged();
 	OnItemRemoved.Broadcast(Index, Removed);
 	return true;
 }
@@ -437,8 +445,7 @@ bool UYIInventoryBag::SwapItems(int32 IndexA, int32 IndexB)
 {
 	if (!Items.IsValidIndex(IndexA) || !Items.IsValidIndex(IndexB) || IndexA == IndexB) return false;
 	Swap(Items[IndexA], Items[IndexB]);
-	MarkPackageDirty();
-	OnChanged.Broadcast();
+	MarkBagChanged();
 	OnItemMoved.Broadcast(IndexA, Items[IndexA].Pos);
 	OnItemMoved.Broadcast(IndexB, Items[IndexB].Pos);
 	return true;
@@ -493,6 +500,5 @@ void UYIInventoryBag::AutoPack()
 		}
 		Items.Add(Tmp);
 	}
-	MarkPackageDirty();
-	OnChanged.Broadcast();
+	MarkBagChanged();
 }

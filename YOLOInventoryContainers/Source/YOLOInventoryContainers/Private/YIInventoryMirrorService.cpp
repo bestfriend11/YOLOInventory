@@ -182,6 +182,7 @@ void FYIInventoryMirrorService::SyncNetState(UYIInventoryComponent& Inventory)
 		Desc.BagRoleTag = Bag->BagRoleTag;
 		Desc.GridSize = Bag->GridSize;
 		Desc.ItemCount = Bag->Items.Num();
+		Desc.RuntimeRevision = Bag->RuntimeRevision;
 		Desc.ParentBagId.Invalidate();
 		Desc.ParentItemInstanceId.Invalidate();
 		Desc.bIsNestedContainer = Inventory.FindContainerParentForBag(Bag->BagId, Desc.ParentBagId, Desc.ParentItemInstanceId);
@@ -193,7 +194,12 @@ void FYIInventoryMirrorService::SyncNetState(UYIInventoryComponent& Inventory)
 	{
 		Inventory.EquippedBag->EnsureBagId();
 		Inventory.NetBagGridSize = Inventory.EquippedBag->GridSize;
+		Inventory.NetBagRevision = Inventory.EquippedBag->RuntimeRevision;
 		YIMirror_AppendNetBagItems(Inventory.EquippedBag, Inventory.NetBagItems);
+	}
+	else
+	{
+		Inventory.NetBagRevision = 0;
 	}
 
 	TSet<FGuid> MirroredContextBagIds;
@@ -216,6 +222,7 @@ void FYIInventoryMirrorService::SyncNetState(UYIInventoryComponent& Inventory)
 		FYINetBagMirrorView& Mirror = Inventory.NetContextBagMirrors.AddDefaulted_GetRef();
 		Mirror.BagId = ContextBag->BagId;
 		Mirror.GridSize = ContextBag->GridSize;
+		Mirror.RuntimeRevision = ContextBag->RuntimeRevision;
 		Mirror.Items.Reserve(ContextBag->Items.Num());
 		YIMirror_AppendNetBagItems(ContextBag, Mirror.Items);
 	}
@@ -238,6 +245,7 @@ void FYIInventoryMirrorService::OnRep_NetBag(UYIInventoryComponent& Inventory)
 	}
 
 	RebuildClientPreviewBagFromNet(Inventory, Inventory.ClientPreviewBag, Inventory.NetBagItems, Inventory.NetBagGridSize, Inventory.ActiveBagId);
+	Inventory.ClientPreviewBag->RuntimeRevision = Inventory.NetBagRevision;
 	Inventory.ClientPreviewBag->OnChanged.Broadcast();
 	Inventory.OnBagOpened.Broadcast(Inventory.ClientPreviewBag);
 }
@@ -281,6 +289,7 @@ void FYIInventoryMirrorService::OnRep_NetContextBagMirrors(UYIInventoryComponent
 		if (UYIInventoryBag* PreviewBag = FindOrCreateClientContextPreviewBagById(Inventory, Mirror.BagId))
 		{
 			RebuildClientPreviewBagFromNet(Inventory, PreviewBag, Mirror.Items, Mirror.GridSize, Mirror.BagId);
+			PreviewBag->RuntimeRevision = Mirror.RuntimeRevision;
 			PreviewBag->OnChanged.Broadcast();
 			Inventory.OnBagOpened.Broadcast(PreviewBag);
 		}
@@ -317,4 +326,3 @@ void FYIInventoryMirrorService::OnRep_LockedBagItems(UYIInventoryComponent& Inve
 		Inventory.EquippedBag->OnChanged.Broadcast();
 	}
 }
-

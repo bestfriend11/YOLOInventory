@@ -1,16 +1,39 @@
 #include "YIInventoryComponent.h"
 #include "YIInventoryBagContextService.h"
+#include "YIInventoryBootstrapService.h"
 #include "YIInventoryContainerRuntimeService.h"
+#include "YIInventoryEventBridgeService.h"
+#include "YIInventoryIdentityLockService.h"
+#include "YIInventoryItemIngressService.h"
 #include "YIInventoryMirrorService.h"
 #include "YIInventoryMutationService.h"
-#include "YIItemSchemaResolver.h"
 #include "YIInventoryBag.h"
-#include "YIItemDefinition.h"
-#include "YIItemInstanceFragmentAccess.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/Package.h"
 #include "YIItemNetTypes.h"
-#include "YIDebugLibrary.h"
+
+namespace
+{
+	static FYIInventoryOpResult YIInventory_MakeOpResultRejected(EYIInventoryOpError Error, const FYIInventoryItemRef* ItemRef = nullptr)
+	{
+		FYIInventoryOpResult Result;
+		Result.bRequestAccepted = false;
+		Result.bSucceeded = false;
+		Result.Error = Error;
+		if (ItemRef)
+		{
+			Result.AffectedBagId = ItemRef->Bag.BagId;
+			Result.AffectedItemInstanceId = ItemRef->Item.ItemInstanceId;
+		}
+		return Result;
+	}
+
+	static void YIInventory_PopulateResultIds(FYIInventoryOpResult& Result, const FYIInventoryItemRef& ItemRef)
+	{
+		Result.AffectedBagId = ItemRef.Bag.BagId;
+		Result.AffectedItemInstanceId = ItemRef.Item.ItemInstanceId;
+	}
+}
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -176,241 +199,68 @@ UYIInventoryBag* UYIInventoryComponent::GetBagByDisplayName(FName BagName) const
 	return FYIInventoryBagContextService::GetBagByDisplayName(*this, BagName);
 }
 
+int32 UYIInventoryComponent::GetBagRuntimeRevisionById(const FGuid& BagId) const
+{
+	if (UYIInventoryBag* Bag = GetBagById(BagId))
+	{
+		return Bag->RuntimeRevision;
+	}
+	return INDEX_NONE;
+}
+
 bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutIdentity) const
 {
-	OutIdentity = FYIInventoryItemRef();
-	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
-	{
-		return false;
-	}
-
-	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
-	OutIdentity.Bag.BagId = Bag->BagId;
-	OutIdentity.Item.ItemInstanceId = BagItem.Item.InstanceId;
-	OutIdentity.Item.LegacyStackKey = BagItem.Item.CustomStackKey;
-	OutIdentity.Item.ItemCode = 0;
-	if (UYIItemDefinition* Def = BagItem.Item.Definition.IsValid()
-		? BagItem.Item.Definition.Get()
-		: BagItem.Item.Definition.LoadSynchronous())
-	{
-		OutIdentity.Item.ItemCode = Def->UniqueCode;
-	}
-
-	return OutIdentity.Bag.BagId.IsValid() && (OutIdentity.Item.ItemInstanceId.IsValid() || OutIdentity.Item.LegacyStackKey != 0);
+	return FYIInventoryIdentityLockService::GetBagItemIdentity(*this, Bag, ItemIndex, OutIdentity);
 }
 
 bool UYIInventoryComponent::IsBagItemLockedByIdentity(const FYIInventoryItemRef& Identity) const
 {
-	if (!Identity.Bag.BagId.IsValid())
-	{
-		return false;
-	}
-
-	return LockedBagItems.ContainsByPredicate([&Identity](const FYIInventoryLockRef& Entry)
-	{
-		if (Entry.ItemRef.Bag.BagId != Identity.Bag.BagId)
-		{
-			return false;
-		}
-		if (Identity.Item.ItemInstanceId.IsValid() && Entry.ItemRef.Item.ItemInstanceId.IsValid())
-		{
-			return Entry.ItemRef.Item.ItemInstanceId == Identity.Item.ItemInstanceId;
-		}
-		return Identity.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == Identity.Item.LegacyStackKey;
-	});
+	return FYIInventoryIdentityLockService::IsBagItemLockedByIdentity(*this, Identity);
 }
 
 bool UYIInventoryComponent::SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked)
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || !Bag || !Bag->Items.IsValidIndex(ItemIndex))
-	{
-		return false;
-	}
-
-	Bag->EnsureBagId();
-
-	FYIBagItem& MutableItem = Bag->Items[ItemIndex];
-	if (!MutableItem.Item.InstanceId.IsValid())
-	{
-		MutableItem.Item.InstanceId = FGuid::NewGuid();
-	}
-	if (!MutableItem.Item.StackId.IsValid())
-	{
-		MutableItem.Item.StackId = FGuid::NewGuid();
-	}
-	if (MutableItem.Item.CustomStackKey == 0)
-	{
-		const int64 NewKey = (static_cast<int64>(FDateTime::UtcNow().GetTicks()) ^ static_cast<int64>(FMath::Rand())) & MAX_int64;
-		MutableItem.Item.CustomStackKey = NewKey == 0 ? 1 : NewKey;
-	}
-
-	FYIInventoryItemRef Identity;
-	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
-	{
-		return false;
-	}
-
-	return SetBagItemLockedInternal(Identity, bLocked);
+	return FYIInventoryIdentityLockService::SetBagItemLocked(*this, Bag, ItemIndex, bLocked);
 }
 
 bool UYIInventoryComponent::SetBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef, bool bLocked)
 {
-	return SetBagItemLockedInternal(ItemRef, bLocked);
+	return FYIInventoryIdentityLockService::SetBagItemLockedByCoreRef(*this, ItemRef, bLocked);
 }
 
 bool UYIInventoryComponent::GetBagItemCoreRef(UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutItemRef) const
 {
-	OutItemRef = FYIInventoryItemRef();
-
-	if (!GetBagItemIdentity(Bag, ItemIndex, OutItemRef))
-	{
-		return false;
-	}
-	return true;
+	return FYIInventoryIdentityLockService::GetBagItemCoreRef(*this, Bag, ItemIndex, OutItemRef);
 }
 
 bool UYIInventoryComponent::SetBagItemLockedInternal(const FYIInventoryItemRef& ItemRef, bool bLocked)
 {
-	if (!GetOwner() || !GetOwner()->HasAuthority() || !ItemRef.Bag.BagId.IsValid())
-	{
-		return false;
-	}
-	if (!ItemRef.Item.ItemInstanceId.IsValid() && ItemRef.Item.LegacyStackKey == 0)
-	{
-		return false;
-	}
-
-	const int32 ExistingIndex = LockedBagItems.IndexOfByPredicate([&](const FYIInventoryLockRef& Entry)
-	{
-		if (Entry.ItemRef.Bag.BagId != ItemRef.Bag.BagId)
-		{
-			return false;
-		}
-		if (ItemRef.Item.ItemInstanceId.IsValid() && Entry.ItemRef.Item.ItemInstanceId.IsValid())
-		{
-			return Entry.ItemRef.Item.ItemInstanceId == ItemRef.Item.ItemInstanceId;
-		}
-		return ItemRef.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == ItemRef.Item.LegacyStackKey;
-	});
-
-	if (bLocked)
-	{
-		if (ExistingIndex != INDEX_NONE)
-		{
-			return true;
-		}
-
-		FYIInventoryLockRef NewEntry;
-		NewEntry.ItemRef = ItemRef;
-		LockedBagItems.Add(NewEntry);
-		SyncNetState();
-		return true;
-	}
-
-	if (ExistingIndex != INDEX_NONE)
-	{
-		LockedBagItems.RemoveAt(ExistingIndex);
-		SyncNetState();
-	}
-	return true;
+	return FYIInventoryIdentityLockService::SetBagItemLockedInternal(*this, ItemRef, bLocked);
 }
 
 bool UYIInventoryComponent::IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const
 {
-	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
-	{
-		return false;
-	}
-
-	FYIInventoryItemRef Identity;
-	if (!GetBagItemIdentity(Bag, ItemIndex, Identity))
-	{
-		return false;
-	}
-
-	return IsBagItemLockedByIdentity(Identity);
+	return FYIInventoryIdentityLockService::IsBagItemLocked(*this, Bag, ItemIndex);
 }
 
 bool UYIInventoryComponent::IsBagItemLockedByCoreRef(const FYIInventoryItemRef& ItemRef) const
 {
-	return IsBagItemLockedByIdentity(ItemRef);
+	return FYIInventoryIdentityLockService::IsBagItemLockedByCoreRef(*this, ItemRef);
 }
 
 bool UYIInventoryComponent::FindItemIndexByInstanceId(const UYIInventoryBag* Bag, const FGuid& InstanceId, int32& OutIndex) const
 {
-	OutIndex = INDEX_NONE;
-	if (!Bag || !InstanceId.IsValid())
-	{
-		return false;
-	}
-
-	for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
-	{
-		if (Bag->Items[Index].Item.InstanceId == InstanceId)
-		{
-			OutIndex = Index;
-			return true;
-		}
-	}
-	return false;
+	return FYIInventoryIdentityLockService::FindItemIndexByInstanceId(*this, Bag, InstanceId, OutIndex);
 }
 
 bool UYIInventoryComponent::FindContainerParentForBag(const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId) const
 {
-	OutParentBagId.Invalidate();
-	OutParentItemInstanceId.Invalidate();
-	if (!ChildBagId.IsValid())
-	{
-		return false;
-	}
-
-	for (UYIInventoryBag* Bag : Bags)
-	{
-		if (!Bag)
-		{
-			continue;
-		}
-		Bag->EnsureBagId();
-		for (const FYIBagItem& Item : Bag->Items)
-		{
-			if (Item.Item.ContainedBagId == ChildBagId)
-			{
-				OutParentBagId = Bag->BagId;
-				OutParentItemInstanceId = Item.Item.InstanceId;
-				return true;
-			}
-		}
-	}
-	return false;
+	return FYIInventoryIdentityLockService::FindContainerParentForBag(*this, ChildBagId, OutParentBagId, OutParentItemInstanceId);
 }
 
 bool UYIInventoryComponent::IsBagDescendantOf(const FGuid& CandidateBagId, const FGuid& PotentialAncestorBagId) const
 {
-	if (!CandidateBagId.IsValid() || !PotentialAncestorBagId.IsValid())
-	{
-		return false;
-	}
-	if (CandidateBagId == PotentialAncestorBagId)
-	{
-		return true;
-	}
-
-	FGuid Current = CandidateBagId;
-	for (int32 Depth = 0; Depth < 32; ++Depth)
-	{
-		FGuid ParentBagId;
-		FGuid ParentItemId;
-		if (!FindContainerParentForBag(Current, ParentBagId, ParentItemId) || !ParentBagId.IsValid())
-		{
-			return false;
-		}
-		if (ParentBagId == PotentialAncestorBagId)
-		{
-			return true;
-		}
-		Current = ParentBagId;
-	}
-	return false;
+	return FYIInventoryIdentityLockService::IsBagDescendantOf(*this, CandidateBagId, PotentialAncestorBagId);
 }
 
 UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag)
@@ -435,119 +285,13 @@ bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 
 bool UYIInventoryComponent::AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<UYIItemDefinition> ItemDef, int32 Count)
 {
-	if (!Bag)
-	{
-		return false;
-	}
-	// Auto-clone template to avoid corrupting assets
-	if (GetOwner() && GetOwner()->HasAuthority() && IsTemplateBag(Bag))
-	{
-		Bag = CloneBagTemplate(Bag);
-		// Reopen to hook delegates
-		OpenBag(Bag);
-	}
-	if (!ItemDef.IsValid())
-	{
-		ItemDef.LoadSynchronous();
-		if (!ItemDef.IsValid())
-		{
-			return false;
-		}
-	}
-	UYIItemDefinition* Def = ItemDef.Get();
-	if (!Def) { Def = ItemDef.LoadSynchronous(); if (!Def) return false; }
-
-	FYIBagItem New;
-	New.Item.Definition = ItemDef;
-	New.Item.Count = FMath::Max(1, Count);
-	New.Size = YIItemSchema::GetDefaultSize(Def);
-	if (YIItemSchema::IsContainerItem(Def))
-	{
-		New.Item.Count = 1;
-	}
-	int32 Idx = Bag->AddBagItem(New);
-	if (Idx != INDEX_NONE && Bag->Items.IsValidIndex(Idx))
-	{
-		EnsureContainedBagForItem(Bag->Items[Idx], Bag);
-	}
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		SyncNetState();
-	}
-	return Idx != INDEX_NONE;
+	return FYIInventoryItemIngressService::AddItemToBag(*this, Bag, ItemDef, Count);
 }
 
 void UYIInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Normalize bag setup on authority so EquippedBag/Bags/OpenBag stay connected.
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		TMap<const UYIInventoryBag*, UYIInventoryBag*> RuntimeCloneMap;
-		for (int32 Index = 0; Index < Bags.Num(); ++Index)
-		{
-			UYIInventoryBag* Bag = Bags[Index];
-			if (!Bag)
-			{
-				continue;
-			}
-			if (IsTemplateBag(Bag))
-			{
-				if (UYIInventoryBag* RuntimeBag = CloneBagTemplate(Bag))
-				{
-					RuntimeCloneMap.Add(Bag, RuntimeBag);
-					Bags[Index] = RuntimeBag;
-				}
-			}
-		}
-
-		Bags.RemoveAllSwap([](UYIInventoryBag* Bag) { return Bag == nullptr; }, EAllowShrinking::No);
-
-		if (EquippedBag)
-		{
-			if (UYIInventoryBag** RuntimeFromList = RuntimeCloneMap.Find(EquippedBag))
-			{
-				EquippedBag = *RuntimeFromList;
-			}
-			else if (IsTemplateBag(EquippedBag))
-			{
-				EquippedBag = CloneBagTemplate(EquippedBag);
-			}
-		}
-
-		if (!EquippedBag)
-		{
-			EquippedBag = GetBag();
-		}
-
-		if (EquippedBag)
-		{
-			EquippedBag->EnsureBagId();
-			ActiveBagId = EquippedBag->BagId;
-			if (!Bags.Contains(EquippedBag))
-			{
-				Bags.Insert(EquippedBag, 0);
-			}
-
-			// Materialize nested runtime bags for any pre-authored container items copied from bag templates
-			// so equipped/net payloads immediately carry valid ContainedBagId values.
-			for (int32 BagIndex = 0; BagIndex < Bags.Num(); ++BagIndex)
-			{
-				UYIInventoryBag* RuntimeBag = Bags[BagIndex];
-				if (!RuntimeBag)
-				{
-					continue;
-				}
-				for (int32 ItemIndex = 0; ItemIndex < RuntimeBag->Items.Num(); ++ItemIndex)
-				{
-					EnsureContainedBagForItem(RuntimeBag->Items[ItemIndex], RuntimeBag);
-				}
-			}
-
-			OpenBag(EquippedBag); // binds events + net sync consistently
-		}
-	}
+	FYIInventoryBootstrapService::BeginPlay(*this);
 }
 
 UYIInventoryBag* UYIInventoryComponent::CloneBagTemplate(const UYIInventoryBag* TemplateBag)
@@ -618,6 +362,7 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagItems, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagGridSize, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagRevision, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, NetBagDescriptors, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagId, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UYIInventoryComponent, ActiveBagContexts, COND_OwnerOnly);
@@ -629,21 +374,7 @@ void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 
 bool UYIInventoryComponent::MoveItem(int32 Index, FIntPoint NewPos)
 {
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
-		{
-			return false;
-		}
-		if (EquippedBag && EquippedBag->MoveItem(Index, NewPos))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-	ServerMoveItem(Index, NewPos);
-	return true; // optimistic; OnRep_NetBag will update preview
+	return FYIInventoryMutationService::MoveItemInActiveBagByIndex(*this, Index, NewPos);
 }
 
 void UYIInventoryComponent::ServerMoveItem_Implementation(int32 Index, FIntPoint NewPos)
@@ -673,21 +404,7 @@ void UYIInventoryComponent::ServerMoveItemInBagAtCell_Implementation(const FGuid
 
 bool UYIInventoryComponent::RotateItem(int32 Index)
 {
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
-		{
-			return false;
-		}
-		if (EquippedBag && EquippedBag->RotateItem(Index))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-	ServerRotateItem(Index);
-	return true;
+	return FYIInventoryMutationService::RotateItemInActiveBagByIndex(*this, Index);
 }
 
 void UYIInventoryComponent::ServerRotateItem_Implementation(int32 Index)
@@ -707,93 +424,17 @@ void UYIInventoryComponent::ServerRotateItemInBag_Implementation(const FGuid& Ba
 
 int32 UYIInventoryComponent::AddBagItem(const FYIBagItem& Item)
 {
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		if (EquippedBag)
-		{
-			FYIBagItem MutableItem = Item;
-			if (UYIItemDefinition* Def = MutableItem.Item.Definition.IsValid()
-				? MutableItem.Item.Definition.Get()
-				: MutableItem.Item.Definition.LoadSynchronous())
-			{
-				if (YIItemSchema::IsContainerItem(Def))
-				{
-					MutableItem.Item.Count = 1;
-				}
-			}
-
-			if (MutableItem.Item.ContainedBagId.IsValid() &&
-				EquippedBag->BagId.IsValid() &&
-				IsBagDescendantOf(EquippedBag->BagId, MutableItem.Item.ContainedBagId))
-			{
-				return INDEX_NONE;
-			}
-
-			int32 Idx = EquippedBag->AddBagItem(MutableItem);
-			if (Idx != INDEX_NONE && EquippedBag->Items.IsValidIndex(Idx))
-			{
-				EnsureContainedBagForItem(EquippedBag->Items[Idx], EquippedBag);
-				SyncNetState();
-			}
-			return Idx;
-		}
-		return INDEX_NONE;
-	}
-	// Client: send net-safe version
-	FYIItemInstance RuntimeItem = Item.Item;
-	FYIItemInstanceNet Net;
-	Net.Definition = RuntimeItem.Definition;
-	Net.Count = RuntimeItem.Count;
-	Net.InstanceId = RuntimeItem.InstanceId;
-	Net.StackId = RuntimeItem.StackId;
-	Net.CustomStackKey = RuntimeItem.CustomStackKey;
-	Net.ContainedBagId = RuntimeItem.ContainedBagId;
-	Net.bRotated = RuntimeItem.bRotated;
-	YIItemInstanceFragments::ExportNetFragmentPayload(RuntimeItem, Net.Fragments);
-	ServerAddBagItem(Net, Item.Pos, Item.Size);
-	return 0; // optimistic dummy index; OnRep will refresh actual layout
-}
-
-static FYIItemInstance NetToFull(const FYIItemInstanceNet& Net)
-{
-	FYIItemInstance Out;
-	Out.Definition = Net.Definition;
-	Out.Count = Net.Count;
-	Out.InstanceId = Net.InstanceId.IsValid() ? Net.InstanceId : FGuid::NewGuid();
-	Out.StackId = Net.StackId.IsValid() ? Net.StackId : FGuid::NewGuid();
-	Out.CustomStackKey = Net.CustomStackKey;
-	Out.ContainedBagId = Net.ContainedBagId;
-	Out.bRotated = Net.bRotated;
-	YIItemInstanceFragments::ImportNetFragmentPayload(Out, Net.Fragments);
-	return Out;
+	return FYIInventoryItemIngressService::AddBagItem(*this, Item);
 }
 
 void UYIInventoryComponent::ServerAddBagItem_Implementation(const FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size)
 {
-	FYIBagItem Item;
-	Item.Item = NetToFull(NetItem);
-	Item.Pos = Pos;
-	Item.Size = Size;
-	AddBagItem(Item);
+	FYIInventoryItemIngressService::ServerAddBagItem(*this, NetItem, Pos, Size);
 }
 
 bool UYIInventoryComponent::RemoveItem(int32 Index)
 {
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		if (EquippedBag && IsBagItemLocked(EquippedBag, Index))
-		{
-			return false;
-		}
-		if (EquippedBag && EquippedBag->RemoveItem(Index))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-	ServerRemoveItem(Index);
-	return true;
+	return FYIInventoryMutationService::RemoveItemFromActiveBagByIndex(*this, Index);
 }
 
 bool UYIInventoryComponent::RemoveItemFromBag(const FGuid& BagId, const FGuid& ItemInstanceId)
@@ -886,104 +527,234 @@ void UYIInventoryComponent::ServerSplitStackInBag_Implementation(
 	SplitStackInBag(BagId, ItemInstanceId, Amount, DesiredPos);
 }
 
+FYIInventoryOpResult UYIInventoryComponent::RequestMoveItem(const FYIInventoryMoveItemRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+
+	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		GetOwner() && GetOwner()->HasAuthority() &&
+		Result.SourceBagRevision != INDEX_NONE &&
+		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+	{
+		Result.Error = EYIInventoryOpError::RevisionMismatch;
+		return Result;
+	}
+
+	const bool bOpResult = Request.bUseExactCell
+		? MoveItemInBagAtCell(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.TargetCell, Request.bAllowSingleOverlapSwap)
+		: MoveItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.TargetCell);
+
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	return Result;
+}
+
+FYIInventoryOpResult UYIInventoryComponent::RequestRotateItem(const FYIInventoryRotateItemRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		GetOwner() && GetOwner()->HasAuthority() &&
+		Result.SourceBagRevision != INDEX_NONE &&
+		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+	{
+		Result.Error = EYIInventoryOpError::RevisionMismatch;
+		return Result;
+	}
+
+	const bool bOpResult = RotateItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	return Result;
+}
+
+FYIInventoryOpResult UYIInventoryComponent::RequestRemoveItem(const FYIInventoryRemoveItemRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		GetOwner() && GetOwner()->HasAuthority() &&
+		Result.SourceBagRevision != INDEX_NONE &&
+		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+	{
+		Result.Error = EYIInventoryOpError::RevisionMismatch;
+		return Result;
+	}
+
+	const bool bOpResult = RemoveItemFromBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	return Result;
+}
+
+FYIInventoryOpResult UYIInventoryComponent::RequestTransferItem(const FYIInventoryTransferItemRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid() || !Request.DestBagId.IsValid())
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.DestBagRevision = GetBagRuntimeRevisionById(Request.DestBagId);
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+			Result.SourceBagRevision != INDEX_NONE &&
+			Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+		{
+			Result.Error = EYIInventoryOpError::RevisionMismatch;
+			return Result;
+		}
+		if (Request.ExpectedDestBagRevision != INDEX_NONE &&
+			Result.DestBagRevision != INDEX_NONE &&
+			Result.DestBagRevision != Request.ExpectedDestBagRevision)
+		{
+			Result.Error = EYIInventoryOpError::RevisionMismatch;
+			return Result;
+		}
+	}
+
+	bool bOpResult = false;
+	if (Request.bUseExactCell)
+	{
+		bOpResult = TransferItemBetweenBagsAtCellById(
+			Request.ItemRef.Bag.BagId,
+			Request.ItemRef.Item.ItemInstanceId,
+			Request.DestBagId,
+			Request.DestCell,
+			Request.Count,
+			Request.bAllowSingleOverlapSwap);
+	}
+	else
+	{
+		int32 IgnoredDestIndex = INDEX_NONE;
+		bOpResult = TransferItemBetweenBagsById(
+			Request.ItemRef.Bag.BagId,
+			Request.ItemRef.Item.ItemInstanceId,
+			Request.DestBagId,
+			Request.Count,
+			IgnoredDestIndex);
+	}
+
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	Result.DestBagRevision = GetBagRuntimeRevisionById(Request.DestBagId);
+	return Result;
+}
+
+FYIInventoryOpResult UYIInventoryComponent::RequestSplitStack(const FYIInventorySplitStackRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid() || Request.Amount <= 0)
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRequest, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		GetOwner() && GetOwner()->HasAuthority() &&
+		Result.SourceBagRevision != INDEX_NONE &&
+		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+	{
+		Result.Error = EYIInventoryOpError::RevisionMismatch;
+		return Result;
+	}
+
+	const bool bOpResult = SplitStackInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId, Request.Amount, Request.DesiredPos);
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	return Result;
+}
+
+FYIInventoryOpResult UYIInventoryComponent::RequestCombineItem(const FYIInventoryCombineItemRequest& Request)
+{
+	if (!Request.ItemRef.Bag.BagId.IsValid() || !Request.ItemRef.Item.ItemInstanceId.IsValid())
+	{
+		return YIInventory_MakeOpResultRejected(EYIInventoryOpError::InvalidRef, &Request.ItemRef);
+	}
+
+	FYIInventoryOpResult Result;
+	YIInventory_PopulateResultIds(Result, Request.ItemRef);
+	Result.TransactionId = FGuid::NewGuid();
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
+		GetOwner() && GetOwner()->HasAuthority() &&
+		Result.SourceBagRevision != INDEX_NONE &&
+		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
+	{
+		Result.Error = EYIInventoryOpError::RevisionMismatch;
+		return Result;
+	}
+
+	const bool bOpResult = CombineItemInBag(Request.ItemRef.Bag.BagId, Request.ItemRef.Item.ItemInstanceId);
+	Result.bRequestAccepted = bOpResult;
+	Result.bSucceeded = bOpResult && (!GetOwner() || GetOwner()->HasAuthority());
+	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
+	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	return Result;
+}
+
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)
 {
-	OnInventoryItemAdded.Broadcast(EquippedBag, Index, Item);
-	UYIDebugLibrary::EmitDebugMessage(
-		this,
-		EYIDebugChannel::Inventory,
-		FString::Printf(TEXT("Added idx=%d count=%d"), Index, Item.Item.Count),
-		FLinearColor(FColor::Green),
-		bDebugInventoryActions,
-		bDebugInventoryActions,
-		2.0f,
-		false,
-		false,
-		TEXT("InventoryComponent"));
+	FYIInventoryEventBridgeService::HandleBagItemAdded(*this, Index, Item);
 }
 
 void UYIInventoryComponent::HandleBagItemRemoved(int32 Index, FYIBagItem Item)
 {
-	if (EquippedBag && EquippedBag->BagId.IsValid())
-	{
-		const int32 Removed = LockedBagItems.RemoveAllSwap([this, &Item](const FYIInventoryLockRef& Entry)
-		{
-			if (!EquippedBag || Entry.ItemRef.Bag.BagId != EquippedBag->BagId)
-			{
-				return false;
-			}
-			if (Entry.ItemRef.Item.ItemInstanceId.IsValid() && Item.Item.InstanceId.IsValid())
-			{
-				return Entry.ItemRef.Item.ItemInstanceId == Item.Item.InstanceId;
-			}
-			return Entry.ItemRef.Item.LegacyStackKey != 0 && Entry.ItemRef.Item.LegacyStackKey == Item.Item.CustomStackKey;
-		}, EAllowShrinking::No);
-		if (Removed > 0 && GetOwner() && GetOwner()->HasAuthority())
-		{
-			SyncNetState();
-		}
-	}
-
-	OnInventoryItemRemoved.Broadcast(EquippedBag, Index, Item);
-	UYIDebugLibrary::EmitDebugMessage(
-		this,
-		EYIDebugChannel::Inventory,
-		FString::Printf(TEXT("Removed idx=%d"), Index),
-		FLinearColor(FColor::Orange),
-		bDebugInventoryActions,
-		bDebugInventoryActions,
-		2.0f,
-		false,
-		false,
-		TEXT("InventoryComponent"));
+	FYIInventoryEventBridgeService::HandleBagItemRemoved(*this, Index, Item);
 }
 
 void UYIInventoryComponent::HandleBagItemMoved(int32 Index, FIntPoint NewPos)
 {
-	OnInventoryItemMoved.Broadcast(EquippedBag, Index, NewPos);
-	UYIDebugLibrary::EmitDebugMessage(
-		this,
-		EYIDebugChannel::Inventory,
-		FString::Printf(TEXT("Moved idx=%d to (%d,%d)"), Index, NewPos.X, NewPos.Y),
-		FLinearColor(FColor::Cyan),
-		bDebugInventoryActions,
-		bDebugInventoryActions,
-		2.0f,
-		false,
-		false,
-		TEXT("InventoryComponent"));
+	FYIInventoryEventBridgeService::HandleBagItemMoved(*this, Index, NewPos);
 }
 
 void UYIInventoryComponent::HandleBagItemRotated(int32 Index)
 {
-	OnInventoryItemRotated.Broadcast(EquippedBag, Index);
-	UYIDebugLibrary::EmitDebugMessage(
-		this,
-		EYIDebugChannel::Inventory,
-		FString::Printf(TEXT("Rotated idx=%d"), Index),
-		FLinearColor(FColor::Yellow),
-		bDebugInventoryActions,
-		bDebugInventoryActions,
-		2.0f,
-		false,
-		false,
-		TEXT("InventoryComponent"));
+	FYIInventoryEventBridgeService::HandleBagItemRotated(*this, Index);
 }
 
 void UYIInventoryComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx)
 {
-	OnInventoryItemTransferred.Broadcast(Src, Dest, SrcIdx, DestIdx);
-	UYIDebugLibrary::EmitDebugMessage(
-		this,
-		EYIDebugChannel::Inventory,
-		FString::Printf(TEXT("Transfer %p:%d -> %p:%d"), Src, SrcIdx, Dest, DestIdx),
-		FLinearColor(FColor::White),
-		bDebugInventoryActions,
-		bDebugInventoryActions,
-		2.0f,
-		false,
-		false,
-		TEXT("InventoryComponent"));
+	FYIInventoryEventBridgeService::HandleBagItemTransferred(*this, Src, Dest, SrcIdx, DestIdx);
 }
 
 // -------- UI helpers --------

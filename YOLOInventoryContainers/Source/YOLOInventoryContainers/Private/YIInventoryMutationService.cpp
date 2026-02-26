@@ -65,6 +65,26 @@ namespace
 	}
 }
 
+bool FYIInventoryMutationService::MoveItemInActiveBagByIndex(UYIInventoryComponent& Inventory, int32 Index, FIntPoint NewPos)
+{
+	if (Inventory.GetOwner() && Inventory.GetOwner()->HasAuthority())
+	{
+		if (Inventory.EquippedBag && Inventory.IsBagItemLocked(Inventory.EquippedBag, Index))
+		{
+			return false;
+		}
+		if (Inventory.EquippedBag && Inventory.EquippedBag->MoveItem(Index, NewPos))
+		{
+			Inventory.SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	Inventory.ServerMoveItem(Index, NewPos);
+	return true;
+}
+
 bool FYIInventoryMutationService::MoveItemInBag(UYIInventoryComponent& Inventory, const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos)
 {
 	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
@@ -208,6 +228,26 @@ bool FYIInventoryMutationService::MoveItemInBagAtCell(UYIInventoryComponent& Inv
 	return true;
 }
 
+bool FYIInventoryMutationService::RotateItemInActiveBagByIndex(UYIInventoryComponent& Inventory, int32 Index)
+{
+	if (Inventory.GetOwner() && Inventory.GetOwner()->HasAuthority())
+	{
+		if (Inventory.EquippedBag && Inventory.IsBagItemLocked(Inventory.EquippedBag, Index))
+		{
+			return false;
+		}
+		if (Inventory.EquippedBag && Inventory.EquippedBag->RotateItem(Index))
+		{
+			Inventory.SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	Inventory.ServerRotateItem(Index);
+	return true;
+}
+
 bool FYIInventoryMutationService::RotateItemInBag(UYIInventoryComponent& Inventory, const FGuid& BagId, const FGuid& ItemInstanceId)
 {
 	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
@@ -241,6 +281,26 @@ bool FYIInventoryMutationService::RotateItemInBag(UYIInventoryComponent& Invento
 	}
 
 	Inventory.ServerRotateItemInBag(BagId, ItemInstanceId);
+	return true;
+}
+
+bool FYIInventoryMutationService::RemoveItemFromActiveBagByIndex(UYIInventoryComponent& Inventory, int32 Index)
+{
+	if (Inventory.GetOwner() && Inventory.GetOwner()->HasAuthority())
+	{
+		if (Inventory.EquippedBag && Inventory.IsBagItemLocked(Inventory.EquippedBag, Index))
+		{
+			return false;
+		}
+		if (Inventory.EquippedBag && Inventory.EquippedBag->RemoveItem(Index))
+		{
+			Inventory.SyncNetState();
+			return true;
+		}
+		return false;
+	}
+
+	Inventory.ServerRemoveItem(Index);
 	return true;
 }
 
@@ -615,4 +675,3 @@ bool FYIInventoryMutationService::SplitStackInBag(UYIInventoryComponent& Invento
 	Inventory.ServerSplitStackInBag(BagId, ItemInstanceId, Amount, DesiredPos);
 	return true;
 }
-

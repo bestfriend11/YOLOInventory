@@ -2,81 +2,24 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
+#include "YIInventoryApiTypes.h"
 #include "YIInventoryCoreTypes.h"
+#include "YIInventoryContextTypes.h"
+#include "YIInventoryEventTypes.h"
 #include "YIItemNetTypes.h"
+#include "YIInventoryReplicationTypes.h"
 #include "UObject/SoftObjectPtr.h"
 #include "YIInventoryComponent.generated.h"
 
 class UYIInventoryBag;
 struct FYIInventoryContainerRuntimeService;
 struct FYIInventoryBagContextService;
+struct FYIInventoryBootstrapService;
+struct FYIInventoryItemIngressService;
+struct FYIInventoryIdentityLockService;
+struct FYIInventoryEventBridgeService;
 struct FYIInventoryMirrorService;
 struct FYIInventoryMutationService;
-
-USTRUCT(BlueprintType)
-struct YOLOINVENTORYCONTAINERS_API FYINetBagDescriptor
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid BagId;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FText DisplayName;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGameplayTag BagRoleTag;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FIntPoint GridSize = FIntPoint(0, 0);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	int32 ItemCount = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid ParentBagId;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid ParentItemInstanceId;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	bool bIsNestedContainer = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	bool bIsActive = false;
-};
-
-USTRUCT(BlueprintType)
-struct YOLOINVENTORYCONTAINERS_API FYIActiveBagContextEntry
-{
-	GENERATED_BODY()
-
-	/** Semantic UI/gameplay context tag (for example UI.Context.Secondary, UI.Context.CraftingSource). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGameplayTag ContextTag;
-
-	/** Runtime bag currently assigned to this context. Owner-only replicated. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid BagId;
-};
-
-USTRUCT(BlueprintType)
-struct YOLOINVENTORYCONTAINERS_API FYINetBagMirrorView
-{
-	GENERATED_BODY()
-
-	/** Bag identity this mirror payload represents. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FGuid BagId;
-
-	/** Lightweight UI grid size for the mirrored bag. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	FIntPoint GridSize = FIntPoint::ZeroValue;
-
-	/** Minimal item payloads for the mirrored bag. Owner-only replicated. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
-	TArray<FYINetBagItem> Items;
-};
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORYCONTAINERS_API UYIInventoryComponent : public UActorComponent
@@ -93,15 +36,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Inventory", meta=(ToolTip="Runtime bags owned by this component. Mutate on server for authoritative gameplay state."))
 	TArray<TObjectPtr<UYIInventoryBag>> Bags;
 
-	// Events
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBagOpened, UYIInventoryBag*, Bag);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBagClosed, UYIInventoryBag*, Bag);
-
 	UPROPERTY(BlueprintAssignable, Category="Inventory", meta=(ToolTip="Fires when a bag becomes active/open on this instance."))
-	FOnBagOpened OnBagOpened;
+	FYIOnInventoryBagOpened OnBagOpened;
 
 	UPROPERTY(BlueprintAssignable, Category="Inventory", meta=(ToolTip="Fires when an active bag is closed on this instance."))
-	FOnBagClosed OnBagClosed;
+	FYIOnInventoryBagClosed OnBagClosed;
 
 	// Create a new bag (owned by this component)
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Create a runtime bag owned by this component.\nArgs:\n- BagName: display/name identifier.\n- GridSize: columns/rows.\nReturns created bag or null."))
@@ -129,6 +68,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Replicated active bag id for owner UI context wiring."))
 	FGuid GetActiveBagId() const { return ActiveBagId; }
+
+	UFUNCTION(BlueprintPure, Category="Inventory", meta=(ToolTip="Current runtime revision for a bag (authoritative on server, mirrored for client previews when available). Returns INDEX_NONE when bag is missing."))
+	int32 GetBagRuntimeRevisionById(const FGuid& BagId) const;
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Context", meta=(ToolTip="Resolve owner-replicated active bag id for a semantic context tag (for example UI.Context.Secondary)."))
 	FGuid GetActiveContextBagId(FGameplayTag ContextTag) const;
@@ -178,7 +120,7 @@ public:
 	bool RemoveBag(UYIInventoryBag* Bag);
 
 	/** Runtime lock used by keep-in-inventory equip mode. Locked items cannot be moved/rotated/removed. */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by bag+index.\nLocked items cannot be moved/rotated/removed."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(DeprecatedFunction, DeprecationMessage="Use SetBagItemLockedByCoreRef (build ref with UYIInventoryCommandLibrary::BuildItemRef / BuildActiveBagItemRef / BuildContextBagItemRef).", ToolTip="Legacy convenience lock/unlock by bag+index.\nPrefer canonical item refs to avoid index drift bugs."))
 	bool SetBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex, bool bLocked);
 
 	UFUNCTION(BlueprintCallable, Category="Inventory|Equipment", meta=(ToolTip="Lock/unlock item by canonical core identity reference (Bag + Item handles)."))
@@ -187,7 +129,7 @@ public:
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Build canonical core item reference for a bag item index.\nReturns false when bag/index is invalid or identity cannot be resolved."))
 	bool GetBagItemCoreRef(UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutItemRef) const;
 
-	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified item is currently lock-protected."))
+	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(DeprecatedFunction, DeprecationMessage="Use IsBagItemLockedByCoreRef (build ref with UYIInventoryCommandLibrary helpers).", ToolTip="Legacy convenience lock query by bag+index.\nPrefer canonical item refs to avoid index drift bugs."))
 	bool IsBagItemLocked(UYIInventoryBag* Bag, int32 ItemIndex) const;
 
 	UFUNCTION(BlueprintPure, Category="Inventory|Equipment", meta=(ToolTip="Returns true when specified canonical item ref is currently lock-protected."))
@@ -197,7 +139,7 @@ public:
 	void SyncNetState();
 
 	// --------- Authority-safe inventory mutations (RPC-backed) ----------
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Move item within active bag.\nClient calls forward to ServerMoveItem RPC."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use explicit bag-targeted APIs (MoveItemInBag/MoveItemInBagAtCell) or UYIInventoryCommandLibrary::MoveItemByRef.", ToolTip="Legacy convenience move in active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
 	bool MoveItem(int32 Index, FIntPoint NewPos);
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItem(int32 Index, FIntPoint NewPos);
@@ -214,7 +156,7 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerMoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Rotate item in active bag.\nClient calls forward to ServerRotateItem RPC."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use RotateItemInBag or UYIInventoryCommandLibrary::RotateItemByRef.", ToolTip="Legacy convenience rotate in active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
 	bool RotateItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRotateItem(int32 Index);
@@ -226,12 +168,12 @@ public:
 	void ServerRotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId);
 
 	/** Add an already-built bag item (e.g., from drag/drop). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Add an already-built bag item into active bag.\nClient calls forward to ServerAddBagItem RPC.\nReturns inserted index or INDEX_NONE."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="UI/internal convenience. Prefer AddItemToBag (definitions) or explicit transfer commands. For runtime item identity-safe flows, use bag-targeted commands.", ToolTip="Legacy convenience add of a prebuilt bag item into the active bag.\nPrimarily used by internal UI drag flows."))
 	int32 AddBagItem(const FYIBagItem& Item);
 	UFUNCTION(Server, Reliable)
 	void ServerAddBagItem(const struct FYIItemInstanceNet& NetItem, FIntPoint Pos, FIntPoint Size);
 
-	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(ToolTip="Remove item by index from active bag.\nClient calls forward to ServerRemoveItem RPC."))
+	UFUNCTION(BlueprintCallable, Category="Inventory|Net", meta=(DeprecatedFunction, DeprecationMessage="Use RemoveItemFromBag or UYIInventoryCommandLibrary::RemoveItemByRef.", ToolTip="Legacy convenience remove from active bag by index.\nPrefer canonical item refs / bag-targeted commands to avoid index drift bugs."))
 	bool RemoveItem(int32 Index);
 	UFUNCTION(Server, Reliable)
 	void ServerRemoveItem(int32 Index);
@@ -272,6 +214,25 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerSplitStackInBag(const FGuid& BagId, const FGuid& ItemInstanceId, int32 Amount, FIntPoint DesiredPos);
 
+	// --------- Standardized request/result API (suite-wide contract) ----------
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: move item using canonical item ref. Returns standardized request/result envelope."))
+	FYIInventoryOpResult RequestMoveItem(const FYIInventoryMoveItemRequest& Request);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: rotate item using canonical item ref. Returns standardized request/result envelope."))
+	FYIInventoryOpResult RequestRotateItem(const FYIInventoryRotateItemRequest& Request);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: remove item using canonical item ref. Returns standardized request/result envelope."))
+	FYIInventoryOpResult RequestRemoveItem(const FYIInventoryRemoveItemRequest& Request);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: transfer item between bags using canonical item ref. Supports exact-cell transfer/swap when requested."))
+	FYIInventoryOpResult RequestTransferItem(const FYIInventoryTransferItemRequest& Request);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: split stack using canonical item ref."))
+	FYIInventoryOpResult RequestSplitStack(const FYIInventorySplitStackRequest& Request);
+
+	UFUNCTION(BlueprintCallable, Category="Inventory|Commands", meta=(ToolTip="Standard request API: combine stack using canonical item ref."))
+	FYIInventoryOpResult RequestCombineItem(const FYIInventoryCombineItemRequest& Request);
+
 	UFUNCTION(Server, Reliable)
 	void ServerSetActiveBagById(const FGuid& InBagId);
 
@@ -299,23 +260,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Debug", meta=(ToolTip="Enable runtime debug prints for inventory actions."))
 	bool bDebugInventoryActions = false;
 
-	// -------- Inventory action delegates (designer-friendly) ----------
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemAdded, UYIInventoryBag*, Bag, int32, Index, FYIBagItem, Item);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemRemoved, UYIInventoryBag*, Bag, int32, Index, FYIBagItem, Item);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnInventoryItemMoved, UYIInventoryBag*, Bag, int32, Index, FIntPoint, NewPos);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnInventoryItemRotated, UYIInventoryBag*, Bag, int32, Index);
-	DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnInventoryItemTransferred, UYIInventoryBag*, Source, UYIInventoryBag*, Dest, int32, SourceIndex, int32, DestIndex);
-
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is added to bag on this instance."))
-	FOnInventoryItemAdded OnInventoryItemAdded;
+	FYIOnInventoryItemAdded OnInventoryItemAdded;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is removed from bag on this instance."))
-	FOnInventoryItemRemoved OnInventoryItemRemoved;
+	FYIOnInventoryItemRemoved OnInventoryItemRemoved;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item position changes in bag on this instance."))
-	FOnInventoryItemMoved OnInventoryItemMoved;
+	FYIOnInventoryItemMoved OnInventoryItemMoved;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item is rotated in bag on this instance."))
-	FOnInventoryItemRotated OnInventoryItemRotated;
+	FYIOnInventoryItemRotated OnInventoryItemRotated;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item transfers between bags."))
-	FOnInventoryItemTransferred OnInventoryItemTransferred;
+	FYIOnInventoryItemTransferred OnInventoryItemTransferred;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -325,6 +279,8 @@ protected:
 	TArray<FYINetBagItem> NetBagItems;
 	UPROPERTY(Replicated, Transient)
 	FIntPoint NetBagGridSize = FIntPoint(0, 0);
+	UPROPERTY(Replicated, Transient)
+	int32 NetBagRevision = 0;
 	UPROPERTY(ReplicatedUsing=OnRep_NetBagDescriptors, Transient)
 	TArray<FYINetBagDescriptor> NetBagDescriptors;
 	UPROPERTY(ReplicatedUsing=OnRep_ActiveBagContexts, Transient)
@@ -358,6 +314,10 @@ protected:
 private:
 	friend struct FYIInventoryContainerRuntimeService;
 	friend struct FYIInventoryBagContextService;
+	friend struct FYIInventoryBootstrapService;
+	friend struct FYIInventoryItemIngressService;
+	friend struct FYIInventoryIdentityLockService;
+	friend struct FYIInventoryEventBridgeService;
 	friend struct FYIInventoryMirrorService;
 	friend struct FYIInventoryMutationService;
 
