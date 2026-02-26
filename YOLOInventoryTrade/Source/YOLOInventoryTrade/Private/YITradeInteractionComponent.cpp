@@ -254,7 +254,7 @@ FYITradeOpResult UYITradeInteractionComponent::RequestTradeEx(const FYITradeOpen
 		return Accepted;
 	}
 
-	Server_RequestTrade_Implementation(Request.Target, Request.bTargetIsNPC); // authority path uses existing logic
+	Server_RequestTradeEx_Implementation(Request);
 	return Accepted;
 }
 
@@ -277,8 +277,8 @@ FYITradeOpResult UYITradeInteractionComponent::RequestTradeTransferEx(const FYIT
 		Server_RequestTradeTransferEx(Request);
 		return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
 	}
-	Server_TransferItem_Implementation(Request.FromSide, Request.ToSide, Request.SourceIndex, Request.DestPos, Request.Count);
-	return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, true, EYITradeOpError::None, FText::GetEmpty());
+	Server_RequestTradeTransferEx_Implementation(Request);
+	return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
 }
 
 FYIShopOpResult UYITradeInteractionComponent::RequestShopOpenEx(const FYIShopOpenRequest& InRequest)
@@ -686,8 +686,17 @@ void UYITradeInteractionComponent::Server_RequestTradeTransferEx_Implementation(
 		return;
 	}
 	Result.bRequestAccepted = true;
-	Result.bSucceeded = true;
-	Server_TransferItem_Implementation(Request.FromSide, Request.ToSide, Request.SourceIndex, Request.DestPos, Request.Count);
+	FText TransferError;
+	Result.bSucceeded = CurrentSession->TryTransferItemBetweenSides(Request.FromSide, Request.ToSide, Request.SourceIndex, Request.DestPos, Request.Count, TransferError);
+	if (!Result.bSucceeded)
+	{
+		Result.Error = EYITradeOpError::ValidationFailed;
+		Result.Message = TransferError.IsEmpty() ? NSLOCTEXT("YOLOInventory", "Trade_TransferFailed", "Trade transfer failed") : TransferError;
+	}
+	else
+	{
+		Result.Error = EYITradeOpError::None;
+	}
 	Client_TradeOpResult(Result);
 }
 
@@ -922,9 +931,9 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
             BoundSession->OnTradeFailed.RemoveAll(this);
         }
         BoundSession = CurrentSession;
-        CurrentSession->OnTradeCancelled.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
-        CurrentSession->OnTradeCommitted.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
-        CurrentSession->OnTradeFailed.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeEnded);
+        CurrentSession->OnTradeCancelled.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeCancelled);
+        CurrentSession->OnTradeCommitted.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeCommittedSession);
+        CurrentSession->OnTradeFailed.AddDynamic(this, &UYITradeInteractionComponent::HandleTradeFailedSession);
         SetComponentTickEnabled(true);
 
 		if (bAutoShowWidget && GetOwningPC() && GetOwningPC()->IsLocalController())
@@ -1144,7 +1153,30 @@ void UYITradeInteractionComponent::CloseShopLocal()
     }
 }
 
-void UYITradeInteractionComponent::HandleTradeEnded()
+void UYITradeInteractionComponent::HandleTradeCancelled()
 {
-    CloseTradeLocal(false);
+	FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Close, FGuid(), true, true, EYITradeOpError::None,
+		NSLOCTEXT("YOLOInventory", "Trade_Cancelled", "Trade cancelled"));
+	OnTradeOpResultReceived.Broadcast(Result);
+	CloseTradeLocal(false);
+}
+
+void UYITradeInteractionComponent::HandleTradeCommittedSession()
+{
+	FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Commit, FGuid(), true, true, EYITradeOpError::None,
+		NSLOCTEXT("YOLOInventory", "Trade_Committed", "Trade committed"));
+	OnTradeOpResultReceived.Broadcast(Result);
+	CloseTradeLocal(false);
+}
+
+void UYITradeInteractionComponent::HandleTradeFailedSession()
+{
+	FText Reason = BoundSession.IsValid() ? BoundSession->GetLastFailureReason() : FText();
+	if (Reason.IsEmpty())
+	{
+		Reason = NSLOCTEXT("YOLOInventory", "Trade_Failed", "Trade failed");
+	}
+	FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Commit, FGuid(), true, false, EYITradeOpError::ValidationFailed, Reason);
+	OnTradeOpResultReceived.Broadcast(Result);
+	CloseTradeLocal(false);
 }

@@ -67,7 +67,13 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 				if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 				{
 					const int32 BuyCount = FMath::Max(1, DraggedItem.Item.Count);
-					TradeComp->RequestShopBuy(ActiveShopComponent, SourceIndex, BuyCount, DestOwnerComp, DestCell);
+					FYIShopBuyRequest Req;
+					Req.Shop = ActiveShopComponent;
+					Req.StockIndex = SourceIndex;
+					Req.Count = BuyCount;
+					Req.BuyerInv = DestOwnerComp;
+					Req.DestPos = DestCell;
+					TradeComp->RequestShopBuyEx(Req);
 					return EYIInventoryGridExternalOpResult::HandledSucceeded;
 				}
 			}
@@ -88,7 +94,12 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 				{
 					UYIInventoryComponent* ShopSourceComp = SourceGrid->Bag ? SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
 					const int32 SellCount = FMath::Max(1, DraggedItem.Item.Count);
-					TradeComp->RequestShopSell(ActiveShopComponent, SourceIndex, SellCount, ShopSourceComp);
+					FYIShopSellRequest Req;
+					Req.Shop = ActiveShopComponent;
+					Req.SourceIndex = SourceIndex;
+					Req.Count = SellCount;
+					Req.SellerInv = ShopSourceComp;
+					TradeComp->RequestShopSellEx(Req);
 					return EYIInventoryGridExternalOpResult::HandledSucceeded;
 				}
 			}
@@ -104,13 +115,6 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 		SourceAdapter->ActiveTradeSession == ActiveTradeSession &&
 		SourceAdapter->bHasTradeSide && bHasTradeSide && SourceIndex != INDEX_NONE)
 	{
-		UYIInventoryComponent* DestOwnerComp = DestGrid->Bag ? DestGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
-		if (DestOwnerComp && DestOwnerComp->GetOwner() && DestOwnerComp->GetOwner()->HasAuthority())
-		{
-			ActiveTradeSession->ServerTransferItemBetweenSides(SourceAdapter->TradeSide, TradeSide, SourceIndex, DestCell, 0);
-			return EYIInventoryGridExternalOpResult::HandledSucceeded;
-		}
-
 		APlayerController* PC = DestGrid->GetOwningPlayer();
 		if (!PC && DestGrid->GetWorld())
 		{
@@ -120,7 +124,13 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 		{
 			if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 			{
-				TradeComp->RequestTradeTransfer(SourceAdapter->TradeSide, TradeSide, SourceIndex, DestCell, 0);
+				FYITradeTransferRequest Req;
+				Req.FromSide = SourceAdapter->TradeSide;
+				Req.ToSide = TradeSide;
+				Req.SourceIndex = SourceIndex;
+				Req.DestPos = DestCell;
+				Req.Count = 0;
+				TradeComp->RequestTradeTransferEx(Req);
 				return EYIInventoryGridExternalOpResult::HandledSucceeded;
 			}
 		}
@@ -152,8 +162,26 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleTrans
 		const FIntPoint DestCell = (DestGrid->SelectedCell.X >= 0 && DestGrid->SelectedCell.Y >= 0)
 			? DestGrid->SelectedCell
 			: FIntPoint(0, 0);
-		ActiveTradeSession->ServerTransferItemBetweenSides(TradeSide, DestAdapter->TradeSide, SourceIndex, DestCell, Count);
-		return EYIInventoryGridExternalOpResult::HandledSucceeded;
+		APlayerController* PC = SourceGrid->GetOwningPlayer();
+		if (!PC && SourceGrid->GetWorld())
+		{
+			PC = UGameplayStatics::GetPlayerController(SourceGrid->GetWorld(), 0);
+		}
+		if (PC)
+		{
+			if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
+			{
+				FYITradeTransferRequest Req;
+				Req.FromSide = TradeSide;
+				Req.ToSide = DestAdapter->TradeSide;
+				Req.SourceIndex = SourceIndex;
+				Req.DestPos = DestCell;
+				Req.Count = Count;
+				TradeComp->RequestTradeTransferEx(Req);
+				return EYIInventoryGridExternalOpResult::HandledSucceeded;
+			}
+		}
+		return EYIInventoryGridExternalOpResult::HandledFailed;
 	}
 
 	return EYIInventoryGridExternalOpResult::NotHandled;
@@ -167,7 +195,16 @@ bool UYIInventoryGridGameplayAdapter::TryEquipItemFromInventory(
 {
 	if (UYIEquipmentComponent* EquipmentComponent = Cast<UYIEquipmentComponent>(EquipmentContextObject))
 	{
-		return SourceInventory && EquipmentComponent->EquipFromInventory(SourceInventory, SourceIndex, RequestedSlotTag);
+		if (!SourceInventory)
+		{
+			return false;
+		}
+		FYIEquipFromInventoryRequest Req;
+		Req.SourceInventory = SourceInventory;
+		Req.SourceIndex = SourceIndex;
+		Req.RequestedSlotTag = RequestedSlotTag;
+		const FYIEquipmentOpResult Result = EquipmentComponent->RequestEquip(Req);
+		return (EquipmentComponent->GetOwner() && EquipmentComponent->GetOwner()->HasAuthority()) ? Result.bSucceeded : Result.bRequestAccepted;
 	}
 	return false;
 }

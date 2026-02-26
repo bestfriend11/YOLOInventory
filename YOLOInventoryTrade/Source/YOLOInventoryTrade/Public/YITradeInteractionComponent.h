@@ -27,9 +27,6 @@ public:
     UYITradeInteractionComponent();
 
     /** Client call: asks the server to start a trade with Target. bTargetIsNPC=true if Target is an NPC pawn. */
-    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade", meta=(ToolTip="Client entry point to request a trade.\nArgs:\n- Target: other actor (player or NPC).\n- bTargetIsNPC: true when target is NPC/shop character.\nValidation runs locally then server-side."))
-    void RequestTrade(AActor* Target, bool bTargetIsNPC);
-
     /** Optional Blueprint/CPP hook to accept or reject a trade request before it is sent to the server. Return false to block. */
     UFUNCTION(BlueprintNativeEvent, Category="YOLOInventory|Trade", meta=(ToolTip="Local preflight hook before request is sent to server.\nReturn false to block request UI-side."))
     bool ValidateTradeRequest(AActor* Target, bool bTargetIsNPC) const;
@@ -57,9 +54,6 @@ public:
     FOnTradeOpResultReceived OnTradeOpResultReceived;
 
     /** Client call: request a server-authoritative item transfer during an active trade session. */
-    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade", meta=(ToolTip="Client request for secure trade transfer in active session.\nArgs:\n- FromSide/ToSide: transfer direction.\n- SourceIndex: source slot index.\n- DestPos: destination cell.\n- Count: stack count (0=default/full item behavior)."))
-    void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
-
     /** Standardized request/result contract for opening a trade session. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
     FYITradeOpResult RequestTradeEx(const FYITradeOpenRequest& Request);
@@ -69,9 +63,6 @@ public:
     FYITradeOpResult RequestTradeTransferEx(const FYITradeTransferRequest& Request);
 
     /** Client call: request shop stock for a given shop component. */
-    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop", meta=(ToolTip="Client entry point to request shop stock snapshot from server."))
-    void RequestShop(UYIShopComponent* Shop);
-
     /** Optional Blueprint/CPP hook to accept or reject a shop request before it is sent to the server. */
     UFUNCTION(BlueprintNativeEvent, Category="YOLOInventory|Shop", meta=(ToolTip="Local preflight hook before shop request is sent to server. Return false to block."))
     bool ValidateShopRequest(UYIShopComponent* Shop) const;
@@ -107,9 +98,6 @@ public:
     FIntPoint CurrentShopStockSize = FIntPoint(0,0);
 
     /** Client call: buy an item from the active shop (server authoritative). DestPos optional for exact placement. */
-    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop", meta=(ToolTip="Client request to buy from shop (server authoritative).\nArgs:\n- Shop: target shop component.\n- StockIndex: item index in shop stock.\n- Count: requested quantity.\n- BuyerInv: destination inventory.\n- DestPos: optional exact position in buyer bag."))
-    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
-
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop|API")
     FYIShopOpResult RequestShopOpenEx(const FYIShopOpenRequest& Request);
 
@@ -126,10 +114,6 @@ public:
     /** Client RPC: notify result of a shop action. */
     UFUNCTION(Client, Reliable)
     void Client_ShopActionResult(UYIShopComponent* Shop, bool bSuccess, const FText& Reason);
-
-    /** Client call: sell an item from the player's inventory into the shop (server authoritative). */
-    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop", meta=(ToolTip="Client request to sell inventory item into shop (server authoritative)."))
-    void RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
     // Bag activity delegates (local pawn)
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnBagItemAdded, int32, Index, FYIBagItem, Item);
@@ -289,7 +273,18 @@ private:
     void HandleBagItemTransferred(UYIInventoryBag* Src, UYIInventoryBag* Dest, int32 SrcIdx, int32 DestIdx);
 
     UFUNCTION()
-    void HandleTradeEnded();
+    void HandleTradeCancelled();
+    UFUNCTION()
+    void HandleTradeCommittedSession();
+    UFUNCTION()
+    void HandleTradeFailedSession();
+
+    // Legacy C++ wrappers kept for suite internals while public/BP API migrates to *Ex request/result methods.
+    void RequestTrade(AActor* Target, bool bTargetIsNPC);
+    void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
+    void RequestShop(UYIShopComponent* Shop);
+    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
+    void RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
     TWeakObjectPtr<AYITradeSessionActor> BoundSession;
     TWeakObjectPtr<UUserWidget> ActiveTradeWidget;

@@ -26,6 +26,7 @@ enum class EYITradeOpKind : uint8
 	Unknown UMETA(DisplayName="Unknown"),
 	Open UMETA(DisplayName="Open Trade"),
 	Transfer UMETA(DisplayName="Transfer Trade Item"),
+	Commit UMETA(DisplayName="Commit Trade"),
 	Close UMETA(DisplayName="Close Trade")
 };
 

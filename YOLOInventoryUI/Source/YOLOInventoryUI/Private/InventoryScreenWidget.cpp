@@ -574,7 +574,12 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 					{
 						if (UYIEquipmentComponent* EquipmentComp = Pawn->FindComponentByClass<UYIEquipmentComponent>())
 						{
-							bSuccess = EquipmentComp->EquipFromInventory(InventoryComp, ItemIdx, FGameplayTag());
+							FYIEquipFromInventoryRequest EquipReq;
+							EquipReq.SourceInventory = InventoryComp;
+							EquipReq.SourceIndex = ItemIdx;
+							EquipReq.RequestedSlotTag = FGameplayTag();
+							const FYIEquipmentOpResult EquipResult = EquipmentComp->RequestEquip(EquipReq);
+							bSuccess = (EquipmentComp->GetOwner() && EquipmentComp->GetOwner()->HasAuthority()) ? EquipResult.bSucceeded : EquipResult.bRequestAccepted;
 						}
 					}
 				}

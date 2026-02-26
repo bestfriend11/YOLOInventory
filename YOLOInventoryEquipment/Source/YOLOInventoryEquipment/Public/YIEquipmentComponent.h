@@ -152,24 +152,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|API")
 	FYIEquipmentOpResult RequestUnequip(const FYIUnequipToInventoryRequest& Request);
 
-	/** Equip item from inventory's active bag index into the requested slot (or auto slot if empty). */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net", meta=(ToolTip="Equip item by source bag index.\nArgs:\n- SourceInventory: owner inventory component.\n- SourceIndex: index in SourceInventory active bag.\n- RequestedSlotTag: optional target slot; empty = auto resolve from item tags.\nNetwork:\n- Client call sends server RPC.\n- Server performs validation, mutates replicated state, and broadcasts events."))
-	bool EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
-
-	UFUNCTION(Server, Reliable)
-	void ServerEquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
-
 	UFUNCTION(Server, Reliable)
 	void ServerRequestEquip(const FYIEquipFromInventoryRequest& Request);
 
-	/** Unequip slot back into destination inventory active bag. */
-	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net", meta=(ToolTip="Unequip item from slot back into destination inventory active bag.\nArgs:\n- DestInventory: owner inventory component that receives item.\n- SlotTag: equipped slot to remove.\nNetwork:\n- Client call sends server RPC.\n- Server mutates replicated state and broadcasts events."))
-	bool UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
 	/** Authority helper: unequip and return the exact bag/index that now contains the item. */
 	bool UnequipToInventoryAndResolveItem(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, UYIInventoryBag*& OutBag, int32& OutItemIndex);
-
-	UFUNCTION(Server, Reliable)
-	void ServerUnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestUnequip(const FYIUnequipToInventoryRequest& Request);
@@ -214,6 +201,10 @@ protected:
 	void OnRep_EquippedItems();
 
 private:
+	// Legacy non-BP wrappers kept for internal compatibility while suite migrates to RequestEquip/RequestUnequip.
+	bool EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
+	bool UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
+
 	bool EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage);
 	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage, UYIInventoryBag** OutBag = nullptr, int32* OutItemIndex = nullptr);
 

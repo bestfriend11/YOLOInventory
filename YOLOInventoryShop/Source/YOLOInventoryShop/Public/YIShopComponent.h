@@ -130,14 +130,6 @@ public:
     UPROPERTY(BlueprintAssignable, Category="Shop|Events", meta=(ToolTip="Client UI event fired when replicated stock mirror updates."))
     FOnStockMirrorUpdated OnStockMirrorUpdated;
 
-    /** Server: attempt to buy a slot from this shop into buyer's inventory component. */
-    UFUNCTION(Server, Reliable, WithValidation)
-    void ServerBuyItem(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
-
-    /** Server: attempt to sell a slot from player's inventory into this shop. */
-    UFUNCTION(Server, Reliable, WithValidation)
-    void ServerSellItem(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
-
     /** Authority-only execution path used by higher-level interaction components to get structured results. */
     bool ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYIShopOpResult& OutResult);
 
@@ -159,6 +151,12 @@ protected:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+    // Legacy RPC wrappers kept for compatibility while callers migrate to Execute*Request via interaction APIs.
+    UFUNCTION(Server, Reliable, WithValidation)
+    void ServerBuyItem(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
+    UFUNCTION(Server, Reliable, WithValidation)
+    void ServerSellItem(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
+
     void BuildRuntimeStock();
     void RefreshMirror();
     bool ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count);

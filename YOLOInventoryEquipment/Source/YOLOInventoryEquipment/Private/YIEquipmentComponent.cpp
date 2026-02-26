@@ -707,15 +707,6 @@ bool UYIEquipmentComponent::EquipFromInventory(UYIInventoryComponent* SourceInve
 	return GetOwner() && GetOwner()->HasAuthority() ? Result.bSucceeded : Result.bRequestAccepted;
 }
 
-void UYIEquipmentComponent::ServerEquipFromInventory_Implementation(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
-{
-	if (!SourceInventory && GetOwner())
-	{
-		SourceInventory = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
-	}
-	EquipFromInventory(SourceInventory, SourceIndex, RequestedSlotTag);
-}
-
 void UYIEquipmentComponent::ServerRequestEquip_Implementation(const FYIEquipFromInventoryRequest& Request)
 {
 	RequestEquip(Request);
@@ -758,15 +749,6 @@ bool UYIEquipmentComponent::UnequipToInventoryAndResolveItem(UYIInventoryCompone
 		OutItemIndex = AddedIndex;
 	}
 	return bSuccess;
-}
-
-void UYIEquipmentComponent::ServerUnequipToInventory_Implementation(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag)
-{
-	if (!DestInventory && GetOwner())
-	{
-		DestInventory = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
-	}
-	UnequipToInventory(DestInventory, SlotTag);
 }
 
 void UYIEquipmentComponent::ServerRequestUnequip_Implementation(const FYIUnequipToInventoryRequest& Request)

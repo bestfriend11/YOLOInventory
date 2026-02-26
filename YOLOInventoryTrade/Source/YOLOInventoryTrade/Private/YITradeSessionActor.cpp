@@ -323,31 +323,35 @@ static int32 GetTradeItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint
     return INDEX_NONE;
 }
 
-void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+bool AYITradeSessionActor::TryTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count, FText& OutError)
 {
     if (!HasAuthority())
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_NoAuthority", "Trade transfer requires server authority");
+        return false;
     }
 
     UYIInventoryComponent* SrcInv = GetInventoryForSide(FromSide);
     UYIInventoryComponent* DstInv = GetInventoryForSide(ToSide);
     if (!SrcInv || !DstInv)
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_NoInventories", "Trade side inventory is missing");
+        return false;
     }
 
     UYIInventoryBag* SrcBag = SrcInv->GetBag();
     UYIInventoryBag* DstBag = DstInv->GetBag();
     if (!SrcBag || !DstBag || !SrcBag->Items.IsValidIndex(SourceIndex))
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_InvalidSource", "Source item is missing");
+        return false;
     }
 
     FYIBagItem SrcItem = SrcBag->Items[SourceIndex];
     if (SrcItem.Item.Count <= 0)
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_EmptySource", "Source stack is empty");
+        return false;
     }
 
     const int32 MoveCount = (Count <= 0) ? SrcItem.Item.Count : FMath::Clamp(Count, 1, SrcItem.Item.Count);
@@ -380,9 +384,13 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
                 SrcInv->SyncNetState();
                 DstInv->SyncNetState();
                 RefreshInventoryViews();
+                return true;
             }
+            OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_NoStackRoom", "Destination stack has no room");
+            return false;
         }
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_CellBlocked", "Destination cell is blocked");
+        return false;
     }
 
     const bool bMovesWholeItem = (MoveCount >= SrcItem.Item.Count);
@@ -393,7 +401,8 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
     ToPlace.Pos = DestPos;
     if (!DstBag->CanPlaceAt(DestPos, ToPlace.Size))
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_CannotPlace", "Cannot place item at destination");
+        return false;
     }
 
     const bool bSavedAutoMerge = DstBag->bAutoMergeOnAdd;
@@ -403,7 +412,8 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
 
     if (NewIdx == INDEX_NONE)
     {
-        return;
+        OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_AddFailed", "Failed to add item to destination bag");
+        return false;
     }
 
     // Remove from source (partial stack supported).
@@ -435,13 +445,22 @@ void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeS
             SrcInv->SyncNetState();
             DstInv->SyncNetState();
             RefreshInventoryViews();
-            return;
+            OutError = NSLOCTEXT("YOLOInventory", "TradeTransfer_SubtreeMoveFailed", "Failed to move nested container data");
+            return false;
         }
     }
 
     SrcInv->SyncNetState();
     DstInv->SyncNetState();
     RefreshInventoryViews();
+    OutError = FText::GetEmpty();
+    return true;
+}
+
+void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
+{
+	FText UnusedError;
+	(void)TryTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count, UnusedError);
 }
 
 UYIInventoryComponent* AYITradeSessionActor::GetInventoryForSide(ETradeSide Side) const
@@ -529,12 +548,15 @@ void AYITradeSessionActor::TryCommit()
     if (!ApplyOffersToSide(ETradeSide::SideA, ETradeSide::SideB, Err) ||
         !ApplyOffersToSide(ETradeSide::SideB, ETradeSide::SideA, Err))
     {
+        LastFailureReason = Err;
         bAReady = bBReady = false;
         OnRep_Offers();
         RefreshInventoryViews();
         if (OnTradeFailed.IsBound()) { OnTradeFailed.Broadcast(); }
         return;
     }
+
+    LastFailureReason = FText::GetEmpty();
 
     if (OnTradeCommitted.IsBound()) { OnTradeCommitted.Broadcast(); }
     Destroy();

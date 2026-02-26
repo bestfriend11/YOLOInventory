@@ -144,6 +144,9 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
 
+	/** Authority helper with explicit success/failure reason for structured request APIs. */
+	bool TryTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count, FText& OutError);
+
 	// --- Client-facing Blueprint helpers (call on owning client; they proxy to server RPCs) ---
 	UFUNCTION(BlueprintCallable, Category="Trade")
 	void AddOfferFromBag(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count) { ServerAddItem(Side, SourceInv, SlotIndex, Count); }
@@ -176,6 +179,7 @@ public:
 	TArray<FYINetBagItem> GetInventoryView(ETradeSide Side) const { return (Side == ETradeSide::SideA) ? InventoryA : InventoryB; }
 	UFUNCTION(BlueprintPure, Category="Trade")
 	FIntPoint GetInventorySize(ETradeSide Side) const { return (Side == ETradeSide::SideA) ? InventorySizeA : InventorySizeB; }
+	const FText& GetLastFailureReason() const { return LastFailureReason; }
 
 	// Commit is internal after both sides ready
 	void TryCommit();
@@ -213,11 +217,11 @@ protected:
 	TArray<FYITradeOfferSource>& GetOfferSources(ETradeSide Side);
 
 	bool ApplyOffersToSide(ETradeSide From, ETradeSide To, FText& OutError);
-
 	UYIInventoryComponent* GetInventoryForSide(ETradeSide Side) const;
 
 	TWeakObjectPtr<class UYIInventoryBag> TrackedBagA;
 	TWeakObjectPtr<class UYIInventoryBag> TrackedBagB;
 	FDelegateHandle TrackedHandleA;
 	FDelegateHandle TrackedHandleB;
+	FText LastFailureReason;
 };
