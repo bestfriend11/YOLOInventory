@@ -843,7 +843,13 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		const FYIBagItem& ItemToMove = Bag->Items[Index];
 		if (ItemToMove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
 		{
-			return OwnerComp->MoveItemInBag(Bag->BagId, ItemToMove.Item.InstanceId, NewPos);
+			FYIInventoryMoveItemRequest Request;
+			Request.ItemRef.Bag.BagId = Bag->BagId;
+			Request.ItemRef.Item.ItemInstanceId = ItemToMove.Item.InstanceId;
+			Request.TargetCell = NewPos;
+			Request.bUseExactCell = false;
+			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
+			return OwnerComp->RequestMoveItem(Request).bRequestAccepted;
 		}
 		// Fallback only for primary bag / legacy edge cases
 		if (OwnerComp->GetBag() == Bag)
@@ -861,7 +867,11 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		const FYIBagItem& ItemToRemove = Bag->Items[Index];
 		if (ItemToRemove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
 		{
-			return OwnerComp->RemoveItemFromBag(Bag->BagId, ItemToRemove.Item.InstanceId);
+			FYIInventoryRemoveItemRequest Request;
+			Request.ItemRef.Bag.BagId = Bag->BagId;
+			Request.ItemRef.Item.ItemInstanceId = ItemToRemove.Item.InstanceId;
+			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
+			return OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 		}
 		if (OwnerComp->GetBag() == Bag)
 		{
@@ -942,7 +952,14 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			const FYIBagItem& SourceItem = Bag->Items[GInventoryDrag.SourceIndex];
 			if (Bag->BagId.IsValid() && SourceItem.Item.InstanceId.IsValid())
 			{
-				const bool bRequested = OwnerComp->MoveItemInBagAtCell(Bag->BagId, SourceItem.Item.InstanceId, Cell, true);
+				FYIInventoryMoveItemRequest Request;
+				Request.ItemRef.Bag.BagId = Bag->BagId;
+				Request.ItemRef.Item.ItemInstanceId = SourceItem.Item.InstanceId;
+				Request.TargetCell = Cell;
+				Request.bUseExactCell = true;
+				Request.bAllowSingleOverlapSwap = true;
+				Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
+				const bool bRequested = OwnerComp->RequestMoveItem(Request).bRequestAccepted;
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bRequested);
 				if (!bRequested)
 				{
@@ -1156,13 +1173,17 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			const FYIBagItem& SourceItem = SourceBag->Items[GInventoryDrag.SourceIndex];
 			if (SourceItem.Item.InstanceId.IsValid())
 			{
-				const bool bTransferred = DestOwnerComp->TransferItemBetweenBagsAtCellById(
-					SourceBag->BagId,
-					SourceItem.Item.InstanceId,
-					Bag->BagId,
-					Cell,
-					0,
-					true);
+				FYIInventoryTransferItemRequest Request;
+				Request.ItemRef.Bag.BagId = SourceBag->BagId;
+				Request.ItemRef.Item.ItemInstanceId = SourceItem.Item.InstanceId;
+				Request.DestBagId = Bag->BagId;
+				Request.bUseExactCell = true;
+				Request.DestCell = Cell;
+				Request.Count = 0;
+				Request.bAllowSingleOverlapSwap = true;
+				Request.ExpectedSourceBagRevision = SourceBag->RuntimeRevision;
+				Request.ExpectedDestBagRevision = Bag->RuntimeRevision;
+				const bool bTransferred = DestOwnerComp->RequestTransferItem(Request).bRequestAccepted;
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bTransferred);
 				if (!bTransferred)
 				{
@@ -1768,12 +1789,14 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 		Bag->BagId.IsValid() && Other->Bag->BagId.IsValid() &&
 		Bag->Items.IsValidIndex(SourceIndex) && Bag->Items[SourceIndex].Item.InstanceId.IsValid())
 	{
-		const bool bTransferred = OwnerComp->TransferItemBetweenBagsById(
-			Bag->BagId,
-			Bag->Items[SourceIndex].Item.InstanceId,
-			Other->Bag->BagId,
-			Count,
-			OutDestIndex);
+		FYIInventoryTransferItemRequest Request;
+		Request.ItemRef.Bag.BagId = Bag->BagId;
+		Request.ItemRef.Item.ItemInstanceId = Bag->Items[SourceIndex].Item.InstanceId;
+		Request.DestBagId = Other->Bag->BagId;
+		Request.Count = Count;
+		Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
+		Request.ExpectedDestBagRevision = Other->Bag->RuntimeRevision;
+		const bool bTransferred = OwnerComp->RequestTransferItem(Request).bRequestAccepted;
 		if (bTransferred)
 		{
 			UpdateBoundTooltip();

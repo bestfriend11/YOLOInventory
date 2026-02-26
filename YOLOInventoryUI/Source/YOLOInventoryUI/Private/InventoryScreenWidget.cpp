@@ -470,7 +470,11 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 				{
 					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
 					{
-						bHandled = OwnerComp->RotateItemInBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+						FYIInventoryRotateItemRequest Request;
+						Request.ItemRef.Bag.BagId = Grid->Bag->BagId;
+						Request.ItemRef.Item.ItemInstanceId = Grid->Bag->Items[ItemIdx].Item.InstanceId;
+						Request.ExpectedSourceBagRevision = Grid->Bag->RuntimeRevision;
+						bHandled = OwnerComp->RequestRotateItem(Request).bRequestAccepted;
 					}
 					else if (OwnerComp->GetBag() == Grid->Bag)
 					{
@@ -491,7 +495,11 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 				{
 					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
 					{
-						bHandled = OwnerComp->RemoveItemFromBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+						FYIInventoryRemoveItemRequest Request;
+						Request.ItemRef.Bag.BagId = Grid->Bag->BagId;
+						Request.ItemRef.Item.ItemInstanceId = Grid->Bag->Items[ItemIdx].Item.InstanceId;
+						Request.ExpectedSourceBagRevision = Grid->Bag->RuntimeRevision;
+						bHandled = OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
 					}
 					else if (OwnerComp->GetBag() == Grid->Bag)
 					{
@@ -517,7 +525,11 @@ void UInventoryScreenWidget::OnActionChosen(int32 ActionId)
 				{
 					if (Grid->Bag->Items.IsValidIndex(ItemIdx) && Grid->Bag->BagId.IsValid() && Grid->Bag->Items[ItemIdx].Item.InstanceId.IsValid())
 					{
-						bHandled = OwnerComp->CombineItemInBag(Grid->Bag->BagId, Grid->Bag->Items[ItemIdx].Item.InstanceId);
+						FYIInventoryCombineItemRequest Request;
+						Request.ItemRef.Bag.BagId = Grid->Bag->BagId;
+						Request.ItemRef.Item.ItemInstanceId = Grid->Bag->Items[ItemIdx].Item.InstanceId;
+						Request.ExpectedSourceBagRevision = Grid->Bag->RuntimeRevision;
+						bHandled = OwnerComp->RequestCombineItem(Request).bRequestAccepted;
 					}
 				}
 				if (!bHandled && Target != INDEX_NONE && Target != ItemIdx)
