@@ -51,6 +51,32 @@ namespace YIEquipmentPrivate
 	{
 		return Ref.Bag.BagId.IsValid() && (Ref.Item.ItemInstanceId.IsValid() || Ref.Item.LegacyStackKey != 0);
 	}
+
+	static EYIEquipmentOpError GuessErrorFromMessage(const FString& Message)
+	{
+		const FString Lower = Message.ToLower();
+		if (Lower.Contains(TEXT("no room")) || Lower.Contains(TEXT("no space")))
+		{
+			return EYIEquipmentOpError::NoSpace;
+		}
+		if (Lower.Contains(TEXT("locked")))
+		{
+			return EYIEquipmentOpError::Locked;
+		}
+		if (Lower.Contains(TEXT("slot tag")) || Lower.Contains(TEXT("slot")))
+		{
+			return EYIEquipmentOpError::InvalidSlot;
+		}
+		if (Lower.Contains(TEXT("index")))
+		{
+			return EYIEquipmentOpError::InvalidIndex;
+		}
+		if (Lower.Contains(TEXT("inventory")))
+		{
+			return EYIEquipmentOpError::InvalidInventory;
+		}
+		return EYIEquipmentOpError::ValidationFailed;
+	}
 }
 
 UYIEquipmentComponent::UYIEquipmentComponent()
@@ -388,6 +414,11 @@ void UYIEquipmentComponent::BroadcastResult(bool bSuccess, FGameplayTag SlotTag,
 	EmitEquipmentMessage(Message, bSuccess ? FColor::Green : FColor::Red);
 }
 
+void UYIEquipmentComponent::EmitStructuredOpResult(const FYIEquipmentOpResult& Result)
+{
+	OnEquipmentOpResultReceived.Broadcast(Result);
+}
+
 USoundBase* UYIEquipmentComponent::ResolveEquipSound(UYIItemDefinition* Definition) const
 {
 	if (!Definition || !GetOwner())
@@ -564,22 +595,116 @@ bool UYIEquipmentComponent::ValidateEquipmentSetup(TArray<FString>& OutBlockingI
 	return OutBlockingIssues.Num() == 0;
 }
 
-bool UYIEquipmentComponent::EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
+FYIEquipmentOpResult UYIEquipmentComponent::RequestEquip(const FYIEquipFromInventoryRequest& InRequest)
 {
+	FYIEquipFromInventoryRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+
+	FYIEquipmentOpResult Result;
+	Result.RequestId = Request.RequestId;
+	Result.OpKind = EYIEquipmentOpKind::Equip;
+	Result.SlotTag = Request.RequestedSlotTag;
+
 	if (!GetOwner())
 	{
-		return false;
+		Result.Error = EYIEquipmentOpError::InvalidRequest;
+		Result.Message = FText::FromString(TEXT("Equipment component has no owner"));
+		return Result;
 	}
+
 	if (!GetOwner()->HasAuthority())
 	{
-		ServerEquipFromInventory(SourceInventory, SourceIndex, RequestedSlotTag);
-		return true;
+		Result.bRequestAccepted = true;
+		ServerRequestEquip(Request);
+		return Result;
+	}
+
+	UYIInventoryComponent* SourceInventory = Request.SourceInventory;
+	if (!SourceInventory && GetOwner())
+	{
+		SourceInventory = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
 	}
 
 	FString Message;
-	const bool bSuccess = EquipFromInventoryInternal(SourceInventory, SourceIndex, RequestedSlotTag, Message);
-	BroadcastResult(bSuccess, RequestedSlotTag, Message);
-	return bSuccess;
+	const bool bSuccess = EquipFromInventoryInternal(SourceInventory, Request.SourceIndex, Request.RequestedSlotTag, Message);
+	BroadcastResult(bSuccess, Request.RequestedSlotTag, Message);
+
+	Result.bRequestAccepted = true;
+	Result.bSucceeded = bSuccess;
+	Result.Error = bSuccess ? EYIEquipmentOpError::None : YIEquipmentPrivate::GuessErrorFromMessage(Message);
+	Result.Message = FText::FromString(Message);
+	if (Request.SourceInventory && Request.SourceInventory->EquippedBag && Request.SourceInventory->EquippedBag->Items.IsValidIndex(Request.SourceIndex))
+	{
+		Result.ItemInstanceId = Request.SourceInventory->EquippedBag->Items[Request.SourceIndex].Item.InstanceId;
+	}
+	EmitStructuredOpResult(Result);
+	if (!GetOwner()->HasLocalNetOwner())
+	{
+		ClientReceiveEquipmentOpResult(Result);
+	}
+	return Result;
+}
+
+FYIEquipmentOpResult UYIEquipmentComponent::RequestUnequip(const FYIUnequipToInventoryRequest& InRequest)
+{
+	FYIUnequipToInventoryRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+
+	FYIEquipmentOpResult Result;
+	Result.RequestId = Request.RequestId;
+	Result.OpKind = EYIEquipmentOpKind::Unequip;
+	Result.SlotTag = Request.SlotTag;
+
+	if (!GetOwner())
+	{
+		Result.Error = EYIEquipmentOpError::InvalidRequest;
+		Result.Message = FText::FromString(TEXT("Equipment component has no owner"));
+		return Result;
+	}
+
+	if (!GetOwner()->HasAuthority())
+	{
+		Result.bRequestAccepted = true;
+		ServerRequestUnequip(Request);
+		return Result;
+	}
+
+	UYIInventoryComponent* DestInventory = Request.DestInventory;
+	if (!DestInventory && GetOwner())
+	{
+		DestInventory = GetOwner()->FindComponentByClass<UYIInventoryComponent>();
+	}
+
+	FString Message;
+	const bool bSuccess = UnequipToInventoryInternal(DestInventory, Request.SlotTag, Message, nullptr, nullptr);
+	BroadcastResult(bSuccess, Request.SlotTag, Message);
+
+	Result.bRequestAccepted = true;
+	Result.bSucceeded = bSuccess;
+	Result.Error = bSuccess ? EYIEquipmentOpError::None : YIEquipmentPrivate::GuessErrorFromMessage(Message);
+	Result.Message = FText::FromString(Message);
+	EmitStructuredOpResult(Result);
+	if (!GetOwner()->HasLocalNetOwner())
+	{
+		ClientReceiveEquipmentOpResult(Result);
+	}
+	return Result;
+}
+
+bool UYIEquipmentComponent::EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
+{
+	FYIEquipFromInventoryRequest Request;
+	Request.SourceInventory = SourceInventory;
+	Request.SourceIndex = SourceIndex;
+	Request.RequestedSlotTag = RequestedSlotTag;
+	const FYIEquipmentOpResult Result = RequestEquip(Request);
+	return GetOwner() && GetOwner()->HasAuthority() ? Result.bSucceeded : Result.bRequestAccepted;
 }
 
 void UYIEquipmentComponent::ServerEquipFromInventory_Implementation(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
@@ -591,22 +716,18 @@ void UYIEquipmentComponent::ServerEquipFromInventory_Implementation(UYIInventory
 	EquipFromInventory(SourceInventory, SourceIndex, RequestedSlotTag);
 }
 
+void UYIEquipmentComponent::ServerRequestEquip_Implementation(const FYIEquipFromInventoryRequest& Request)
+{
+	RequestEquip(Request);
+}
+
 bool UYIEquipmentComponent::UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag)
 {
-	if (!GetOwner())
-	{
-		return false;
-	}
-	if (!GetOwner()->HasAuthority())
-	{
-		ServerUnequipToInventory(DestInventory, SlotTag);
-		return true;
-	}
-
-	FString Message;
-	const bool bSuccess = UnequipToInventoryInternal(DestInventory, SlotTag, Message, nullptr, nullptr);
-	BroadcastResult(bSuccess, SlotTag, Message);
-	return bSuccess;
+	FYIUnequipToInventoryRequest Request;
+	Request.DestInventory = DestInventory;
+	Request.SlotTag = SlotTag;
+	const FYIEquipmentOpResult Result = RequestUnequip(Request);
+	return GetOwner() && GetOwner()->HasAuthority() ? Result.bSucceeded : Result.bRequestAccepted;
 }
 
 bool UYIEquipmentComponent::UnequipToInventoryAndResolveItem(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, UYIInventoryBag*& OutBag, int32& OutItemIndex)
@@ -648,10 +769,20 @@ void UYIEquipmentComponent::ServerUnequipToInventory_Implementation(UYIInventory
 	UnequipToInventory(DestInventory, SlotTag);
 }
 
+void UYIEquipmentComponent::ServerRequestUnequip_Implementation(const FYIUnequipToInventoryRequest& Request)
+{
+	RequestUnequip(Request);
+}
+
 void UYIEquipmentComponent::ClientNotifyItemEquipped_Implementation(FGameplayTag SlotTag, FYIItemInstanceNet Item)
 {
 	UYIItemDefinition* Definition = Item.Definition.IsValid() ? Item.Definition.Get() : Item.Definition.LoadSynchronous();
 	HandleItemEquippedFeedback(SlotTag, Item, Definition);
+}
+
+void UYIEquipmentComponent::ClientReceiveEquipmentOpResult_Implementation(const FYIEquipmentOpResult& Result)
+{
+	EmitStructuredOpResult(Result);
 }
 
 bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage)

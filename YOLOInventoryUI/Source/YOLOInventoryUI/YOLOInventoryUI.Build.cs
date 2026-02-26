@@ -23,6 +23,7 @@ public class YOLOInventoryUI : ModuleRules
             "YOLOInventorySchema",
             "YOLOInventoryGrid",
             "YOLOInventoryEquipment",
+            "YOLOInventoryShop",
             "YOLOInventoryTrade",
             "YOLOInventoryWorld",
             "YOLOInventoryContainers"

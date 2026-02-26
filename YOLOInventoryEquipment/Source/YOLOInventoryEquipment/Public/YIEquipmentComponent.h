@@ -5,6 +5,7 @@
 #include "GameplayTagContainer.h"
 #include "YIInventoryCoreTypes.h"
 #include "YIItemNetTypes.h"
+#include "YIEquipmentApiTypes.h"
 #include "YIEquipmentComponent.generated.h"
 
 class UYIInventoryComponent;
@@ -74,6 +75,7 @@ struct YOLOINVENTORYEQUIPMENT_API FYIEquipmentSlotDefinition
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FYIEquipmentChangedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FYIEquipmentResultEvent, bool, bSuccess, FGameplayTag, SlotTag, FString, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FYIItemEquippedEvent, FGameplayTag, SlotTag, FYIItemInstanceNet, Item, UYIItemDefinition*, ItemDefinition);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FYIEquipmentOpResultEvent, const FYIEquipmentOpResult&, Result);
 
 /**
  * Server-authoritative equipment container keyed by slot gameplay tags.
@@ -138,12 +140,27 @@ public:
 	UPROPERTY(BlueprintAssignable, Category="Equipment|Events", meta=(ToolTip="Equip-success event for moment feedback (SFX/VFX/animations).\nFires on server and owning client via RPC.\nNot fired for unequip."))
 	FYIItemEquippedEvent OnItemEquipped;
 
+	/** Standardized request/result feedback channel for equipment operations (owner authoritative result). */
+	UPROPERTY(BlueprintAssignable, Category="Equipment|Events", meta=(ToolTip="Owner-facing structured operation result for RequestEquip/RequestUnequip APIs.")) 
+	FYIEquipmentOpResultEvent OnEquipmentOpResultReceived;
+
+	/** Standardized equip request API (request/result contract style). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|API")
+	FYIEquipmentOpResult RequestEquip(const FYIEquipFromInventoryRequest& Request);
+
+	/** Standardized unequip request API (request/result contract style). */
+	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|API")
+	FYIEquipmentOpResult RequestUnequip(const FYIUnequipToInventoryRequest& Request);
+
 	/** Equip item from inventory's active bag index into the requested slot (or auto slot if empty). */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net", meta=(ToolTip="Equip item by source bag index.\nArgs:\n- SourceInventory: owner inventory component.\n- SourceIndex: index in SourceInventory active bag.\n- RequestedSlotTag: optional target slot; empty = auto resolve from item tags.\nNetwork:\n- Client call sends server RPC.\n- Server performs validation, mutates replicated state, and broadcasts events."))
 	bool EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
 
 	UFUNCTION(Server, Reliable)
 	void ServerEquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestEquip(const FYIEquipFromInventoryRequest& Request);
 
 	/** Unequip slot back into destination inventory active bag. */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Equipment|Net", meta=(ToolTip="Unequip item from slot back into destination inventory active bag.\nArgs:\n- DestInventory: owner inventory component that receives item.\n- SlotTag: equipped slot to remove.\nNetwork:\n- Client call sends server RPC.\n- Server mutates replicated state and broadcasts events."))
@@ -154,8 +171,14 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerUnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
 
+	UFUNCTION(Server, Reliable)
+	void ServerRequestUnequip(const FYIUnequipToInventoryRequest& Request);
+
 	UFUNCTION(Client, Unreliable)
 	void ClientNotifyItemEquipped(FGameplayTag SlotTag, FYIItemInstanceNet Item);
+
+	UFUNCTION(Client, Reliable)
+	void ClientReceiveEquipmentOpResult(const FYIEquipmentOpResult& Result);
 
 	/** Get equipped item for a slot. */
 	UFUNCTION(BlueprintPure, Category="YOLOInventory|Equipment", meta=(ToolTip="Returns true when slot currently has equipped item.\nArgs:\n- SlotTag: queried slot.\n- OutItem: populated equipped item net payload when found."))
@@ -205,6 +228,7 @@ private:
 
 	void EmitEquipmentMessage(const FString& Message, const FColor& Color) const;
 	void BroadcastResult(bool bSuccess, FGameplayTag SlotTag, const FString& Message);
+	void EmitStructuredOpResult(const FYIEquipmentOpResult& Result);
 	void HandleItemEquippedFeedback(FGameplayTag SlotTag, const FYIItemInstanceNet& Item, UYIItemDefinition* Definition);
 	USoundBase* ResolveEquipSound(UYIItemDefinition* Definition) const;
 	void PlayEquipSound(UYIItemDefinition* Definition) const;

@@ -37,6 +37,10 @@
       "Enabled": true
     },
     {
+      "Name": "YOLOInventoryShop",
+      "Enabled": true
+    },
+    {
       "Name": "YOLOInventoryTrade",
       "Enabled": true
     },

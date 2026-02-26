@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryTypes.h"
+#include "YIShopApiTypes.h"
 #include "YIShopComponent.generated.h"
 
 class UYIInventoryBag;
@@ -23,7 +24,7 @@ enum class EYIShopStockMode : uint8
 
 /** Price entry for a single resource (e.g., Gold, Silver). */
 USTRUCT(BlueprintType)
-struct YOLOINVENTORYTRADE_API FYIShopPrice
+struct YOLOINVENTORYSHOP_API FYIShopPrice
 {
     GENERATED_BODY()
 
@@ -36,7 +37,7 @@ struct YOLOINVENTORYTRADE_API FYIShopPrice
 
 /** Per-item price list keyed by item code. */
 USTRUCT(BlueprintType)
-struct YOLOINVENTORYTRADE_API FYIShopListing
+struct YOLOINVENTORYSHOP_API FYIShopListing
 {
     GENERATED_BODY()
 
@@ -59,7 +60,7 @@ struct YOLOINVENTORYTRADE_API FYIShopListing
  * Provides server-side purchase RPC that transfers items into the buyer's inventory if they have resources.
  */
 UCLASS(ClassGroup=(Inventory), Blueprintable, meta=(BlueprintSpawnableComponent))
-class YOLOINVENTORYTRADE_API UYIShopComponent : public UActorComponent
+class YOLOINVENTORYSHOP_API UYIShopComponent : public UActorComponent
 {
     GENERATED_BODY()
 public:
@@ -137,6 +138,12 @@ public:
     UFUNCTION(Server, Reliable, WithValidation)
     void ServerSellItem(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
+    /** Authority-only execution path used by higher-level interaction components to get structured results. */
+    bool ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYIShopOpResult& OutResult);
+
+    /** Authority-only execution path used by higher-level interaction components to get structured results. */
+    bool ExecuteSellRequest(const FYIShopSellRequest& Request, FYIShopOpResult& OutResult);
+
     /** Blueprint helper to get listing info for UI (works on client). */
     UFUNCTION(BlueprintPure, Category="Shop", meta=(ToolTip="Client-safe getter for current replicated stock mirror items."))
     TArray<FYINetBagItem> GetStockMirror() const { return StockMirror; }
@@ -159,8 +166,6 @@ private:
     UYIInventoryBag* CreateStockInstance() const;
     UYIInventoryBag* GetStockForPlayer(APlayerState* PlayerState);
     void GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const;
-    void NotifyStockForPlayer(APlayerState* PlayerState);
-
     FTimerHandle RestockTimer;
 
     /** Per-player stock bags (server only, used when StockMode==PerPlayerStock). */

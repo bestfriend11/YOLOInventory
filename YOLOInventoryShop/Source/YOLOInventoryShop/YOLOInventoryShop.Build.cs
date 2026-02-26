@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-public class YOLOInventoryTrade : ModuleRules
+public class YOLOInventoryShop : ModuleRules
 {
-    public YOLOInventoryTrade(ReadOnlyTargetRules Target) : base(Target)
+    public YOLOInventoryShop(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
@@ -11,12 +11,9 @@ public class YOLOInventoryTrade : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
-            "GameplayTags",
-            "UMG",
             "YOLOInventoryCore",
             "YOLOInventorySchema",
             "YOLOInventoryContainers"
-            ,"YOLOInventoryShop"
         });
     }
 }

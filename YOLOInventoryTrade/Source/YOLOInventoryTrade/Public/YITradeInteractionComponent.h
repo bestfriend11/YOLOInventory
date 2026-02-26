@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "YIInventoryBag.h"
+#include "YIShopApiTypes.h"
+#include "YITradeApiTypes.h"
 #include "YITradeSessionActor.h"
 #include "YITradeInteractionComponent.generated.h"
 
@@ -50,9 +52,21 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Owning-client failure event for rejected/failed trade requests."))
     FOnTradeFailed OnTradeFailed;
 
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeOpResultReceived, const FYITradeOpResult&, Result);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Structured trade request/result feedback for RequestTradeEx / RequestTradeTransferEx.")) 
+    FOnTradeOpResultReceived OnTradeOpResultReceived;
+
     /** Client call: request a server-authoritative item transfer during an active trade session. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade", meta=(ToolTip="Client request for secure trade transfer in active session.\nArgs:\n- FromSide/ToSide: transfer direction.\n- SourceIndex: source slot index.\n- DestPos: destination cell.\n- Count: stack count (0=default/full item behavior)."))
     void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
+
+    /** Standardized request/result contract for opening a trade session. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeEx(const FYITradeOpenRequest& Request);
+
+    /** Standardized request/result contract for trade transfer. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeTransferEx(const FYITradeTransferRequest& Request);
 
     /** Client call: request shop stock for a given shop component. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop", meta=(ToolTip="Client entry point to request shop stock snapshot from server."))
@@ -80,6 +94,10 @@ public:
     UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop", meta=(ToolTip="Owning-client result event for buy/sell operations."))
     FOnShopActionResult OnShopActionResult;
 
+    DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnShopOpResultReceived, const FYIShopOpResult&, Result);
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Shop", meta=(ToolTip="Structured shop request/result feedback for RequestShop*Ex APIs."))
+    FOnShopOpResultReceived OnShopOpResultReceived;
+
     /** Latest shop stock snapshot (client-owned). */
     UPROPERTY(BlueprintReadOnly, Category="YOLOInventory|Shop", meta=(ToolTip="Current shop context on owning client."))
     UYIShopComponent* CurrentShop = nullptr;
@@ -91,6 +109,15 @@ public:
     /** Client call: buy an item from the active shop (server authoritative). DestPos optional for exact placement. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop", meta=(ToolTip="Client request to buy from shop (server authoritative).\nArgs:\n- Shop: target shop component.\n- StockIndex: item index in shop stock.\n- Count: requested quantity.\n- BuyerInv: destination inventory.\n- DestPos: optional exact position in buyer bag."))
     void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
+
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop|API")
+    FYIShopOpResult RequestShopOpenEx(const FYIShopOpenRequest& Request);
+
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop|API")
+    FYIShopOpResult RequestShopBuyEx(const FYIShopBuyRequest& Request);
+
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Shop|API")
+    FYIShopOpResult RequestShopSellEx(const FYIShopSellRequest& Request);
 
     /** Client RPC: push shop stock data to owning client (used by server). */
     UFUNCTION(Client, Reliable)
@@ -162,19 +189,34 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
 
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeEx(FYITradeOpenRequest Request);
+
 	// Server-side shop handler
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestShop(UYIShopComponent* Shop);
 
+	UFUNCTION(Server, Reliable)
+	void Server_RequestShopOpenEx(FYIShopOpenRequest Request);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestShopBuyEx(FYIShopBuyRequest Request);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
+	UFUNCTION(Server, Reliable)
+	void Server_RequestShopSellEx(FYIShopSellRequest Request);
+
 	/** Server: execute a transfer request during an active trade session. */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_TransferItem(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeTransferEx(FYITradeTransferRequest Request);
 
     // Client notifications
     UFUNCTION(Client, Reliable)
@@ -182,6 +224,12 @@ protected:
 
     UFUNCTION(Client, Reliable)
     void Client_TradeSessionFailed(const FText& Reason);
+
+    UFUNCTION(Client, Reliable)
+    void Client_TradeOpResult(const FYITradeOpResult& Result);
+
+    UFUNCTION(Client, Reliable)
+    void Client_ShopOpResult(const FYIShopOpResult& Result);
 
     /** Owning-client replicated session pointer for safe BP access (set on server). */
     UPROPERTY(ReplicatedUsing=OnRep_CurrentSession, BlueprintReadOnly, Category="YOLOInventory|Trade", meta=(ToolTip="Replicated current trade session pointer for owning client. Use OnRep_CurrentSession/OnTradeSessionReady for UI wiring."))
@@ -247,4 +295,5 @@ private:
     TWeakObjectPtr<UUserWidget> ActiveTradeWidget;
     TWeakObjectPtr<UUserWidget> ActiveShopWidget;
     bool bShopOpened = false;
+    FGuid PendingTradeOpenRequestId;
 };

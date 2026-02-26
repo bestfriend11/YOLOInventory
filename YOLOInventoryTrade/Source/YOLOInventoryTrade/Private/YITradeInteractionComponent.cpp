@@ -67,6 +67,34 @@ namespace YITradeInteractionUIBindings
 
 using namespace YITradeInteractionUIBindings;
 
+namespace
+{
+	static FYITradeOpResult MakeTradeOpResult(EYITradeOpKind OpKind, const FGuid& RequestId, bool bAccepted, bool bSucceeded, EYITradeOpError Error, const FText& Message)
+	{
+		FYITradeOpResult Result;
+		Result.OpKind = OpKind;
+		Result.RequestId = RequestId;
+		Result.bRequestAccepted = bAccepted;
+		Result.bSucceeded = bSucceeded;
+		Result.Error = Error;
+		Result.Message = Message;
+		return Result;
+	}
+
+	static FYIShopOpResult MakeShopOpResult(UYIShopComponent* Shop, EYIShopOpKind OpKind, const FGuid& RequestId, bool bAccepted, bool bSucceeded, EYIShopOpError Error, const FText& Message)
+	{
+		FYIShopOpResult Result;
+		Result.Shop = Shop;
+		Result.OpKind = OpKind;
+		Result.RequestId = RequestId;
+		Result.bRequestAccepted = bAccepted;
+		Result.bSucceeded = bSucceeded;
+		Result.Error = Error;
+		Result.Message = Message;
+		return Result;
+	}
+}
+
 UYITradeInteractionComponent::UYITradeInteractionComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -132,79 +160,215 @@ void UYITradeInteractionComponent::TickComponent(float DeltaTime, ELevelTick Tic
 
 void UYITradeInteractionComponent::RequestTrade(AActor* Target, bool bTargetIsNPC)
 {
-    // Client entry point: validate locally (Blueprints can override), then forward to server
-    if (!IsOwnerValidForTrade(true))
-    {
-        Client_TradeSessionFailed(NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Trade component must be on PlayerController"));
-        return;
-    }
-    if (!ValidateTradeRequest(Target, bTargetIsNPC))
-    {
-        Client_TradeSessionFailed(NSLOCTEXT("YOLOInventory", "Trade_ClientRejected", "Trade request rejected"));
-        return;
-    }
-    if (!IsWithinDistance(Target, TradeInteractionDistance))
-    {
-        Client_TradeSessionFailed(NSLOCTEXT("YOLOInventory", "Trade_TooFar", "Target is too far"));
-        return;
-    }
-    Server_RequestTrade(Target, bTargetIsNPC);
+	FYITradeOpenRequest Req;
+	Req.Target = Target;
+	Req.bTargetIsNPC = bTargetIsNPC;
+	(void)RequestTradeEx(Req);
 }
 
 void UYITradeInteractionComponent::RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
 {
-    if (!IsOwnerValidForTrade(true))
-    {
-        return;
-    }
-    Server_TransferItem(FromSide, ToSide, SourceIndex, DestPos, Count);
+	FYITradeTransferRequest Req;
+	Req.FromSide = FromSide;
+	Req.ToSide = ToSide;
+	Req.SourceIndex = SourceIndex;
+	Req.DestPos = DestPos;
+	Req.Count = Count;
+	(void)RequestTradeTransferEx(Req);
 }
 
 void UYITradeInteractionComponent::RequestShop(UYIShopComponent* Shop)
 {
-    if (!IsOwnerValidForTrade(true))
-    {
-        return;
-    }
-    if (!Shop)
-    {
-        return;
-    }
-    if (!ValidateShopRequest(Shop))
-    {
-        return;
-    }
-    if (Shop->GetOwner() && !IsWithinDistance(Shop->GetOwner(), ShopInteractionDistance))
-    {
-        return;
-    }
-    Server_RequestShop(Shop);
+	FYIShopOpenRequest Req;
+	Req.Shop = Shop;
+	(void)RequestShopOpenEx(Req);
 }
 
 void UYITradeInteractionComponent::RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
-    if (!IsOwnerValidForTrade(true))
-    {
-        return;
-    }
-    if (!Shop || !BuyerInv || Count <= 0)
-    {
-        return;
-    }
-    Server_RequestShopBuy(Shop, StockIndex, Count, BuyerInv, DestPos);
+	FYIShopBuyRequest Req;
+	Req.Shop = Shop;
+	Req.StockIndex = StockIndex;
+	Req.Count = Count;
+	Req.BuyerInv = BuyerInv;
+	Req.DestPos = DestPos;
+	(void)RequestShopBuyEx(Req);
 }
 
 void UYITradeInteractionComponent::RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
 {
-    if (!IsOwnerValidForTrade(true))
-    {
-        return;
-    }
-    if (!Shop || !SellerInv || Count <= 0)
-    {
-        return;
-    }
-    Server_RequestShopSell(Shop, SourceIndex, Count, SellerInv);
+	FYIShopSellRequest Req;
+	Req.Shop = Shop;
+	Req.SourceIndex = SourceIndex;
+	Req.Count = Count;
+	Req.SellerInv = SellerInv;
+	(void)RequestShopSellEx(Req);
+}
+
+FYITradeOpResult UYITradeInteractionComponent::RequestTradeEx(const FYITradeOpenRequest& InRequest)
+{
+	FYITradeOpenRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+
+	if (!IsOwnerValidForTrade(true))
+	{
+		const FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Open, Request.RequestId, false, false, EYITradeOpError::InvalidOwner,
+			NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Trade component must be on PlayerController"));
+		PendingTradeOpenRequestId = Request.RequestId;
+		Client_TradeSessionFailed(Result.Message);
+		return Result;
+	}
+	if (!Request.Target)
+	{
+		const FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Open, Request.RequestId, false, false, EYITradeOpError::InvalidTarget,
+			NSLOCTEXT("YOLOInventory", "Trade_NoTarget", "No trade target"));
+		PendingTradeOpenRequestId = Request.RequestId;
+		Client_TradeSessionFailed(Result.Message);
+		return Result;
+	}
+	if (!ValidateTradeRequest(Request.Target, Request.bTargetIsNPC))
+	{
+		const FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Open, Request.RequestId, false, false, EYITradeOpError::ValidationFailed,
+			NSLOCTEXT("YOLOInventory", "Trade_ClientRejected", "Trade request rejected"));
+		PendingTradeOpenRequestId = Request.RequestId;
+		Client_TradeSessionFailed(Result.Message);
+		return Result;
+	}
+	if (!IsWithinDistance(Request.Target, TradeInteractionDistance))
+	{
+		const FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Open, Request.RequestId, false, false, EYITradeOpError::TooFar,
+			NSLOCTEXT("YOLOInventory", "Trade_TooFar", "Target is too far"));
+		PendingTradeOpenRequestId = Request.RequestId;
+		Client_TradeSessionFailed(Result.Message);
+		return Result;
+	}
+
+	FYITradeOpResult Accepted = MakeTradeOpResult(EYITradeOpKind::Open, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
+	PendingTradeOpenRequestId = Request.RequestId;
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestTradeEx(Request);
+		return Accepted;
+	}
+
+	Server_RequestTrade_Implementation(Request.Target, Request.bTargetIsNPC); // authority path uses existing logic
+	return Accepted;
+}
+
+FYITradeOpResult UYITradeInteractionComponent::RequestTradeTransferEx(const FYITradeTransferRequest& InRequest)
+{
+	FYITradeTransferRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+	if (!IsOwnerValidForTrade(true))
+	{
+		FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, false, false, EYITradeOpError::InvalidOwner,
+			NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Trade component must be on PlayerController"));
+		OnTradeOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestTradeTransferEx(Request);
+		return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, false, EYITradeOpError::None, FText::GetEmpty());
+	}
+	Server_TransferItem_Implementation(Request.FromSide, Request.ToSide, Request.SourceIndex, Request.DestPos, Request.Count);
+	return MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, true, true, EYITradeOpError::None, FText::GetEmpty());
+}
+
+FYIShopOpResult UYITradeInteractionComponent::RequestShopOpenEx(const FYIShopOpenRequest& InRequest)
+{
+	FYIShopOpenRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+	if (!IsOwnerValidForTrade(true))
+	{
+		FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, false, false, EYIShopOpError::InvalidRequest,
+			NSLOCTEXT("YOLOInventory", "Shop_InvalidOwner", "Shop interaction requires PlayerController owner"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (!Request.Shop)
+	{
+		FYIShopOpResult Result = MakeShopOpResult(nullptr, EYIShopOpKind::Open, Request.RequestId, false, false, EYIShopOpError::InvalidShop,
+			NSLOCTEXT("YOLOInventory", "Shop_InvalidShop", "Invalid shop"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (!ValidateShopRequest(Request.Shop))
+	{
+		FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, false, false, EYIShopOpError::ValidationFailed,
+			NSLOCTEXT("YOLOInventory", "Shop_RequestRejected", "Shop request rejected"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (Request.Shop->GetOwner() && !IsWithinDistance(Request.Shop->GetOwner(), ShopInteractionDistance))
+	{
+		FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, false, false, EYIShopOpError::TooFar,
+			NSLOCTEXT("YOLOInventory", "Shop_TooFar", "Shop is too far"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestShopOpenEx(Request);
+		return MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, true, false, EYIShopOpError::None, FText::GetEmpty());
+	}
+	Server_RequestShopOpenEx_Implementation(Request);
+	return MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, true, true, EYIShopOpError::None, FText::GetEmpty());
+}
+
+FYIShopOpResult UYITradeInteractionComponent::RequestShopBuyEx(const FYIShopBuyRequest& InRequest)
+{
+	FYIShopBuyRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+	if (!IsOwnerValidForTrade(true) || !Request.Shop || !Request.BuyerInv || Request.Count <= 0)
+	{
+		FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Buy, Request.RequestId, false, false, EYIShopOpError::InvalidRequest,
+			NSLOCTEXT("YOLOInventory", "Shop_Buy_InvalidReq", "Invalid buy request"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestShopBuyEx(Request);
+		return MakeShopOpResult(Request.Shop, EYIShopOpKind::Buy, Request.RequestId, true, false, EYIShopOpError::None, FText::GetEmpty());
+	}
+	Server_RequestShopBuyEx_Implementation(Request);
+	return MakeShopOpResult(Request.Shop, EYIShopOpKind::Buy, Request.RequestId, true, true, EYIShopOpError::None, FText::GetEmpty());
+}
+
+FYIShopOpResult UYITradeInteractionComponent::RequestShopSellEx(const FYIShopSellRequest& InRequest)
+{
+	FYIShopSellRequest Request = InRequest;
+	if (!Request.RequestId.IsValid())
+	{
+		Request.RequestId = FGuid::NewGuid();
+	}
+	if (!IsOwnerValidForTrade(true) || !Request.Shop || !Request.SellerInv || Request.Count <= 0)
+	{
+		FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Sell, Request.RequestId, false, false, EYIShopOpError::InvalidRequest,
+			NSLOCTEXT("YOLOInventory", "Shop_Sell_InvalidReq", "Invalid sell request"));
+		OnShopOpResultReceived.Broadcast(Result);
+		return Result;
+	}
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestShopSellEx(Request);
+		return MakeShopOpResult(Request.Shop, EYIShopOpKind::Sell, Request.RequestId, true, false, EYIShopOpError::None, FText::GetEmpty());
+	}
+	Server_RequestShopSellEx_Implementation(Request);
+	return MakeShopOpResult(Request.Shop, EYIShopOpKind::Sell, Request.RequestId, true, true, EYIShopOpError::None, FText::GetEmpty());
 }
 
 void UYITradeInteractionComponent::Server_RequestTrade_Implementation(AActor* Target, bool bTargetIsNPC)
@@ -300,6 +464,12 @@ bool UYITradeInteractionComponent::Server_RequestTrade_Validate(AActor* Target, 
     return IsOwnerValidForTrade(false);
 }
 
+void UYITradeInteractionComponent::Server_RequestTradeEx_Implementation(FYITradeOpenRequest Request)
+{
+	// Reuse legacy implementation; structured completion/failure is emitted on client from OnRep_CurrentSession/Client_TradeSessionFailed.
+	Server_RequestTrade_Implementation(Request.Target, Request.bTargetIsNPC);
+}
+
 void UYITradeInteractionComponent::Server_RequestShop_Implementation(UYIShopComponent* Shop)
 {
     if (!IsOwnerValidForTrade(false) || !Shop)
@@ -319,6 +489,25 @@ void UYITradeInteractionComponent::Server_RequestShop_Implementation(UYIShopComp
     Client_ShopStockReady(Shop, OutItems, OutSize);
 }
 
+void UYITradeInteractionComponent::Server_RequestShopOpenEx_Implementation(FYIShopOpenRequest Request)
+{
+	FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Open, Request.RequestId, false, false, EYIShopOpError::InvalidRequest, FText::GetEmpty());
+	if (!IsOwnerValidForTrade(false) || !Request.Shop)
+	{
+		Result.Error = Request.Shop ? EYIShopOpError::InvalidRequest : EYIShopOpError::InvalidShop;
+		Result.Message = Request.Shop
+			? NSLOCTEXT("YOLOInventory", "Shop_Open_InvalidReq", "Invalid shop request")
+			: NSLOCTEXT("YOLOInventory", "Shop_Open_InvalidShop", "Invalid shop");
+		Client_ShopOpResult(Result);
+		return;
+	}
+	Result.bRequestAccepted = true;
+	Server_RequestShop_Implementation(Request.Shop);
+	Result.bSucceeded = true;
+	Result.Error = EYIShopOpError::None;
+	Client_ShopOpResult(Result);
+}
+
 bool UYITradeInteractionComponent::Server_RequestShop_Validate(UYIShopComponent* Shop)
 {
     return IsOwnerValidForTrade(false) && Shop != nullptr;
@@ -326,31 +515,13 @@ bool UYITradeInteractionComponent::Server_RequestShop_Validate(UYIShopComponent*
 
 void UYITradeInteractionComponent::Server_RequestShopBuy_Implementation(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
 {
-    if (!IsOwnerValidForTrade(false) || !Shop || !BuyerInv || Count <= 0)
-    {
-        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_Invalid", "Invalid buy request"));
-        return;
-    }
-
-    APlayerController* PC = GetOwningPC();
-    if (!PC || !PC->PlayerState)
-    {
-        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_NoPC", "No player controller"));
-        return;
-    }
-
-    // Only allow buying into the requester's inventory.
-    if (APawn* Pawn = PC->GetPawn())
-    {
-        if (BuyerInv->GetOwner() != Pawn)
-        {
-            Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Buy_WrongOwner", "Invalid inventory owner"));
-            return;
-        }
-    }
-
-    Shop->ServerBuyItem(StockIndex, Count, BuyerInv, DestPos);
-    Client_ShopActionResult(Shop, true, NSLOCTEXT("YOLOInventory", "Shop_Buy_OK", "Purchase requested"));
+	FYIShopBuyRequest Request;
+	Request.Shop = Shop;
+	Request.StockIndex = StockIndex;
+	Request.Count = Count;
+	Request.BuyerInv = BuyerInv;
+	Request.DestPos = DestPos;
+	Server_RequestShopBuyEx_Implementation(Request);
 }
 
 bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
@@ -360,31 +531,12 @@ bool UYITradeInteractionComponent::Server_RequestShopBuy_Validate(UYIShopCompone
 
 void UYITradeInteractionComponent::Server_RequestShopSell_Implementation(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
 {
-    if (!IsOwnerValidForTrade(false) || !Shop || !SellerInv || Count <= 0)
-    {
-        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_Invalid", "Invalid sell request"));
-        return;
-    }
-
-    APlayerController* PC = GetOwningPC();
-    if (!PC || !PC->PlayerState)
-    {
-        Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_NoPC", "No player controller"));
-        return;
-    }
-
-    // Only allow selling from the requester's inventory.
-    if (APawn* Pawn = PC->GetPawn())
-    {
-        if (SellerInv->GetOwner() != Pawn)
-        {
-            Client_ShopActionResult(Shop, false, NSLOCTEXT("YOLOInventory", "Shop_Sell_WrongOwner", "Invalid inventory owner"));
-            return;
-        }
-    }
-
-    Shop->ServerSellItem(SourceIndex, Count, SellerInv);
-    Client_ShopActionResult(Shop, true, NSLOCTEXT("YOLOInventory", "Shop_Sell_OK", "Sale requested"));
+	FYIShopSellRequest Request;
+	Request.Shop = Shop;
+	Request.SourceIndex = SourceIndex;
+	Request.Count = Count;
+	Request.SellerInv = SellerInv;
+	Server_RequestShopSellEx_Implementation(Request);
 }
 
 bool UYITradeInteractionComponent::Server_RequestShopSell_Validate(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
@@ -416,6 +568,129 @@ void UYITradeInteractionComponent::Server_TransferItem_Implementation(ETradeSide
     CurrentSession->ServerTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count);
 }
 
+void UYITradeInteractionComponent::Server_RequestShopBuyEx_Implementation(FYIShopBuyRequest Request)
+{
+	FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Buy, Request.RequestId, false, false, EYIShopOpError::InvalidRequest, FText::GetEmpty());
+	if (!IsOwnerValidForTrade(false) || !Request.Shop || !Request.BuyerInv || Request.Count <= 0)
+	{
+		Result.Error = EYIShopOpError::InvalidRequest;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_Invalid", "Invalid buy request");
+		Client_ShopActionResult(Request.Shop, false, Result.Message);
+		Client_ShopOpResult(Result);
+		return;
+	}
+
+	APlayerController* PC = GetOwningPC();
+	if (!PC || !PC->PlayerState)
+	{
+		Result.Error = EYIShopOpError::InvalidRequest;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_NoPC", "No player controller");
+		Client_ShopActionResult(Request.Shop, false, Result.Message);
+		Client_ShopOpResult(Result);
+		return;
+	}
+	if (APawn* Pawn = PC->GetPawn())
+	{
+		if (Request.BuyerInv->GetOwner() != Pawn)
+		{
+			Result.Error = EYIShopOpError::InvalidOwner;
+			Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_WrongOwner", "Invalid inventory owner");
+			Client_ShopActionResult(Request.Shop, false, Result.Message);
+			Client_ShopOpResult(Result);
+			return;
+		}
+	}
+
+	Result.bRequestAccepted = true;
+	Request.Shop->ExecuteBuyRequest(Request, Result);
+
+	TArray<FYINetBagItem> OutItems;
+	FIntPoint OutSize = FIntPoint::ZeroValue;
+	Request.Shop->GetStockMirrorForPlayer(PC->PlayerState, OutItems, OutSize);
+	Client_ShopStockReady(Request.Shop, OutItems, OutSize);
+
+	Client_ShopActionResult(Request.Shop, Result.bSucceeded, Result.Message);
+	Client_ShopOpResult(Result);
+}
+
+void UYITradeInteractionComponent::Server_RequestShopSellEx_Implementation(FYIShopSellRequest Request)
+{
+	FYIShopOpResult Result = MakeShopOpResult(Request.Shop, EYIShopOpKind::Sell, Request.RequestId, false, false, EYIShopOpError::InvalidRequest, FText::GetEmpty());
+	if (!IsOwnerValidForTrade(false) || !Request.Shop || !Request.SellerInv || Request.Count <= 0)
+	{
+		Result.Error = EYIShopOpError::InvalidRequest;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_Invalid", "Invalid sell request");
+		Client_ShopActionResult(Request.Shop, false, Result.Message);
+		Client_ShopOpResult(Result);
+		return;
+	}
+
+	APlayerController* PC = GetOwningPC();
+	if (!PC || !PC->PlayerState)
+	{
+		Result.Error = EYIShopOpError::InvalidRequest;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_NoPC", "No player controller");
+		Client_ShopActionResult(Request.Shop, false, Result.Message);
+		Client_ShopOpResult(Result);
+		return;
+	}
+	if (APawn* Pawn = PC->GetPawn())
+	{
+		if (Request.SellerInv->GetOwner() != Pawn)
+		{
+			Result.Error = EYIShopOpError::InvalidOwner;
+			Result.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_WrongOwner", "Invalid inventory owner");
+			Client_ShopActionResult(Request.Shop, false, Result.Message);
+			Client_ShopOpResult(Result);
+			return;
+		}
+	}
+
+	Result.bRequestAccepted = true;
+	Request.Shop->ExecuteSellRequest(Request, Result);
+
+	TArray<FYINetBagItem> OutItems;
+	FIntPoint OutSize = FIntPoint::ZeroValue;
+	Request.Shop->GetStockMirrorForPlayer(PC->PlayerState, OutItems, OutSize);
+	Client_ShopStockReady(Request.Shop, OutItems, OutSize);
+
+	Client_ShopActionResult(Request.Shop, Result.bSucceeded, Result.Message);
+	Client_ShopOpResult(Result);
+}
+
+void UYITradeInteractionComponent::Server_RequestTradeTransferEx_Implementation(FYITradeTransferRequest Request)
+{
+	FYITradeOpResult Result = MakeTradeOpResult(EYITradeOpKind::Transfer, Request.RequestId, false, false, EYITradeOpError::InvalidRequest, FText::GetEmpty());
+	if (!IsOwnerValidForTrade(false) || !CurrentSession)
+	{
+		Result.Error = EYITradeOpError::NoSession;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_NoSession", "No active trade session");
+		Client_TradeOpResult(Result);
+		return;
+	}
+
+	APlayerController* PC = GetOwningPC();
+	if (!PC || !PC->PlayerState)
+	{
+		Result.Error = EYITradeOpError::InvalidOwner;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_InvalidOwner", "Invalid player controller");
+		Client_TradeOpResult(Result);
+		return;
+	}
+	const ETradeSide CallerSide = CurrentSession->GetSideForPlayer(PC->PlayerState);
+	if (CallerSide != ETradeSide::SideA && CallerSide != ETradeSide::SideB)
+	{
+		Result.Error = EYITradeOpError::NotParticipant;
+		Result.Message = NSLOCTEXT("YOLOInventory", "Trade_NotParticipant", "You are not part of this trade");
+		Client_TradeOpResult(Result);
+		return;
+	}
+	Result.bRequestAccepted = true;
+	Result.bSucceeded = true;
+	Server_TransferItem_Implementation(Request.FromSide, Request.ToSide, Request.SourceIndex, Request.DestPos, Request.Count);
+	Client_TradeOpResult(Result);
+}
+
 bool UYITradeInteractionComponent::Server_TransferItem_Validate(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
 {
     return IsOwnerValidForTrade(false);
@@ -445,6 +720,9 @@ void UYITradeInteractionComponent::Client_TradeSessionStarted_Implementation(AYI
 
 void UYITradeInteractionComponent::Client_TradeSessionFailed_Implementation(const FText& Reason)
 {
+    FYITradeOpResult Structured = MakeTradeOpResult(EYITradeOpKind::Open, PendingTradeOpenRequestId, true, false, EYITradeOpError::ValidationFailed, Reason);
+    OnTradeOpResultReceived.Broadcast(Structured);
+    PendingTradeOpenRequestId.Invalidate();
     OnTradeFailed.Broadcast(Reason);
     UYIDebugLibrary::EmitDebugMessage(
         this,
@@ -457,6 +735,11 @@ void UYITradeInteractionComponent::Client_TradeSessionFailed_Implementation(cons
         false,
         false,
         TEXT("Trade"));
+}
+
+void UYITradeInteractionComponent::Client_TradeOpResult_Implementation(const FYITradeOpResult& Result)
+{
+	OnTradeOpResultReceived.Broadcast(Result);
 }
 
 void UYITradeInteractionComponent::Client_ShopStockReady_Implementation(UYIShopComponent* Shop, const TArray<FYINetBagItem>& Stock, FIntPoint Size)
@@ -515,6 +798,11 @@ void UYITradeInteractionComponent::Client_ShopActionResult_Implementation(UYISho
         false,
         false,
         TEXT("Trade"));
+}
+
+void UYITradeInteractionComponent::Client_ShopOpResult_Implementation(const FYIShopOpResult& Result)
+{
+	OnShopOpResultReceived.Broadcast(Result);
 }
 
 APlayerController* UYITradeInteractionComponent::GetOwningPC() const
@@ -621,6 +909,9 @@ void UYITradeInteractionComponent::OnRep_CurrentSession()
 {
 	if (CurrentSession)
 	{
+		FYITradeOpResult Structured = MakeTradeOpResult(EYITradeOpKind::Open, PendingTradeOpenRequestId, true, true, EYITradeOpError::None, FText::GetEmpty());
+		OnTradeOpResultReceived.Broadcast(Structured);
+		PendingTradeOpenRequestId.Invalidate();
 		OnTradeSessionReady.Broadcast(CurrentSession);
         OnTradeOpened.Broadcast(CurrentSession);
 

@@ -2,8 +2,8 @@
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
-  "FriendlyName": "YOLOInventoryTrade",
-  "Description": "Runtime trade/session interaction systems for YOLO Inventory Suite.",
+  "FriendlyName": "YOLOInventoryShop",
+  "Description": "Runtime shop stock and buy/sell systems for YOLO Inventory Suite.",
   "Category": "YOLO Inventory Suite",
   "CreatedBy": "Rovo Dev",
   "CreatedByURL": "",
@@ -14,7 +14,7 @@
   "Installed": false,
   "Modules": [
     {
-      "Name": "YOLOInventoryTrade",
+      "Name": "YOLOInventoryShop",
       "Type": "Runtime",
       "LoadingPhase": "Default"
     }
@@ -30,10 +30,6 @@
     },
     {
       "Name": "YOLOInventoryContainers",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryShop",
       "Enabled": true
     }
   ]
