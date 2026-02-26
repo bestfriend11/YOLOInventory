@@ -9,6 +9,7 @@
 
 class UYIInventoryBag;
 struct FYIInventoryContainerRuntimeService;
+struct FYIInventoryBagContextService;
 struct FYIInventoryMirrorService;
 struct FYIInventoryMutationService;
 
@@ -356,6 +357,7 @@ protected:
 
 private:
 	friend struct FYIInventoryContainerRuntimeService;
+	friend struct FYIInventoryBagContextService;
 	friend struct FYIInventoryMirrorService;
 	friend struct FYIInventoryMutationService;
 

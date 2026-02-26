@@ -1,4 +1,5 @@
 #include "YIInventoryComponent.h"
+#include "YIInventoryBagContextService.h"
 #include "YIInventoryContainerRuntimeService.h"
 #include "YIInventoryMirrorService.h"
 #include "YIInventoryMutationService.h"
@@ -19,214 +20,37 @@ UYIInventoryComponent::UYIInventoryComponent()
 
 UYIInventoryBag* UYIInventoryComponent::CreateBag(FName BagName, FIntPoint GridSize)
 {
-	UYIInventoryBag* NewBag = NewObject<UYIInventoryBag>(this);
-	if (NewBag)
-	{
-		NewBag->EnsureBagId();
-		NewBag->GridSize = GridSize;
-		NewBag->DisplayName = FText::FromName(BagName);
-		Bags.Add(NewBag);
-		// Keep setup simple: first created bag becomes active automatically.
-		if (!EquippedBag)
-		{
-			OpenBag(NewBag);
-		}
-		else if (!ActiveBagId.IsValid())
-		{
-			ActiveBagId = NewBag->BagId;
-		}
-		return NewBag;
-	}
-	return nullptr;
+	return FYIInventoryBagContextService::CreateBag(*this, BagName, GridSize);
 }
 
 void UYIInventoryComponent::OpenBag(UYIInventoryBag* Bag)
 {
-	if (!Bag) return;
-	// Prevent templates from being used directly at runtime
-	if (GetOwner() && GetOwner()->HasAuthority() && IsTemplateBag(Bag))
-	{
-		UYIInventoryBag* RuntimeBag = CloneBagTemplate(Bag);
-		if (!RuntimeBag)
-		{
-			return;
-		}
-		Bag = RuntimeBag;
-	}
-
-	// Ensure the active bag is tracked in Bags so designers do not need to keep two fields in sync.
-	if (!Bags.Contains(Bag))
-	{
-		Bags.Add(Bag);
-	}
-
-	if (EquippedBag && BagChangedHandle.IsValid())
-	{
-		EquippedBag->OnChanged.Remove(BagChangedHandle);
-		BagChangedHandle.Reset();
-	}
-	if (BagEventSource)
-	{
-		BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
-		BagEventSource->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
-		BagEventSource->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
-		BagEventSource->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
-		BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
-		BagEventSource = nullptr;
-	}
-
-	EquippedBag = Bag;
-	if (EquippedBag)
-	{
-		EquippedBag->EnsureBagId();
-		ActiveBagId = EquippedBag->BagId;
-		BagChangedHandle = EquippedBag->OnChanged.AddUObject(this, &UYIInventoryComponent::SyncNetState);
-		BagEventSource = EquippedBag;
-		BagEventSource->OnItemAdded.AddDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
-		BagEventSource->OnItemRemoved.AddDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
-		BagEventSource->OnItemMoved.AddDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
-		BagEventSource->OnItemRotated.AddDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
-		BagEventSource->OnItemTransferred.AddDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		SyncNetState();
-	}
-	OnBagOpened.Broadcast(Bag);
+	FYIInventoryBagContextService::OpenBag(*this, Bag);
 }
 
 void UYIInventoryComponent::CloseBag(UYIInventoryBag* Bag)
 {
-	if (!Bag) return;
-	Bag->EnsureBagId();
-	if (EquippedBag == Bag)
-	{
-		if (BagChangedHandle.IsValid())
-		{
-			EquippedBag->OnChanged.Remove(BagChangedHandle);
-			BagChangedHandle.Reset();
-		}
-		if (BagEventSource)
-		{
-			BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
-			BagEventSource->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
-			BagEventSource->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
-			BagEventSource->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
-			BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
-			BagEventSource = nullptr;
-		}
-		EquippedBag = nullptr;
-		ActiveBagId.Invalidate();
-		if (GetOwner() && GetOwner()->HasAuthority())
-		{
-			SyncNetState();
-		}
-	}
-	const int32 ClearedContextCount = ClearActiveContextsForBagId(Bag->BagId);
-	if (ClearedContextCount == 0)
-	{
-		OnBagClosed.Broadcast(Bag);
-	}
+	FYIInventoryBagContextService::CloseBag(*this, Bag);
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBag() const
 {
-	auto ResolvePrimaryBag = [this]() -> UYIInventoryBag*
-	{
-		if (ActiveBagId.IsValid())
-		{
-			if (UYIInventoryBag* ActiveBag = GetBagById(ActiveBagId))
-			{
-				return ActiveBag;
-			}
-		}
-		for (UYIInventoryBag* Bag : Bags)
-		{
-			if (Bag)
-			{
-				return Bag;
-			}
-		}
-		return nullptr;
-	};
-
-	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority)
-	{
-		if (EquippedBag)
-		{
-			return EquippedBag.Get();
-		}
-		return ResolvePrimaryBag();
-	}
-	// Client: prefer preview mirror if present
-	if (ClientPreviewBag)
-	{
-		return ClientPreviewBag;
-	}
-	if (EquippedBag)
-	{
-		return EquippedBag.Get();
-	}
-	return ResolvePrimaryBag();
+	return FYIInventoryBagContextService::GetBag(*this);
 }
 
 FGuid UYIInventoryComponent::GetActiveContextBagId(FGameplayTag ContextTag) const
 {
-	if (!ContextTag.IsValid())
-	{
-		return FGuid();
-	}
-
-	for (const FYIActiveBagContextEntry& Entry : ActiveBagContexts)
-	{
-		if (Entry.ContextTag == ContextTag)
-		{
-			return Entry.BagId;
-		}
-	}
-	return FGuid();
+	return FYIInventoryBagContextService::GetActiveContextBagId(*this, ContextTag);
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetActiveContextBag(FGameplayTag ContextTag) const
 {
-	const FGuid ContextBagId = GetActiveContextBagId(ContextTag);
-	return ContextBagId.IsValid() ? GetBagById(ContextBagId) : nullptr;
+	return FYIInventoryBagContextService::GetActiveContextBag(*this, ContextTag);
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
 {
-	if (!BagId.IsValid())
-	{
-		return nullptr;
-	}
-
-	for (UYIInventoryBag* Bag : Bags)
-	{
-		if (!Bag)
-		{
-			continue;
-		}
-		if (!Bag->BagId.IsValid())
-		{
-			Bag->EnsureBagId();
-		}
-		if (Bag->BagId == BagId)
-		{
-			return Bag;
-		}
-	}
-
-	// Client-side UI mirrors (owner-only, not authoritative).
-	if (ClientPreviewBag && ClientPreviewBag->BagId == BagId)
-	{
-		return ClientPreviewBag;
-	}
-	if (UYIInventoryBag* ContextPreview = FindClientContextPreviewBagById(BagId))
-	{
-		return ContextPreview;
-	}
-	return nullptr;
+	return FYIInventoryBagContextService::GetBagById(*this, BagId);
 }
 
 UYIInventoryBag* UYIInventoryComponent::FindClientContextPreviewBagById(const FGuid& BagId) const
@@ -246,248 +70,52 @@ void UYIInventoryComponent::RebuildClientPreviewBagFromNet(UYIInventoryBag* Targ
 
 int32 UYIInventoryComponent::FindActiveContextIndex(FGameplayTag ContextTag) const
 {
-	if (!ContextTag.IsValid())
-	{
-		return INDEX_NONE;
-	}
-
-	for (int32 Index = 0; Index < ActiveBagContexts.Num(); ++Index)
-	{
-		if (ActiveBagContexts[Index].ContextTag == ContextTag)
-		{
-			return Index;
-		}
-	}
-	return INDEX_NONE;
+	return FYIInventoryBagContextService::FindActiveContextIndex(*this, ContextTag);
 }
 
 bool UYIInventoryComponent::SetActiveBagById(const FGuid& InBagId)
 {
-	if (!InBagId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		ServerSetActiveBagById(InBagId);
-		return true;
-	}
-
-	if (UYIInventoryBag* Bag = GetBagById(InBagId))
-	{
-		OpenBag(Bag);
-		return true;
-	}
-	return false;
+	return FYIInventoryBagContextService::SetActiveBagById(*this, InBagId);
 }
 
 bool UYIInventoryComponent::SetActiveBagByRoleTag(FGameplayTag InBagRoleTag)
 {
-	if (!InBagRoleTag.IsValid())
-	{
-		return false;
-	}
-	if (UYIInventoryBag* Bag = GetBagByRoleTag(InBagRoleTag))
-	{
-		OpenBag(Bag);
-		return true;
-	}
-	return false;
+	return FYIInventoryBagContextService::SetActiveBagByRoleTag(*this, InBagRoleTag);
 }
 
 bool UYIInventoryComponent::OpenContainedBagAtIndex(int32 ItemIndex)
 {
-	UYIInventoryBag* ActiveBag = GetBag();
-	if (!ActiveBag || !ActiveBag->Items.IsValidIndex(ItemIndex))
-	{
-		return false;
-	}
-
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		const FYIBagItem& Item = ActiveBag->Items[ItemIndex];
-		if (!Item.Item.InstanceId.IsValid())
-		{
-			return false;
-		}
-		const FGuid ParentBagId = ActiveBag->BagId.IsValid() ? ActiveBag->BagId : ActiveBagId;
-		ServerOpenContainedBagByInstance(ParentBagId, Item.Item.InstanceId);
-		return true;
-	}
-
-	return TryOpenContainedBagInternal(ActiveBag, ItemIndex);
+	return FYIInventoryBagContextService::OpenContainedBagAtIndex(*this, ItemIndex);
 }
 
 UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagAtIndex(int32 ItemIndex)
 {
-	UYIInventoryBag* ActiveBag = GetBag();
-	if (!ActiveBag || !ActiveBag->Items.IsValidIndex(ItemIndex))
-	{
-		return nullptr;
-	}
-
-	UYIInventoryBag* Contained = EnsureContainedBagForItem(ActiveBag->Items[ItemIndex], ActiveBag);
-	if (Contained && GetOwner() && GetOwner()->HasAuthority())
-	{
-		SyncNetState();
-	}
-	return Contained;
+	return FYIInventoryBagContextService::EnsureContainedBagAtIndex(*this, ItemIndex);
 }
 
 bool UYIInventoryComponent::OpenParentBag()
 {
-	UYIInventoryBag* ActiveBag = GetBag();
-	if (!ActiveBag)
-	{
-		return false;
-	}
-
-	const FGuid ChildBagId = ActiveBag->BagId;
-	if (!ChildBagId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		ServerOpenParentBag(ChildBagId);
-		return true;
-	}
-
-	FGuid ParentBagId;
-	FGuid ParentItemId;
-	if (!FindContainerParentForBag(ChildBagId, ParentBagId, ParentItemId))
-	{
-		return false;
-	}
-	return SetActiveBagById(ParentBagId);
+	return FYIInventoryBagContextService::OpenParentBag(*this);
 }
 
 bool UYIInventoryComponent::SetActiveContextBagById(FGameplayTag ContextTag, const FGuid& InBagId)
 {
-	if (!ContextTag.IsValid() || !InBagId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		ServerSetActiveContextBagById(ContextTag, InBagId);
-		return true;
-	}
-
-	if (UYIInventoryBag* Bag = GetBagById(InBagId))
-	{
-		Bag->EnsureBagId();
-		UYIInventoryBag* PreviousBag = nullptr;
-		const int32 ExistingIndex = FindActiveContextIndex(ContextTag);
-		if (ExistingIndex != INDEX_NONE)
-		{
-			if (ActiveBagContexts[ExistingIndex].BagId != Bag->BagId)
-			{
-				PreviousBag = GetBagById(ActiveBagContexts[ExistingIndex].BagId);
-			}
-			ActiveBagContexts[ExistingIndex].BagId = Bag->BagId;
-		}
-		else
-		{
-			FYIActiveBagContextEntry& NewEntry = ActiveBagContexts.AddDefaulted_GetRef();
-			NewEntry.ContextTag = ContextTag;
-			NewEntry.BagId = Bag->BagId;
-		}
-		if (GetOwner() && GetOwner()->HasAuthority())
-		{
-			SyncNetState();
-		}
-		if (PreviousBag && PreviousBag != Bag)
-		{
-			OnBagClosed.Broadcast(PreviousBag);
-		}
-		OnBagOpened.Broadcast(Bag);
-		return true;
-	}
-	return false;
+	return FYIInventoryBagContextService::SetActiveContextBagById(*this, ContextTag, InBagId);
 }
 
 bool UYIInventoryComponent::SetActiveContextBagByRoleTag(FGameplayTag ContextTag, FGameplayTag InBagRoleTag)
 {
-	if (!ContextTag.IsValid() || !InBagRoleTag.IsValid())
-	{
-		return false;
-	}
-
-	if (UYIInventoryBag* Bag = GetBagByRoleTag(InBagRoleTag))
-	{
-		Bag->EnsureBagId();
-		return SetActiveContextBagById(ContextTag, Bag->BagId);
-	}
-	return false;
+	return FYIInventoryBagContextService::SetActiveContextBagByRoleTag(*this, ContextTag, InBagRoleTag);
 }
 
 bool UYIInventoryComponent::ClearActiveContextBag(FGameplayTag ContextTag)
 {
-	if (!ContextTag.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		ServerClearActiveContextBag(ContextTag);
-		return true;
-	}
-
-	const int32 ExistingIndex = FindActiveContextIndex(ContextTag);
-	if (ExistingIndex == INDEX_NONE)
-	{
-		return false;
-	}
-
-	UYIInventoryBag* ClosedBag = GetBagById(ActiveBagContexts[ExistingIndex].BagId);
-	ActiveBagContexts.RemoveAt(ExistingIndex);
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		SyncNetState();
-	}
-	if (ClosedBag)
-	{
-		OnBagClosed.Broadcast(ClosedBag);
-	}
-	return true;
+	return FYIInventoryBagContextService::ClearActiveContextBag(*this, ContextTag);
 }
 
 int32 UYIInventoryComponent::ClearActiveContextsForBagId(const FGuid& InBagId)
 {
-	if (!InBagId.IsValid())
-	{
-		return 0;
-	}
-
-	int32 RemovedCount = 0;
-	for (int32 Index = ActiveBagContexts.Num() - 1; Index >= 0; --Index)
-	{
-		if (ActiveBagContexts[Index].BagId == InBagId)
-		{
-			ActiveBagContexts.RemoveAtSwap(Index, 1, EAllowShrinking::No);
-			++RemovedCount;
-		}
-	}
-
-	if (RemovedCount > 0)
-	{
-		if (GetOwner() && GetOwner()->HasAuthority())
-		{
-			SyncNetState();
-		}
-		if (UYIInventoryBag* ClosedBag = GetBagById(InBagId))
-		{
-			OnBagClosed.Broadcast(ClosedBag);
-		}
-	}
-
-	return RemovedCount;
+	return FYIInventoryBagContextService::ClearActiveContextsForBagId(*this, InBagId);
 }
 
 void UYIInventoryComponent::ServerSetActiveBagById_Implementation(const FGuid& InBagId)
@@ -540,36 +168,12 @@ void UYIInventoryComponent::ServerOpenParentBag_Implementation(const FGuid& Chil
 
 UYIInventoryBag* UYIInventoryComponent::GetBagByRoleTag(FGameplayTag BagRoleTag) const
 {
-	if (!BagRoleTag.IsValid())
-	{
-		return nullptr;
-	}
-
-	for (UYIInventoryBag* Bag : Bags)
-	{
-		if (Bag && Bag->BagRoleTag.IsValid() && Bag->BagRoleTag.MatchesTag(BagRoleTag))
-		{
-			return Bag;
-		}
-	}
-	return nullptr;
+	return FYIInventoryBagContextService::GetBagByRoleTag(*this, BagRoleTag);
 }
 
 UYIInventoryBag* UYIInventoryComponent::GetBagByDisplayName(FName BagName) const
 {
-	if (BagName.IsNone())
-	{
-		return nullptr;
-	}
-
-	for (UYIInventoryBag* Bag : Bags)
-	{
-		if (Bag && Bag->DisplayName.EqualTo(FText::FromName(BagName)))
-		{
-			return Bag;
-		}
-	}
-	return nullptr;
+	return FYIInventoryBagContextService::GetBagByDisplayName(*this, BagName);
 }
 
 bool UYIInventoryComponent::GetBagItemIdentity(const UYIInventoryBag* Bag, int32 ItemIndex, FYIInventoryItemRef& OutIdentity) const
@@ -821,43 +425,12 @@ bool UYIInventoryComponent::TryOpenContainedBagInternal(UYIInventoryBag* ParentB
 
 void UYIInventoryComponent::GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const
 {
-	OutDescriptors = NetBagDescriptors;
+	FYIInventoryBagContextService::GetReplicatedBagDescriptors(*this, OutDescriptors);
 }
 
 bool UYIInventoryComponent::RemoveBag(UYIInventoryBag* Bag)
 {
-	if (!Bag) return false;
-	Bag->EnsureBagId();
-	LockedBagItems.RemoveAllSwap([Bag](const FYIInventoryLockRef& Entry)
-	{
-		return Entry.ItemRef.Bag.BagId == Bag->BagId;
-	}, EAllowShrinking::No);
-	if (ActiveBagId.IsValid() && ActiveBagId == Bag->BagId)
-	{
-		ActiveBagId.Invalidate();
-	}
-	ClearActiveContextsForBagId(Bag->BagId);
-	const bool bWasEquipped = (EquippedBag == Bag);
-	if (bWasEquipped)
-	{
-		CloseBag(Bag);
-	}
-
-	int32 Index = Bags.IndexOfByKey(Bag);
-	if (Index != INDEX_NONE)
-	{
-		Bags.RemoveAt(Index);
-		// Keep workflow predictable: if the current bag was removed, auto-open another one if available.
-		if (bWasEquipped)
-		{
-			if (UYIInventoryBag* NextBag = GetBag())
-			{
-				OpenBag(NextBag);
-			}
-		}
-		return true;
-	}
-	return false;
+	return FYIInventoryBagContextService::RemoveBag(*this, Bag);
 }
 
 bool UYIInventoryComponent::AddItemToBag(UYIInventoryBag* Bag, TSoftObjectPtr<UYIItemDefinition> ItemDef, int32 Count)
