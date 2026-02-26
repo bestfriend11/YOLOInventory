@@ -37,24 +37,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory", meta=(ToolTip="The inventory bag asset to display"))
 	UYIInventoryBag* Bag;
 
-	/** Optional owner inventory component for ID/role-based runtime bag binding. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Optional inventory component to resolve BagId/RoleTag bindings"))
+	/** Runtime owner inventory component used to resolve context/id/role bindings. Internal binding state (not designer-authored). */
+	UPROPERTY(Transient)
 	TObjectPtr<UYIInventoryComponent> BoundInventoryComponent = nullptr;
 
-	/** Optional bag id binding. If valid and BoundInventoryComponent is set, this takes precedence over role binding. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag identity binding (preferred when valid)"))
+	/** Runtime bag id binding. Internal binding state set by SetBagBindingById at runtime. */
 	FGuid BoundBagId;
 
 	/** Optional role tag binding when BoundBagId is not set. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bag role binding fallback (for example Bag.Role.Context.Secondary)"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(EditCondition="!bBindToActiveBagContext", EditConditionHides, ToolTip="Designer-facing binding by bag role tag (used when not binding to active context)."))
 	FGameplayTag BoundBagRoleTag;
 
 	/** If true, this grid always resolves from inventory active bag contexts instead of a fixed role/id. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(ToolTip="Bind this grid to the inventory component's active bag context map instead of a fixed bag role."))
 	bool bBindToActiveBagContext = false;
 
 	/** Optional semantic active-context tag. Empty = primary active bag (ActiveBagId); set to bind this grid to a named context bag. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(EditCondition="bBindToActiveBagContext", EditConditionHides))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Binding", meta=(EditCondition="bBindToActiveBagContext", EditConditionHides, ToolTip="Context tag this grid listens to when active-context binding is enabled. Empty = primary active bag."))
 	FGameplayTag BoundActiveContextTag;
 
 	/** Set/replace the bag shown by this grid at runtime. Ensures Slate and delegates are rebound. */
