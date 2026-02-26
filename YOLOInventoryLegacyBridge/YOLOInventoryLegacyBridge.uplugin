@@ -35,6 +35,10 @@
     {
       "Name": "YOLOInventoryContainers",
       "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryUI",
+      "Enabled": true
     }
   ]
 }

@@ -13,7 +13,6 @@ public class YOLOInventoryContainers : ModuleRules
             "Engine",
             "GameplayTags",
             "GameplayAbilities",
-            "UMG",
             "YOLOInventoryCore",
             "YOLOInventorySchema"
         });

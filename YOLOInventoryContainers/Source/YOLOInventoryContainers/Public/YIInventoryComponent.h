@@ -8,7 +8,9 @@
 #include "YIInventoryComponent.generated.h"
 
 class UYIInventoryBag;
-class UUserWidget;
+struct FYIInventoryContainerRuntimeService;
+struct FYIInventoryMirrorService;
+struct FYIInventoryMutationService;
 
 USTRUCT(BlueprintType)
 struct YOLOINVENTORYCONTAINERS_API FYINetBagDescriptor
@@ -284,10 +286,6 @@ public:
 	UFUNCTION(Server, Reliable)
 	void ServerOpenParentBag(const FGuid& ChildBagId);
 
-	/** Soft class references so designers can assign widgets once and call the helpers below. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", meta=(ToolTip="Inventory screen widget class used by OpenInventoryScreen on owning client."))
-	TSoftClassPtr<UUserWidget> InventoryScreenClass;
-
 	/** Optional per-inventory SFX library for item-driven UI sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Audio", meta=(ToolTip="Optional per-inventory SFX library for item-driven UI sounds"))
 	TSoftObjectPtr<class UYIItemSFXLibrary> ItemSFXLibrary;
@@ -317,18 +315,6 @@ public:
 	FOnInventoryItemRotated OnInventoryItemRotated;
 	UPROPERTY(BlueprintAssignable, Category="Inventory|Events", meta=(ToolTip="Fires when item transfers between bags."))
 	FOnInventoryItemTransferred OnInventoryItemTransferred;
-
-	/** Open the inventory screen for the owning local player. Creates if needed, sets the current bag, adds to viewport. */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper.\nOpen inventory screen and bind to current active bag context."))
-	UUserWidget* OpenInventoryScreen();
-
-	/** Close and remove the inventory screen if it is open. */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close inventory screen if open."))
-	void CloseInventoryScreen();
-
-	/** Close all inventory-related screens managed by this component. */
-	UFUNCTION(BlueprintCallable, Category="UI", meta=(ToolTip="Owning-client helper. Close all screens managed by this component."))
-	void CloseAllScreens();
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -369,9 +355,12 @@ protected:
 	TArray<TObjectPtr<UYIInventoryBag>> ClientContextPreviewBags;
 
 private:
+	friend struct FYIInventoryContainerRuntimeService;
+	friend struct FYIInventoryMirrorService;
+	friend struct FYIInventoryMutationService;
+
 	FDelegateHandle BagChangedHandle;
 	UYIInventoryBag* BagEventSource = nullptr;
-	TWeakObjectPtr<UUserWidget> ActiveInventoryScreen;
 
 	// Cleanup delegate when component is destroyed
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;

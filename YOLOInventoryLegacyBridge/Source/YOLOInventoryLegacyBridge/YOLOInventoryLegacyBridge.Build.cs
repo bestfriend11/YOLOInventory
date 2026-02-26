@@ -16,7 +16,8 @@ public class YOLOInventoryLegacyBridge : ModuleRules
             "YOLOInventoryContainers",
             "YOLOInventoryCore",
             "YOLOInventorySchema",
-            "YOLOInventoryEquipment"
+            "YOLOInventoryEquipment",
+            "YOLOInventoryUI"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]

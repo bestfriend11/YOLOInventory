@@ -1,137 +1,15 @@
 #include "YIInventoryComponent.h"
+#include "YIInventoryContainerRuntimeService.h"
+#include "YIInventoryMirrorService.h"
+#include "YIInventoryMutationService.h"
 #include "YIItemSchemaResolver.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
 #include "YIItemInstanceFragmentAccess.h"
 #include "Net/UnrealNetwork.h"
-#include "YIItemRegistrySubsystem.h"
-#include "YIInventoryBlueprintLibrary.h"
 #include "UObject/Package.h"
-#include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetBlueprintLibrary.h"
-#include "GameFramework/Pawn.h"
-#include "GameFramework/PlayerController.h"
-#include "Engine/Engine.h"
 #include "YIItemNetTypes.h"
 #include "YIDebugLibrary.h"
-
-namespace YIInventoryComponentUIBindings
-{
-	struct FYIInventoryScreenBindParams
-	{
-		UYIInventoryComponent* InInventoryComponent = nullptr;
-	};
-
-	static void YIInventoryComp_BindInventoryScreenWidget(UUserWidget* Widget, UYIInventoryComponent* InventoryComponent)
-	{
-		if (!Widget || !InventoryComponent)
-		{
-			return;
-		}
-
-		if (UFunction* Fn = Widget->FindFunction(TEXT("BindInventoryBagContexts")))
-		{
-			YIInventoryComponentUIBindings::FYIInventoryScreenBindParams Params;
-			Params.InInventoryComponent = InventoryComponent;
-			Widget->ProcessEvent(Fn, &Params);
-		}
-	}
-}
-
-using namespace YIInventoryComponentUIBindings;
-
-namespace
-{
-	static FYIItemInstance YIInventoryComp_MakeItemInstanceByCode(int64 Code, int32 Count)
-	{
-		FYIItemInstance Out;
-		Out.Count = Count;
-		if (Code == 0 || !GEngine)
-		{
-			return Out;
-		}
-
-		if (UYIItemRegistrySubsystem* Registry = GEngine->GetEngineSubsystem<UYIItemRegistrySubsystem>())
-		{
-			Out.Definition = Registry->GetByCode(Code);
-		}
-		return Out;
-	}
-
-	static bool YIInventoryComp_RectsOverlap(const FIntPoint& APos, const FIntPoint& ASize, const FIntPoint& BPos, const FIntPoint& BSize)
-	{
-		return !(APos.X + ASize.X <= BPos.X || BPos.X + BSize.X <= APos.X ||
-				 APos.Y + ASize.Y <= BPos.Y || BPos.Y + BSize.Y <= APos.Y);
-	}
-
-	static bool YIInventoryComp_FindSingleOverlapAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell, const FIntPoint& Size, int32& OutVictimIndex, int32 IgnoreIndex = INDEX_NONE)
-	{
-		OutVictimIndex = INDEX_NONE;
-		if (!Bag)
-		{
-			return false;
-		}
-
-		const FIntPoint Footprint = Bag->GetEffectiveSize(Size);
-		for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
-		{
-			if (Index == IgnoreIndex)
-			{
-				continue;
-			}
-			const FYIBagItem& Existing = Bag->Items[Index];
-			const FIntPoint ExistingSize = Bag->GetEffectiveSize(Existing.Size);
-			if (!YIInventoryComp_RectsOverlap(Cell, Footprint, Existing.Pos, ExistingSize))
-			{
-				continue;
-			}
-
-			if (OutVictimIndex != INDEX_NONE)
-			{
-				OutVictimIndex = INDEX_NONE;
-				return false; // more than one overlap -> not a single-swap candidate
-			}
-			OutVictimIndex = Index;
-		}
-
-		return OutVictimIndex != INDEX_NONE;
-	}
-
-	static int32 YIInventoryComp_AddBagItemExact(UYIInventoryBag* Bag, const FYIBagItem& ItemAtExactPos)
-	{
-		if (!Bag)
-		{
-			return INDEX_NONE;
-		}
-		if (!Bag->CanPlaceAt(ItemAtExactPos.Pos, ItemAtExactPos.Size))
-		{
-			return INDEX_NONE;
-		}
-
-		const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
-		Bag->bAutoMergeOnAdd = false;
-		const int32 NewIndex = Bag->AddBagItem(ItemAtExactPos);
-		Bag->bAutoMergeOnAdd = bSavedAutoMerge;
-		return NewIndex;
-	}
-
-	static void YIInventoryComp_ReassignRuntimeItemIdentitiesForClonedBag(UYIInventoryBag* Bag)
-	{
-		if (!Bag)
-		{
-			return;
-		}
-
-		// Template bag items are copied by value. That means runtime identities (InstanceId/StackId/ContainedBagId)
-		// would also be copied and can collide across pawns/sessions. Reassign on clone so every runtime bag owns unique items.
-		for (FYIBagItem& ItemEntry : Bag->Items)
-		{
-			ItemEntry.Item.InstanceId = FGuid::NewGuid();
-			ItemEntry.Item.StackId = FGuid::NewGuid();
-			ItemEntry.Item.ContainedBagId.Invalidate();
-		}
-	}
-}
 
 UYIInventoryComponent::UYIInventoryComponent()
 {
@@ -353,74 +231,17 @@ UYIInventoryBag* UYIInventoryComponent::GetBagById(const FGuid& BagId) const
 
 UYIInventoryBag* UYIInventoryComponent::FindClientContextPreviewBagById(const FGuid& BagId) const
 {
-	if (!BagId.IsValid())
-	{
-		return nullptr;
-	}
-	for (UYIInventoryBag* Bag : ClientContextPreviewBags)
-	{
-		if (Bag && Bag->BagId == BagId)
-		{
-			return Bag;
-		}
-	}
-	return nullptr;
+	return FYIInventoryMirrorService::FindClientContextPreviewBagById(*this, BagId);
 }
 
 UYIInventoryBag* UYIInventoryComponent::FindOrCreateClientContextPreviewBagById(const FGuid& BagId)
 {
-	if (!BagId.IsValid())
-	{
-		return nullptr;
-	}
-	if (UYIInventoryBag* Existing = FindClientContextPreviewBagById(BagId))
-	{
-		return Existing;
-	}
-	UYIInventoryBag* NewPreview = NewObject<UYIInventoryBag>(this);
-	if (!NewPreview)
-	{
-		return nullptr;
-	}
-	NewPreview->BagId = BagId;
-	ClientContextPreviewBags.Add(NewPreview);
-	return NewPreview;
+	return FYIInventoryMirrorService::FindOrCreateClientContextPreviewBagById(*this, BagId);
 }
 
 void UYIInventoryComponent::RebuildClientPreviewBagFromNet(UYIInventoryBag* TargetBag, const TArray<FYINetBagItem>& InItems, const FIntPoint& InGridSize, const FGuid& InBagId)
 {
-	if (!TargetBag)
-	{
-		return;
-	}
-
-	TargetBag->GridSize = InGridSize;
-	TargetBag->BagId = InBagId;
-	TargetBag->Items.Reset();
-
-	for (const FYINetBagItem& Net : InItems)
-	{
-		if (Net.Code == 0 || Net.Count <= 0)
-		{
-			continue;
-		}
-
-		FYIBagItem Item;
-		Item.Item = YIInventoryComp_MakeItemInstanceByCode(Net.Code, Net.Count);
-		if (Net.InstanceId.IsValid())
-		{
-			Item.Item.InstanceId = Net.InstanceId;
-		}
-		if (Net.StackId.IsValid())
-		{
-			Item.Item.StackId = Net.StackId;
-		}
-		Item.Item.CustomStackKey = Net.CustomStackKey;
-		Item.Item.ContainedBagId = Net.ContainedBagId;
-		Item.Pos = Net.Pos;
-		Item.Size = Net.Size;
-		TargetBag->Items.Add(Item);
-	}
+	FYIInventoryMirrorService::RebuildClientPreviewBagFromNet(*this, TargetBag, InItems, InGridSize, InBagId);
 }
 
 int32 UYIInventoryComponent::FindActiveContextIndex(FGameplayTag ContextTag) const
@@ -990,88 +811,12 @@ bool UYIInventoryComponent::IsBagDescendantOf(const FGuid& CandidateBagId, const
 
 UYIInventoryBag* UYIInventoryComponent::EnsureContainedBagForItem(FYIBagItem& InOutItem, const UYIInventoryBag* ParentBag)
 {
-	(void)ParentBag;
-	UYIItemDefinition* Definition = InOutItem.Item.Definition.IsValid()
-		? InOutItem.Item.Definition.Get()
-		: InOutItem.Item.Definition.LoadSynchronous();
-	if (!Definition || !YIItemSchema::IsContainerItem(Definition))
-	{
-		return nullptr;
-	}
-
-	if (InOutItem.Item.ContainedBagId.IsValid())
-	{
-		if (UYIInventoryBag* Existing = GetBagById(InOutItem.Item.ContainedBagId))
-		{
-			return Existing;
-		}
-	}
-
-	UYIInventoryBag* ChildBag = nullptr;
-	if (const UYIInventoryBag* TemplateBag = Cast<UYIInventoryBag>(YIItemSchema::GetContainerTemplateBag(Definition).LoadSynchronous()))
-	{
-		ChildBag = CloneBagTemplate(TemplateBag);
-	}
-	else
-	{
-		ChildBag = NewObject<UYIInventoryBag>(this);
-		if (ChildBag)
-		{
-			ChildBag->EnsureBagId();
-			const FText EffectiveName = YIItemSchema::GetDisplayName(Definition);
-			ChildBag->DisplayName = EffectiveName.IsEmpty()
-				? FText::FromString(TEXT("Container"))
-				: EffectiveName;
-			const FIntPoint DefaultGrid = YIItemSchema::GetContainerDefaultGridSize(Definition);
-			ChildBag->GridSize = FIntPoint(
-				FMath::Max(1, DefaultGrid.X),
-				FMath::Max(1, DefaultGrid.Y));
-			ChildBag->bAllowRotation = true;
-		}
-	}
-
-	if (!ChildBag)
-	{
-		return nullptr;
-	}
-
-	ChildBag->EnsureBagId();
-	if (!Bags.Contains(ChildBag))
-	{
-		Bags.Add(ChildBag);
-	}
-	InOutItem.Item.ContainedBagId = ChildBag->BagId;
-	InOutItem.Item.Count = 1; // container items are always non-stackable runtime instances
-	return ChildBag;
+	return FYIInventoryContainerRuntimeService::EnsureContainedBagForItem(*this, InOutItem, ParentBag);
 }
 
 bool UYIInventoryComponent::TryOpenContainedBagInternal(UYIInventoryBag* ParentBag, int32 ItemIndex)
 {
-	if (!ParentBag || !ParentBag->Items.IsValidIndex(ItemIndex))
-	{
-		return false;
-	}
-
-	FYIBagItem& Item = ParentBag->Items[ItemIndex];
-	UYIInventoryBag* ChildBag = EnsureContainedBagForItem(Item, ParentBag);
-	if (!ChildBag)
-	{
-		return false;
-	}
-
-	if (!ChildBag->BagId.IsValid())
-	{
-		ChildBag->EnsureBagId();
-	}
-
-	// Prevent cycles: destination child bag can never be parent/ancestor of its current parent.
-	if (ParentBag->BagId.IsValid() && IsBagDescendantOf(ParentBag->BagId, ChildBag->BagId))
-	{
-		return false;
-	}
-
-	OpenBag(ChildBag);
-	return true;
+	return FYIInventoryContainerRuntimeService::TryOpenContainedBagInternal(*this, ParentBag, ItemIndex);
 }
 
 void UYIInventoryComponent::GetReplicatedBagDescriptors(TArray<FYINetBagDescriptor>& OutDescriptors) const
@@ -1234,44 +979,7 @@ void UYIInventoryComponent::BeginPlay()
 
 UYIInventoryBag* UYIInventoryComponent::CloneBagTemplate(const UYIInventoryBag* TemplateBag)
 {
-	if (!TemplateBag)
-	{
-		return nullptr;
-	}
-
-	UYIInventoryBag* NewBag = NewObject<UYIInventoryBag>(this);
-	if (!NewBag)
-	{
-		return nullptr;
-	}
-	NewBag->EnsureBagId();
-
-	// Copy layout/settings
-	NewBag->DisplayName = TemplateBag->DisplayName;
-	NewBag->BagRoleTag = TemplateBag->BagRoleTag;
-	NewBag->GridSize = TemplateBag->GridSize;
-	NewBag->CellPixelSize = TemplateBag->CellPixelSize;
-	NewBag->bAllowRotation = TemplateBag->bAllowRotation;
-	NewBag->MinifyScale = TemplateBag->MinifyScale;
-	NewBag->GridStyleAsset = TemplateBag->GridStyleAsset;
-	NewBag->GridLineColor = TemplateBag->GridLineColor;
-	NewBag->OuterLineColor = TemplateBag->OuterLineColor;
-	NewBag->CellBgColor = TemplateBag->CellBgColor;
-	NewBag->GridThickness = TemplateBag->GridThickness;
-	NewBag->bShowCellTooltips = TemplateBag->bShowCellTooltips;
-	NewBag->bShowSortingHeaders = TemplateBag->bShowSortingHeaders;
-	NewBag->bEnableThumbnails = TemplateBag->bEnableThumbnails;
-	NewBag->bEnableHoverHighlight = TemplateBag->bEnableHoverHighlight;
-	NewBag->bUseTagFilter = TemplateBag->bUseTagFilter;
-	NewBag->TagFilters = TemplateBag->TagFilters;
-	NewBag->bUseFolderFilter = TemplateBag->bUseFolderFilter;
-	NewBag->FolderFilters = TemplateBag->FolderFilters;
-	NewBag->bAutoMergeOnAdd = TemplateBag->bAutoMergeOnAdd;
-
-	// Copy items
-	NewBag->Items = TemplateBag->Items;
-	YIInventoryComp_ReassignRuntimeItemIdentitiesForClonedBag(NewBag);
-	return NewBag;
+	return FYIInventoryContainerRuntimeService::CloneBagTemplate(*this, TemplateBag);
 }
 
 bool UYIInventoryComponent::IsTemplateBag(const UYIInventoryBag* Bag) const
@@ -1299,236 +1007,37 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 		BagEventSource->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
 		BagEventSource = nullptr;
 	}
-	CloseInventoryScreen();
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
 void UYIInventoryComponent::SyncNetState()
 {
-	if (!GetOwner() || GetOwner()->GetLocalRole() != ROLE_Authority)
-	{
-		return;
-	}
-
-	if (!ActiveBagId.IsValid() && EquippedBag)
-	{
-		EquippedBag->EnsureBagId();
-		ActiveBagId = EquippedBag->BagId;
-	}
-	if (!ActiveBagId.IsValid())
-	{
-		for (UYIInventoryBag* Bag : Bags)
-		{
-			if (Bag)
-			{
-				Bag->EnsureBagId();
-				ActiveBagId = Bag->BagId;
-				break;
-			}
-		}
-	}
-
-	NetBagItems.Reset();
-	NetBagDescriptors.Reset();
-	NetContextBagMirrors.Reset();
-	NetBagDescriptors.Reserve(Bags.Num());
-
-	for (UYIInventoryBag* Bag : Bags)
-	{
-		if (!Bag)
-		{
-			continue;
-		}
-		Bag->EnsureBagId();
-		FYINetBagDescriptor Desc;
-		Desc.BagId = Bag->BagId;
-		Desc.DisplayName = Bag->DisplayName;
-		Desc.BagRoleTag = Bag->BagRoleTag;
-		Desc.GridSize = Bag->GridSize;
-		Desc.ItemCount = Bag->Items.Num();
-		Desc.ParentBagId.Invalidate();
-		Desc.ParentItemInstanceId.Invalidate();
-		Desc.bIsNestedContainer = FindContainerParentForBag(Bag->BagId, Desc.ParentBagId, Desc.ParentItemInstanceId);
-		Desc.bIsActive = (Bag->BagId == ActiveBagId);
-		NetBagDescriptors.Add(Desc);
-	}
-
-	if (EquippedBag)
-	{
-		EquippedBag->EnsureBagId();
-		NetBagGridSize = EquippedBag->GridSize;
-		for (const FYIBagItem& It : EquippedBag->Items)
-		{
-			if (It.Item.Count <= 0) continue;
-			FYINetBagItem Net;
-			Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
-			if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
-			{
-				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
-				{
-					Net.Code = Def->UniqueCode;
-				}
-			}
-			Net.Count = It.Item.Count;
-			Net.InstanceId = It.Item.InstanceId;
-			Net.StackId = It.Item.StackId;
-			Net.Pos = It.Pos;
-			Net.Size = It.Size;
-			Net.CustomStackKey = It.Item.CustomStackKey;
-			Net.ContainedBagId = It.Item.ContainedBagId;
-			NetBagItems.Add(Net);
-		}
-	}
-
-	// Mirror only active context bags (owner-only) to keep bandwidth bounded.
-	// Deduplicate by BagId and skip the primary active bag because it is already mirrored by NetBagItems.
-	TSet<FGuid> MirroredContextBagIds;
-	for (const FYIActiveBagContextEntry& ContextEntry : ActiveBagContexts)
-	{
-		if (!ContextEntry.BagId.IsValid() || ContextEntry.BagId == ActiveBagId || MirroredContextBagIds.Contains(ContextEntry.BagId))
-		{
-			continue;
-		}
-
-		UYIInventoryBag* ContextBag = GetBagById(ContextEntry.BagId);
-		if (!ContextBag)
-		{
-			continue;
-		}
-
-		ContextBag->EnsureBagId();
-		MirroredContextBagIds.Add(ContextEntry.BagId);
-
-		FYINetBagMirrorView& Mirror = NetContextBagMirrors.AddDefaulted_GetRef();
-		Mirror.BagId = ContextBag->BagId;
-		Mirror.GridSize = ContextBag->GridSize;
-		Mirror.Items.Reserve(ContextBag->Items.Num());
-
-		for (const FYIBagItem& It : ContextBag->Items)
-		{
-			if (It.Item.Count <= 0)
-			{
-				continue;
-			}
-
-			FYINetBagItem Net;
-			Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
-			if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
-			{
-				if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
-				{
-					Net.Code = Def->UniqueCode;
-				}
-			}
-			Net.Count = It.Item.Count;
-			Net.InstanceId = It.Item.InstanceId;
-			Net.StackId = It.Item.StackId;
-			Net.Pos = It.Pos;
-			Net.Size = It.Size;
-			Net.CustomStackKey = It.Item.CustomStackKey;
-			Net.ContainedBagId = It.Item.ContainedBagId;
-			Mirror.Items.Add(Net);
-		}
-	}
-
-	// Force Net update
-	if (AActor* OwnerActor = GetOwner())
-	{
-		OwnerActor->ForceNetUpdate();
-	}
+	FYIInventoryMirrorService::SyncNetState(*this);
 }
 
 void UYIInventoryComponent::OnRep_NetBag()
 {
-	// Build or refresh a lightweight client preview bag for UI; not authoritative.
-	if (!ClientPreviewBag)
-	{
-		ClientPreviewBag = NewObject<UYIInventoryBag>(this);
-		if (!ClientPreviewBag) return;
-	}
-
-	RebuildClientPreviewBagFromNet(ClientPreviewBag, NetBagItems, NetBagGridSize, ActiveBagId);
-
-	// Notify UI bound to this bag
-	ClientPreviewBag->OnChanged.Broadcast();
-	OnBagOpened.Broadcast(ClientPreviewBag); // UI can listen to refresh
+	FYIInventoryMirrorService::OnRep_NetBag(*this);
 }
 
 void UYIInventoryComponent::OnRep_NetBagDescriptors()
 {
-	// No-op for now: UI can poll NetBagDescriptors via component reference.
+	FYIInventoryMirrorService::OnRep_NetBagDescriptors(*this);
 }
 
 void UYIInventoryComponent::OnRep_ActiveBagContexts()
 {
-	// Notify UI bindings that resolve from active bag contexts.
-	if (UYIInventoryBag* ActiveBag = GetBagById(ActiveBagId))
-	{
-		OnBagOpened.Broadcast(ActiveBag);
-	}
-	else if (ClientPreviewBag && ActiveBagId.IsValid())
-	{
-		OnBagOpened.Broadcast(ClientPreviewBag);
-	}
-
-	for (const FYIActiveBagContextEntry& ContextEntry : ActiveBagContexts)
-	{
-		if (UYIInventoryBag* ContextBag = GetBagById(ContextEntry.BagId))
-		{
-			OnBagOpened.Broadcast(ContextBag);
-		}
-	}
+	FYIInventoryMirrorService::OnRep_ActiveBagContexts(*this);
 }
 
 void UYIInventoryComponent::OnRep_NetContextBagMirrors()
 {
-	TSet<FGuid> IncomingBagIds;
-	for (const FYINetBagMirrorView& Mirror : NetContextBagMirrors)
-	{
-		if (!Mirror.BagId.IsValid())
-		{
-			continue;
-		}
-
-		IncomingBagIds.Add(Mirror.BagId);
-		if (UYIInventoryBag* PreviewBag = FindOrCreateClientContextPreviewBagById(Mirror.BagId))
-		{
-			RebuildClientPreviewBagFromNet(PreviewBag, Mirror.Items, Mirror.GridSize, Mirror.BagId);
-			PreviewBag->OnChanged.Broadcast();
-			OnBagOpened.Broadcast(PreviewBag);
-		}
-	}
-
-	for (int32 Index = ClientContextPreviewBags.Num() - 1; Index >= 0; --Index)
-	{
-		UYIInventoryBag* PreviewBag = ClientContextPreviewBags[Index];
-		if (!PreviewBag || !PreviewBag->BagId.IsValid() || IncomingBagIds.Contains(PreviewBag->BagId))
-		{
-			continue;
-		}
-
-		OnBagClosed.Broadcast(PreviewBag);
-		ClientContextPreviewBags.RemoveAtSwap(Index, 1, EAllowShrinking::No);
-	}
+	FYIInventoryMirrorService::OnRep_NetContextBagMirrors(*this);
 }
 
 void UYIInventoryComponent::OnRep_LockedBagItems()
 {
-	if (ClientPreviewBag)
-	{
-		ClientPreviewBag->OnChanged.Broadcast();
-	}
-	for (UYIInventoryBag* ContextPreviewBag : ClientContextPreviewBags)
-	{
-		if (ContextPreviewBag)
-		{
-			ContextPreviewBag->OnChanged.Broadcast();
-		}
-	}
-	if (EquippedBag)
-	{
-		EquippedBag->OnChanged.Broadcast();
-	}
+	FYIInventoryMirrorService::OnRep_LockedBagItems(*this);
 }
 
 void UYIInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -1571,38 +1080,7 @@ void UYIInventoryComponent::ServerMoveItem_Implementation(int32 Index, FIntPoint
 
 bool UYIInventoryComponent::MoveItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 ItemIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, ItemIndex))
-		{
-			return false;
-		}
-		if (TargetBag->MoveItem(ItemIndex, NewPos))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerMoveItemInBag(BagId, ItemInstanceId, NewPos);
-	return true; // optimistic; owner-only mirrors will reconcile
+	return FYIInventoryMutationService::MoveItemInBag(*this, BagId, ItemInstanceId, NewPos);
 }
 
 void UYIInventoryComponent::ServerMoveItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint NewPos)
@@ -1612,111 +1090,7 @@ void UYIInventoryComponent::ServerMoveItemInBag_Implementation(const FGuid& BagI
 
 bool UYIInventoryComponent::MoveItemInBagAtCell(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 SourceIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex) || !TargetBag->Items.IsValidIndex(SourceIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, SourceIndex))
-		{
-			return false;
-		}
-
-		if (TargetBag->MoveItem(SourceIndex, DestCell))
-		{
-			SyncNetState();
-			return true;
-		}
-		if (!bAllowSingleOverlapSwap)
-		{
-			return false;
-		}
-
-		int32 VictimIndex = INDEX_NONE;
-		const FYIBagItem SourceItemCopy = TargetBag->Items[SourceIndex];
-		if (!YIInventoryComp_FindSingleOverlapAtCell(TargetBag, DestCell, SourceItemCopy.Size, VictimIndex, SourceIndex) ||
-			!TargetBag->Items.IsValidIndex(VictimIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, VictimIndex))
-		{
-			return false;
-		}
-
-		const FYIBagItem VictimItemCopy = TargetBag->Items[VictimIndex];
-		const FIntPoint SourceOriginalPos = SourceItemCopy.Pos;
-		const FIntPoint VictimOriginalPos = VictimItemCopy.Pos;
-
-		// Remove victim first, then source (re-find source index because indices may shift).
-		if (!TargetBag->RemoveItem(VictimIndex))
-		{
-			return false;
-		}
-
-		int32 SourceIndexAfterVictimRemove = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndexAfterVictimRemove) ||
-			!TargetBag->Items.IsValidIndex(SourceIndexAfterVictimRemove))
-		{
-			// Best effort restore victim.
-			FYIBagItem RestoreVictim = VictimItemCopy;
-			RestoreVictim.Pos = VictimOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
-			return false;
-		}
-
-		if (!TargetBag->RemoveItem(SourceIndexAfterVictimRemove))
-		{
-			FYIBagItem RestoreVictim = VictimItemCopy;
-			RestoreVictim.Pos = VictimOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
-			return false;
-		}
-
-		FYIBagItem PlacedSource = SourceItemCopy;
-		PlacedSource.Pos = DestCell;
-		const int32 NewSourceIdx = YIInventoryComp_AddBagItemExact(TargetBag, PlacedSource);
-		if (NewSourceIdx == INDEX_NONE)
-		{
-			FYIBagItem RestoreSource = SourceItemCopy; RestoreSource.Pos = SourceOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreSource);
-			FYIBagItem RestoreVictim = VictimItemCopy; RestoreVictim.Pos = VictimOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
-			return false;
-		}
-
-		FYIBagItem PlacedVictim = VictimItemCopy;
-		PlacedVictim.Pos = SourceOriginalPos;
-		const int32 NewVictimIdx = YIInventoryComp_AddBagItemExact(TargetBag, PlacedVictim);
-		if (NewVictimIdx == INDEX_NONE)
-		{
-			TargetBag->RemoveItem(NewSourceIdx);
-			FYIBagItem RestoreSource = SourceItemCopy; RestoreSource.Pos = SourceOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreSource);
-			FYIBagItem RestoreVictim = VictimItemCopy; RestoreVictim.Pos = VictimOriginalPos;
-			YIInventoryComp_AddBagItemExact(TargetBag, RestoreVictim);
-			return false;
-		}
-
-		SyncNetState();
-		return true;
-	}
-
-	ServerMoveItemInBagAtCell(BagId, ItemInstanceId, DestCell, bAllowSingleOverlapSwap);
-	return true;
+	return FYIInventoryMutationService::MoveItemInBagAtCell(*this, BagId, ItemInstanceId, DestCell, bAllowSingleOverlapSwap);
 }
 
 void UYIInventoryComponent::ServerMoveItemInBagAtCell_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId, FIntPoint DestCell, bool bAllowSingleOverlapSwap)
@@ -1750,38 +1124,7 @@ void UYIInventoryComponent::ServerRotateItem_Implementation(int32 Index)
 
 bool UYIInventoryComponent::RotateItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 ItemIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, ItemIndex))
-		{
-			return false;
-		}
-		if (TargetBag->RotateItem(ItemIndex))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerRotateItemInBag(BagId, ItemInstanceId);
-	return true;
+	return FYIInventoryMutationService::RotateItemInBag(*this, BagId, ItemInstanceId);
 }
 
 void UYIInventoryComponent::ServerRotateItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId)
@@ -1882,38 +1225,7 @@ bool UYIInventoryComponent::RemoveItem(int32 Index)
 
 bool UYIInventoryComponent::RemoveItemFromBag(const FGuid& BagId, const FGuid& ItemInstanceId)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 ItemIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, ItemIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, ItemIndex))
-		{
-			return false;
-		}
-		if (TargetBag->RemoveItem(ItemIndex))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerRemoveItemFromBag(BagId, ItemInstanceId);
-	return true;
+	return FYIInventoryMutationService::RemoveItemFromBag(*this, BagId, ItemInstanceId);
 }
 
 void UYIInventoryComponent::ServerRemoveItem_Implementation(int32 Index)
@@ -1928,63 +1240,7 @@ void UYIInventoryComponent::ServerRemoveItemFromBag_Implementation(const FGuid& 
 
 bool UYIInventoryComponent::TransferItemBetweenBagsById(const FGuid& SourceBagId, const FGuid& ItemInstanceId, const FGuid& DestBagId, int32 Count, int32& OutDestIndex)
 {
-	OutDestIndex = INDEX_NONE;
-	if (!SourceBagId.IsValid() || !DestBagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-	if (SourceBagId == DestBagId)
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* SourceBag = GetBagById(SourceBagId);
-		UYIInventoryBag* DestBag = GetBagById(DestBagId);
-		if (!SourceBag || !DestBag)
-		{
-			return false;
-		}
-
-		int32 SourceIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(SourceBag, ItemInstanceId, SourceIndex) || !SourceBag->Items.IsValidIndex(SourceIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(SourceBag, SourceIndex))
-		{
-			return false;
-		}
-
-		const FYIBagItem& SourceItem = SourceBag->Items[SourceIndex];
-		if (SourceItem.Item.ContainedBagId.IsValid() && DestBag->BagId.IsValid() &&
-			IsBagDescendantOf(DestBag->BagId, SourceItem.Item.ContainedBagId))
-		{
-			// Prevent placing a container into one of its descendants.
-			return false;
-		}
-
-		if (UYIItemDefinition* Def = SourceItem.Item.Definition.IsValid()
-			? SourceItem.Item.Definition.Get()
-			: SourceItem.Item.Definition.LoadSynchronous())
-		{
-			if (!DestBag->CanAcceptItemDefinition(Def))
-			{
-				return false;
-			}
-		}
-
-		if (UYIInventoryBlueprintLibrary::TransferItemBetweenBags(SourceBag, DestBag, SourceIndex, Count, OutDestIndex))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerTransferItemBetweenBagsById(SourceBagId, ItemInstanceId, DestBagId, Count);
-	return true;
+	return FYIInventoryMutationService::TransferItemBetweenBagsById(*this, SourceBagId, ItemInstanceId, DestBagId, Count, OutDestIndex);
 }
 
 void UYIInventoryComponent::ServerTransferItemBetweenBagsById_Implementation(
@@ -2005,198 +1261,7 @@ bool UYIInventoryComponent::TransferItemBetweenBagsAtCellById(
 	int32 Count,
 	bool bAllowSingleOverlapSwap)
 {
-	if (!SourceBagId.IsValid() || !DestBagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-	if (SourceBagId == DestBagId)
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* SourceBag = GetBagById(SourceBagId);
-		UYIInventoryBag* DestBag = GetBagById(DestBagId);
-		if (!SourceBag || !DestBag)
-		{
-			return false;
-		}
-
-		int32 SourceIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(SourceBag, ItemInstanceId, SourceIndex) || !SourceBag->Items.IsValidIndex(SourceIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(SourceBag, SourceIndex))
-		{
-			return false;
-		}
-
-		const FYIBagItem SourceBagItem = SourceBag->Items[SourceIndex];
-		FYIBagItem ToPlace = SourceBagItem;
-		const FIntPoint SourceOriginalPos = SourceBagItem.Pos;
-
-		UYIItemDefinition* Def = ToPlace.Item.Definition.IsValid()
-			? ToPlace.Item.Definition.Get()
-			: ToPlace.Item.Definition.LoadSynchronous();
-		if (!Def || !DestBag->CanAcceptItemDefinition(Def))
-		{
-			return false;
-		}
-
-		if (SourceBagItem.Item.ContainedBagId.IsValid() && DestBag->BagId.IsValid() &&
-			IsBagDescendantOf(DestBag->BagId, SourceBagItem.Item.ContainedBagId))
-		{
-			return false;
-		}
-
-		const bool bStacking = Def->IsRuntimeStackingAllowed();
-		const bool bPartialTransferRequested = (bStacking && Count > 0 && Count < SourceBagItem.Item.Count);
-		if (Count > 0 && bStacking)
-		{
-			ToPlace.Item.Count = FMath::Clamp(Count, 1, SourceBagItem.Item.Count);
-		}
-		ToPlace.Pos = DestCell;
-
-		// Exact transfer path (no overlap required)
-		if (DestBag->CanPlaceAt(DestCell, ToPlace.Size))
-		{
-			const int32 DestInsertIndex = YIInventoryComp_AddBagItemExact(DestBag, ToPlace);
-			if (DestInsertIndex == INDEX_NONE)
-			{
-				return false;
-			}
-
-			if (bPartialTransferRequested)
-			{
-				if (!SourceBag->Items.IsValidIndex(SourceIndex))
-				{
-					DestBag->RemoveItem(DestInsertIndex);
-					return false;
-				}
-
-				SourceBag->Items[SourceIndex].Item.Count -= ToPlace.Item.Count;
-				if (SourceBag->Items[SourceIndex].Item.Count <= 0)
-				{
-					if (!SourceBag->RemoveItem(SourceIndex))
-					{
-						DestBag->RemoveItem(DestInsertIndex);
-						return false;
-					}
-				}
-				else
-				{
-					SourceBag->MarkPackageDirty();
-					SourceBag->OnChanged.Broadcast();
-				}
-			}
-			else
-			{
-				if (!SourceBag->RemoveItem(SourceIndex))
-				{
-					DestBag->RemoveItem(DestInsertIndex);
-					return false;
-				}
-			}
-
-			SourceBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestInsertIndex);
-			DestBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestInsertIndex);
-			SyncNetState();
-			return true;
-		}
-
-		if (!bAllowSingleOverlapSwap)
-		{
-			return false;
-		}
-
-		// Swap path is only supported for whole-item moves (partial stack swap is ambiguous UX/network-wise).
-		if (bPartialTransferRequested || (Count > 0 && Count != SourceBagItem.Item.Count))
-		{
-			return false;
-		}
-
-		int32 VictimIndex = INDEX_NONE;
-		if (!YIInventoryComp_FindSingleOverlapAtCell(DestBag, DestCell, ToPlace.Size, VictimIndex) || !DestBag->Items.IsValidIndex(VictimIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(DestBag, VictimIndex))
-		{
-			return false;
-		}
-
-		const FYIBagItem VictimItem = DestBag->Items[VictimIndex];
-		if (VictimItem.Item.ContainedBagId.IsValid() && SourceBag->BagId.IsValid() &&
-			IsBagDescendantOf(SourceBag->BagId, VictimItem.Item.ContainedBagId))
-		{
-			return false;
-		}
-
-		UYIItemDefinition* VictimDef = VictimItem.Item.Definition.IsValid()
-			? VictimItem.Item.Definition.Get()
-			: VictimItem.Item.Definition.LoadSynchronous();
-		if (!VictimDef || !SourceBag->CanAcceptItemDefinition(VictimDef))
-		{
-			return false;
-		}
-
-		if (!SourceBag->CanPlaceAtIgnoring(SourceOriginalPos, VictimItem.Size, SourceIndex))
-		{
-			return false;
-		}
-
-		// Atomic-ish swap with rollback.
-		if (!DestBag->RemoveItem(VictimIndex))
-		{
-			return false;
-		}
-
-		FYIBagItem PlacedSource = SourceBagItem;
-		PlacedSource.Pos = DestCell;
-		const int32 DestPlacedIndex = YIInventoryComp_AddBagItemExact(DestBag, PlacedSource);
-		if (DestPlacedIndex == INDEX_NONE)
-		{
-			FYIBagItem RestoreVictim = VictimItem;
-			RestoreVictim.Pos = VictimItem.Pos;
-			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
-			return false;
-		}
-
-		if (!SourceBag->RemoveItem(SourceIndex))
-		{
-			DestBag->RemoveItem(DestPlacedIndex);
-			FYIBagItem RestoreVictim = VictimItem;
-			RestoreVictim.Pos = VictimItem.Pos;
-			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
-			return false;
-		}
-
-		FYIBagItem PlacedVictim = VictimItem;
-		PlacedVictim.Pos = SourceOriginalPos;
-		const int32 SourcePlacedIndex = YIInventoryComp_AddBagItemExact(SourceBag, PlacedVictim);
-		if (SourcePlacedIndex == INDEX_NONE)
-		{
-			// Best-effort rollback.
-			DestBag->RemoveItem(DestPlacedIndex);
-			FYIBagItem RestoreSource = SourceBagItem;
-			RestoreSource.Pos = SourceOriginalPos;
-			YIInventoryComp_AddBagItemExact(SourceBag, RestoreSource);
-			FYIBagItem RestoreVictim = VictimItem;
-			RestoreVictim.Pos = VictimItem.Pos;
-			YIInventoryComp_AddBagItemExact(DestBag, RestoreVictim);
-			return false;
-		}
-
-		SourceBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestPlacedIndex);
-		DestBag->OnItemTransferred.Broadcast(SourceBag, DestBag, SourceIndex, DestPlacedIndex);
-		SyncNetState();
-		return true;
-	}
-
-	ServerTransferItemBetweenBagsAtCellById(SourceBagId, ItemInstanceId, DestBagId, DestCell, Count, bAllowSingleOverlapSwap);
-	return true;
+	return FYIInventoryMutationService::TransferItemBetweenBagsAtCellById(*this, SourceBagId, ItemInstanceId, DestBagId, DestCell, Count, bAllowSingleOverlapSwap);
 }
 
 void UYIInventoryComponent::ServerTransferItemBetweenBagsAtCellById_Implementation(
@@ -2226,49 +1291,7 @@ void UYIInventoryComponent::ServerSwapItemIntoBagCellById_Implementation(
 
 bool UYIInventoryComponent::CombineItemInBag(const FGuid& BagId, const FGuid& ItemInstanceId)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid())
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 SourceIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex) || !TargetBag->Items.IsValidIndex(SourceIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, SourceIndex))
-		{
-			return false;
-		}
-
-		int32 TargetIndex = TargetBag->FindExistingStackIndexForItem(TargetBag->Items[SourceIndex]);
-		if (TargetIndex == INDEX_NONE || TargetIndex == SourceIndex)
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, TargetIndex))
-		{
-			return false;
-		}
-
-		if (TargetBag->CombineStacks(TargetIndex, SourceIndex))
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerCombineItemInBag(BagId, ItemInstanceId);
-	return true;
+	return FYIInventoryMutationService::CombineItemInBag(*this, BagId, ItemInstanceId);
 }
 
 void UYIInventoryComponent::ServerCombineItemInBag_Implementation(const FGuid& BagId, const FGuid& ItemInstanceId)
@@ -2278,39 +1301,7 @@ void UYIInventoryComponent::ServerCombineItemInBag_Implementation(const FGuid& B
 
 bool UYIInventoryComponent::SplitStackInBag(const FGuid& BagId, const FGuid& ItemInstanceId, int32 Amount, FIntPoint DesiredPos)
 {
-	if (!BagId.IsValid() || !ItemInstanceId.IsValid() || Amount <= 0)
-	{
-		return false;
-	}
-
-	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		UYIInventoryBag* TargetBag = GetBagById(BagId);
-		if (!TargetBag)
-		{
-			return false;
-		}
-
-		int32 SourceIndex = INDEX_NONE;
-		if (!FindItemIndexByInstanceId(TargetBag, ItemInstanceId, SourceIndex))
-		{
-			return false;
-		}
-		if (IsBagItemLocked(TargetBag, SourceIndex))
-		{
-			return false;
-		}
-
-		if (TargetBag->SplitStack(SourceIndex, Amount, DesiredPos) != INDEX_NONE)
-		{
-			SyncNetState();
-			return true;
-		}
-		return false;
-	}
-
-	ServerSplitStackInBag(BagId, ItemInstanceId, Amount, DesiredPos);
-	return true;
+	return FYIInventoryMutationService::SplitStackInBag(*this, BagId, ItemInstanceId, Amount, DesiredPos);
 }
 
 void UYIInventoryComponent::ServerSplitStackInBag_Implementation(
@@ -2424,52 +1415,9 @@ void UYIInventoryComponent::HandleBagItemTransferred(UYIInventoryBag* Src, UYIIn
 
 // -------- UI helpers --------
 
-UUserWidget* UYIInventoryComponent::OpenInventoryScreen()
-{
-	if (!GetOwner()) return nullptr;
-	if (GetOwner()->GetNetMode() == NM_DedicatedServer) return nullptr; // no UI on dedicated server
-	if (ActiveInventoryScreen.IsValid())
-	{
-		YIInventoryComp_BindInventoryScreenWidget(ActiveInventoryScreen.Get(), this);
-		return ActiveInventoryScreen.Get();
-	}
+/* UI screen helpers moved to YOLOInventoryUI (UYIInventoryUIScreenLibrary). */
 
-	if (!InventoryScreenClass.IsNull())
-	{
-		InventoryScreenClass.LoadSynchronous();
-	}
-	if (!InventoryScreenClass.IsValid()) return nullptr;
 
-	APlayerController* PC = nullptr;
-	if (APawn* Pawn = Cast<APawn>(GetOwner()))
-	{
-		PC = Cast<APlayerController>(Pawn->GetController());
-	}
-	else
-	{
-		PC = Cast<APlayerController>(GetOwner());
-	}
-	if (!PC || !PC->IsLocalController()) return nullptr;
 
-	UUserWidget* Screen = CreateWidget<UUserWidget>(PC, InventoryScreenClass.Get());
-	if (!Screen) return nullptr;
 
-	YIInventoryComp_BindInventoryScreenWidget(Screen, this);
-	Screen->AddToViewport();
-	ActiveInventoryScreen = Screen;
-	return Screen;
-}
 
-void UYIInventoryComponent::CloseInventoryScreen()
-{
-	if (ActiveInventoryScreen.IsValid())
-	{
-		ActiveInventoryScreen->RemoveFromParent();
-		ActiveInventoryScreen.Reset();
-	}
-}
-
-void UYIInventoryComponent::CloseAllScreens()
-{
-	CloseInventoryScreen();
-}

@@ -4,6 +4,7 @@
 #include "YIActionBarComponent.h"
 #include "YIEquipmentComponent.h"
 #include "YIInventoryComponent.h"
+#include "YIInventoryUIScreenLibrary.h"
 #include "YIItemDefinition.h"
 #include "YIItemFragments.h"
 
@@ -138,9 +139,9 @@ bool UYIInventoryGameplaySetupLibrary::QuickStartPawnInventory(APawn* Pawn, bool
 	{
 		if (UYIInventoryComponent* InventoryComp = Pawn->FindComponentByClass<UYIInventoryComponent>())
 		{
-			if (!InventoryComp->OpenInventoryScreen())
+			if (!UYIInventoryUIScreenLibrary::OpenInventoryScreenForComponent(Pawn, InventoryComp))
 			{
-				OutResult.Warnings.Add(FString::Printf(TEXT("Inventory screen did not open for pawn '%s'. Set InventoryScreenClass or call on local owning client."), *Pawn->GetName()));
+				OutResult.Warnings.Add(FString::Printf(TEXT("Inventory screen did not open for pawn '%s'. Call on local owning client and ensure YOLOInventoryUI is enabled."), *Pawn->GetName()));
 			}
 		}
 		else
