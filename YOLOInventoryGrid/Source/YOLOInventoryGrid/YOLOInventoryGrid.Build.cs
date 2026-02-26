@@ -20,9 +20,7 @@ public class YOLOInventoryGrid : ModuleRules
             "YOLOInventoryCore",
             "YOLOInventorySchema",
             "YOLOInventoryContainers",
-            "YOLOInventoryEquipment",
-            "YOLOInventoryTrade",
-            "YOLOInventoryWorld"
+            "StructUtils"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]

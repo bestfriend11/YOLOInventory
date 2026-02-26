@@ -9,14 +9,11 @@ class UYIInventoryBag;
 class SInventoryGridWidget;
 class UAbilitySystemComponent;
 struct FYIRequirementContext;
-class AYITradeSessionActor;
 class USoundBase;
 class UYIItemSFXLibrary;
-class UYIEquipmentComponent;
-enum class ETradeSide : uint8;
-class UYIShopComponent;
 class UYIInventoryComponent;
 class UYIInventoryGridStyleAsset;
+class UYIInventoryGridFeatureAdapter;
 
 /**
  * UInventoryGridWidget
@@ -338,9 +335,9 @@ public:
 	static bool IsItemDragActive(const UWorld* ContextWorld = nullptr);
 	/** Get the currently dragged item (if any) and the source bag for context; returns false if no drag active. */
 	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld = nullptr);
-	/** Equip the currently dragged inventory item into the requested equipment slot. */
+	/** Equip the currently dragged inventory item into the requested equipment slot via the source grid's feature adapter. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
-	static bool TryEquipActiveDraggedItem(class UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag);
+	static bool TryEquipActiveDraggedItem(UObject* EquipmentContextObject, FGameplayTag RequestedSlotTag);
 	/** Locate a live runtime grid currently bound to the provided bag. */
 	static UInventoryGridWidget* FindRegisteredGridForBag(UYIInventoryBag* InBag, const UWorld* ContextWorld = nullptr);
 	/** Starts drag for a specific item index from the provided bag using a registered runtime grid. */
@@ -350,15 +347,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
 	static bool BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, int32 ItemIndex, const UWorld* ContextWorld = nullptr);
 
-	/** Optional: route cross-owner transfers through a trade session (server-authoritative). */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
-	void SetTradeSession(AYITradeSessionActor* InSession) { ActiveTradeSession = InSession; bHasTradeSide = false; }
-	/** Set trade context (session + side) so cross-bag drops can route through server. */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Trade")
-	void SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide);
-	/** Assign shop context for drag/drop purchases or selling. */
-	UFUNCTION(BlueprintCallable, Category="Inventory|Shop")
-	void SetShopContext(UYIShopComponent* InShop, bool bStockGrid);
+	/** Optional integration adapter (trade/shop/equip/world). Grid core remains view/runtime and delegates feature-specific behavior here. */
+	UFUNCTION(BlueprintCallable, Category="Inventory|Integration")
+	void SetFeatureAdapter(UYIInventoryGridFeatureAdapter* InAdapter);
+	UFUNCTION(BlueprintPure, Category="Inventory|Integration")
+	UYIInventoryGridFeatureAdapter* GetFeatureAdapter() const { return FeatureAdapter; }
 	/** Fill OutData for the currently selected cell if an item exists there (returns true on success). */
 	UFUNCTION(BlueprintCallable, Category="Inventory", meta=(ToolTip="Get tooltip data for the currently selected cell"))
 	bool GetSelectedCellTooltipData(struct FYITooltipData& OutData, const struct FYIRequirementContext& RequirementContext) const;
@@ -382,13 +375,10 @@ public:
 
 private:
 	UPROPERTY(Transient)
-	TObjectPtr<AYITradeSessionActor> ActiveTradeSession = nullptr;
-	UPROPERTY(Transient)
-	ETradeSide TradeSide = static_cast<ETradeSide>(0);
-	UPROPERTY(Transient)
-	bool bHasTradeSide = false;
-	UPROPERTY(Transient)
 	bool bAllowSelfMove = true;
+	UPROPERTY(Transient, Instanced)
+	TObjectPtr<UYIInventoryGridFeatureAdapter> FeatureAdapter = nullptr;
+
 	static TSet<TWeakObjectPtr<UInventoryGridWidget>> GRegisteredGrids;
 	TSharedPtr<SInventoryGridWidget> MySlateWidget;
 
@@ -431,8 +421,4 @@ private:
 	bool IsDragHoverSoundEnabled() const;
 	bool IsInvalidSoundEnabled() const;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UYIShopComponent> ActiveShopComponent = nullptr;
-	UPROPERTY(Transient)
-	bool bIsShopStockGrid = false;
 };

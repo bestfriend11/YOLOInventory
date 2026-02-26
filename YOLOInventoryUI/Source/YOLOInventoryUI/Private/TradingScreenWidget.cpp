@@ -1,4 +1,5 @@
 #include "TradingScreenWidget.h"
+#include "YIInventoryGridGameplayAdapter.h"
 #include "UILayerSubsystem.h"
 #include "InventoryScreenWidget.h"
 #include "InventoryDragOverlayUserWidget.h"
@@ -10,6 +11,21 @@
 
 namespace YITradingScreenWidgetPrivate
 {
+	static UYIInventoryGridGameplayAdapter* EnsureGameplayAdapter(UInventoryGridWidget* Grid)
+	{
+		if (!Grid)
+		{
+			return nullptr;
+		}
+		if (UYIInventoryGridGameplayAdapter* Existing = Cast<UYIInventoryGridGameplayAdapter>(Grid->GetFeatureAdapter()))
+		{
+			return Existing;
+		}
+		UYIInventoryGridGameplayAdapter* Adapter = NewObject<UYIInventoryGridGameplayAdapter>(Grid);
+		Grid->SetFeatureAdapter(Adapter);
+		return Adapter;
+	}
+
 	static FYIItemInstance MakeItemInstanceByCode(int64 Code, int32 Count)
 	{
 		FYIItemInstance Item;
@@ -223,7 +239,10 @@ void UTradingScreenWidget::RefreshOffers()
     if (LeftGrid)
     {
         LeftGrid->SetBag(LocalBag);
-        LeftGrid->SetTradeContext(Session, LocalSide);
+        if (UYIInventoryGridGameplayAdapter* Adapter = YITradingScreenWidgetPrivate::EnsureGameplayAdapter(LeftGrid))
+        {
+            Adapter->SetTradeContext(Session, LocalSide);
+        }
         LeftGrid->SetAllowSelfMove(LocalBag != nullptr);
         LeftGrid->RefreshBoundTooltip();
     }
@@ -240,7 +259,10 @@ void UTradingScreenWidget::RefreshOffers()
         if (RightGrid)
         {
             RightGrid->SetBag(OtherBag);
-            RightGrid->SetTradeContext(Session, OtherSide);
+            if (UYIInventoryGridGameplayAdapter* Adapter = YITradingScreenWidgetPrivate::EnsureGameplayAdapter(RightGrid))
+            {
+                Adapter->SetTradeContext(Session, OtherSide);
+            }
             RightGrid->SetAllowSelfMove(false);
             RightGrid->RefreshBoundTooltip();
         }
@@ -252,7 +274,10 @@ void UTradingScreenWidget::RefreshOffers()
         if (RightGrid)
         {
             RightGrid->SetBag(RightMirrorBag);
-            RightGrid->SetTradeContext(Session, OtherSide);
+            if (UYIInventoryGridGameplayAdapter* Adapter = YITradingScreenWidgetPrivate::EnsureGameplayAdapter(RightGrid))
+            {
+                Adapter->SetTradeContext(Session, OtherSide);
+            }
             RightGrid->SetAllowSelfMove(false);
             RightGrid->RefreshBoundTooltip();
         }

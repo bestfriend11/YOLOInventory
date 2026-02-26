@@ -1,4 +1,5 @@
 #include "InventoryScreenWidget.h"
+#include "YIInventoryGridGameplayAdapter.h"
 #include "InputCoreTypes.h"
 
 // Enhanced Input
@@ -32,6 +33,19 @@
 
 namespace YIInventoryScreenPrivate
 {
+	static void EnsureGridGameplayAdapter(UInventoryGridWidget* Grid)
+	{
+		if (!Grid)
+		{
+			return;
+		}
+		if (Grid->GetFeatureAdapter())
+		{
+			return;
+		}
+		Grid->SetFeatureAdapter(NewObject<UYIInventoryGridGameplayAdapter>(Grid));
+	}
+
 	struct FYIAutoEquipmentSlotEntry
 	{
 		FGameplayTag SlotTag;
@@ -368,6 +382,9 @@ bool UInventoryScreenWidget::AutoWireScreen(bool bRebuildEquipmentPane)
 	{
 		BindInventoryBagContexts(InventoryComp);
 	}
+
+	YIInventoryScreenPrivate::EnsureGridGameplayAdapter(Grid);
+	YIInventoryScreenPrivate::EnsureGridGameplayAdapter(SecondaryContextGrid);
 
 	if (Grid && Tooltip)
 	{

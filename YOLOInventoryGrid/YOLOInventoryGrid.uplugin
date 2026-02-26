@@ -33,15 +33,7 @@
       "Enabled": true
     },
     {
-      "Name": "YOLOInventoryEquipment",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryTrade",
-      "Enabled": true
-    },
-    {
-      "Name": "YOLOInventoryWorld",
+      "Name": "StructUtils",
       "Enabled": true
     }
   ]

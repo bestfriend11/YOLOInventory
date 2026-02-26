@@ -1,6 +1,7 @@
 #include "ShopScreenWidget.h"
 
 #include "InventoryDragOverlayUserWidget.h"
+#include "YIInventoryGridGameplayAdapter.h"
 #include "UILayerSubsystem.h"
 #include "Engine/Engine.h"
 #include "YIInventoryBag.h"
@@ -9,6 +10,21 @@
 
 namespace YIShopScreenWidgetPrivate
 {
+	static UYIInventoryGridGameplayAdapter* EnsureGameplayAdapter(UInventoryGridWidget* Grid)
+	{
+		if (!Grid)
+		{
+			return nullptr;
+		}
+		if (UYIInventoryGridGameplayAdapter* Existing = Cast<UYIInventoryGridGameplayAdapter>(Grid->GetFeatureAdapter()))
+		{
+			return Existing;
+		}
+		UYIInventoryGridGameplayAdapter* Adapter = NewObject<UYIInventoryGridGameplayAdapter>(Grid);
+		Grid->SetFeatureAdapter(Adapter);
+		return Adapter;
+	}
+
 	static FYIItemInstance MakeItemInstanceByCode(int64 Code, int32 Count)
 	{
 		FYIItemInstance Item;
@@ -73,7 +89,10 @@ void UShopScreenWidget::SetShop(UYIShopComponent* InShop, UYIInventoryBag* Local
 	if (LeftGrid)
 	{
 		LeftGrid->SetBag(LocalBag);
-		LeftGrid->SetShopContext(Shop, false);
+		if (UYIInventoryGridGameplayAdapter* Adapter = YIShopScreenWidgetPrivate::EnsureGameplayAdapter(LeftGrid))
+		{
+			Adapter->SetShopContext(Shop, false);
+		}
 		LeftGrid->RefreshBoundTooltip();
 	}
 
@@ -81,7 +100,10 @@ void UShopScreenWidget::SetShop(UYIShopComponent* InShop, UYIInventoryBag* Local
 	if (RightGrid)
 	{
 		RightGrid->SetBag(ShopMirrorBag);
-		RightGrid->SetShopContext(Shop, true);
+		if (UYIInventoryGridGameplayAdapter* Adapter = YIShopScreenWidgetPrivate::EnsureGameplayAdapter(RightGrid))
+		{
+			Adapter->SetShopContext(Shop, true);
+		}
 		RightGrid->SetAllowSelfMove(false);
 		RightGrid->RefreshBoundTooltip();
 	}
@@ -130,7 +152,10 @@ void UShopScreenWidget::HandleShopMirrorUpdated()
 	if (RightGrid)
 	{
 		RightGrid->SetBag(ShopMirrorBag);
-		RightGrid->SetShopContext(Shop, true);
+		if (UYIInventoryGridGameplayAdapter* Adapter = YIShopScreenWidgetPrivate::EnsureGameplayAdapter(RightGrid))
+		{
+			Adapter->SetShopContext(Shop, true);
+		}
 		RightGrid->SetAllowSelfMove(false);
 		RightGrid->RefreshBoundTooltip();
 	}

@@ -1,5 +1,6 @@
-﻿#include "InventoryGridWidget.h"
+#include "InventoryGridWidget.h"
 #include "SInventoryGridWidget.h"
+#include "YIInventoryGridFeatureAdapter.h"
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIInventoryBlueprintLibrary.h"
@@ -8,13 +9,8 @@
 #include "YIItemInstanceFragmentAccess.h"
 #include "AbilitySystemComponent.h"
 #include "YIRequirement.h"
-#include "YITradeSessionActor.h"
-#include "YITradeInteractionComponent.h"
-#include "YIShopComponent.h"
-#include "YIEquipmentComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "YIItemNetTypes.h"
-#include "YIWorldLootBlueprintLibrary.h"
 #include "YIItemSFXLibrary.h"
 #include "Engine/World.h"
 #include "Blueprint/UserWidget.h"
@@ -740,10 +736,13 @@ void UInventoryGridWidget::HandleGhostPlacementChanged(const FIntPoint& TopLeftC
 	}
 }
 
-void UInventoryGridWidget::SetShopContext(UYIShopComponent* InShop, bool bStockGrid)
+void UInventoryGridWidget::SetFeatureAdapter(UYIInventoryGridFeatureAdapter* InAdapter)
 {
-	ActiveShopComponent = InShop;
-	bIsShopStockGrid = bStockGrid;
+	FeatureAdapter = InAdapter;
+	if (FeatureAdapter)
+	{
+		FeatureAdapter->OnAssignedToGrid(this);
+	}
 }
 
 bool UInventoryGridWidget::IsInventorySoundEnabled() const
@@ -1083,107 +1082,51 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	FYIBagItem ToPlace = GInventoryDrag.Item;
 	ToPlace.Pos = Cell;
 
-	// If this grid participates in a shop session, route drag from shop stock to buyer inventory via shop RPCs.
-	if (ActiveShopComponent && GInventoryDrag.SourceGrid.IsValid())
+	// Optional feature adapters can intercept cross-grid drops (trade/shop/etc) before core bag transfer logic.
+	if (UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get())
 	{
-		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
-		if (SourceGrid->ActiveShopComponent == ActiveShopComponent)
+		auto TryAdapterDrop = [&](UYIInventoryGridFeatureAdapter* Adapter) -> TOptional<bool>
 		{
-			// Only allow drag FROM shop stock INTO player bag.
-			if (SourceGrid->bIsShopStockGrid && !bIsShopStockGrid && GInventoryDrag.SourceIndex != INDEX_NONE)
+			if (!Adapter)
 			{
-				APlayerController* PC = GetOwningPlayer();
-				if (!PC && GetWorld())
-				{
-					PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-				}
-				if (PC)
-				{
-					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
-					{
-						const int32 BuyCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
-						TradeComp->RequestShopBuy(ActiveShopComponent, GInventoryDrag.SourceIndex, BuyCount, OwnerComp, Cell);
-						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
-						PlayDropSound();
-						GInventoryDrag.Reset();
-						RefreshBoundTooltip();
-						return true;
-					}
-				}
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-				PlayInvalidMoveSound();
-				return false;
+				return {};
 			}
-			// Allow drag FROM player bag INTO shop stock (sell).
-			if (!SourceGrid->bIsShopStockGrid && bIsShopStockGrid && GInventoryDrag.SourceIndex != INDEX_NONE)
+			const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleCrossGridDrop(
+				this,
+				SourceGrid,
+				GInventoryDrag.SourceIndex,
+				GInventoryDrag.Item,
+				Cell);
+			if (Result == EYIInventoryGridExternalOpResult::NotHandled)
 			{
-				APlayerController* PC = GetOwningPlayer();
-				if (!PC && GetWorld())
-				{
-					PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-				}
-				if (PC)
-				{
-					if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
-					{
-						UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
-						UYIInventoryComponent* ShopSourceComp = (DragSourceGrid && DragSourceGrid->Bag)
-							? DragSourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
-						const int32 SellCount = FMath::Max(1, GInventoryDrag.Item.Item.Count);
-						TradeComp->RequestShopSell(ActiveShopComponent, GInventoryDrag.SourceIndex, SellCount, ShopSourceComp);
-						OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
-						PlayDropSound();
-						GInventoryDrag.Reset();
-						RefreshBoundTooltip();
-						return true;
-					}
-				}
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-				PlayInvalidMoveSound();
-				return false;
+				return {};
 			}
-			// Block moving items into or within the shop stock grid.
-			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-			PlayInvalidMoveSound();
-			return false;
-		}
-	}
-
-	// If this grid participates in a trade session, route cross-bag transfer through the session (server authoritative).
-	if (ActiveTradeSession && GInventoryDrag.SourceGrid.IsValid())
-	{
-		const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
-		if (SourceGrid->ActiveTradeSession == ActiveTradeSession && SourceGrid->bHasTradeSide && bHasTradeSide && GInventoryDrag.SourceIndex != INDEX_NONE)
-		{
-			if (OwnerComp && OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority())
+			const bool bSuccess = (Result == EYIInventoryGridExternalOpResult::HandledSucceeded);
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bSuccess);
+			if (bSuccess)
 			{
-				ActiveTradeSession->ServerTransferItemBetweenSides(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 				PlayDropSound();
 				GInventoryDrag.Reset();
+				SourceGrid->RefreshBoundTooltip();
 				RefreshBoundTooltip();
-				return true;
 			}
-			APlayerController* PC = GetOwningPlayer();
-			if (!PC && GetWorld())
+			else
 			{
-				PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+				PlayInvalidMoveSound();
 			}
-			if (PC)
+			return bSuccess;
+		};
+
+		if (const TOptional<bool> DestHandled = TryAdapterDrop(FeatureAdapter))
+		{
+			return DestHandled.GetValue();
+		}
+		if (SourceGrid != this)
+		{
+			if (const TOptional<bool> SrcHandled = TryAdapterDrop(SourceGrid->FeatureAdapter))
 			{
-				if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
-				{
-					TradeComp->RequestTradeTransfer(SourceGrid->TradeSide, TradeSide, GInventoryDrag.SourceIndex, Cell, 0);
-					OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
-					PlayDropSound();
-					GInventoryDrag.Reset();
-					RefreshBoundTooltip();
-					return true;
-				}
+				return SrcHandled.GetValue();
 			}
-			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-			PlayInvalidMoveSound();
-			return false;
 		}
 	}
 
@@ -1464,7 +1407,8 @@ void UInventoryGridWidget::CancelDrag()
 						{
 							const FVector SpawnLoc = Owner->GetActorLocation() + Owner->GetActorForwardVector() * 80.f;
 							const FTransform SpawnTransform(Owner->GetActorRotation(), SpawnLoc);
-							if (UYIWorldLootBlueprintLibrary::SpawnItemPickupFromInstance(this, Restore.Item, SpawnTransform))
+							if (DragSourceGrid->FeatureAdapter &&
+								DragSourceGrid->FeatureAdapter->TrySpawnWorldDropFromInstance(this, Restore.Item, SpawnTransform))
 							{
 								bDroppedToWorld = true;
 							}
@@ -1510,14 +1454,14 @@ bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventor
 	return true;
 }
 
-bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* EquipmentComponent, FGameplayTag RequestedSlotTag)
+bool UInventoryGridWidget::TryEquipActiveDraggedItem(UObject* EquipmentContextObject, FGameplayTag RequestedSlotTag)
 {
-	if (!EquipmentComponent)
+	if (!EquipmentContextObject)
 	{
 		return false;
 	}
 
-	if (UWorld* World = EquipmentComponent->GetWorld())
+	if (UWorld* World = EquipmentContextObject->GetWorld())
 	{
 		if (!YI_IsGlobalDragValid(World))
 		{
@@ -1568,7 +1512,18 @@ bool UInventoryGridWidget::TryEquipActiveDraggedItem(UYIEquipmentComponent* Equi
 		return false;
 	}
 
-	const bool bEquipped = EquipmentComponent->EquipFromInventory(SourceInventory, SourceIndexToEquip, RequestedSlotTag);
+	UYIInventoryGridFeatureAdapter* Adapter = SourceGrid->GetFeatureAdapter();
+	if (!Adapter)
+	{
+		if (TempInsertedIndex != INDEX_NONE)
+		{
+			SourceGrid->Bag->RemoveItem(TempInsertedIndex);
+			SourceGrid->RefreshBoundTooltip();
+		}
+		return false;
+	}
+
+	const bool bEquipped = Adapter->TryEquipItemFromInventory(EquipmentContextObject, SourceInventory, SourceIndexToEquip, RequestedSlotTag);
 	if (bEquipped)
 	{
 		SourceGrid->RefreshBoundTooltip();
@@ -1712,20 +1667,6 @@ bool UInventoryGridWidget::IsItemIndexLockedForUI(int32 ItemIndex) const
 	return OwnerInventory && OwnerInventory->IsBagItemLocked(Bag, ItemIndex);
 }
 
-void UInventoryGridWidget::SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide)
-{
-	ActiveTradeSession = InSession;
-	if (InSession)
-	{
-		TradeSide = InSide;
-		bHasTradeSide = true;
-	}
-	else
-	{
-		bHasTradeSide = false;
-	}
-}
-
 void UInventoryGridWidget::HandleCellClicked(const FIntPoint& Cell)
 {
 	// If a drag is active, attempt drop; otherwise start a drag from the clicked cell
@@ -1784,16 +1725,38 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 	int32 SourceIndex = GetSelectedItemIndex();
 	if (SourceIndex == INDEX_NONE) return false;
 
-	// Trade session path: route transfer through server so both sides stay in sync.
-	if (ActiveTradeSession && Other->ActiveTradeSession == ActiveTradeSession && bHasTradeSide && Other->bHasTradeSide)
+	// Feature adapters can route transfer actions (trade/shop/etc) before core bag transfer logic.
+	auto TryAdapterTransfer = [&](UYIInventoryGridFeatureAdapter* Adapter) -> TOptional<bool>
 	{
-		const FIntPoint DestCell = (Other->SelectedCell.X >= 0 && Other->SelectedCell.Y >= 0) ? Other->SelectedCell : FIntPoint(0, 0);
-		ActiveTradeSession->ServerTransferItemBetweenSides(TradeSide, Other->TradeSide, SourceIndex, DestCell, Count);
-		UpdateBoundTooltip();
-		Other->RefreshBoundTooltip();
-		OnItemTransferred.Broadcast(this, SourceIndex, INDEX_NONE);
-		Other->OnItemTransferred.Broadcast(this, SourceIndex, INDEX_NONE);
-		return true;
+		if (!Adapter)
+		{
+			return {};
+		}
+		const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleTransferSelectedTo(this, Other, SourceIndex, Count, OutDestIndex);
+		if (Result == EYIInventoryGridExternalOpResult::NotHandled)
+		{
+			return {};
+		}
+		const bool bSuccess = (Result == EYIInventoryGridExternalOpResult::HandledSucceeded);
+		if (bSuccess)
+		{
+			UpdateBoundTooltip();
+			Other->RefreshBoundTooltip();
+			OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
+			Other->OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
+		}
+		return bSuccess;
+	};
+	if (const TOptional<bool> Handled = TryAdapterTransfer(FeatureAdapter))
+	{
+		return Handled.GetValue();
+	}
+	if (Other != this)
+	{
+		if (const TOptional<bool> OtherHandled = TryAdapterTransfer(Other->FeatureAdapter))
+		{
+			return OtherHandled.GetValue();
+		}
 	}
 
 	// Non-trade: only allow direct transfer on authority.
@@ -2051,4 +2014,6 @@ void UInventoryGridWidget::HandleInventoryBagClosed(UYIInventoryBag* InBag)
 		}
 	}
 }
+
+
 
