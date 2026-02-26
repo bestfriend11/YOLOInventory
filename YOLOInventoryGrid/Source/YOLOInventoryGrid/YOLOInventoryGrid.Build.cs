@@ -11,14 +11,25 @@ public class YOLOInventoryGrid : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
+            "UMG",
             "SlateCore",
-            "Slate"
+            "Slate",
+            "InputCore",
+            "GameplayTags",
+            "GameplayAbilities",
+            "YOLOInventoryCore",
+            "YOLOInventorySchema",
+            "YOLOInventoryContainers",
+            "YOLOInventoryEquipment",
+            "YOLOInventoryTrade",
+            "YOLOInventoryWorld"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "Projects",
-            "RenderCore"
+            "RenderCore",
+            "ApplicationCore"
         });
     }
 }

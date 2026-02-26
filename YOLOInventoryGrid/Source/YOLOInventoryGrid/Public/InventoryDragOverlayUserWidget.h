@@ -9,7 +9,7 @@
  * bUseGlobalDragGhost on the grids.
  */
 UCLASS()
-class YOLOINVENTORYUI_API UInventoryDragOverlayUserWidget : public UUserWidget
+class YOLOINVENTORYGRID_API UInventoryDragOverlayUserWidget : public UUserWidget
 {
 	GENERATED_BODY()
 public:

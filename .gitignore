@@ -75,3 +75,13 @@ Build/*/**
 # IDE/build artifacts
 .vscode/*
 .idea/*
+YOLOInventoryContainers/ARCHITECTURE_TODO.md
+YOLOInventoryCore/ARCHITECTURE_TODO.md
+YOLOInventoryEditorCore/ARCHITECTURE_TODO.md
+YOLOInventoryEquipment/ARCHITECTURE_TODO.md
+YOLOInventoryGrid/ARCHITECTURE_TODO.md
+YOLOInventoryLoot/ARCHITECTURE_TODO.md
+YOLOInventorySchema/ARCHITECTURE_TODO.md
+YOLOInventoryTrade/ARCHITECTURE_TODO.md
+YOLOInventoryUI/ARCHITECTURE_TODO.md
+YOLOInventoryWorld/ARCHITECTURE_TODO.md

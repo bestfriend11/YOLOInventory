@@ -29,10 +29,6 @@
       "Enabled": true
     },
     {
-      "Name": "YOLOInventoryGrid",
-      "Enabled": true
-    },
-    {
       "Name": "YOLOInventoryContainers",
       "Enabled": true
     },

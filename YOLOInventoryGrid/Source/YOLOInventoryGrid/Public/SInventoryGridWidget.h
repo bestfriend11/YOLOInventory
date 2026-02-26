@@ -8,7 +8,7 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UYIInventoryGridStyleAsset;
 struct FYIGridStyleBrushSlot;
-class YOLOINVENTORYUI_API SInventoryGridWidget : public SCompoundWidget
+class YOLOINVENTORYGRID_API SInventoryGridWidget : public SCompoundWidget
 {
 public:
 	// Callbacks used by owning UInventoryGridWidget to react to hover/selection changes

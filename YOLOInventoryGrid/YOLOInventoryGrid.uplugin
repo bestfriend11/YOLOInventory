@@ -19,5 +19,30 @@
       "LoadingPhase": "Default"
     }
   ],
-  "Plugins": []
+  "Plugins": [
+    {
+      "Name": "YOLOInventoryCore",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventorySchema",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryContainers",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryEquipment",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryTrade",
+      "Enabled": true
+    },
+    {
+      "Name": "YOLOInventoryWorld",
+      "Enabled": true
+    }
+  ]
 }

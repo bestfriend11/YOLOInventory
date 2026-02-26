@@ -29,7 +29,7 @@ class UYIInventoryGridStyleAsset;
  * - Use MoveSelection* helpers to drive focus with input mappings (gamepad/keyboard).
  */
 UCLASS(meta=(DisplayName="YOLO Inventory Grid"))
-class YOLOINVENTORYUI_API UInventoryGridWidget : public UWidget
+class YOLOINVENTORYGRID_API UInventoryGridWidget : public UWidget
 {
 	GENERATED_BODY()
 public:
