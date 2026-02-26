@@ -297,8 +297,8 @@ void AYITradeSessionActor::ServerSetResource_Implementation(ETradeSide Side, FNa
 
 void AYITradeSessionActor::ServerSetReady_Implementation(ETradeSide Side, bool bReady)
 {
-    if (Side == ETradeSide::SideA) bAReady = bReady; else bBReady = bReady;
-    TryCommit();
+	FText UnusedError;
+	(void)TrySetReady(Side, bReady, Cast<APlayerController>(GetOwner()), UnusedError);
 }
 
 void AYITradeSessionActor::ServerCancel_Implementation()
@@ -321,6 +321,62 @@ static int32 GetTradeItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint
         }
     }
     return INDEX_NONE;
+}
+
+bool AYITradeSessionActor::TrySetReady(ETradeSide Side, bool bReady, APlayerController* RequestingPC, FText& OutError)
+{
+	if (!HasAuthority())
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_NoAuthority", "Trade readiness requires server authority");
+		return false;
+	}
+
+	if (RequestingPC)
+	{
+		if (!RequestingPC->PlayerState)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_NoPlayerState", "Invalid player state");
+			return false;
+		}
+
+		const ETradeSide CallerSide = GetSideForPlayer(RequestingPC->PlayerState);
+		const bool bIsParticipant = (RequestingPC->PlayerState == PlayerA) || (RequestingPC->PlayerState == PlayerB);
+		if (!bIsParticipant)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_NotParticipant", "You are not part of this trade");
+			return false;
+		}
+		if (CallerSide != Side)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_WrongSide", "Cannot change readiness for the other side");
+			return false;
+		}
+	}
+
+	if (!bSideBIsNPC && Side == ETradeSide::SideB && !PlayerB)
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_MissingSideB", "Trade side B is not valid");
+		return false;
+	}
+	if (Side == ETradeSide::SideA && !PlayerA)
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeSetReady_MissingSideA", "Trade side A is not valid");
+		return false;
+	}
+
+	if (Side == ETradeSide::SideA)
+	{
+		bAReady = bReady;
+	}
+	else
+	{
+		bBReady = bReady;
+	}
+
+	LastFailureReason = FText::GetEmpty();
+	ForceNetUpdate();
+	TryCommit();
+	return true;
 }
 
 bool AYITradeSessionActor::TryTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count, FText& OutError)

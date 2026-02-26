@@ -769,9 +769,13 @@ void UYITradeInteractionComponent::Server_RequestTradeSetReadyEx_Implementation(
 	}
 
 	Result.bRequestAccepted = true;
-	CurrentSession->ServerSetReady(Request.Side, Request.bReady);
-	Result.bSucceeded = true;
-	Result.Error = EYITradeOpError::None;
+	FText SetReadyError;
+	Result.bSucceeded = CurrentSession->TrySetReady(Request.Side, Request.bReady, PC, SetReadyError);
+	Result.Error = Result.bSucceeded ? EYITradeOpError::None : EYITradeOpError::ValidationFailed;
+	Result.Message = Result.bSucceeded ? FText::GetEmpty()
+		: (SetReadyError.IsEmpty()
+			? NSLOCTEXT("YOLOInventory", "Trade_SetReady_Failed", "Failed to change trade readiness")
+			: SetReadyError);
 	Client_TradeOpResult(Result);
 }
 
