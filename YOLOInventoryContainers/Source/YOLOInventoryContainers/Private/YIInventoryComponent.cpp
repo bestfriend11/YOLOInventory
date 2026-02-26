@@ -539,8 +539,16 @@ FYIInventoryOpResult UYIInventoryComponent::RequestMoveItem(const FYIInventoryMo
 	Result.TransactionId = FGuid::NewGuid();
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
 
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestMoveItem(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
+
 	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
-		GetOwner() && GetOwner()->HasAuthority() &&
 		Result.SourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
 	{
@@ -570,8 +578,15 @@ FYIInventoryOpResult UYIInventoryComponent::RequestRotateItem(const FYIInventory
 	YIInventory_PopulateResultIds(Result, Request.ItemRef);
 	Result.TransactionId = FGuid::NewGuid();
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestRotateItem(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
 	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
-		GetOwner() && GetOwner()->HasAuthority() &&
 		Result.SourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
 	{
@@ -598,8 +613,15 @@ FYIInventoryOpResult UYIInventoryComponent::RequestRemoveItem(const FYIInventory
 	YIInventory_PopulateResultIds(Result, Request.ItemRef);
 	Result.TransactionId = FGuid::NewGuid();
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestRemoveItem(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
 	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
-		GetOwner() && GetOwner()->HasAuthority() &&
 		Result.SourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
 	{
@@ -628,7 +650,15 @@ FYIInventoryOpResult UYIInventoryComponent::RequestTransferItem(const FYIInvento
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
 	Result.DestBagRevision = GetBagRuntimeRevisionById(Request.DestBagId);
 
-	if (GetOwner() && GetOwner()->HasAuthority())
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestTransferItem(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
+
 	{
 		if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
 			Result.SourceBagRevision != INDEX_NONE &&
@@ -687,8 +717,15 @@ FYIInventoryOpResult UYIInventoryComponent::RequestSplitStack(const FYIInventory
 	YIInventory_PopulateResultIds(Result, Request.ItemRef);
 	Result.TransactionId = FGuid::NewGuid();
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestSplitStack(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
 	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
-		GetOwner() && GetOwner()->HasAuthority() &&
 		Result.SourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
 	{
@@ -715,8 +752,15 @@ FYIInventoryOpResult UYIInventoryComponent::RequestCombineItem(const FYIInventor
 	YIInventory_PopulateResultIds(Result, Request.ItemRef);
 	Result.TransactionId = FGuid::NewGuid();
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
+	if (!(GetOwner() && GetOwner()->HasAuthority()))
+	{
+		ServerRequestCombineItem(Request);
+		Result.bRequestAccepted = true;
+		Result.bSucceeded = false;
+		Result.Error = EYIInventoryOpError::None;
+		return Result;
+	}
 	if (Request.ExpectedSourceBagRevision != INDEX_NONE &&
-		GetOwner() && GetOwner()->HasAuthority() &&
 		Result.SourceBagRevision != INDEX_NONE &&
 		Result.SourceBagRevision != Request.ExpectedSourceBagRevision)
 	{
@@ -730,6 +774,36 @@ FYIInventoryOpResult UYIInventoryComponent::RequestCombineItem(const FYIInventor
 	Result.Error = bOpResult ? EYIInventoryOpError::None : EYIInventoryOpError::ValidationFailed;
 	Result.SourceBagRevision = GetBagRuntimeRevisionById(Request.ItemRef.Bag.BagId);
 	return Result;
+}
+
+void UYIInventoryComponent::ServerRequestMoveItem_Implementation(FYIInventoryMoveItemRequest Request)
+{
+	RequestMoveItem(Request);
+}
+
+void UYIInventoryComponent::ServerRequestRotateItem_Implementation(FYIInventoryRotateItemRequest Request)
+{
+	RequestRotateItem(Request);
+}
+
+void UYIInventoryComponent::ServerRequestRemoveItem_Implementation(FYIInventoryRemoveItemRequest Request)
+{
+	RequestRemoveItem(Request);
+}
+
+void UYIInventoryComponent::ServerRequestTransferItem_Implementation(FYIInventoryTransferItemRequest Request)
+{
+	RequestTransferItem(Request);
+}
+
+void UYIInventoryComponent::ServerRequestSplitStack_Implementation(FYIInventorySplitStackRequest Request)
+{
+	RequestSplitStack(Request);
+}
+
+void UYIInventoryComponent::ServerRequestCombineItem_Implementation(FYIInventoryCombineItemRequest Request)
+{
+	RequestCombineItem(Request);
 }
 
 void UYIInventoryComponent::HandleBagItemAdded(int32 Index, FYIBagItem Item)

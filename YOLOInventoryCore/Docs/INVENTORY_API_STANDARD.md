@@ -133,13 +133,16 @@ Phase A (done / in progress)
 
 Phase B (next)
 
-- propagate expected revisions through RPC request paths
 - standardize request/result wrappers across more systems (trade/shop/equipment actions)
 - add service-level regression tests for mutation + mirror + container runtime
+- enforce richer error reporting from server request-RPC execution paths (future response/telemetry channel)
+
+Phase B progress (implemented)
+
+- request-struct server RPC wrappers added on `UYIInventoryComponent` so client-originated `Request*` flows execute server-side revision checks
 
 Phase C
 
 - delta replication strategy for bag mirrors
 - topology policy abstraction (grid/list/hive placement backends)
 - async-loading enforcement in runtime command hot paths
-

@@ -234,6 +234,24 @@ public:
 	FYIInventoryOpResult RequestCombineItem(const FYIInventoryCombineItemRequest& Request);
 
 	UFUNCTION(Server, Reliable)
+	void ServerRequestMoveItem(FYIInventoryMoveItemRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestRotateItem(FYIInventoryRotateItemRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestRemoveItem(FYIInventoryRemoveItemRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestTransferItem(FYIInventoryTransferItemRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestSplitStack(FYIInventorySplitStackRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestCombineItem(FYIInventoryCombineItemRequest Request);
+
+	UFUNCTION(Server, Reliable)
 	void ServerSetActiveBagById(const FGuid& InBagId);
 
 	UFUNCTION(Server, Reliable)
