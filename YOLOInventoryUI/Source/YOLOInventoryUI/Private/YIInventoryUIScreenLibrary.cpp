@@ -8,6 +8,8 @@
 
 namespace
 {
+	constexpr int32 YIInventoryScreenViewportZOrder = 100000;
+
 	struct FYIInventoryScreenBindParams
 	{
 		UYIInventoryComponent* InInventoryComponent = nullptr;
@@ -74,6 +76,7 @@ UUserWidget* UYIInventoryUIScreenLibrary::OpenInventoryScreenForComponent(UObjec
 		if (UUserWidget* Existing = ExistingPtr->Get())
 		{
 			BindInventoryScreenWidget(Existing, InventoryComponent);
+			Existing->SetZOrderInViewport(YIInventoryScreenViewportZOrder);
 			return Existing;
 		}
 		GInventoryScreensByComponent.Remove(InventoryComponent);
@@ -98,7 +101,7 @@ UUserWidget* UYIInventoryUIScreenLibrary::OpenInventoryScreenForComponent(UObjec
 	}
 
 	BindInventoryScreenWidget(Screen, InventoryComponent);
-	Screen->AddToViewport();
+	Screen->AddToViewport(YIInventoryScreenViewportZOrder);
 	GInventoryScreensByComponent.Add(InventoryComponent, Screen);
 	return Screen;
 }
@@ -124,4 +127,3 @@ void UYIInventoryUIScreenLibrary::CloseAllScreensForComponent(UYIInventoryCompon
 {
 	CloseInventoryScreenForComponent(InventoryComponent);
 }
-

@@ -46,6 +46,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	FSlateWindowElementList& OutDrawElements, int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const
 {
 	LayerId = Super::NativePaint(Args, AllottedGeometry, MyCullingRect, OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
+	LayerId += FMath::Max(0, OverlayLayerBias);
 
 	// Convert desktop cursor to viewport space first; this removes window-origin offsets
 	// in PIE windowed mode and keeps drag ghost aligned after viewport resize/move.
@@ -178,11 +179,16 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	}
 
 	const FVector2D GhostSize = FVector2D(GhostFootprint) * GhostCellPx;
+	const FVector2D AnchorPixelOffset(
+		(static_cast<float>(LiveAnchorOffset.X) + 0.5f) * GhostCellPx,
+		(static_cast<float>(LiveAnchorOffset.Y) + 0.5f) * GhostCellPx);
 	const FIntPoint CursorCell(
 		FMath::FloorToInt(Local.X / GhostCellPx),
 		FMath::FloorToInt(Local.Y / GhostCellPx));
 	const FIntPoint GhostTopLeftCell = CursorCell - LiveAnchorOffset;
-	const FVector2D P = FVector2D(GhostTopLeftCell) * GhostCellPx;
+	const FVector2D P = bSnapDragVisualsToGrid
+		? FVector2D(GhostTopLeftCell) * GhostCellPx
+		: (Local - AnchorPixelOffset);
 	const FLinearColor Tint = DragIconTexture
 		? (GhostStyle ? GhostStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.90f))
 		: FLinearColor(1.f, 1.f, 1.f, 0.18f);
@@ -200,7 +206,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	{
 		Debug += FString::Printf(TEXT("Local(cursor in overlay): %s\n"), *V2(Local));
 		Debug += FString::Printf(TEXT("GhostSize: %s  P(top-left): %s\n"), *V2(GhostSize), *V2(P));
-		Debug += FString::Printf(TEXT("CursorCell: %s  Anchor: %s  GhostTopLeftCell: %s\n"), *V2i(CursorCell), *V2i(LiveAnchorOffset), *V2i(GhostTopLeftCell));
+		Debug += FString::Printf(TEXT("CursorCell: %s  Anchor: %s  GhostTopLeftCell: %s  Snap:%s\n"), *V2i(CursorCell), *V2i(LiveAnchorOffset), *V2i(GhostTopLeftCell), bSnapDragVisualsToGrid ? TEXT("Y") : TEXT("N"));
 		Debug += FString::Printf(TEXT("GhostFootprint(cells): %s  CellPx: %.2f\n"), *V2i(GhostFootprint), GhostCellPx);
 		Debug += FString::Printf(TEXT("ScaleGrid: %s (hover=%s source=%s)\n"),
 			GhostScaleGrid ? *GhostScaleGrid->GetName() : TEXT("<none>"),
@@ -228,10 +234,19 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		if (!bInside) return;
 		// Compute candidate footprint using the same anchor-cell logic as the grid widget.
 		const FIntPoint Foot = Grid->Bag->GetEffectiveSize(LiveDragItem.Size);
+		const FVector2D FootS_Grid = FVector2D(Foot) * CellPx;
 		const FIntPoint CursorCellGrid(
 			FMath::FloorToInt(GridLocalFromScreen.X / CellPx),
 			FMath::FloorToInt(GridLocalFromScreen.Y / CellPx));
-		const FIntPoint DesiredTopLeft = CursorCellGrid - LiveAnchorOffset;
+		const FVector2D AnchorPixelOffsetGrid(
+			(static_cast<float>(LiveAnchorOffset.X) + 0.5f) * CellPx,
+			(static_cast<float>(LiveAnchorOffset.Y) + 0.5f) * CellPx);
+		const FVector2D UnsnappedTopLeftGrid = GridLocalFromScreen - AnchorPixelOffsetGrid;
+		const FIntPoint DesiredTopLeft = bSnapDragVisualsToGrid
+			? (CursorCellGrid - LiveAnchorOffset)
+			: FIntPoint(
+				FMath::FloorToInt(UnsnappedTopLeftGrid.X / CellPx),
+				FMath::FloorToInt(UnsnappedTopLeftGrid.Y / CellPx));
 
 		int32 IgnoreIndex = INDEX_NONE;
 		if (LiveSourceBag == Grid->Bag && LiveDragItem.Item.InstanceId.IsValid())
@@ -243,8 +258,9 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 
 		const FIntPoint GridSize = Grid->Bag->GridSize;
 		// Convert grid-local footprint rect to overlay local
-		const FVector2D FootP_Grid = FVector2D(DesiredTopLeft) * CellPx;
-		const FVector2D FootS_Grid = FVector2D(Foot) * CellPx;
+		const FVector2D FootP_Grid = bSnapDragVisualsToGrid
+			? FVector2D(DesiredTopLeft) * CellPx
+			: UnsnappedTopLeftGrid;
 		const FVector2D FootP_Abs = GridGeom.LocalToAbsolute(FootP_Grid);
 		const FVector2D FootP_Overlay = AllottedGeometry.AbsoluteToLocal(FootP_Abs);
 
