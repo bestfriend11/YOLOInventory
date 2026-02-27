@@ -62,6 +62,11 @@ public:
 		HoveredItemTopLeft = FIntPoint(-1, -1);
 		HoveredItemSize = FIntPoint::ZeroValue;
 		SelectedCell = FIntPoint(-1, -1);
+		GhostAnchorCellOffset = FIntPoint::ZeroValue;
+		CachedGhostIconInstanceId.Invalidate();
+		CachedGhostIconTexture.Reset();
+		CachedHoveredIconInstanceId.Invalidate();
+		CachedHoveredIconTexture.Reset();
 		UpdateHoverSelection();
 	}
 	void SetCellPixelSize(float InSize) { CellSize = FVector2D(InSize, InSize); }
@@ -143,8 +148,13 @@ private:
 	mutable FVector2D GhostCursorLocal = FVector2D::ZeroVector;
 	mutable FIntPoint GhostFootprint = FIntPoint::ZeroValue;
 	mutable FIntPoint GhostTopLeft = FIntPoint::ZeroValue;
+	mutable FIntPoint GhostAnchorCellOffset = FIntPoint::ZeroValue;
 	mutable FSlateBrush GhostBrush;
 	mutable bool bGhostHasIcon = false;
+	mutable FGuid CachedGhostIconInstanceId;
+	mutable TWeakObjectPtr<UTexture2D> CachedGhostIconTexture;
+	mutable FGuid CachedHoveredIconInstanceId;
+	mutable TWeakObjectPtr<UTexture2D> CachedHoveredIconTexture;
 	mutable TMap<int32, TStrongObjectPtr<UMaterialInstanceDynamic>> StyleSlotMIDs;
 	mutable TMap<int32, TWeakObjectPtr<UMaterialInterface>> StyleSlotSourceMaterials;
 	mutable TMap<int32, FSlateBrush> StyleSlotBrushCache;

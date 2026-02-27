@@ -13,6 +13,17 @@
 #include "YOLOInventorySettings.h"
 #include "YIInventoryGridStyleAsset.h"
 
+static UTexture2D* YI_Overlay_TryResolveItemIconNoLoad(const FYIItemInstance& Item)
+{
+	UYIItemDefinition* Def = Item.Definition.Get();
+	if (!Def)
+	{
+		return nullptr;
+	}
+
+	const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
+	return EffectiveIcon.Get();
+}
 
 UInventoryDragOverlayUserWidget::UInventoryDragOverlayUserWidget(const FObjectInitializer& OI)
 	: Super(OI)
@@ -53,6 +64,11 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		&& Settings.IsDebugChannelEnabled(EYIDebugChannel::Grid);
 	FYIBagItem LiveDragItem; UYIInventoryBag* LiveSourceBag = nullptr;
 	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag, GetWorld());
+	FIntPoint LiveAnchorOffset = FIntPoint::ZeroValue;
+	if (bHasLiveDrag)
+	{
+		UInventoryGridWidget::GetActiveDraggedItemAnchor(LiveAnchorOffset, GetWorld());
+	}
 	bShouldDraw = bHasLiveDrag;
 	FString Debug;
 	auto V2 = [](const FVector2D& V){ return FString::Printf(TEXT("(%.1f, %.1f)"), V.X, V.Y); };
@@ -119,7 +135,10 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 			const FGeometry GridGeomT = Grid->GetCachedGeometry();
 			const FSlateRect AbsRect = GridGeomT.GetLayoutBoundingRect();
 			const bool bHit = AbsRect.ContainsPoint(CachedCursorSS);
-			HoverPickInfo += FString::Printf(TEXT("Grid %s AbsRect: (%.1f,%.1f)-(%.1f,%.1f) hit:%s\n"), *Grid->GetName(), AbsRect.Left, AbsRect.Top, AbsRect.Right, AbsRect.Bottom, bHit?TEXT("Y"):TEXT("N"));
+			if (bShowDebug)
+			{
+				HoverPickInfo += FString::Printf(TEXT("Grid %s AbsRect: (%.1f,%.1f)-(%.1f,%.1f) hit:%s\n"), *Grid->GetName(), AbsRect.Left, AbsRect.Top, AbsRect.Right, AbsRect.Bottom, bHit ? TEXT("Y") : TEXT("N"));
+			}
 			if (bHit)
 			{
 				HoveredGrid = Grid;
@@ -155,17 +174,15 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	const UTexture2D* DragIconTexture = nullptr;
 	if (bHasLiveDrag)
 	{
-		if (UYIItemDefinition* Def = LiveDragItem.Item.Definition.IsValid()
-			? LiveDragItem.Item.Definition.Get()
-			: LiveDragItem.Item.Definition.LoadSynchronous())
-		{
-			const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
-			DragIconTexture = EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous();
-		}
+		DragIconTexture = YI_Overlay_TryResolveItemIconNoLoad(LiveDragItem.Item);
 	}
 
 	const FVector2D GhostSize = FVector2D(GhostFootprint) * GhostCellPx;
-	const FVector2D P = Local - (GhostSize * 0.5f);
+	const FIntPoint CursorCell(
+		FMath::FloorToInt(Local.X / GhostCellPx),
+		FMath::FloorToInt(Local.Y / GhostCellPx));
+	const FIntPoint GhostTopLeftCell = CursorCell - LiveAnchorOffset;
+	const FVector2D P = FVector2D(GhostTopLeftCell) * GhostCellPx;
 	const FLinearColor Tint = DragIconTexture
 		? (GhostStyle ? GhostStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.90f))
 		: FLinearColor(1.f, 1.f, 1.f, 0.18f);
@@ -183,6 +200,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 	{
 		Debug += FString::Printf(TEXT("Local(cursor in overlay): %s\n"), *V2(Local));
 		Debug += FString::Printf(TEXT("GhostSize: %s  P(top-left): %s\n"), *V2(GhostSize), *V2(P));
+		Debug += FString::Printf(TEXT("CursorCell: %s  Anchor: %s  GhostTopLeftCell: %s\n"), *V2i(CursorCell), *V2i(LiveAnchorOffset), *V2i(GhostTopLeftCell));
 		Debug += FString::Printf(TEXT("GhostFootprint(cells): %s  CellPx: %.2f\n"), *V2i(GhostFootprint), GhostCellPx);
 		Debug += FString::Printf(TEXT("ScaleGrid: %s (hover=%s source=%s)\n"),
 			GhostScaleGrid ? *GhostScaleGrid->GetName() : TEXT("<none>"),
@@ -208,21 +226,22 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 			Debug += FString::Printf(TEXT("GridLocalFromScreen: %s  VisualSize(px): %s  Inside:%s\n"), *V2(GridLocalFromScreen), *V2(VisualSize), bInside?TEXT("Y"):TEXT("N"));
 		}
 		if (!bInside) return;
-		// Compute candidate footprint anchored at cursor center, clamped inside grid
-		FYIBagItem DragItem; UYIInventoryBag* SrcBag=nullptr; UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, GetWorld());
-		const FIntPoint Foot = Grid->Bag->GetEffectiveSize(DragItem.Size);
-		// Determine the cell that would center under the cursor
-		const FVector2D CursorCellF = GridLocalFromScreen / CellPx; // fractional cell coords
-		FIntPoint DesiredTopLeft(
-			FMath::FloorToInt(CursorCellF.X - (Foot.X * 0.5f)),
-			FMath::FloorToInt(CursorCellF.Y - (Foot.Y * 0.5f))
-		);
-		// Clamp TopLeft so the footprint stays entirely inside the grid
+		// Compute candidate footprint using the same anchor-cell logic as the grid widget.
+		const FIntPoint Foot = Grid->Bag->GetEffectiveSize(LiveDragItem.Size);
+		const FIntPoint CursorCellGrid(
+			FMath::FloorToInt(GridLocalFromScreen.X / CellPx),
+			FMath::FloorToInt(GridLocalFromScreen.Y / CellPx));
+		const FIntPoint DesiredTopLeft = CursorCellGrid - LiveAnchorOffset;
+
+		int32 IgnoreIndex = INDEX_NONE;
+		if (LiveSourceBag == Grid->Bag && LiveDragItem.Item.InstanceId.IsValid())
+		{
+			Grid->Bag->FindItemIndexByInstanceIdFast(LiveDragItem.Item.InstanceId, IgnoreIndex);
+		}
+		int32 OverlapIdx = INDEX_NONE;
+		const bool bCan = Grid->Bag->FindSingleOverlapAt(DesiredTopLeft, LiveDragItem.Size, IgnoreIndex, OverlapIdx);
+
 		const FIntPoint GridSize = Grid->Bag->GridSize;
-		DesiredTopLeft.X = FMath::Clamp(DesiredTopLeft.X, 0, FMath::Max(0, GridSize.X - Foot.X));
-		DesiredTopLeft.Y = FMath::Clamp(DesiredTopLeft.Y, 0, FMath::Max(0, GridSize.Y - Foot.Y));
-		// Evaluate placement at clamped position
-		const bool bCan = Grid->Bag->CanPlaceAt(DesiredTopLeft, DragItem.Size);
 		// Convert grid-local footprint rect to overlay local
 		const FVector2D FootP_Grid = FVector2D(DesiredTopLeft) * CellPx;
 		const FVector2D FootS_Grid = FVector2D(Foot) * CellPx;
@@ -231,8 +250,9 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 
 		if (bShowDebug)
 		{
-			Debug += FString::Printf(TEXT("DragItem.Size: %s  Foot(effective): %s  CellPx: %.2f\n"), *V2i(DragItem.Size), *V2i(Foot), CellPx);
-			Debug += FString::Printf(TEXT("CursorCellF: %s  DesiredTopLeft(clamped): %s  GridSize: %s\n"), *V2(CursorCellF), *V2i(DesiredTopLeft), *V2i(GridSize));
+			Debug += FString::Printf(TEXT("DragItem.Size: %s  Foot(effective): %s  CellPx: %.2f\n"), *V2i(LiveDragItem.Size), *V2i(Foot), CellPx);
+			Debug += FString::Printf(TEXT("CursorCell: %s  Anchor: %s  DesiredTopLeft: %s  GridSize: %s\n"), *V2i(CursorCellGrid), *V2i(LiveAnchorOffset), *V2i(DesiredTopLeft), *V2i(GridSize));
+			Debug += FString::Printf(TEXT("IgnoreIndex: %d  OverlapIdx: %d\n"), IgnoreIndex, OverlapIdx);
 			Debug += FString::Printf(TEXT("bCanPlace: %s\n"), bCan?TEXT("true"):TEXT("false"));
 			Debug += FString::Printf(TEXT("FootP_Grid: %s  FootS_Grid: %s  FootP_Abs: %s  FootP_Overlay: %s\n"), *V2(FootP_Grid), *V2(FootS_Grid), *V2(FootP_Abs), *V2(FootP_Overlay));
 		}

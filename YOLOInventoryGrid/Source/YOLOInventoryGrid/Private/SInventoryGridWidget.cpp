@@ -13,8 +13,6 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
-#pragma optimize("", off)
-
 static void YI_DrawBrushSlot(
 	FSlateWindowElementList& OutDrawElements,
 	int32& LayerId,
@@ -70,6 +68,18 @@ static void YI_DrawRectOutline(
 		Color,
 		true,
 		FMath::Max(0.5f, Thickness));
+}
+
+static UTexture2D* YI_Grid_TryResolveItemIconNoLoad(const FYIItemInstance& Item)
+{
+	UYIItemDefinition* Def = Item.Definition.Get();
+	if (!Def)
+	{
+		return nullptr;
+	}
+
+	const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
+	return EffectiveIcon.Get();
 }
 
 const FSlateBrush* SInventoryGridWidget::ResolveBrushForStyleSlot(
@@ -155,34 +165,11 @@ const FSlateBrush* SInventoryGridWidget::ResolveBrushForStyleSlot(
 void SInventoryGridWidget::RebuildOccupancy()
 {
 	CellToItemIndex.Reset();
-	if (!Bag.IsValid()) return;
-	CellToItemIndex.Init(INDEX_NONE, Bag->GridSize.X * Bag->GridSize.Y);
-	for (int32 i=0;i<Bag->Items.Num();++i)
-	{
-		const auto& It = Bag->Items[i];
-		const FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-		for (int y=0; y<Eff.Y; ++y)
-		{
-			for (int x=0; x<Eff.X; ++x)
-			{
-				const int GX = It.Pos.X + x;
-				const int GY = It.Pos.Y + y;
-				if (GX>=0 && GY>=0 && GX < Bag->GridSize.X && GY < Bag->GridSize.Y)
-				{
-					CellToItemIndex[GY * Bag->GridSize.X + GX] = i;
-				}
-			}
-		}
-	}
 }
 
 int32 SInventoryGridWidget::GetItemIndexAtCell(const FIntPoint& Cell) const
 {
-	if (!Bag.IsValid()) return INDEX_NONE;
-	if (Cell.X < 0 || Cell.Y < 0 || Cell.X >= Bag->GridSize.X || Cell.Y >= Bag->GridSize.Y) return INDEX_NONE;
-	const int32 Idx = Cell.Y * Bag->GridSize.X + Cell.X;
-	if (!CellToItemIndex.IsValidIndex(Idx)) return INDEX_NONE;
-	return CellToItemIndex[Idx];
+	return Bag.IsValid() ? Bag->GetItemIndexAtCellFast(Cell) : INDEX_NONE;
 }
 
 void SInventoryGridWidget::UpdateHoverSelection()
@@ -424,9 +411,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		const FVector2D P = FVector2D(It.Pos) * LocalCell;
 		const FVector2D S = FVector2D(Eff) * LocalCell;
 
-		UYIItemDefinition* Def = It.Item.Definition.IsValid() ? It.Item.Definition.Get() : It.Item.Definition.LoadSynchronous();
-		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
-		UTexture2D* IconTex = bShowItemIcons && Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
+		UTexture2D* IconTex = bShowItemIcons ? YI_Grid_TryResolveItemIconNoLoad(It.Item) : nullptr;
 
 		if (GridStyle && GridStyle->ItemFill.bEnabled)
 		{
@@ -529,9 +514,12 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 			if (Bag->Items.IsValidIndex(HoveredItemIndex))
 			{
 				const FYIBagItem& HoverItem = Bag->Items[HoveredItemIndex];
-				UYIItemDefinition* HoverDef = HoverItem.Item.Definition.IsValid() ? HoverItem.Item.Definition.Get() : HoverItem.Item.Definition.LoadSynchronous();
-				const TSoftObjectPtr<UTexture2D> EffectiveHoverIcon = HoverDef ? YIItemSchema::GetIcon(HoverDef) : nullptr;
-				UTexture2D* HoverIcon = bShowItemIcons && HoverDef ? (EffectiveHoverIcon.IsValid() ? EffectiveHoverIcon.Get() : EffectiveHoverIcon.LoadSynchronous()) : nullptr;
+				if (CachedHoveredIconInstanceId != HoverItem.Item.InstanceId)
+				{
+					CachedHoveredIconInstanceId = HoverItem.Item.InstanceId;
+					CachedHoveredIconTexture = bShowItemIcons ? YI_Grid_TryResolveItemIconNoLoad(HoverItem.Item) : nullptr;
+				}
+				UTexture2D* HoverIcon = CachedHoveredIconTexture.Get();
 				DrawItemIcon(HoverIcon, P, S);
 			}
 		}
@@ -606,7 +594,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 				FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
 			}
 
-			const FVector2D P = GhostCursorLocal - (GhostSize * 0.5f);
+			const FVector2D P = FVector2D(GhostTopLeft) * LocalCell;
 			const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
 			const FLinearColor Tint = bGhostHasIcon
 				? (GridStyle ? GridStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.9f))
@@ -635,6 +623,9 @@ void SInventoryGridWidget::Tick(const FGeometry& AllottedGeometry, const double 
 	const bool bDragActive = UInventoryGridWidget::GetActiveDraggedItem(DragItem, SrcBag, ContextWorld);
 	if (!bDragActive)
 	{
+		GhostAnchorCellOffset = FIntPoint::ZeroValue;
+		CachedGhostIconInstanceId.Invalidate();
+		CachedGhostIconTexture.Reset();
 		if (bGhostActive)
 		{
 			bGhostActive = false;
@@ -670,15 +661,19 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 
 	if (bDragActive)
 	{
+		UInventoryGridWidget::GetActiveDraggedItemAnchor(GhostAnchorCellOffset, ContextWorld);
 		const FIntPoint Eff = Bag.IsValid() ? Bag->GetEffectiveSize(DragItem.Size) : DragItem.Size;
 		if (Eff != GhostFootprint)
 		{
 			GhostFootprint = Eff;
 			GhostSize = FVector2D(GhostFootprint) * CellSize;
 		}
-		UYIItemDefinition* Def = DragItem.Item.Definition.IsValid() ? DragItem.Item.Definition.Get() : DragItem.Item.Definition.LoadSynchronous();
-		const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
-		UTexture2D* Icon = Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
+		if (CachedGhostIconInstanceId != DragItem.Item.InstanceId)
+		{
+			CachedGhostIconInstanceId = DragItem.Item.InstanceId;
+			CachedGhostIconTexture = YI_Grid_TryResolveItemIconNoLoad(DragItem.Item);
+		}
+		UTexture2D* Icon = CachedGhostIconTexture.Get();
 		if (Icon)
 		{
 			GhostBrush.SetResourceObject(Icon);
@@ -697,13 +692,10 @@ FReply SInventoryGridWidget::OnMouseMove(const FGeometry& MyGeometry, const FPoi
 		// Ignore that source item for ghost overlap/highlight evaluation so the drag preview behaves as if the item was picked up locally.
 		if (Bag.IsValid() && SrcBag == Bag && DragItem.Item.InstanceId.IsValid())
 		{
-			for (int32 ItemIndex = 0; ItemIndex < Bag->Items.Num(); ++ItemIndex)
+			int32 FoundIndex = INDEX_NONE;
+			if (Bag->FindItemIndexByInstanceIdFast(DragItem.Item.InstanceId, FoundIndex))
 			{
-				if (Bag->Items[ItemIndex].Item.InstanceId == DragItem.Item.InstanceId)
-				{
-					GhostIgnoreIndex = ItemIndex;
-					break;
-				}
+				GhostIgnoreIndex = FoundIndex;
 			}
 		}
 	}
@@ -810,14 +802,19 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, co
 		bGhostOutOfBounds = false;
 		return;
 	}
+	if (LocalCell.X <= UE_SMALL_NUMBER || LocalCell.Y <= UE_SMALL_NUMBER)
+	{
+		bGhostPlacementValid = false;
+		GhostOverlapIndex = INDEX_NONE;
+		bGhostOutOfBounds = true;
+		return;
+	}
 
-	// Compute top-left cell by centering the footprint on the cursor, then rounding to nearest cell
-	const FVector2D CellPos = FVector2D(LocalCursor.X / LocalCell.X, LocalCursor.Y / LocalCell.Y);
-	const FVector2D TopLeftCellF = CellPos - FVector2D((float)GhostFootprint.X, (float)GhostFootprint.Y) * 0.5f;
-	const FIntPoint Candidate(
-		FMath::RoundToInt(TopLeftCellF.X),
-		FMath::RoundToInt(TopLeftCellF.Y)
-	);
+	// Compute top-left by anchoring cursor-cell to the picked cell inside the dragged item.
+	const FIntPoint CursorCell(
+		FMath::FloorToInt(LocalCursor.X / LocalCell.X),
+		FMath::FloorToInt(LocalCursor.Y / LocalCell.Y));
+	const FIntPoint Candidate = CursorCell - GhostAnchorCellOffset;
 	GhostTopLeft = Candidate;
 	int32 Overlap = INDEX_NONE;
 	// bounds
@@ -853,7 +850,7 @@ bool SInventoryGridWidget::EvaluateGhostPlacement(const FIntPoint& TopLeft, int3
 		{
 			const int GX = TopLeft.X + x;
 			const int GY = TopLeft.Y + y;
-			const int32 Idx = CellToItemIndex.IsValidIndex(GY * Bag->GridSize.X + GX) ? CellToItemIndex[GY * Bag->GridSize.X + GX] : INDEX_NONE;
+			const int32 Idx = Bag->GetItemIndexAtCellFast(FIntPoint(GX, GY));
 			if (Idx != INDEX_NONE && Idx != GhostIgnoreIndex)
 			{
 				if (OutOverlapIdx == INDEX_NONE) { OutOverlapIdx = Idx; }
@@ -920,19 +917,19 @@ FReply SInventoryGridWidget::OnMouseButtonDown(const FGeometry& MyGeometry, cons
 		if (OwnerWidget.IsValid())
 		{
 			const int32 Idx = GetItemIndexAtCell(DropCell);
-if (Idx != INDEX_NONE)
-{
-const FYIBagItem CachedItem = Bag->Items[Idx];
-if (OwnerWidget->BeginDragFromCell(DropCell))
+			if (Idx != INDEX_NONE)
+			{
+				const FYIBagItem CachedItem = Bag->Items[Idx];
+				if (OwnerWidget->BeginDragFromCell(DropCell))
 				{
 					// Build ghost visual using the cached item copy (item was removed from bag on pickup)
 					const FYIBagItem& Item = CachedItem;
 					const FIntPoint Eff = Bag->GetEffectiveSize(Item.Size);
 					GhostSize = FVector2D(Eff) * CellSize;
 					GhostFootprint = Eff;
-					UYIItemDefinition* Def = Item.Item.Definition.IsValid() ? Item.Item.Definition.Get() : Item.Item.Definition.LoadSynchronous();
-					const TSoftObjectPtr<UTexture2D> EffectiveIcon = Def ? YIItemSchema::GetIcon(Def) : nullptr;
-					UTexture2D* Icon = Def ? (EffectiveIcon.IsValid() ? EffectiveIcon.Get() : EffectiveIcon.LoadSynchronous()) : nullptr;
+					CachedGhostIconInstanceId = Item.Item.InstanceId;
+					CachedGhostIconTexture = YI_Grid_TryResolveItemIconNoLoad(Item.Item);
+					UTexture2D* Icon = CachedGhostIconTexture.Get();
 					if (Icon)
 					{
 						GhostBrush.SetResourceObject(Icon);
@@ -942,13 +939,14 @@ if (OwnerWidget->BeginDragFromCell(DropCell))
 					else
 					{
 						GhostBrush = *FAppStyle::GetBrush("WhiteBrush");
-					GhostBrush.TintColor = FSlateColor(FLinearColor(1,1,1,0.25f));
-					GhostBrush.ImageSize = GhostSize;
-					bGhostHasIcon = false;
-				}
+						GhostBrush.TintColor = FSlateColor(FLinearColor(1,1,1,0.25f));
+						GhostBrush.ImageSize = GhostSize;
+						bGhostHasIcon = false;
+					}
 					GhostIgnoreIndex = INDEX_NONE;
 					GhostCursorLocal = Local;
-				UpdateGhostPlacement(Local, CellSize);
+					UInventoryGridWidget::GetActiveDraggedItemAnchor(GhostAnchorCellOffset, ContextWorld);
+					UpdateGhostPlacement(Local, CellSize);
 					bGhostActive = true;
 					Invalidate(EInvalidateWidgetReason::Paint);
 				}
@@ -1008,4 +1006,3 @@ bool SInventoryGridWidget::MoveSelection(const FIntPoint& Delta)
 	return false;
 }
 
-#pragma optimize("", on)

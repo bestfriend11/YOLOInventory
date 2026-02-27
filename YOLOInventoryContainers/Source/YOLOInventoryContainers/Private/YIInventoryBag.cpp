@@ -9,6 +9,7 @@ void UYIInventoryBag::PostLoad()
 {
 	Super::PostLoad();
 	EnsureBagId();
+	MarkRuntimeLookupCacheDirty();
 	for (FYIBagItem& ItemEntry : Items)
 	{
 		if (!ItemEntry.Item.InstanceId.IsValid())
@@ -32,6 +33,7 @@ void UYIInventoryBag::EnsureBagId()
 
 void UYIInventoryBag::MarkBagChanged()
 {
+	MarkRuntimeLookupCacheDirty();
 	++RuntimeRevision;
 	if (ShouldMarkDirty())
 	{
@@ -134,13 +136,18 @@ bool UYIInventoryBag::CanPlaceAt(const FIntPoint Pos, const FIntPoint Size) cons
 	{
 		return false;
 	}
-	for (int32 i = 0; i < Items.Num(); ++i)
+	BuildRuntimeLookupCache();
+	for (int32 Y = 0; Y < EffSize.Y; ++Y)
 	{
-		const FYIBagItem& It = Items[i];
-		const FIntPoint OtherEff = GetEffectiveSize(It.Size);
-		if (RectsOverlap(Pos, EffSize, It.Pos, OtherEff))
+		const int32 GridY = Pos.Y + Y;
+		const int32 RowBase = GridY * GridSize.X;
+		for (int32 X = 0; X < EffSize.X; ++X)
 		{
-			return false;
+			const int32 FlatIdx = RowBase + Pos.X + X;
+			if (RuntimeCellToItemIndex.IsValidIndex(FlatIdx) && RuntimeCellToItemIndex[FlatIdx] != INDEX_NONE)
+			{
+				return false;
+			}
 		}
 	}
 	return true;
@@ -149,12 +156,8 @@ bool UYIInventoryBag::CanPlaceAt(const FIntPoint Pos, const FIntPoint Size) cons
 bool UYIInventoryBag::MoveItem(int32 Index, const FIntPoint NewPos)
 {
 	if (!Items.IsValidIndex(Index)) return false;
-	FYIBagItem Tmp = Items[Index];
-	// Temporarily remove for overlap test
-	Items.RemoveAt(Index);
-	const bool bCan = CanPlaceAt(NewPos, Tmp.Size);
-	Items.Insert(Tmp, Index);
-	if (!bCan) return false;
+	const FYIBagItem& Tmp = Items[Index];
+	if (!CanPlaceAtIgnoring(NewPos, Tmp.Size, Index)) return false;
 	Items[Index].Pos = NewPos;
 	MarkBagChanged();
 	OnItemMoved.Broadcast(Index, NewPos);
@@ -329,7 +332,7 @@ int32 UYIInventoryBag::SplitStack(int32 Index, int32 Amount, const FIntPoint Pos
 
 bool UYIInventoryBag::CanPlaceAtWithScale(const FIntPoint Pos, const FIntPoint Size) const
 {
-	return CanPlaceAt(Pos, GetEffectiveSize(Size));
+	return CanPlaceAt(Pos, Size);
 }
 
 bool UYIInventoryBag::ShouldMarkDirty() const
@@ -360,14 +363,24 @@ bool UYIInventoryBag::CanPlaceAtIgnoring(const FIntPoint& Pos, const FIntPoint& 
 	{
 		return false;
 	}
-	for (int32 i = 0; i < Items.Num(); ++i)
+	BuildRuntimeLookupCache();
+	for (int32 Y = 0; Y < EffSize.Y; ++Y)
 	{
-		if (i == IgnoreIndex) continue;
-		const FYIBagItem& It = Items[i];
-		const FIntPoint OtherEff = GetEffectiveSize(It.Size);
-		if (RectsOverlap(Pos, EffSize, It.Pos, OtherEff))
+		const int32 GridY = Pos.Y + Y;
+		const int32 RowBase = GridY * GridSize.X;
+		for (int32 X = 0; X < EffSize.X; ++X)
 		{
-			return false;
+			const int32 FlatIdx = RowBase + Pos.X + X;
+			if (!RuntimeCellToItemIndex.IsValidIndex(FlatIdx))
+			{
+				continue;
+			}
+
+			const int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
+			if (ItemIdx != INDEX_NONE && ItemIdx != IgnoreIndex)
+			{
+				return false;
+			}
 		}
 	}
 	return true;
@@ -384,12 +397,8 @@ bool UYIInventoryBag::RotateItem(int32 Index)
 		return false;
 	}
 
-	FYIBagItem It = Cur;
-	FIntPoint Rot(It.Size.Y, It.Size.X);
-	// remove temporarily
-	Items.RemoveAt(Index);
-	bool bOk = CanPlaceAt(It.Pos, Rot);
-	Items.Insert(It, Index);
+	const FIntPoint Rot(Cur.Size.Y, Cur.Size.X);
+	const bool bOk = CanPlaceAtIgnoring(Cur.Pos, Rot, Index);
 	if (!bOk) return false;
 	Items[Index].Size = Rot;
 	// Update stack key to reflect rotation change
@@ -402,6 +411,7 @@ void UYIInventoryBag::ApplyMinifyScale(float NewScale, TArray<FYIBagItem>& Dropp
 {
 	DroppedItems.Reset();
 	MinifyScale = FMath::Clamp(NewScale, 0.1f, 1.0f);
+	MarkRuntimeLookupCacheDirty();
 	if (GridSize.X <= 0 || GridSize.Y <= 0)
 	{
 		// list mode: nothing to drop
@@ -501,4 +511,208 @@ void UYIInventoryBag::AutoPack()
 		Items.Add(Tmp);
 	}
 	MarkBagChanged();
+}
+
+void UYIInventoryBag::MarkRuntimeLookupCacheDirty() const
+{
+	bRuntimeLookupCacheDirty = true;
+}
+
+bool UYIInventoryBag::IsRuntimeLookupCacheDirty() const
+{
+	if (bRuntimeLookupCacheDirty)
+	{
+		return true;
+	}
+
+	if (RuntimeCachedGridSize != GridSize)
+	{
+		return true;
+	}
+
+	return !FMath::IsNearlyEqual(RuntimeCachedMinifyScale, MinifyScale);
+}
+
+void UYIInventoryBag::BuildRuntimeLookupCache() const
+{
+	if (!IsRuntimeLookupCacheDirty())
+	{
+		return;
+	}
+
+	RuntimeCellToItemIndex.Reset();
+	RuntimeInstanceToItemIndex.Reset();
+	RuntimeCachedGridSize = GridSize;
+	RuntimeCachedMinifyScale = MinifyScale;
+
+	if (GridSize.X > 0 && GridSize.Y > 0)
+	{
+		RuntimeCellToItemIndex.Init(INDEX_NONE, GridSize.X * GridSize.Y);
+	}
+
+	for (int32 ItemIdx = 0; ItemIdx < Items.Num(); ++ItemIdx)
+	{
+		const FYIBagItem& Item = Items[ItemIdx];
+		if (Item.Item.InstanceId.IsValid())
+		{
+			RuntimeInstanceToItemIndex.Add(Item.Item.InstanceId, ItemIdx);
+		}
+
+		if (GridSize.X <= 0 || GridSize.Y <= 0)
+		{
+			continue;
+		}
+
+		const FIntPoint Eff = GetEffectiveSize(Item.Size);
+		for (int32 Y = 0; Y < Eff.Y; ++Y)
+		{
+			const int32 GridY = Item.Pos.Y + Y;
+			if (GridY < 0 || GridY >= GridSize.Y)
+			{
+				continue;
+			}
+
+			const int32 RowBase = GridY * GridSize.X;
+			for (int32 X = 0; X < Eff.X; ++X)
+			{
+				const int32 GridX = Item.Pos.X + X;
+				if (GridX < 0 || GridX >= GridSize.X)
+				{
+					continue;
+				}
+
+				const int32 FlatIdx = RowBase + GridX;
+				if (RuntimeCellToItemIndex.IsValidIndex(FlatIdx))
+				{
+					RuntimeCellToItemIndex[FlatIdx] = ItemIdx;
+				}
+			}
+		}
+	}
+
+	bRuntimeLookupCacheDirty = false;
+}
+
+int32 UYIInventoryBag::GetItemIndexAtCellFast(const FIntPoint& Cell) const
+{
+	if (GridSize.X <= 0 || GridSize.Y <= 0)
+	{
+		return INDEX_NONE;
+	}
+	if (Cell.X < 0 || Cell.Y < 0 || Cell.X >= GridSize.X || Cell.Y >= GridSize.Y)
+	{
+		return INDEX_NONE;
+	}
+
+	BuildRuntimeLookupCache();
+	const int32 FlatIdx = Cell.Y * GridSize.X + Cell.X;
+	return RuntimeCellToItemIndex.IsValidIndex(FlatIdx) ? RuntimeCellToItemIndex[FlatIdx] : INDEX_NONE;
+}
+
+bool UYIInventoryBag::FindItemIndexByInstanceIdFast(const FGuid& InstanceId, int32& OutIndex) const
+{
+	OutIndex = INDEX_NONE;
+	if (!InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	BuildRuntimeLookupCache();
+	if (const int32* FoundIdx = RuntimeInstanceToItemIndex.Find(InstanceId))
+	{
+		OutIndex = *FoundIdx;
+		return Items.IsValidIndex(OutIndex);
+	}
+	return false;
+}
+
+bool UYIInventoryBag::FindSingleOverlapAt(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex, int32& OutOverlapIdx) const
+{
+	OutOverlapIdx = INDEX_NONE;
+	if (GridSize.X <= 0 || GridSize.Y <= 0)
+	{
+		return true;
+	}
+
+	const FIntPoint EffSize = GetEffectiveSize(Size);
+	if (Pos.X < 0 || Pos.Y < 0 || Pos.X + EffSize.X > GridSize.X || Pos.Y + EffSize.Y > GridSize.Y)
+	{
+		return false;
+	}
+
+	BuildRuntimeLookupCache();
+	for (int32 Y = 0; Y < EffSize.Y; ++Y)
+	{
+		const int32 GridY = Pos.Y + Y;
+		const int32 RowBase = GridY * GridSize.X;
+		for (int32 X = 0; X < EffSize.X; ++X)
+		{
+			const int32 FlatIdx = RowBase + Pos.X + X;
+			if (!RuntimeCellToItemIndex.IsValidIndex(FlatIdx))
+			{
+				continue;
+			}
+
+			const int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
+			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex)
+			{
+				continue;
+			}
+			if (OutOverlapIdx == INDEX_NONE)
+			{
+				OutOverlapIdx = ItemIdx;
+			}
+			else if (OutOverlapIdx != ItemIdx)
+			{
+				OutOverlapIdx = INDEX_NONE;
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+void UYIInventoryBag::GetOverlappingItemIndicesAt(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex, TArray<int32>& OutIndices) const
+{
+	OutIndices.Reset();
+	if (GridSize.X <= 0 || GridSize.Y <= 0)
+	{
+		return;
+	}
+
+	const FIntPoint EffSize = GetEffectiveSize(Size);
+	if (Pos.X < 0 || Pos.Y < 0 || Pos.X + EffSize.X > GridSize.X || Pos.Y + EffSize.Y > GridSize.Y)
+	{
+		return;
+	}
+
+	BuildRuntimeLookupCache();
+	TArray<uint8> Seen;
+	Seen.Init(0, Items.Num());
+	for (int32 Y = 0; Y < EffSize.Y; ++Y)
+	{
+		const int32 GridY = Pos.Y + Y;
+		const int32 RowBase = GridY * GridSize.X;
+		for (int32 X = 0; X < EffSize.X; ++X)
+		{
+			const int32 FlatIdx = RowBase + Pos.X + X;
+			if (!RuntimeCellToItemIndex.IsValidIndex(FlatIdx))
+			{
+				continue;
+			}
+
+			const int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
+			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex)
+			{
+				continue;
+			}
+			if (!Seen.IsValidIndex(ItemIdx) || Seen[ItemIdx] != 0)
+			{
+				continue;
+			}
+			Seen[ItemIdx] = 1;
+			OutIndices.Add(ItemIdx);
+		}
+	}
 }

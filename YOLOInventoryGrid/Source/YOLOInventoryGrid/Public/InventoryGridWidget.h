@@ -337,6 +337,8 @@ public:
 	static bool IsItemDragActive(const UWorld* ContextWorld = nullptr);
 	/** Get the currently dragged item (if any) and the source bag for context; returns false if no drag active. */
 	static bool GetActiveDraggedItem(struct FYIBagItem& OutItem, class UYIInventoryBag*& OutSourceBag, const UWorld* ContextWorld = nullptr);
+	/** Get the active drag cell anchor offset (relative to dragged item top-left). */
+	static bool GetActiveDraggedItemAnchor(FIntPoint& OutAnchorCellOffset, const UWorld* ContextWorld = nullptr);
 	/** Equip the currently dragged inventory item into the requested equipment slot via the source grid's feature adapter. */
 	UFUNCTION(BlueprintCallable, Category="Inventory|Drag")
 	static bool TryEquipActiveDraggedItem(UObject* EquipmentContextObject, FGameplayTag RequestedSlotTag);

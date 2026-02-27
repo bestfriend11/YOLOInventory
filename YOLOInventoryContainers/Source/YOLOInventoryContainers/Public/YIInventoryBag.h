@@ -235,6 +235,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Bag")
 	FIntPoint GetEffectiveSize(const FIntPoint InSize) const;
 
+	/** O(1) item lookup by cell using transient runtime cache. Returns INDEX_NONE when cell is empty/out of range. */
+	int32 GetItemIndexAtCellFast(const FIntPoint& Cell) const;
+
+	/** O(1) lookup by item instance id using transient runtime cache. */
+	bool FindItemIndexByInstanceIdFast(const FGuid& InstanceId, int32& OutIndex) const;
+
+	/**
+	 * Check whether a footprint overlaps at most one distinct item (excluding IgnoreIndex).
+	 * Returns false for out-of-bounds or multi-item overlap.
+	 */
+	bool FindSingleOverlapAt(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex, int32& OutOverlapIdx) const;
+
+	/** Gather unique overlapping item indices for a footprint (excluding IgnoreIndex). */
+	void GetOverlappingItemIndicesAt(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex, TArray<int32>& OutIndices) const;
+
+private:
+	void MarkRuntimeLookupCacheDirty() const;
+	void BuildRuntimeLookupCache() const;
+	bool IsRuntimeLookupCacheDirty() const;
+
+	mutable bool bRuntimeLookupCacheDirty = true;
+	mutable TArray<int32> RuntimeCellToItemIndex;
+	mutable TMap<FGuid, int32> RuntimeInstanceToItemIndex;
+	mutable FIntPoint RuntimeCachedGridSize = FIntPoint(-1, -1);
+	mutable float RuntimeCachedMinifyScale = -1.0f;
+
 protected:
 	/** Only mark package dirty when this is a persistent asset (not PIE/runtime clone). */
 	bool ShouldMarkDirty() const;

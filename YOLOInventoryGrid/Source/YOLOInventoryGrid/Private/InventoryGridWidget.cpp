@@ -25,12 +25,13 @@ static struct FInventoryGlobalDrag
 	TWeakObjectPtr<UInventoryGridWidget> SourceGrid;
 	int32 SourceIndex = INDEX_NONE; // original index at pickup time (may be invalid after removal)
 	FIntPoint SourcePos = FIntPoint(-1,-1);
+	FIntPoint AnchorCellOffset = FIntPoint::ZeroValue;
 	FYIBagItem Item;
 	bool bRemovedFromSource = false; // true if we removed the item from its bag when drag started
 	bool bActive = false;
 	bool bFromExchange = false;
 	TWeakObjectPtr<UGameInstance> DragGI;
-	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; bFromExchange = false; DragGI.Reset(); }
+	void Reset() { SourceGrid = nullptr; SourceIndex = INDEX_NONE; SourcePos = FIntPoint(-1,-1); AnchorCellOffset = FIntPoint::ZeroValue; Item = FYIBagItem(); bRemovedFromSource = false; bActive = false; bFromExchange = false; DragGI.Reset(); }
 } GInventoryDrag;
 
 namespace
@@ -231,40 +232,14 @@ static USoundBase* ResolveItemSoundForEvent(const UInventoryGridWidget* Grid, co
 // Check if placing a footprint at Pos would overlap at most one other item (ignoring SourceIdx). Returns that item index or INDEX_NONE.
 static bool FindSingleOverlap(const UYIInventoryBag* Bag, int32 SourceIdx, const FIntPoint& Pos, const FIntPoint& Footprint, int32& OutOverlapIdx)
 {
-	OutOverlapIdx = INDEX_NONE;
 	if (!Bag) return false;
-	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
-	// bounds check
-	if (Pos.X < 0 || Pos.Y < 0 || Pos.X + Footprint.X > Bag->GridSize.X || Pos.Y + Footprint.Y > Bag->GridSize.Y) return false;
-	for (int32 i=0;i<Bag->Items.Num();++i)
-	{
-		if (i == SourceIdx) continue;
-		const FYIBagItem& It = Bag->Items[i];
-		const FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-		if (RectsOverlap(Pos, Footprint, It.Pos, Eff))
-		{
-			if (OutOverlapIdx == INDEX_NONE) { OutOverlapIdx = i; }
-			else if (OutOverlapIdx != i) { OutOverlapIdx = INDEX_NONE; return false; }
-		}
-	}
-	return true;
+	return Bag->FindSingleOverlapAt(Pos, Footprint, SourceIdx, OutOverlapIdx);
 }
 
 // Helper: get item index at an arbitrary cell in a bag (returns INDEX_NONE)
 static int32 GetItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell)
 {
-	if (!Bag) return INDEX_NONE;
-	for (int32 i = 0; i < Bag->Items.Num(); ++i)
-	{
-		const auto& It = Bag->Items[i];
-		if (It.Pos.X < 0 || It.Pos.Y < 0) continue;
-		FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-		if (Cell.X >= It.Pos.X && Cell.Y >= It.Pos.Y && Cell.X < It.Pos.X + Eff.X && Cell.Y < It.Pos.Y + Eff.Y)
-		{
-			return i;
-		}
-	}
-	return INDEX_NONE;
+	return Bag ? Bag->GetItemIndexAtCellFast(Cell) : INDEX_NONE;
 }
 
 void UInventoryGridWidget::OnWidgetRebuilt()
@@ -817,6 +792,12 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	GInventoryDrag.SourceIndex = Idx;
 	GInventoryDrag.Item = Bag->Items[Idx];
 	GInventoryDrag.SourcePos = GInventoryDrag.Item.Pos;
+	{
+		const FIntPoint Eff = Bag->GetEffectiveSize(GInventoryDrag.Item.Size);
+		const FIntPoint RawAnchor = Cell - GInventoryDrag.Item.Pos;
+		GInventoryDrag.AnchorCellOffset.X = FMath::Clamp(RawAnchor.X, 0, FMath::Max(0, Eff.X - 1));
+		GInventoryDrag.AnchorCellOffset.Y = FMath::Clamp(RawAnchor.Y, 0, FMath::Max(0, Eff.Y - 1));
+	}
 	GInventoryDrag.bRemovedFromSource = false; // keep item in bag until drop is confirmed (prevents other clients seeing it vanish mid-drag)
 	GInventoryDrag.bActive = true;
 	GInventoryDrag.bFromExchange = false;
@@ -928,16 +909,12 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 
 		const FYIBagItem ToPlace = GInventoryDrag.Item;
 		const FIntPoint Footprint = Bag->GetEffectiveSize(ToPlace.Size);
-		for (int32 ItemIndex = 0; ItemIndex < Bag->Items.Num(); ++ItemIndex)
+		TArray<int32> OverlapIndices;
+		const int32 IgnoreIndex = (GInventoryDrag.SourceGrid.Get() == this) ? GInventoryDrag.SourceIndex : INDEX_NONE;
+		Bag->GetOverlappingItemIndicesAt(Cell, Footprint, IgnoreIndex, OverlapIndices);
+		for (int32 ItemIndex : OverlapIndices)
 		{
-	if (GInventoryDrag.SourceGrid.Get() == this && ItemIndex == GInventoryDrag.SourceIndex)
-			{
-				continue;
-			}
-
-			const FYIBagItem& ExistingItem = Bag->Items[ItemIndex];
-			const FIntPoint ExistingSize = Bag->GetEffectiveSize(ExistingItem.Size);
-			if (RectsOverlap(Cell, Footprint, ExistingItem.Pos, ExistingSize) && IsItemIndexLockedForUI(ItemIndex))
+			if (IsItemIndexLockedForUI(ItemIndex))
 			{
 				return true;
 			}
@@ -1044,6 +1021,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			GInventoryDrag.SourceGrid = this;
 			GInventoryDrag.SourceIndex = INDEX_NONE;
 			GInventoryDrag.Item = SavedVictim;
+			GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
 			GInventoryDrag.bRemovedFromSource = true;
 			GInventoryDrag.bFromExchange = true;
 			GInventoryDrag.SourcePos = SavedVictim.Pos;
@@ -1091,6 +1069,10 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 			GInventoryDrag.SourceGrid = nullptr;
 			GInventoryDrag.SourceIndex = INDEX_NONE;
 			GInventoryDrag.Item = SavedVictim;
+			GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
+			GInventoryDrag.SourcePos = SavedVictim.Pos;
+			GInventoryDrag.bRemovedFromSource = true;
+			GInventoryDrag.bFromExchange = true;
 			GInventoryDrag.bActive = true;
 			OnItemDragStarted.Broadcast(this, INDEX_NONE);
 		}
@@ -1370,6 +1352,7 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	GInventoryDrag.SourceGrid = this;
 	GInventoryDrag.SourceIndex = INDEX_NONE;
 	GInventoryDrag.Item = SavedVictim;
+	GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
 	GInventoryDrag.bRemovedFromSource = true; // victim no longer exists in any bag after being displaced
 	GInventoryDrag.bFromExchange = true;
 	GInventoryDrag.SourcePos = SavedVictim.Pos;
@@ -1483,6 +1466,18 @@ bool UInventoryGridWidget::GetActiveDraggedItem(FYIBagItem& OutItem, UYIInventor
 	OutItem = GInventoryDrag.Item;
 	UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
 	OutSourceBag = SourceGrid ? SourceGrid->Bag : nullptr;
+	return true;
+}
+
+bool UInventoryGridWidget::GetActiveDraggedItemAnchor(FIntPoint& OutAnchorCellOffset, const UWorld* ContextWorld)
+{
+	if (!YI_IsGlobalDragValid(ContextWorld))
+	{
+		OutAnchorCellOffset = FIntPoint::ZeroValue;
+		return false;
+	}
+
+	OutAnchorCellOffset = GInventoryDrag.AnchorCellOffset;
 	return true;
 }
 
@@ -1684,6 +1679,7 @@ bool UInventoryGridWidget::BeginDetachedDragFromBagItem(UYIInventoryBag* InBag, 
 	GInventoryDrag.SourceIndex = INDEX_NONE;
 	GInventoryDrag.SourcePos = DragSourcePos;
 	GInventoryDrag.Item = DraggedItem;
+	GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
 	GInventoryDrag.bRemovedFromSource = true;
 	GInventoryDrag.bActive = true;
 	GInventoryDrag.bFromExchange = false;

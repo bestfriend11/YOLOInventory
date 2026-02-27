@@ -415,17 +415,7 @@ void AYITradeSessionActor::ServerCancel_Implementation()
 // Helper to get item index at a specific cell in a bag (INDEX_NONE if none).
 static int32 GetTradeItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell)
 {
-    if (!Bag) return INDEX_NONE;
-    for (int32 i = 0; i < Bag->Items.Num(); ++i)
-    {
-        const FYIBagItem& It = Bag->Items[i];
-        const FIntPoint Eff = Bag->GetEffectiveSize(It.Size);
-        if (Cell.X >= It.Pos.X && Cell.Y >= It.Pos.Y && Cell.X < It.Pos.X + Eff.X && Cell.Y < It.Pos.Y + Eff.Y)
-        {
-            return i;
-        }
-    }
-    return INDEX_NONE;
+    return Bag ? Bag->GetItemIndexAtCellFast(Cell) : INDEX_NONE;
 }
 
 bool AYITradeSessionActor::TrySetReady(ETradeSide Side, bool bReady, APlayerController* RequestingPC, FText& OutError)

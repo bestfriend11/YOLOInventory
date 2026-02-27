@@ -18,9 +18,7 @@ bool FYIInventoryIdentityLockService::GetBagItemIdentity(const UYIInventoryCompo
 	OutIdentity.Item.ItemInstanceId = BagItem.Item.InstanceId;
 	OutIdentity.Item.LegacyStackKey = BagItem.Item.CustomStackKey;
 	OutIdentity.Item.ItemCode = 0;
-	if (UYIItemDefinition* Def = BagItem.Item.Definition.IsValid()
-		? BagItem.Item.Definition.Get()
-		: BagItem.Item.Definition.LoadSynchronous())
+	if (UYIItemDefinition* Def = BagItem.Item.Definition.Get())
 	{
 		OutIdentity.Item.ItemCode = Def->UniqueCode;
 	}
@@ -169,15 +167,7 @@ bool FYIInventoryIdentityLockService::FindItemIndexByInstanceId(const UYIInvento
 		return false;
 	}
 
-	for (int32 Index = 0; Index < Bag->Items.Num(); ++Index)
-	{
-		if (Bag->Items[Index].Item.InstanceId == InstanceId)
-		{
-			OutIndex = Index;
-			return true;
-		}
-	}
-	return false;
+	return Bag->FindItemIndexByInstanceIdFast(InstanceId, OutIndex);
 }
 
 bool FYIInventoryIdentityLockService::FindContainerParentForBag(const UYIInventoryComponent& Inventory, const FGuid& ChildBagId, FGuid& OutParentBagId, FGuid& OutParentItemInstanceId)
@@ -237,4 +227,3 @@ bool FYIInventoryIdentityLockService::IsBagDescendantOf(const UYIInventoryCompon
 	}
 	return false;
 }
-
