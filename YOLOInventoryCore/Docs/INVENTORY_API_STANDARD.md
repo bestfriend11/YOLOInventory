@@ -165,3 +165,18 @@ Phase C
 - delta replication strategy for bag mirrors
 - topology policy abstraction (grid/list/hive placement backends)
 - async-loading enforcement in runtime command hot paths
+
+## 11) Fragment-Driven Runtime Roadmap
+
+Fragments are not only data containers; feature plugins must consume them for authoritative behavior.
+
+Canonical backlog and plugin ownership map:
+
+- `YOLOInventoryCore/Docs/FRAGMENT_RUNTIME_TODO.md`
+
+This includes:
+
+- shop/trade/equipment/loot/world fragment categories
+- GAS bridge fragment plan
+- description engine + editor preview plan
+- phase-by-phase delivery checklist
