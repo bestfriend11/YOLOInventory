@@ -198,19 +198,6 @@ bool UYIShopComponent::ConsumePrice(UObject* ResourceProvider, int64 ItemCode, i
     return true;
 }
 
-void UYIShopComponent::ServerBuyItem_Implementation(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
-{
-    FYIShopBuyRequest Request;
-    Request.Shop = this;
-    Request.StockIndex = StockIndex;
-    Request.Count = Count;
-    Request.BuyerInv = BuyerInv;
-    Request.DestPos = DestPos;
-
-    FYIShopOpResult Unused;
-    ExecuteBuyRequest(Request, Unused);
-}
-
 bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYIShopOpResult& OutResult)
 {
 	OutResult = MakeShopResult(this, EYIShopOpKind::Buy, Request.RequestId, false, false, EYIShopOpError::InvalidRequest, FText::GetEmpty());
@@ -375,23 +362,6 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 		false,
 		TEXT("Shop"));
 	return true;
-}
-
-bool UYIShopComponent::ServerBuyItem_Validate(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos)
-{
-    return true; // lightweight; implementation does full checks
-}
-
-void UYIShopComponent::ServerSellItem_Implementation(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
-{
-    FYIShopSellRequest Request;
-    Request.Shop = this;
-    Request.SourceIndex = SourceIndex;
-    Request.Count = Count;
-    Request.SellerInv = SellerInv;
-
-    FYIShopOpResult Unused;
-    ExecuteSellRequest(Request, Unused);
 }
 
 bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYIShopOpResult& OutResult)
@@ -559,11 +529,6 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 		false,
 		TEXT("Shop"));
 	return true;
-}
-
-bool UYIShopComponent::ServerSellItem_Validate(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv)
-{
-    return true;
 }
 
 void UYIShopComponent::RefreshMirror()

@@ -219,25 +219,64 @@ void AYITradeSessionActor::RefreshInventoryViews()
 	if (OnOffersUpdated.IsBound()) { OnOffersUpdated.Broadcast(); }
 }
 
-void AYITradeSessionActor::ServerAddItem_Implementation(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count)
+bool AYITradeSessionActor::TryAddOfferItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SourceIndex, int32 Count, APlayerController* RequestingPC, FText& OutError)
 {
-	if (!HasAuthority() || !SourceInv || SlotIndex == INDEX_NONE || Count <= 0)
+	if (!HasAuthority())
 	{
-		return;
-    }
+		OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_NoAuthority", "Trade offer updates require server authority");
+		return false;
+	}
 
-    UYIInventoryBag* Bag = SourceInv->GetBag();
-    if (!Bag || !Bag->Items.IsValidIndex(SlotIndex))
-    {
-        return;
-    }
-    const FYIBagItem& SrcItem = Bag->Items[SlotIndex];
-    if (SrcItem.Item.Count < Count)
-    {
-        return;
-    }
+	if (!SourceInv || SourceIndex == INDEX_NONE || Count <= 0)
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_InvalidRequest", "Invalid offer add request");
+		return false;
+	}
 
-    FYIBagItem Slice = SrcItem;
+	if (RequestingPC)
+	{
+		if (!RequestingPC->PlayerState)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_NoPlayerState", "Invalid player state");
+			return false;
+		}
+		const bool bIsParticipant = (RequestingPC->PlayerState == PlayerA) || (RequestingPC->PlayerState == PlayerB);
+		if (!bIsParticipant)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_NotParticipant", "You are not part of this trade");
+			return false;
+		}
+		const ETradeSide CallerSide = GetSideForPlayer(RequestingPC->PlayerState);
+		if (CallerSide != Side)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_WrongSide", "Cannot edit the other side offer");
+			return false;
+		}
+	}
+
+	if (UYIInventoryComponent* ExpectedSourceInv = GetInventoryForSide(Side))
+	{
+		if (ExpectedSourceInv != SourceInv)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_InvalidInventory", "Offer source inventory does not belong to this trade side");
+			return false;
+		}
+	}
+
+	UYIInventoryBag* Bag = SourceInv->GetBag();
+	if (!Bag || !Bag->Items.IsValidIndex(SourceIndex))
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_InvalidSource", "Source item is missing");
+		return false;
+	}
+	const FYIBagItem& SrcItem = Bag->Items[SourceIndex];
+	if (SrcItem.Item.Count < Count)
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_InsufficientCount", "Requested count exceeds source stack");
+		return false;
+	}
+
+	FYIBagItem Slice = SrcItem;
     Slice.Item.Count = Count;
 
     FYINetBagItem Net;
@@ -257,48 +296,114 @@ void AYITradeSessionActor::ServerAddItem_Implementation(ETradeSide Side, UYIInve
     Net.CustomStackKey = SrcItem.Item.CustomStackKey;
     Net.ContainedBagId = SrcItem.Item.ContainedBagId;
 
-    FYITradeOffer& Offer = GetOffer(Side);
-    TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);
-    Offer.Items.Add(Net);
+	FYITradeOffer& Offer = GetOffer(Side);
+	TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);
+	Offer.Items.Add(Net);
 
-    FYITradeOfferSource Src;
-    Src.SourceInv = SourceInv;
-    Src.SlotIndex = SlotIndex;
-    Src.Count = Count;
-    Src.ItemCopy = Slice;
-    Sources.Add(Src);
+	FYITradeOfferSource Src;
+	Src.SourceInv = SourceInv;
+	Src.SlotIndex = SourceIndex;
+	Src.Count = Count;
+	Src.ItemCopy = Slice;
+	Sources.Add(Src);
 
-    OnRep_Offers();
-    if (Side == ETradeSide::SideA) bAReady = false; else bBReady = false;
-    RefreshInventoryViews();
+	OnRep_Offers();
+	if (Side == ETradeSide::SideA) bAReady = false; else bBReady = false;
+	RefreshInventoryViews();
+	OutError = FText::GetEmpty();
+	return true;
 }
 
-void AYITradeSessionActor::ServerRemoveItem_Implementation(ETradeSide Side, int32 Index)
+bool AYITradeSessionActor::TryRemoveOfferItem(ETradeSide Side, int32 OfferIndex, APlayerController* RequestingPC, FText& OutError)
 {
-    FYITradeOffer& Offer = GetOffer(Side);
-    if (Offer.Items.IsValidIndex(Index))
-    {
-        Offer.Items.RemoveAt(Index);
-        TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);
-        if (Sources.IsValidIndex(Index)) { Sources.RemoveAt(Index); }
-        OnRep_Offers();
-        if (Side == ETradeSide::SideA) bAReady = false; else bBReady = false;
-        RefreshInventoryViews();
-    }
+	if (!HasAuthority())
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeRemoveOffer_NoAuthority", "Trade offer updates require server authority");
+		return false;
+	}
+
+	if (RequestingPC)
+	{
+		if (!RequestingPC->PlayerState)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeRemoveOffer_NoPlayerState", "Invalid player state");
+			return false;
+		}
+		const bool bIsParticipant = (RequestingPC->PlayerState == PlayerA) || (RequestingPC->PlayerState == PlayerB);
+		if (!bIsParticipant)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeRemoveOffer_NotParticipant", "You are not part of this trade");
+			return false;
+		}
+		const ETradeSide CallerSide = GetSideForPlayer(RequestingPC->PlayerState);
+		if (CallerSide != Side)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeRemoveOffer_WrongSide", "Cannot edit the other side offer");
+			return false;
+		}
+	}
+
+	FYITradeOffer& Offer = GetOffer(Side);
+	if (!Offer.Items.IsValidIndex(OfferIndex))
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeRemoveOffer_InvalidIndex", "Offer entry is missing");
+		return false;
+	}
+
+	Offer.Items.RemoveAt(OfferIndex);
+	TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);
+	if (Sources.IsValidIndex(OfferIndex))
+	{
+		Sources.RemoveAt(OfferIndex);
+	}
+	OnRep_Offers();
+	if (Side == ETradeSide::SideA) bAReady = false; else bBReady = false;
+	RefreshInventoryViews();
+	OutError = FText::GetEmpty();
+	return true;
 }
 
-void AYITradeSessionActor::ServerSetResource_Implementation(ETradeSide Side, FName Resource, int64 Amount)
+bool AYITradeSessionActor::TrySetResourceOffer(ETradeSide Side, FName Resource, int64 Amount, APlayerController* RequestingPC, FText& OutError)
 {
-    FYITradeOffer& Offer = GetOffer(Side);
-    Offer.Resources.Add(Resource, Amount - Offer.Resources.Get(Resource));
-    OnRep_Offers();
-    RefreshInventoryViews();
-}
+	if (!HasAuthority())
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeSetResource_NoAuthority", "Trade offer updates require server authority");
+		return false;
+	}
+	if (Resource.IsNone() || Amount < 0)
+	{
+		OutError = NSLOCTEXT("YOLOInventory", "TradeSetResource_InvalidRequest", "Invalid resource offer request");
+		return false;
+	}
 
-void AYITradeSessionActor::ServerSetReady_Implementation(ETradeSide Side, bool bReady)
-{
-	FText UnusedError;
-	(void)TrySetReady(Side, bReady, Cast<APlayerController>(GetOwner()), UnusedError);
+	if (RequestingPC)
+	{
+		if (!RequestingPC->PlayerState)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetResource_NoPlayerState", "Invalid player state");
+			return false;
+		}
+		const bool bIsParticipant = (RequestingPC->PlayerState == PlayerA) || (RequestingPC->PlayerState == PlayerB);
+		if (!bIsParticipant)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetResource_NotParticipant", "You are not part of this trade");
+			return false;
+		}
+		const ETradeSide CallerSide = GetSideForPlayer(RequestingPC->PlayerState);
+		if (CallerSide != Side)
+		{
+			OutError = NSLOCTEXT("YOLOInventory", "TradeSetResource_WrongSide", "Cannot edit the other side offer");
+			return false;
+		}
+	}
+
+	FYITradeOffer& Offer = GetOffer(Side);
+	Offer.Resources.Add(Resource, Amount - Offer.Resources.Get(Resource));
+	OnRep_Offers();
+	if (Side == ETradeSide::SideA) bAReady = false; else bBReady = false;
+	RefreshInventoryViews();
+	OutError = FText::GetEmpty();
+	return true;
 }
 
 void AYITradeSessionActor::ServerCancel_Implementation()
@@ -511,12 +616,6 @@ bool AYITradeSessionActor::TryTransferItemBetweenSides(ETradeSide FromSide, ETra
     RefreshInventoryViews();
     OutError = FText::GetEmpty();
     return true;
-}
-
-void AYITradeSessionActor::ServerTransferItemBetweenSides_Implementation(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count)
-{
-	FText UnusedError;
-	(void)TryTransferItemBetweenSides(FromSide, ToSide, SourceIndex, DestPos, Count, UnusedError);
 }
 
 UYIInventoryComponent* AYITradeSessionActor::GetInventoryForSide(ETradeSide Side) const

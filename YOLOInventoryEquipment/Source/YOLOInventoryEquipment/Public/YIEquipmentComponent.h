@@ -201,10 +201,6 @@ protected:
 	void OnRep_EquippedItems();
 
 private:
-	// Legacy non-BP wrappers kept for internal compatibility while suite migrates to RequestEquip/RequestUnequip.
-	bool EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag);
-	bool UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag);
-
 	bool EquipFromInventoryInternal(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag, FString& OutMessage);
 	bool UnequipToInventoryInternal(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, FString& OutMessage, UYIInventoryBag** OutBag = nullptr, int32* OutItemIndex = nullptr);
 

@@ -154,8 +154,11 @@ Phase B progress (implemented)
 - request-struct server RPC wrappers added on `UYIInventoryComponent` so client-originated `Request*` flows execute server-side revision checks
 - owner-only client result notifications for failed `Request*` executions via `OnInventoryOpResultReceived` (BlueprintAssignable on `UYIInventoryComponent`)
 - trade readiness/commit initiation standardized through `RequestTradeSetReadyEx` + structured result callbacks
+- trade offer-edit operations standardized through `RequestTradeAddOfferEx` / `RequestTradeRemoveOfferEx` / `RequestTradeSetResourceEx`
 - non-standard public trade session mutation helpers removed from public API surface
+- internal legacy wrappers removed from trade interaction/shop/equipment mutation paths (standard `Request*Ex` and `Execute*Request` paths only)
 - view adapter path converted to interface-based contract for cleaner plugin decoupling
+- cross-plugin API contract smoke tests added for inventory/trade/shop/equipment request-result envelopes
 
 Phase C
 

@@ -25,6 +25,9 @@ enum class EYITradeOpKind : uint8
 {
 	Unknown UMETA(DisplayName="Unknown"),
 	Open UMETA(DisplayName="Open Trade"),
+	AddOffer UMETA(DisplayName="Add Trade Offer Item"),
+	RemoveOffer UMETA(DisplayName="Remove Trade Offer Item"),
+	SetResource UMETA(DisplayName="Set Trade Resource"),
 	Transfer UMETA(DisplayName="Transfer Trade Item"),
 	SetReady UMETA(DisplayName="Set Trade Ready"),
 	Commit UMETA(DisplayName="Commit Trade"),
@@ -92,6 +95,60 @@ struct YOLOINVENTORYTRADE_API FYITradeTransferRequest
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
 	int32 Count = 0;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYTRADE_API FYITradeAddOfferRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	ETradeSide Side = ETradeSide::SideA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	TObjectPtr<class UYIInventoryComponent> SourceInventory = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	int32 SourceIndex = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	int32 Count = 1;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYTRADE_API FYITradeRemoveOfferRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	ETradeSide Side = ETradeSide::SideA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	int32 OfferIndex = INDEX_NONE;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYTRADE_API FYITradeSetResourceRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	FGuid RequestId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	ETradeSide Side = ETradeSide::SideA;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	FName Resource = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Trade")
+	int64 Amount = 0;
 };
 
 USTRUCT(BlueprintType)

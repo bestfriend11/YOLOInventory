@@ -17,7 +17,7 @@ struct FYIBagItem;
 
 /**
  * Player-controller component that handles secure trade initiation and notifies the client UI.
- * Drop it on your PlayerController BP/Class; call RequestTrade (client) and bind to OnTradeSessionReady.
+ * Drop it on your PlayerController BP/Class; call RequestTradeEx (client) and bind to OnTradeSessionReady.
  */
 UCLASS(ClassGroup=(Inventory), BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class YOLOINVENTORYTRADE_API UYITradeInteractionComponent : public UActorComponent
@@ -50,7 +50,7 @@ public:
     FOnTradeFailed OnTradeFailed;
 
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTradeOpResultReceived, const FYITradeOpResult&, Result);
-    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Structured trade request/result feedback for RequestTradeEx / RequestTradeTransferEx / RequestTradeSetReadyEx.")) 
+    UPROPERTY(BlueprintAssignable, Category="YOLOInventory|Trade", meta=(ToolTip="Structured trade request/result feedback for all RequestTrade*Ex APIs.")) 
     FOnTradeOpResultReceived OnTradeOpResultReceived;
 
     /** Client call: request a server-authoritative item transfer during an active trade session. */
@@ -61,6 +61,18 @@ public:
     /** Standardized request/result contract for trade transfer. */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
     FYITradeOpResult RequestTradeTransferEx(const FYITradeTransferRequest& Request);
+
+    /** Standardized request/result contract for adding offer entries. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeAddOfferEx(const FYITradeAddOfferRequest& Request);
+
+    /** Standardized request/result contract for removing offer entries. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeRemoveOfferEx(const FYITradeRemoveOfferRequest& Request);
+
+    /** Standardized request/result contract for setting resource offers. */
+    UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
+    FYITradeOpResult RequestTradeSetResourceEx(const FYITradeSetResourceRequest& Request);
 
     /** Standardized request/result contract for trade readiness / commit initiation (commit is still implicit when both sides are ready). */
     UFUNCTION(BlueprintCallable, Category="YOLOInventory|Trade|API")
@@ -173,38 +185,29 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	// Server-side authority handler (keep validation lightweight to avoid disconnects)
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestTrade(AActor* Target, bool bTargetIsNPC);
-
 	UFUNCTION(Server, Reliable)
 	void Server_RequestTradeEx(FYITradeOpenRequest Request);
-
-	// Server-side shop handler
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestShop(UYIShopComponent* Shop);
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestShopOpenEx(FYIShopOpenRequest Request);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
-
 	UFUNCTION(Server, Reliable)
 	void Server_RequestShopBuyEx(FYIShopBuyRequest Request);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestShopSellEx(FYIShopSellRequest Request);
 
-	/** Server: execute a transfer request during an active trade session. */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_TransferItem(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
-
 	UFUNCTION(Server, Reliable)
 	void Server_RequestTradeTransferEx(FYITradeTransferRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeAddOfferEx(FYITradeAddOfferRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeRemoveOfferEx(FYITradeRemoveOfferRequest Request);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestTradeSetResourceEx(FYITradeSetResourceRequest Request);
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestTradeSetReadyEx(FYITradeSetReadyRequest Request);
@@ -285,14 +288,6 @@ private:
     void HandleTradeCommittedSession();
     UFUNCTION()
     void HandleTradeFailedSession();
-
-    // Legacy C++ wrappers kept for suite internals while public/BP API migrates to *Ex request/result methods.
-    void RequestTrade(AActor* Target, bool bTargetIsNPC);
-    void RequestTradeTransfer(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count = 0);
-    void RequestTradeSetReady(ETradeSide Side, bool bReady);
-    void RequestShop(UYIShopComponent* Shop);
-    void RequestShopBuy(UYIShopComponent* Shop, int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
-    void RequestShopSell(UYIShopComponent* Shop, int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
 
     TWeakObjectPtr<AYITradeSessionActor> BoundSession;
     TWeakObjectPtr<UUserWidget> ActiveTradeWidget;

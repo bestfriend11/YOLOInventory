@@ -697,28 +697,9 @@ FYIEquipmentOpResult UYIEquipmentComponent::RequestUnequip(const FYIUnequipToInv
 	return Result;
 }
 
-bool UYIEquipmentComponent::EquipFromInventory(UYIInventoryComponent* SourceInventory, int32 SourceIndex, FGameplayTag RequestedSlotTag)
-{
-	FYIEquipFromInventoryRequest Request;
-	Request.SourceInventory = SourceInventory;
-	Request.SourceIndex = SourceIndex;
-	Request.RequestedSlotTag = RequestedSlotTag;
-	const FYIEquipmentOpResult Result = RequestEquip(Request);
-	return GetOwner() && GetOwner()->HasAuthority() ? Result.bSucceeded : Result.bRequestAccepted;
-}
-
 void UYIEquipmentComponent::ServerRequestEquip_Implementation(const FYIEquipFromInventoryRequest& Request)
 {
 	RequestEquip(Request);
-}
-
-bool UYIEquipmentComponent::UnequipToInventory(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag)
-{
-	FYIUnequipToInventoryRequest Request;
-	Request.DestInventory = DestInventory;
-	Request.SlotTag = SlotTag;
-	const FYIEquipmentOpResult Result = RequestUnequip(Request);
-	return GetOwner() && GetOwner()->HasAuthority() ? Result.bSucceeded : Result.bRequestAccepted;
 }
 
 bool UYIEquipmentComponent::UnequipToInventoryAndResolveItem(UYIInventoryComponent* DestInventory, FGameplayTag SlotTag, UYIInventoryBag*& OutBag, int32& OutItemIndex)
@@ -734,7 +715,10 @@ bool UYIEquipmentComponent::UnequipToInventoryAndResolveItem(UYIInventoryCompone
 	if (!GetOwner()->HasAuthority())
 	{
 		// Non-authority callers can request unequip, but deterministic source index is only known on authority.
-		return UnequipToInventory(DestInventory, SlotTag);
+		FYIUnequipToInventoryRequest Request;
+		Request.DestInventory = DestInventory;
+		Request.SlotTag = SlotTag;
+		return RequestUnequip(Request).bRequestAccepted;
 	}
 
 	FString Message;

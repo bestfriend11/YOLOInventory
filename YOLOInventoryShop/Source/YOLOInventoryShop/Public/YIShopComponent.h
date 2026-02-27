@@ -151,12 +151,6 @@ protected:
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
-    // Legacy RPC wrappers kept for compatibility while callers migrate to Execute*Request via interaction APIs.
-    UFUNCTION(Server, Reliable, WithValidation)
-    void ServerBuyItem(int32 StockIndex, int32 Count, UYIInventoryComponent* BuyerInv, FIntPoint DestPos);
-    UFUNCTION(Server, Reliable, WithValidation)
-    void ServerSellItem(int32 SourceIndex, int32 Count, UYIInventoryComponent* SellerInv);
-
     void BuildRuntimeStock();
     void RefreshMirror();
     bool ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count);

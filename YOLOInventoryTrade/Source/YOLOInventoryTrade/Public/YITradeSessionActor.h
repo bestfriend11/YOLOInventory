@@ -130,6 +130,15 @@ public:
 	/** Authority helper with explicit success/failure reason for structured request APIs. */
 	bool TryTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count, FText& OutError);
 
+	/** Authority helper for adding offered inventory slices (non-mutating until commit). */
+	bool TryAddOfferItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SourceIndex, int32 Count, APlayerController* RequestingPC, FText& OutError);
+
+	/** Authority helper for removing an offered item entry by index. */
+	bool TryRemoveOfferItem(ETradeSide Side, int32 OfferIndex, APlayerController* RequestingPC, FText& OutError);
+
+	/** Authority helper for setting resource offer amount. */
+	bool TrySetResourceOffer(ETradeSide Side, FName Resource, int64 Amount, APlayerController* RequestingPC, FText& OutError);
+
 	/** Authority helper for readiness / commit initiation. Prefer UYITradeInteractionComponent::RequestTradeSetReadyEx. */
 	bool TrySetReady(ETradeSide Side, bool bReady, APlayerController* RequestingPC, FText& OutError);
 
@@ -184,20 +193,6 @@ protected:
 
 	bool ApplyOffersToSide(ETradeSide From, ETradeSide To, FText& OutError);
 	UYIInventoryComponent* GetInventoryForSide(ETradeSide Side) const;
-
-	// Legacy session mutation RPCs retained for internal compatibility; standardized callers should use UYITradeInteractionComponent Request*Ex API.
-	UFUNCTION(Server, Reliable)
-	void ServerAddItem(ETradeSide Side, UYIInventoryComponent* SourceInv, int32 SlotIndex, int32 Count);
-	UFUNCTION(Server, Reliable)
-	void ServerRemoveItem(ETradeSide Side, int32 Index);
-	UFUNCTION(Server, Reliable)
-	void ServerSetResource(ETradeSide Side, FName Resource, int64 Amount);
-	UFUNCTION(Server, Reliable)
-	void ServerTransferItemBetweenSides(ETradeSide FromSide, ETradeSide ToSide, int32 SourceIndex, FIntPoint DestPos, int32 Count);
-
-	// Internal legacy session RPC retained for compatibility; standardized callers should use UYITradeInteractionComponent::RequestTradeSetReadyEx.
-	UFUNCTION(Server, Reliable)
-	void ServerSetReady(ETradeSide Side, bool bReady);
 
 	TWeakObjectPtr<class UYIInventoryBag> TrackedBagA;
 	TWeakObjectPtr<class UYIInventoryBag> TrackedBagB;
