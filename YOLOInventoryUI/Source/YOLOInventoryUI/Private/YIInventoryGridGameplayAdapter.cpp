@@ -7,56 +7,10 @@
 #include "YITradeSessionActor.h"
 #include "YIInventoryComponent.h"
 #include "YIInventoryBlueprintLibrary.h"
+#include "YIItemDescriptionResolver.h"
 #include "YIWorldLootBlueprintLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
-
-namespace
-{
-	static FText BuildShopPriceLine(const TArray<FYIShopPrice>& Prices, const bool bForBuy)
-	{
-		if (Prices.Num() == 0)
-		{
-			return FText::GetEmpty();
-		}
-
-		TArray<FText> Chunks;
-		Chunks.Reserve(Prices.Num());
-		for (const FYIShopPrice& Price : Prices)
-		{
-			if (Price.Resource.IsNone() || Price.Amount <= 0)
-			{
-				continue;
-			}
-
-			Chunks.Add(FText::Format(
-				NSLOCTEXT("YOLOInventory", "ShopPriceChunk", "{0} {1}"),
-				FText::AsNumber(Price.Amount),
-				FText::FromName(Price.Resource)));
-		}
-
-		if (Chunks.Num() == 0)
-		{
-			return FText::GetEmpty();
-		}
-
-		FString Joined;
-		for (int32 Index = 0; Index < Chunks.Num(); ++Index)
-		{
-			if (Index > 0)
-			{
-				Joined += TEXT(" + ");
-			}
-			Joined += Chunks[Index].ToString();
-		}
-
-		return FText::Format(
-			bForBuy
-				? NSLOCTEXT("YOLOInventory", "ShopBuyPriceLine", "Buy Price: {0}")
-				: NSLOCTEXT("YOLOInventory", "ShopSellPriceLine", "Sell Price: {0}"),
-			FText::FromString(Joined));
-	}
-}
 
 void UYIInventoryGridGameplayAdapter::SetTradeSession(AYITradeSessionActor* InSession)
 {
@@ -250,21 +204,14 @@ void UYIInventoryGridGameplayAdapter::AugmentTooltipData(
 	}
 
 	const APlayerController* PC = Grid ? Grid->GetOwningPlayer() : nullptr;
-	APlayerState* ViewerPlayerState = PC ? PC->PlayerState : nullptr;
-
-	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
-	TArray<FYIShopPrice> Prices;
-	if (!ActiveShopComponent->ResolveDisplayPriceForItem(BagItem.Item, bIsShopStockGrid, ViewerPlayerState, 1, Prices))
-	{
-		return;
-	}
-
-	InOutTooltipData.EconomyLine = BuildShopPriceLine(Prices, bIsShopStockGrid);
-	if (!bIsShopStockGrid && Prices.Num() > 0)
-	{
-		const int64 ClampedSellPrice = FMath::Clamp<int64>(Prices[0].Amount, 0, MAX_int32);
-		InOutTooltipData.SellPrice = static_cast<int32>(ClampedSellPrice);
-	}
+	FYIItemDescriptionContext Context;
+	Context.Item = &Bag->Items[ItemIndex].Item;
+	Context.Bag = Bag;
+	Context.Shop = ActiveShopComponent;
+	Context.ViewerPlayerState = PC ? PC->PlayerState : nullptr;
+	Context.bShopBuyContext = bIsShopStockGrid;
+	Context.Count = 1;
+	FYIItemDescriptionResolver::AugmentTooltip(Context, InOutTooltipData);
 }
 
 bool UYIInventoryGridGameplayAdapter::TryEquipItemFromInventory(

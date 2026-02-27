@@ -177,6 +177,17 @@ Status notes:
 - add GAS bridge plugin + initial GAS fragments
 - wire equip/use hooks to GAS bridge
 
+Status notes:
+- Added equipment-owned runtime fragments:
+  - `FYIItemDurabilityRuntimeFragment`
+  - `FYIItemChargesRuntimeFragment`
+  - `FYIItemCooldownRuntimeFragment`
+  - `FYIItemEquipRequirementsFragment`
+- Added trade-owned fragments:
+  - `FYIItemTradePolicyFragment`
+  - `FYIItemBindStateRuntimeFragment`
+- Added first runtime `YIItemDescriptionResolver` pass in UI plugin with cache + fragment line augmentation (shop/equipment/trade context).
+
 ### Phase 3
 - ship description resolver with caching + editor preview panel
 
