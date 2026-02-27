@@ -11,6 +11,7 @@ public class YOLOInventoryShop : ModuleRules
             "Core",
             "CoreUObject",
             "Engine",
+            "GameplayTags",
             "YOLOInventoryCore",
             "YOLOInventorySchema",
             "YOLOInventoryContainers"

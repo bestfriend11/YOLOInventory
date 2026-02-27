@@ -167,6 +167,12 @@ This keeps extension path open without editing core classes each time.
 - wire buy/sell to resolver output
 - add tooltip price line from resolver
 
+Status notes:
+- Implemented with fixed-point integer pricing (basis points), not float-only economy values.
+- Added optional level/quality/count scaling in price rules.
+- Added GUID-targeted buy/sell request fields for safer stock/source identity resolution.
+- Listing precedence: explicit listing prices override fragment prices when `bListingsOverrideFragmentPrices=true`.
+
 ### Phase 2
 - add GAS bridge plugin + initial GAS fragments
 - wire equip/use hooks to GAS bridge
@@ -182,8 +188,8 @@ This keeps extension path open without editing core classes each time.
 
 ## 8) Immediate Open Items
 
-- [ ] Define exact `PriceDefinition` fragment fields and defaults
-- [ ] Decide listing precedence: fragment baseline vs listing override
+- [x] Define exact `PriceDefinition` fragment fields and defaults
+- [x] Decide listing precedence: fragment baseline vs listing override
 - [ ] Add shop price/visibility contract tests
 - [ ] Add description preview panel in editor schema dashboard
 - [ ] Define first GAS bridge API surface and plugin boundaries

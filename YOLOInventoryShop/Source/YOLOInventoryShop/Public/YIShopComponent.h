@@ -2,7 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "YIInventoryTypes.h"
+#include "YIItemInstance.h"
 #include "YIShopApiTypes.h"
 #include "YIShopComponent.generated.h"
 
@@ -78,6 +80,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Optional explicit per-item listings.\nIf missing for an item, pricing/stock behavior falls back to component rules."))
     TArray<FYIShopListing> Listings;
 
+    /** If true, explicit Listings prices override fragment-driven price fragments when both exist. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop|Pricing", meta=(ToolTip="When enabled, Listings price entries override fragment-driven shop prices for matching item code."))
+    bool bListingsOverrideFragmentPrices = true;
+
+    /** Optional semantic tags describing this shop context (Blacksmith, Magic, Faction.*). */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop|Policy", meta=(ToolTip="Semantic context tags used by shop policy fragments (required/blocked tags)."))
+    FGameplayTagContainer ShopContextTags;
+
     /** Allow players to sell items into the shop. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Allow players to sell items into shop stock."))
     bool bAllowSelling = true;
@@ -143,8 +153,19 @@ public:
     UFUNCTION(BlueprintPure, Category="Shop", meta=(ToolTip="Client-safe getter for current replicated stock mirror size."))
     FIntPoint GetStockMirrorSize() const { return StockMirrorSize; }
 
+    /** Resolve display price rows for this item using listing + fragment pipeline. */
+    UFUNCTION(BlueprintCallable, Category="Shop|Pricing")
+    bool ResolveDisplayPriceForItem(const FYIItemInstance& Item, bool bForBuy, APlayerState* ViewerPlayerState, int32 Count, TArray<FYIShopPrice>& OutPrices) const;
+
+    /** Resolve static policy flags from item shop policy fragment for UI/debug surfaces. */
+    UFUNCTION(BlueprintCallable, Category="Shop|Policy")
+    void ResolveDisplayPolicyForItem(const FYIItemInstance& Item, bool& bOutVisible, bool& bOutBuyable, bool& bOutSellable) const;
+
     /** Build a stock mirror for a specific player (used for per-player stock mode). */
     void GetStockMirrorForPlayer(APlayerState* PlayerState, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize);
+
+    /** Exposes current shop context tags for resolver services. */
+    const FGameplayTagContainer& GetShopContextTags() const { return ShopContextTags; }
 
 protected:
     virtual void BeginPlay() override;
@@ -153,11 +174,28 @@ protected:
 private:
     void BuildRuntimeStock();
     void RefreshMirror();
-    bool ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count);
+    bool ConsumePrice(UObject* ResourceProvider, const TArray<FYIShopPrice>& Prices);
     const FYIShopListing* FindListing(int64 ItemCode) const;
+    int32 ResolveItemIndex(const UYIInventoryBag* Bag, int32 RequestedIndex, const FGuid& RequestedInstanceId) const;
+    bool ResolvePolicyForItem(
+        const FYIItemInstance& Item,
+        bool& bOutVisible,
+        bool& bOutBuyable,
+        bool& bOutSellable,
+        bool& bOutRequirePriceForVisibility,
+        bool& bOutRequirePriceForBuy,
+        bool& bOutRequirePriceForSell) const;
+    bool ResolvePriceForItem(
+        const FYIItemInstance& Item,
+        APlayerState* BuyerPlayerState,
+        APlayerState* SellerPlayerState,
+        int32 Count,
+        bool bForBuy,
+        TArray<FYIShopPrice>& OutPrices,
+        bool& bOutResolvedFromFragment) const;
     UYIInventoryBag* CreateStockInstance() const;
     UYIInventoryBag* GetStockForPlayer(APlayerState* PlayerState);
-    void GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const;
+    void GetStockMirrorForBag(const UYIInventoryBag* Bag, APlayerState* ViewerPlayerState, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const;
     FTimerHandle RestockTimer;
 
     /** Per-player stock bags (server only, used when StockMode==PerPlayerStock). */

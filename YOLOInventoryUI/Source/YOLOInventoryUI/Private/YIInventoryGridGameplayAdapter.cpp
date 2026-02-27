@@ -6,8 +6,57 @@
 #include "YITradeInteractionComponent.h"
 #include "YITradeSessionActor.h"
 #include "YIInventoryComponent.h"
+#include "YIInventoryBlueprintLibrary.h"
 #include "YIWorldLootBlueprintLibrary.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
+
+namespace
+{
+	static FText BuildShopPriceLine(const TArray<FYIShopPrice>& Prices, const bool bForBuy)
+	{
+		if (Prices.Num() == 0)
+		{
+			return FText::GetEmpty();
+		}
+
+		TArray<FText> Chunks;
+		Chunks.Reserve(Prices.Num());
+		for (const FYIShopPrice& Price : Prices)
+		{
+			if (Price.Resource.IsNone() || Price.Amount <= 0)
+			{
+				continue;
+			}
+
+			Chunks.Add(FText::Format(
+				NSLOCTEXT("YOLOInventory", "ShopPriceChunk", "{0} {1}"),
+				FText::AsNumber(Price.Amount),
+				FText::FromName(Price.Resource)));
+		}
+
+		if (Chunks.Num() == 0)
+		{
+			return FText::GetEmpty();
+		}
+
+		FString Joined;
+		for (int32 Index = 0; Index < Chunks.Num(); ++Index)
+		{
+			if (Index > 0)
+			{
+				Joined += TEXT(" + ");
+			}
+			Joined += Chunks[Index].ToString();
+		}
+
+		return FText::Format(
+			bForBuy
+				? NSLOCTEXT("YOLOInventory", "ShopBuyPriceLine", "Buy Price: {0}")
+				: NSLOCTEXT("YOLOInventory", "ShopSellPriceLine", "Sell Price: {0}"),
+			FText::FromString(Joined));
+	}
+}
 
 void UYIInventoryGridGameplayAdapter::SetTradeSession(AYITradeSessionActor* InSession)
 {
@@ -70,6 +119,7 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 					FYIShopBuyRequest Req;
 					Req.Shop = ActiveShopComponent;
 					Req.StockIndex = SourceIndex;
+					Req.StockItemInstanceId = DraggedItem.Item.InstanceId;
 					Req.Count = BuyCount;
 					Req.BuyerInv = DestOwnerComp;
 					Req.DestPos = DestCell;
@@ -97,6 +147,7 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 					FYIShopSellRequest Req;
 					Req.Shop = ActiveShopComponent;
 					Req.SourceIndex = SourceIndex;
+					Req.SourceItemInstanceId = DraggedItem.Item.InstanceId;
 					Req.Count = SellCount;
 					Req.SellerInv = ShopSourceComp;
 					TradeComp->RequestShopSellEx(Req);
@@ -185,6 +236,35 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleTrans
 	}
 
 	return EYIInventoryGridExternalOpResult::NotHandled;
+}
+
+void UYIInventoryGridGameplayAdapter::AugmentTooltipData(
+	UInventoryGridWidget* Grid,
+	const UYIInventoryBag* Bag,
+	int32 ItemIndex,
+	FYITooltipData& InOutTooltipData)
+{
+	if (!ActiveShopComponent || !Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return;
+	}
+
+	const APlayerController* PC = Grid ? Grid->GetOwningPlayer() : nullptr;
+	APlayerState* ViewerPlayerState = PC ? PC->PlayerState : nullptr;
+
+	const FYIBagItem& BagItem = Bag->Items[ItemIndex];
+	TArray<FYIShopPrice> Prices;
+	if (!ActiveShopComponent->ResolveDisplayPriceForItem(BagItem.Item, bIsShopStockGrid, ViewerPlayerState, 1, Prices))
+	{
+		return;
+	}
+
+	InOutTooltipData.EconomyLine = BuildShopPriceLine(Prices, bIsShopStockGrid);
+	if (!bIsShopStockGrid && Prices.Num() > 0)
+	{
+		const int64 ClampedSellPrice = FMath::Clamp<int64>(Prices[0].Amount, 0, MAX_int32);
+		InOutTooltipData.SellPrice = static_cast<int32>(ClampedSellPrice);
+	}
 }
 
 bool UYIInventoryGridGameplayAdapter::TryEquipItemFromInventory(

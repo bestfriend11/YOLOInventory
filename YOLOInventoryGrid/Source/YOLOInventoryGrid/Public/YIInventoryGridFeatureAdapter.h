@@ -9,6 +9,7 @@
 
 class UInventoryGridWidget;
 class UYIInventoryComponent;
+struct FYITooltipData;
 
 UENUM(BlueprintType)
 enum class EYIInventoryGridExternalOpResult : uint8
@@ -70,6 +71,15 @@ public:
 	{
 		return false;
 	}
+
+	/** Optional tooltip augmentation hook for feature-specific price/status lines. */
+	virtual void AugmentTooltipData(
+		UInventoryGridWidget* Grid,
+		const UYIInventoryBag* Bag,
+		int32 ItemIndex,
+		FYITooltipData& InOutTooltipData)
+	{
+	}
 };
 
 /**
@@ -122,5 +132,13 @@ public:
 		const FTransform& SpawnTransform) override
 	{
 		return false;
+	}
+
+	virtual void AugmentTooltipData(
+		UInventoryGridWidget* Grid,
+		const UYIInventoryBag* Bag,
+		int32 ItemIndex,
+		FYITooltipData& InOutTooltipData) override
+	{
 	}
 };

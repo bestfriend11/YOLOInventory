@@ -23,6 +23,10 @@ enum class EYIShopOpError : uint8
 	NoFunds UMETA(DisplayName="No Funds"),
 	NoSpace UMETA(DisplayName="No Space"),
 	UnlistedNotAllowed UMETA(DisplayName="Unlisted Not Allowed"),
+	NotVisible UMETA(DisplayName="Not Visible"),
+	NotBuyable UMETA(DisplayName="Not Buyable"),
+	NotSellable UMETA(DisplayName="Not Sellable"),
+	PriceUnavailable UMETA(DisplayName="Price Unavailable"),
 	ValidationFailed UMETA(DisplayName="Validation Failed"),
 	AuthorityRequired UMETA(DisplayName="Authority Required"),
 	Unsupported UMETA(DisplayName="Unsupported")
@@ -90,6 +94,10 @@ struct YOLOINVENTORYSHOP_API FYIShopBuyRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
 	int32 StockIndex = INDEX_NONE;
 
+	/** Stable stock identity (preferred over StockIndex when set). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
+	FGuid StockItemInstanceId;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
 	int32 Count = 1;
 
@@ -113,6 +121,10 @@ struct YOLOINVENTORYSHOP_API FYIShopSellRequest
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
 	int32 SourceIndex = INDEX_NONE;
+
+	/** Stable source identity (preferred over SourceIndex when set). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
+	FGuid SourceItemInstanceId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Shop")
 	int32 Count = 1;

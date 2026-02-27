@@ -1734,14 +1734,28 @@ void UInventoryGridWidget::UpdateBoundTooltip()
 	Ctx.XP = RequirementXP;
 	Ctx.PreviewAttributes = RequirementPreviewAttributes;
 
+	int32 TooltipItemIndex = INDEX_NONE;
 	bool bGot = GetSelectedCellTooltipData(Data, Ctx);
+	if (bGot)
+	{
+		TooltipItemIndex = GetSelectedItemIndex();
+	}
 	if (!bGot && Bag && HoveredItemIndexCached != INDEX_NONE)
 	{
 		bGot = UYIInventoryBlueprintLibrary::GetItemTooltipData(Bag, HoveredItemIndexCached, Data, Ctx);
+		if (bGot)
+		{
+			TooltipItemIndex = HoveredItemIndexCached;
+		}
 	}
 
 	if (bGot)
 	{
+		if (IYIInventoryGridAdapterInterface* Adapter = ResolveFeatureAdapterInterface())
+		{
+			Adapter->AugmentTooltipData(this, Bag, TooltipItemIndex, Data);
+		}
+
 		if (BoundTooltipWidget)
 		{
 			YI_UpdateTooltipWidget(BoundTooltipWidget, Data);

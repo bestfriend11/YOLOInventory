@@ -149,7 +149,12 @@ void SInventoryTooltipWidget::RebuildFromData()
 
 	if (PriceText.IsValid())
 	{
-		if (CachedData.SellPrice > 0)
+		if (!CachedData.EconomyLine.IsEmpty())
+		{
+			PriceText->SetText(CachedData.EconomyLine);
+			PriceText->SetVisibility(EVisibility::Visible);
+		}
+		else if (CachedData.SellPrice > 0)
 		{
 			PriceText->SetText(FText::Format(NSLOCTEXT("YOLOInventory", "SellPriceFmtSlate", "Sell Price: {0}"), FText::AsNumber(CachedData.SellPrice)));
 			PriceText->SetVisibility(EVisibility::Visible);

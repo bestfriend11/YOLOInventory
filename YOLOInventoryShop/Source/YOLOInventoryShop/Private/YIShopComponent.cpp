@@ -6,6 +6,8 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryComponent.h"
 #include "YIItemDefinition.h"
+#include "YIShopPriceResolver.h"
+#include "YIShopVisibilityResolver.h"
 #include "YIDebugLibrary.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/PlayerController.h"
@@ -176,26 +178,209 @@ const FYIShopListing* UYIShopComponent::FindListing(int64 ItemCode) const
     return Listings.FindByPredicate([&](const FYIShopListing& L){ return L.ItemCode == ItemCode; });
 }
 
-bool UYIShopComponent::ConsumePrice(UObject* ResourceProvider, int64 ItemCode, int32 Count)
+int32 UYIShopComponent::ResolveItemIndex(const UYIInventoryBag* Bag, int32 RequestedIndex, const FGuid& RequestedInstanceId) const
 {
-    if (!ResourceProvider) return false;
-    const FYIShopListing* Listing = FindListing(ItemCode);
-    if (!Listing) return true; // free
+	if (!Bag)
+	{
+		return INDEX_NONE;
+	}
+
+	if (RequestedInstanceId.IsValid())
+	{
+		int32 ResolvedIndex = INDEX_NONE;
+		if (Bag->FindItemIndexByInstanceIdFast(RequestedInstanceId, ResolvedIndex))
+		{
+			return ResolvedIndex;
+		}
+		return INDEX_NONE;
+	}
+
+	return RequestedIndex;
+}
+
+bool UYIShopComponent::ConsumePrice(UObject* ResourceProvider, const TArray<FYIShopPrice>& Prices)
+{
+    if (!ResourceProvider)
+    {
+        return Prices.Num() == 0;
+    }
+
+    if (Prices.Num() == 0)
+    {
+        return true;
+    }
 
     // Check first
-    for (const FYIShopPrice& Price : Listing->Prices)
+    for (const FYIShopPrice& Price : Prices)
     {
-        if (YIShopPrivate::GetResourceAmount(ResourceProvider, Price.Resource) < Price.Amount * Count)
+        if (Price.Amount <= 0 || Price.Resource.IsNone())
+        {
+            continue;
+        }
+        if (YIShopPrivate::GetResourceAmount(ResourceProvider, Price.Resource) < Price.Amount)
         {
             return false;
         }
     }
     // Consume
-    for (const FYIShopPrice& Price : Listing->Prices)
+    for (const FYIShopPrice& Price : Prices)
     {
-        YIShopPrivate::ConsumeResource(ResourceProvider, Price.Resource, Price.Amount * Count);
+        if (Price.Amount <= 0 || Price.Resource.IsNone())
+        {
+            continue;
+        }
+        YIShopPrivate::ConsumeResource(ResourceProvider, Price.Resource, Price.Amount);
     }
     return true;
+}
+
+bool UYIShopComponent::ResolvePolicyForItem(
+	const FYIItemInstance& Item,
+	bool& bOutVisible,
+	bool& bOutBuyable,
+	bool& bOutSellable,
+	bool& bOutRequirePriceForVisibility,
+	bool& bOutRequirePriceForBuy,
+	bool& bOutRequirePriceForSell) const
+{
+	bOutVisible = true;
+	bOutBuyable = true;
+	bOutSellable = true;
+	bOutRequirePriceForVisibility = false;
+	bOutRequirePriceForBuy = false;
+	bOutRequirePriceForSell = false;
+
+	UYIItemDefinition* Definition = Item.Definition.Get();
+	if (!Definition)
+	{
+		return false;
+	}
+
+	const FYIShopResolvedVisibility Resolved = FYIShopVisibilityResolver::ResolvePolicy({this, Definition});
+	bOutVisible = Resolved.bVisibleInShop;
+	bOutBuyable = Resolved.bBuyable;
+	bOutSellable = Resolved.bSellable;
+	bOutRequirePriceForVisibility = Resolved.bRequirePriceForVisibility;
+	bOutRequirePriceForBuy = Resolved.bRequirePriceForBuy;
+	bOutRequirePriceForSell = Resolved.bRequirePriceForSell;
+	return true;
+}
+
+bool UYIShopComponent::ResolvePriceForItem(
+	const FYIItemInstance& Item,
+	APlayerState* BuyerPlayerState,
+	APlayerState* SellerPlayerState,
+	int32 Count,
+	bool bForBuy,
+	TArray<FYIShopPrice>& OutPrices,
+	bool& bOutResolvedFromFragment) const
+{
+	OutPrices.Reset();
+	bOutResolvedFromFragment = false;
+
+	if (Count <= 0)
+	{
+		return false;
+	}
+
+	UYIItemDefinition* Definition = Item.Definition.Get();
+
+	const int64 ItemCode = Definition ? Definition->UniqueCode : 0;
+	const FYIShopListing* Listing = ItemCode != 0 ? FindListing(ItemCode) : nullptr;
+
+	FYIShopResolvedPriceResult FragmentPrices;
+	bool bHasFragmentPrices = false;
+	if (Definition)
+	{
+		FYIShopPriceResolverContext Context;
+		Context.Shop = this;
+		Context.Definition = Definition;
+		Context.ItemInstance = &Item;
+		Context.BuyerPlayerState = BuyerPlayerState;
+		Context.SellerPlayerState = SellerPlayerState;
+		Context.Count = Count;
+		Context.PriceKind = bForBuy ? EYIShopResolvedPriceKind::Buy : EYIShopResolvedPriceKind::Sell;
+		bHasFragmentPrices = FYIShopPriceResolver::ResolveFragmentPrice(Context, FragmentPrices);
+	}
+
+	if (Listing && Listing->Prices.Num() > 0 && (bListingsOverrideFragmentPrices || !bHasFragmentPrices))
+	{
+		OutPrices.Reserve(Listing->Prices.Num());
+		for (const FYIShopPrice& ListingPrice : Listing->Prices)
+		{
+			if (ListingPrice.Resource.IsNone() || ListingPrice.Amount <= 0)
+			{
+				continue;
+			}
+
+			FYIShopPrice PriceRow;
+			PriceRow.Resource = ListingPrice.Resource;
+			if (bForBuy)
+			{
+				PriceRow.Amount = ListingPrice.Amount * static_cast<int64>(Count);
+			}
+			else
+			{
+				const int64 BaseSellAmount = static_cast<int64>(FMath::RoundToInt64(static_cast<double>(ListingPrice.Amount) * SellPriceMultiplier));
+				PriceRow.Amount = BaseSellAmount * static_cast<int64>(Count);
+			}
+
+			if (PriceRow.Amount > 0)
+			{
+				OutPrices.Add(PriceRow);
+			}
+		}
+		return OutPrices.Num() > 0;
+	}
+
+	if (!bHasFragmentPrices)
+	{
+		return false;
+	}
+
+	OutPrices.Reserve(FragmentPrices.Rows.Num());
+	for (const FYIShopResolvedPriceRow& Row : FragmentPrices.Rows)
+	{
+		if (Row.Resource.IsNone() || Row.Amount <= 0)
+		{
+			continue;
+		}
+
+		FYIShopPrice& PriceRow = OutPrices.AddDefaulted_GetRef();
+		PriceRow.Resource = Row.Resource;
+		PriceRow.Amount = Row.Amount;
+	}
+
+	bOutResolvedFromFragment = OutPrices.Num() > 0;
+	return OutPrices.Num() > 0;
+}
+
+bool UYIShopComponent::ResolveDisplayPriceForItem(const FYIItemInstance& Item, bool bForBuy, APlayerState* ViewerPlayerState, int32 Count, TArray<FYIShopPrice>& OutPrices) const
+{
+	bool bResolvedFromFragment = false;
+	return ResolvePriceForItem(
+		Item,
+		bForBuy ? ViewerPlayerState : nullptr,
+		bForBuy ? nullptr : ViewerPlayerState,
+		FMath::Max(1, Count),
+		bForBuy,
+		OutPrices,
+		bResolvedFromFragment);
+}
+
+void UYIShopComponent::ResolveDisplayPolicyForItem(const FYIItemInstance& Item, bool& bOutVisible, bool& bOutBuyable, bool& bOutSellable) const
+{
+	bool bRequirePriceForVisibility = false;
+	bool bRequirePriceForBuy = false;
+	bool bRequirePriceForSell = false;
+	ResolvePolicyForItem(
+		Item,
+		bOutVisible,
+		bOutBuyable,
+		bOutSellable,
+		bRequirePriceForVisibility,
+		bRequirePriceForBuy,
+		bRequirePriceForSell);
 }
 
 bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYIShopOpResult& OutResult)
@@ -243,7 +428,8 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_NoStock", "Shop has no stock");
 		return false;
 	}
-	if (!StockBag->Items.IsValidIndex(Request.StockIndex))
+	const int32 StockIndex = ResolveItemIndex(StockBag, Request.StockIndex, Request.StockItemInstanceId);
+	if (!StockBag->Items.IsValidIndex(StockIndex))
 	{
 		OnShopPurchase.Broadcast(BuyerPS, 0, Request.Count, false);
 		OutResult.Error = EYIShopOpError::InvalidStockIndex;
@@ -251,7 +437,7 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 		return false;
 	}
 
-	FYIBagItem& StockItem = StockBag->Items[Request.StockIndex];
+	FYIBagItem& StockItem = StockBag->Items[StockIndex];
 	if (StockItem.Item.Count < Request.Count)
 	{
 		OnShopPurchase.Broadcast(BuyerPS, 0, Request.Count, false);
@@ -261,6 +447,39 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 	}
 
 	const int64 Code = StockItem.Item.Definition.IsValid() ? StockItem.Item.Definition.Get()->UniqueCode : 0;
+	bool bVisible = true;
+	bool bBuyable = true;
+	bool bSellable = true;
+	bool bRequirePriceForVisibility = false;
+	bool bRequirePriceForBuy = false;
+	bool bRequirePriceForSell = false;
+	ResolvePolicyForItem(StockItem.Item, bVisible, bBuyable, bSellable, bRequirePriceForVisibility, bRequirePriceForBuy, bRequirePriceForSell);
+	if (!bVisible)
+	{
+		OnShopPurchase.Broadcast(BuyerPS, Code, Request.Count, false);
+		OutResult.Error = EYIShopOpError::NotVisible;
+		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_NotVisible", "Item is not visible in this shop");
+		return false;
+	}
+	if (!bBuyable)
+	{
+		OnShopPurchase.Broadcast(BuyerPS, Code, Request.Count, false);
+		OutResult.Error = EYIShopOpError::NotBuyable;
+		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_NotBuyable", "Item cannot be bought from this shop");
+		return false;
+	}
+
+	TArray<FYIShopPrice> ResolvedPrices;
+	bool bUnusedResolvedFromFragment = false;
+	const bool bHasResolvedPrice = ResolvePriceForItem(StockItem.Item, BuyerPS, nullptr, Request.Count, true, ResolvedPrices, bUnusedResolvedFromFragment);
+	if (!bHasResolvedPrice && bRequirePriceForBuy)
+	{
+		OnShopPurchase.Broadcast(BuyerPS, Code, Request.Count, false);
+		OutResult.Error = EYIShopOpError::PriceUnavailable;
+		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Buy_PriceUnavailable", "Item has no valid buy price in this shop");
+		return false;
+	}
+
 	if (Request.DestPos.X >= 0 && Request.DestPos.Y >= 0)
 	{
 		UYIInventoryBag* BuyerBag = Request.BuyerInv->GetBag();
@@ -280,7 +499,7 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 		}
 	}
 
-	if (!ConsumePrice(BuyerResourceProvider, Code, Request.Count))
+	if (!ConsumePrice(BuyerResourceProvider, ResolvedPrices))
 	{
 		OnShopPurchase.Broadcast(BuyerPS, Code, Request.Count, false);
 		OutResult.Error = EYIShopOpError::NoFunds;
@@ -315,11 +534,11 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 	{
 		if (BuyerResourceProvider)
 		{
-			if (const FYIShopListing* Listing = FindListing(Code))
+			for (const FYIShopPrice& Price : ResolvedPrices)
 			{
-				for (const FYIShopPrice& Price : Listing->Prices)
+				if (Price.Amount > 0 && !Price.Resource.IsNone())
 				{
-					YIShopPrivate::AddResource(BuyerResourceProvider, Price.Resource, Price.Amount * Request.Count);
+					YIShopPrivate::AddResource(BuyerResourceProvider, Price.Resource, Price.Amount);
 				}
 			}
 		}
@@ -332,7 +551,7 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 	StockItem.Item.Count -= Request.Count;
 	if (StockItem.Item.Count <= 0)
 	{
-		StockBag->RemoveItem(Request.StockIndex);
+		StockBag->RemoveItem(StockIndex);
 	}
 	Request.BuyerInv->SyncNetState();
 	if (bAutoSortStock && StockBag)
@@ -409,7 +628,8 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 	UObject* SellerResourceProvider = YIShopPrivate::ResolveResourceProvider(SellerPS);
 
 	UYIInventoryBag* SellerBag = Request.SellerInv->GetBag();
-	if (!SellerBag || !SellerBag->Items.IsValidIndex(Request.SourceIndex))
+	const int32 SourceIndex = ResolveItemIndex(SellerBag, Request.SourceIndex, Request.SourceItemInstanceId);
+	if (!SellerBag || !SellerBag->Items.IsValidIndex(SourceIndex))
 	{
 		OnShopSale.Broadcast(SellerPS, 0, Request.Count, false);
 		OutResult.Error = EYIShopOpError::InvalidSourceIndex;
@@ -417,7 +637,7 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 		return false;
 	}
 
-	FYIBagItem OriginalItem = SellerBag->Items[Request.SourceIndex];
+	FYIBagItem OriginalItem = SellerBag->Items[SourceIndex];
 	if (OriginalItem.Item.Count < Request.Count)
 	{
 		OnShopSale.Broadcast(SellerPS, 0, Request.Count, false);
@@ -427,18 +647,42 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 	}
 
 	const int64 Code = OriginalItem.Item.Definition.IsValid() ? OriginalItem.Item.Definition.Get()->UniqueCode : 0;
-	const FYIShopListing* Listing = FindListing(Code);
-	if (!Listing && !bAllowSellingUnlisted)
+	bool bVisible = true;
+	bool bBuyable = true;
+	bool bSellable = true;
+	bool bRequirePriceForVisibility = false;
+	bool bRequirePriceForBuy = false;
+	bool bRequirePriceForSell = false;
+	ResolvePolicyForItem(OriginalItem.Item, bVisible, bBuyable, bSellable, bRequirePriceForVisibility, bRequirePriceForBuy, bRequirePriceForSell);
+	if (!bSellable)
+	{
+		OnShopSale.Broadcast(SellerPS, Code, Request.Count, false);
+		OutResult.Error = EYIShopOpError::NotSellable;
+		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_NotSellable", "Item cannot be sold to this shop");
+		return false;
+	}
+
+	TArray<FYIShopPrice> ResolvedPrices;
+	bool bUnusedResolvedFromFragment = false;
+	const bool bHasResolvedPrice = ResolvePriceForItem(OriginalItem.Item, nullptr, SellerPS, Request.Count, false, ResolvedPrices, bUnusedResolvedFromFragment);
+	if (!bHasResolvedPrice && !bAllowSellingUnlisted)
 	{
 		OnShopSale.Broadcast(SellerPS, Code, Request.Count, false);
 		OutResult.Error = EYIShopOpError::UnlistedNotAllowed;
 		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_Unlisted", "Item cannot be sold here");
 		return false;
 	}
+	if (!bHasResolvedPrice && bRequirePriceForSell)
+	{
+		OnShopSale.Broadcast(SellerPS, Code, Request.Count, false);
+		OutResult.Error = EYIShopOpError::PriceUnavailable;
+		OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_PriceUnavailable", "Item has no valid sell price in this shop");
+		return false;
+	}
 
 	if (OriginalItem.Item.Count == Request.Count)
 	{
-		if (!SellerBag->RemoveItem(Request.SourceIndex))
+		if (!SellerBag->RemoveItem(SourceIndex))
 		{
 			OutResult.Error = EYIShopOpError::ValidationFailed;
 			OutResult.Message = NSLOCTEXT("YOLOInventory", "Shop_Sell_RemoveFail", "Failed to remove item from inventory");
@@ -447,7 +691,7 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 	}
 	else
 	{
-		SellerBag->Items[Request.SourceIndex].Item.Count -= Request.Count;
+		SellerBag->Items[SourceIndex].Item.Count -= Request.Count;
 		SellerBag->OnChanged.Broadcast();
 	}
 
@@ -460,7 +704,7 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 		}
 		else
 		{
-			SellerBag->Items[Request.SourceIndex].Item.Count += Request.Count;
+			SellerBag->Items[SourceIndex].Item.Count += Request.Count;
 			SellerBag->OnChanged.Broadcast();
 		}
 		OnShopSale.Broadcast(SellerPS, Code, Request.Count, false);
@@ -480,7 +724,7 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 		}
 		else
 		{
-			SellerBag->Items[Request.SourceIndex].Item.Count += Request.Count;
+			SellerBag->Items[SourceIndex].Item.Count += Request.Count;
 			SellerBag->OnChanged.Broadcast();
 		}
 		OnShopSale.Broadcast(SellerPS, Code, Request.Count, false);
@@ -489,14 +733,13 @@ bool UYIShopComponent::ExecuteSellRequest(const FYIShopSellRequest& Request, FYI
 		return false;
 	}
 
-	if (SellerResourceProvider && Listing)
+	if (SellerResourceProvider)
 	{
-		for (const FYIShopPrice& Price : Listing->Prices)
+		for (const FYIShopPrice& Price : ResolvedPrices)
 		{
-			const int64 Pay = static_cast<int64>(Price.Amount * Request.Count * SellPriceMultiplier);
-			if (Pay > 0)
+			if (Price.Amount > 0 && !Price.Resource.IsNone())
 			{
-				YIShopPrivate::AddResource(SellerResourceProvider, Price.Resource, Pay);
+				YIShopPrivate::AddResource(SellerResourceProvider, Price.Resource, Price.Amount);
 			}
 		}
 	}
@@ -538,7 +781,7 @@ void UYIShopComponent::RefreshMirror()
     StockMirrorSize = FIntPoint(8,6);
     if (RuntimeStock)
     {
-        GetStockMirrorForBag(RuntimeStock, StockMirror, StockMirrorSize);
+        GetStockMirrorForBag(RuntimeStock, nullptr, StockMirror, StockMirrorSize);
     }
     // Push
     if (AActor* OwnerActor = GetOwner())
@@ -605,7 +848,7 @@ UYIInventoryBag* UYIShopComponent::GetStockForPlayer(APlayerState* PlayerState)
     return NewBag;
 }
 
-void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const
+void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, APlayerState* ViewerPlayerState, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize) const
 {
     OutItems.Reset();
     OutSize = FIntPoint(8,6);
@@ -615,15 +858,39 @@ void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<F
     for (const FYIBagItem& It : Bag->Items)
     {
         if (It.Item.Count <= 0) continue;
+
+		bool bVisible = true;
+		bool bBuyable = true;
+		bool bSellable = true;
+		bool bRequirePriceForVisibility = false;
+		bool bRequirePriceForBuy = false;
+		bool bRequirePriceForSell = false;
+		ResolvePolicyForItem(It.Item, bVisible, bBuyable, bSellable, bRequirePriceForVisibility, bRequirePriceForBuy, bRequirePriceForSell);
+		if (!bVisible)
+		{
+			continue;
+		}
+
+		if (bRequirePriceForVisibility)
+		{
+			TArray<FYIShopPrice> VisibilityPrices;
+			bool bUnusedResolvedFromFragment = false;
+			const bool bHasPrice = ResolvePriceForItem(
+				It.Item,
+				ViewerPlayerState,
+				nullptr,
+				1,
+				true,
+				VisibilityPrices,
+				bUnusedResolvedFromFragment);
+			if (!bHasPrice)
+			{
+				continue;
+			}
+		}
+
         FYINetBagItem Net;
         Net.Code = It.Item.Definition.IsValid() ? It.Item.Definition.Get()->UniqueCode : 0;
-        if (Net.Code == 0 && It.Item.Definition.ToSoftObjectPath().IsValid())
-        {
-            if (UYIItemDefinition* Def = Cast<UYIItemDefinition>(It.Item.Definition.LoadSynchronous()))
-            {
-                Net.Code = Def->UniqueCode;
-            }
-        }
         Net.Count = It.Item.Count;
         Net.InstanceId = It.Item.InstanceId;
         Net.StackId = It.Item.StackId;
@@ -638,5 +905,6 @@ void UYIShopComponent::GetStockMirrorForBag(const UYIInventoryBag* Bag, TArray<F
 void UYIShopComponent::GetStockMirrorForPlayer(APlayerState* PlayerState, TArray<FYINetBagItem>& OutItems, FIntPoint& OutSize)
 {
 	const UYIInventoryBag* StockBag = GetStockForPlayer(PlayerState);
-	GetStockMirrorForBag(StockBag, OutItems, OutSize);
+	APlayerState* VisibilityViewer = (StockMode == EYIShopStockMode::PerPlayerStock) ? PlayerState : nullptr;
+	GetStockMirrorForBag(StockBag, VisibilityViewer, OutItems, OutSize);
 }

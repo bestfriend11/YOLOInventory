@@ -70,6 +70,9 @@ public:
 	/** Economy info (sell price). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") int32 SellPrice = 0;
 
+	/** Optional fully-formatted economy line (for shop-aware tooltips). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") FText EconomyLine;
+
 	/** True if all requirements are met (for quick checks). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") bool bAllRequirementsMet = true;
 };

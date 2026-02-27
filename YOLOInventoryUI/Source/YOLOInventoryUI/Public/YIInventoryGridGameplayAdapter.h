@@ -7,6 +7,7 @@
 class AYITradeSessionActor;
 class UYIShopComponent;
 enum class ETradeSide : uint8;
+struct FYITooltipData;
 
 /**
  * Default gameplay integration adapter for grid widgets.
@@ -46,6 +47,12 @@ public:
 		const FYIItemInstance& Item,
 		const FTransform& SpawnTransform) override;
 
+	virtual void AugmentTooltipData(
+		UInventoryGridWidget* Grid,
+		const UYIInventoryBag* Bag,
+		int32 ItemIndex,
+		FYITooltipData& InOutTooltipData) override;
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<AYITradeSessionActor> ActiveTradeSession = nullptr;
@@ -62,4 +69,3 @@ private:
 	UPROPERTY(Transient)
 	bool bIsShopStockGrid = false;
 };
-
