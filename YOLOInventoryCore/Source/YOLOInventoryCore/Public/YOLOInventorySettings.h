@@ -142,6 +142,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Visuals", meta=(AllowedClasses="/Script/YOLOInventoryGrid.YIInventoryGridStyleAsset", ToolTip="Fallback grid style for runtime inventory grids (widget override and bag style take priority)."))
 	TSoftObjectPtr<UObject> DefaultGridStyle;
 
+	/** Snap drag ghost/highlight visuals to grid cells. Disable for free cursor movement drag visuals. */
+	UPROPERTY(EditAnywhere, config, Category = "Visuals|Grid", meta=(ToolTip="If enabled, drag ghost and placement highlight snap to cell boundaries. Disable for free cursor movement visuals."))
+	bool bSnapDragVisualsToGrid = true;
+
 	/** Read-only access to settings. */
 	static const UYOLOInventorySettings& Get();
 

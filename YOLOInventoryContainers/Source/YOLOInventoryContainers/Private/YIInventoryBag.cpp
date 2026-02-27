@@ -606,7 +606,23 @@ int32 UYIInventoryBag::GetItemIndexAtCellFast(const FIntPoint& Cell) const
 
 	BuildRuntimeLookupCache();
 	const int32 FlatIdx = Cell.Y * GridSize.X + Cell.X;
-	return RuntimeCellToItemIndex.IsValidIndex(FlatIdx) ? RuntimeCellToItemIndex[FlatIdx] : INDEX_NONE;
+	if (!RuntimeCellToItemIndex.IsValidIndex(FlatIdx))
+	{
+		return INDEX_NONE;
+	}
+
+	int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
+	if (ItemIdx != INDEX_NONE && !Items.IsValidIndex(ItemIdx))
+	{
+		MarkRuntimeLookupCacheDirty();
+		BuildRuntimeLookupCache();
+		ItemIdx = RuntimeCellToItemIndex.IsValidIndex(FlatIdx) ? RuntimeCellToItemIndex[FlatIdx] : INDEX_NONE;
+		if (ItemIdx != INDEX_NONE && !Items.IsValidIndex(ItemIdx))
+		{
+			return INDEX_NONE;
+		}
+	}
+	return ItemIdx;
 }
 
 bool UYIInventoryBag::FindItemIndexByInstanceIdFast(const FGuid& InstanceId, int32& OutIndex) const
@@ -654,7 +670,7 @@ bool UYIInventoryBag::FindSingleOverlapAt(const FIntPoint& Pos, const FIntPoint&
 			}
 
 			const int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
-			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex)
+			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex || !Items.IsValidIndex(ItemIdx))
 			{
 				continue;
 			}
@@ -703,7 +719,7 @@ void UYIInventoryBag::GetOverlappingItemIndicesAt(const FIntPoint& Pos, const FI
 			}
 
 			const int32 ItemIdx = RuntimeCellToItemIndex[FlatIdx];
-			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex)
+			if (ItemIdx == INDEX_NONE || ItemIdx == IgnoreIndex || !Items.IsValidIndex(ItemIdx))
 			{
 				continue;
 			}

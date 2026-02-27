@@ -63,6 +63,7 @@ int32 UInventoryDragOverlayUserWidget::NativePaint(const FPaintArgs& Args, const
 		&& Settings.bEnableDebugPipeline
 		&& Settings.bDebugOutputToScreen
 		&& Settings.IsDebugChannelEnabled(EYIDebugChannel::Grid);
+	const bool bSnapDragVisualsToGrid = Settings.bSnapDragVisualsToGrid;
 	FYIBagItem LiveDragItem; UYIInventoryBag* LiveSourceBag = nullptr;
 	const bool bHasLiveDrag = UInventoryGridWidget::GetActiveDraggedItem(LiveDragItem, LiveSourceBag, GetWorld());
 	FIntPoint LiveAnchorOffset = FIntPoint::ZeroValue;

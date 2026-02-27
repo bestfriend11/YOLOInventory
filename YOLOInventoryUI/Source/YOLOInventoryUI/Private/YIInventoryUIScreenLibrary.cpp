@@ -76,7 +76,11 @@ UUserWidget* UYIInventoryUIScreenLibrary::OpenInventoryScreenForComponent(UObjec
 		if (UUserWidget* Existing = ExistingPtr->Get())
 		{
 			BindInventoryScreenWidget(Existing, InventoryComponent);
-			Existing->SetZOrderInViewport(YIInventoryScreenViewportZOrder);
+			if (Existing->IsInViewport())
+			{
+				Existing->RemoveFromParent();
+				Existing->AddToViewport(YIInventoryScreenViewportZOrder);
+			}
 			return Existing;
 		}
 		GInventoryScreensByComponent.Remove(InventoryComponent);

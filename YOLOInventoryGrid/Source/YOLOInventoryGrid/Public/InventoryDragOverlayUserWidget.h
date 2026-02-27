@@ -19,10 +19,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals")
 	FVector2D FallbackGhostSize = FVector2D(64.f, 64.f);
 
-	/** If true, drag ghost and highlight snap to grid cells. Disable for free cursor movement visuals. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals")
-	bool bSnapDragVisualsToGrid = true;
-
 	/** Layer bias added to this overlay paint so it draws above sibling UI inside the same viewport widget tree. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Visuals", meta=(ClampMin="0"))
 	int32 OverlayLayerBias = 2048;

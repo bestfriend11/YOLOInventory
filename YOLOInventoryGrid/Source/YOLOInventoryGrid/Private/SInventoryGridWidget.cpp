@@ -190,6 +190,18 @@ void SInventoryGridWidget::UpdateHoverSelection()
 	}
 
 	const FIntPoint GridSize = Bag->GridSize;
+	if (GridSize.X <= 0 || GridSize.Y <= 0)
+	{
+		if (HoveredItemIndex != INDEX_NONE)
+		{
+			HoveredItemIndex = INDEX_NONE;
+			HoveredItemTopLeft = FIntPoint(-1, -1);
+			HoveredItemSize = FIntPoint::ZeroValue;
+			if (OnHoveredItemChanged.IsBound()) { OnHoveredItemChanged.Execute(HoveredItemIndex); }
+		}
+		return;
+	}
+
 	// If HoverCell is outside the grid area, treat it as no hover
 	if (HoverCell.X < 0 || HoverCell.Y < 0 || HoverCell.X >= GridSize.X || HoverCell.Y >= GridSize.Y)
 	{
@@ -203,7 +215,12 @@ void SInventoryGridWidget::UpdateHoverSelection()
 		return;
 	}
 
-	const int32 Idx = GetItemIndexAtCell(HoverCell);
+	int32 Idx = GetItemIndexAtCell(HoverCell);
+	if (Idx != INDEX_NONE && !Bag->Items.IsValidIndex(Idx))
+	{
+		Idx = INDEX_NONE;
+	}
+
 	if (Idx != HoveredItemIndex)
 	{
 		HoveredItemIndex = Idx;
