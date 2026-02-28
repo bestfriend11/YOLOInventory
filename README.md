@@ -8,6 +8,7 @@ This folder contains scaffolded plugins for the modular YOLO inventory suite:
 - YOLOInventoryEquipment
 - YOLOInventoryLoot
 - YOLOInventoryUI
+- YOLOInventoryGASBridge
 - YOLOInventoryEditorCore
 - YOLOInventoryEditorSchema
 - YOLOInventoryEditorGrid

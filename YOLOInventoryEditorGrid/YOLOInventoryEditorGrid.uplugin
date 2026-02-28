@@ -1,11 +1,11 @@
-{
+﻿{
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
   "FriendlyName": "YOLOInventoryEditorGrid",
   "Description": "Editor tools for bag and grid authoring/validation.",
   "Category": "YOLO Inventory Suite",
-  "CreatedBy": "Rovo Dev",
+  "CreatedBy": "fhana",
   "CreatedByURL": "",
   "DocsURL": "",
   "EnabledByDefault": false,
@@ -50,3 +50,4 @@
     }
   ]
 }
+

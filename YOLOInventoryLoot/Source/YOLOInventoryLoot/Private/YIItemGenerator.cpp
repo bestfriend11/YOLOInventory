@@ -6,7 +6,9 @@
 #include "YIAffixPoolAsset.h"
 #include "YIAffixAsset.h"
 #include "YIFragmentRollStrategy.h"
+#include "YIItemFeatureResolverRegistry.h"
 #include "YIInventoryBlueprintLibrary.h"
+#include "YILootPolicyResolver.h"
 
 static int32 ClampLevel(int32 Level, int32 MinLevel, int32 MaxLevel)
 {
@@ -233,6 +235,28 @@ bool UYIItemGenerator::GenerateItem(int32 Level, int32 Seed, FYIBagItem& OutItem
 	if (!Def)
 	{
 		return false;
+	}
+
+	if (const TSharedPtr<IYILootPolicyResolver, ESPMode::ThreadSafe> LootResolver =
+		FYIItemFeatureResolverRegistry::Get().FindResolverTyped<IYILootPolicyResolver>(YIItemFeatureKeys::LootPolicy))
+	{
+		FYILootPolicyContext PolicyContext;
+		PolicyContext.LootLevel = UseLevel;
+
+		FYILootPolicyResult PolicyResult;
+		if (!LootResolver->EvaluateLootPolicy(Def, PolicyContext, PolicyResult))
+		{
+			return false;
+		}
+
+		if (PolicyResult.MinGeneratedCount > 0)
+		{
+			Count = FMath::Max(Count, PolicyResult.MinGeneratedCount);
+		}
+		if (PolicyResult.MaxGeneratedCount > 0)
+		{
+			Count = FMath::Min(Count, PolicyResult.MaxGeneratedCount);
+		}
 	}
 
 	OutItem.Item.Definition = DefSoft;

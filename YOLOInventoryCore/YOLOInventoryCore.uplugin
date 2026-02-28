@@ -1,11 +1,11 @@
-{
+﻿{
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
   "FriendlyName": "YOLOInventoryCore",
   "Description": "Non-opinionated inventory runtime foundation (IDs, interfaces, replication/save contracts).",
   "Category": "YOLO Inventory Suite",
-  "CreatedBy": "Rovo Dev",
+  "CreatedBy": "fhana",
   "CreatedByURL": "",
   "DocsURL": "",
   "EnabledByDefault": false,
@@ -21,3 +21,4 @@
   ],
   "Plugins": []
 }
+

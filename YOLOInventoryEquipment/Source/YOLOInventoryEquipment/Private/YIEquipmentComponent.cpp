@@ -11,7 +11,13 @@
 #include "YIItemSFXLibrary.h"
 #include "YOLOInventorySettings.h"
 #include "Engine/Engine.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameplayTagAssetInterface.h"
+#include "YIEquipmentPolicyResolver.h"
+#include "YIItemFeatureResolverRegistry.h"
+#include "UObject/UnrealType.h"
 #include "Algo/Unique.h"
 #include "YIDebugLibrary.h"
 
@@ -76,6 +82,62 @@ namespace YIEquipmentPrivate
 			return EYIEquipmentOpError::InvalidInventory;
 		}
 		return EYIEquipmentOpError::ValidationFailed;
+	}
+
+	static int32 ResolveOwnerLevelForEquipPolicy(const AActor* Owner)
+	{
+		if (!Owner)
+		{
+			return 1;
+		}
+
+		auto ReadLevelProperty = [](const UObject* Obj, FName PropertyName, int32& OutLevel) -> bool
+		{
+			if (!Obj)
+			{
+				return false;
+			}
+
+			if (const FProperty* Property = Obj->GetClass()->FindPropertyByName(PropertyName))
+			{
+				if (const FNumericProperty* Numeric = CastField<FNumericProperty>(Property))
+				{
+					if (Numeric->IsInteger())
+					{
+						OutLevel = static_cast<int32>(Numeric->GetSignedIntPropertyValue(Property->ContainerPtrToValuePtr<void>(Obj)));
+						return true;
+					}
+				}
+			}
+			return false;
+		};
+
+		int32 ResolvedLevel = 1;
+		if (ReadLevelProperty(Owner, TEXT("Level"), ResolvedLevel) || ReadLevelProperty(Owner, TEXT("CharacterLevel"), ResolvedLevel))
+		{
+			return FMath::Max(1, ResolvedLevel);
+		}
+
+		if (const APawn* Pawn = Cast<APawn>(Owner))
+		{
+			if (const APlayerState* PS = Pawn->GetPlayerState())
+			{
+				if (ReadLevelProperty(PS, TEXT("Level"), ResolvedLevel) || ReadLevelProperty(PS, TEXT("CharacterLevel"), ResolvedLevel))
+				{
+					return FMath::Max(1, ResolvedLevel);
+				}
+			}
+		}
+		return 1;
+	}
+
+	static void ResolveOwnerTagsForEquipPolicy(const AActor* Owner, FGameplayTagContainer& OutTags)
+	{
+		OutTags.Reset();
+		if (const IGameplayTagAssetInterface* TagOwner = Cast<IGameplayTagAssetInterface>(Owner))
+		{
+			TagOwner->GetOwnedGameplayTags(OutTags);
+		}
 	}
 }
 
@@ -779,6 +841,23 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 	{
 		OutMessage = TEXT("Equip failed: Item definition could not be loaded.");
 		return false;
+	}
+
+	if (const TSharedPtr<IYIEquipPolicyResolver, ESPMode::ThreadSafe> EquipResolver =
+		FYIItemFeatureResolverRegistry::Get().FindResolverTyped<IYIEquipPolicyResolver>(YIItemFeatureKeys::EquipPolicy))
+	{
+		FYIEquipPolicyContext PolicyContext;
+		PolicyContext.ActorLevel = YIEquipmentPrivate::ResolveOwnerLevelForEquipPolicy(GetOwner());
+		YIEquipmentPrivate::ResolveOwnerTagsForEquipPolicy(GetOwner(), PolicyContext.ActorTags);
+
+		FYIEquipPolicyResult PolicyResult;
+		if (!EquipResolver->EvaluateEquipPolicy(SourceBagItem.Item, PolicyContext, PolicyResult))
+		{
+			OutMessage = FString::Printf(
+				TEXT("Equip failed: %s"),
+				*PolicyResult.Message.ToString());
+			return false;
+		}
 	}
 
 	// Container items authored in bag templates may not have their runtime nested bag materialized yet.

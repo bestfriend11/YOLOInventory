@@ -180,3 +180,6 @@ This includes:
 - GAS bridge fragment plan
 - description engine + editor preview plan
 - phase-by-phase delivery checklist
+
+GAS bridge API/boundary contract:
+- `YOLOInventoryGASBridge/Docs/GAS_BRIDGE_API.md`

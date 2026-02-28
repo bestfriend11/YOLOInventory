@@ -2,8 +2,8 @@
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
-  "FriendlyName": "YOLOInventorySchema",
-  "Description": "Default item/affix schema and fragment-based authoring model built on YOLOInventoryCore.",
+  "FriendlyName": "YOLOInventoryGASBridge",
+  "Description": "Optional GAS bridge for YOLO Inventory Suite. Provides item-to-GAS grant/use APIs without coupling core modules to GAS.",
   "Category": "YOLO Inventory Suite",
   "CreatedBy": "fhana",
   "CreatedByURL": "",
@@ -14,7 +14,7 @@
   "Installed": false,
   "Modules": [
     {
-      "Name": "YOLOInventorySchema",
+      "Name": "YOLOInventoryGASBridge",
       "Type": "Runtime",
       "LoadingPhase": "Default"
     }
@@ -25,13 +25,14 @@
       "Enabled": true
     },
     {
-      "Name": "GameplayAbilities",
+      "Name": "YOLOInventorySchema",
       "Enabled": true
     },
     {
-      "Name": "CSVItemBuilder",
+      "Name": "GameplayAbilities",
       "Enabled": true
     }
   ]
 }
+
 

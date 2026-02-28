@@ -3,12 +3,15 @@
 #include "YIInventoryBag.h"
 #include "YIInventoryBlueprintLibrary.h"
 #include "YIItemDefinition.h"
+#include "YIItemFeatureResolverRegistry.h"
 #include "YIItemInstance.h"
 #include "YIItemInstanceFragmentAccess.h"
 #include "YIItemPickup.h"
 #include "YIItemRegistrySubsystem.h"
+#include "YIWorldPickupPolicyResolver.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "GameplayTagAssetInterface.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace
@@ -210,6 +213,28 @@ bool UYIWorldLootBlueprintLibrary::PickupItemActorIntoBag(UObject* WorldContextO
 	Full.ContainedBagId = NetInstance.ContainedBagId;
 	Full.bRotated = NetInstance.bRotated;
 	YIItemInstanceFragments::ImportNetFragmentPayload(Full, NetInstance.Fragments);
+
+	if (const TSharedPtr<IYIWorldPickupPolicyResolver, ESPMode::ThreadSafe> PickupResolver =
+		FYIItemFeatureResolverRegistry::Get().FindResolverTyped<IYIWorldPickupPolicyResolver>(YIItemFeatureKeys::PickupPolicy))
+	{
+		FYIWorldPickupPolicyContext PolicyContext;
+		if (const AActor* ContextActor = Cast<AActor>(WorldContextObject))
+		{
+			const AActor* PickupOwner = Pickup->GetOwner();
+			PolicyContext.bIsOwner = !PickupOwner || PickupOwner == ContextActor || PickupOwner == ContextActor->GetOwner();
+
+			if (const IGameplayTagAssetInterface* TagSource = Cast<IGameplayTagAssetInterface>(ContextActor))
+			{
+				TagSource->GetOwnedGameplayTags(PolicyContext.PickerTags);
+			}
+		}
+
+		FYIWorldPickupPolicyResult PolicyResult;
+		if (!PickupResolver->EvaluatePickupPolicy(Full, PolicyContext, PolicyResult))
+		{
+			return false;
+		}
+	}
 
 	if (UYIInventoryBlueprintLibrary::AddItemInstanceToBag(Bag, Full))
 	{

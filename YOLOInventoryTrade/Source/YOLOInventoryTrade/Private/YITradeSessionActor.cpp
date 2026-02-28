@@ -7,7 +7,9 @@
 #include "YIInventoryComponent.h"
 #include "YIInventoryBag.h"
 #include "YIItemDefinition.h"
+#include "YIItemFeatureResolverRegistry.h"
 #include "YIItemSchemaResolver.h"
+#include "YITradePolicyResolver.h"
 #include "Engine/Engine.h"
 
 AYITradeSessionActor::AYITradeSessionActor()
@@ -274,6 +276,23 @@ bool AYITradeSessionActor::TryAddOfferItem(ETradeSide Side, UYIInventoryComponen
 	{
 		OutError = NSLOCTEXT("YOLOInventory", "TradeAddOffer_InsufficientCount", "Requested count exceeds source stack");
 		return false;
+	}
+
+	if (const TSharedPtr<IYITradePolicyResolver, ESPMode::ThreadSafe> TradeResolver =
+		FYIItemFeatureResolverRegistry::Get().FindResolverTyped<IYITradePolicyResolver>(YIItemFeatureKeys::TradePolicy))
+	{
+		FYITradePolicyContext PolicyContext;
+		PolicyContext.bRequireVisibility = true;
+		PolicyContext.ServerTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+		FYITradePolicyResult PolicyResult;
+		if (!TradeResolver->EvaluateTradePolicy(SrcItem.Item, PolicyContext, PolicyResult))
+		{
+			OutError = PolicyResult.Message.IsEmpty()
+				? NSLOCTEXT("YOLOInventory", "TradeAddOffer_PolicyRejected", "Item does not satisfy trade policy")
+				: PolicyResult.Message;
+			return false;
+		}
 	}
 
 	FYIBagItem Slice = SrcItem;

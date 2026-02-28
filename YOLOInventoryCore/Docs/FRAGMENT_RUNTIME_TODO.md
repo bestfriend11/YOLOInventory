@@ -93,6 +93,12 @@ Required runtime consumers:
 - consumable/use command path
 - persistence integration for dynamic GAS-related runtime state
 
+API surface/boundary definition:
+- `YOLOInventoryGASBridge/Docs/GAS_BRIDGE_API.md`
+- core request/result types: `YIGASBridgeApiTypes.h`
+- service entrypoint: `UYIGASBridgeSubsystem`
+- first-pass GAS fragments: `YIGASBridgeFragments.h`
+
 ## 3) Description Engine (fast, fragment + GAS driven)
 
 Target behavior:
@@ -200,6 +206,22 @@ Status notes:
 ### Phase 4
 - trade/equipment/loot/world policy fragments migrated to resolver pattern
 
+Status notes:
+- Added shared feature-resolver registry in core (`YIItemFeatureResolverRegistry`) with thread-safe module registration.
+- Added feature-owned default resolvers:
+  - trade: `FYIDefaultTradePolicyResolver`
+  - equipment: `FYIDefaultEquipPolicyResolver`
+  - loot: `FYIDefaultLootPolicyResolver`
+  - world pickup: `FYIDefaultWorldPickupPolicyResolver`
+- Added new policy fragments:
+  - loot: `FYIItemLootEligibilityFragment`, `FYIItemRollPolicyFragment`
+  - world: `FYIItemPickupPolicyFragment`
+- Wired authoritative runtime consumers to resolver checks:
+  - trade offer add path (`AYITradeSessionActor::TryAddOfferItem`)
+  - equipment equip path (`UYIEquipmentComponent::EquipFromInventoryInternal`)
+  - loot generation path (`UYIItemGenerator::GenerateItem`)
+  - world pickup path (`UYIWorldLootBlueprintLibrary::PickupItemActorIntoBag`)
+
 ### Phase 5
 - optimization and contract tests for fragment-driven request/result paths
 
@@ -209,7 +231,7 @@ Status notes:
 - [x] Decide listing precedence: fragment baseline vs listing override
 - [ ] Add shop price/visibility contract tests
 - [x] Add description preview panel in editor schema dashboard
-- [ ] Define first GAS bridge API surface and plugin boundaries
+- [x] Define first GAS bridge API surface and plugin boundaries
 
 Editor status note:
 - Item dashboard preview now includes selection-level description + resolved fragment field preview (schema-driven, plugin-agnostic).

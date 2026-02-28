@@ -1,11 +1,11 @@
-{
+﻿{
   "FileVersion": 3,
   "Version": 1,
   "VersionName": "0.1.0",
   "FriendlyName": "YOLOInventoryContainers",
   "Description": "Runtime inventory bag/component/container systems for YOLO Inventory Suite.",
   "Category": "YOLO Inventory Suite",
-  "CreatedBy": "Rovo Dev",
+  "CreatedBy": "fhana",
   "CreatedByURL": "",
   "DocsURL": "",
   "EnabledByDefault": true,
@@ -34,3 +34,4 @@
     }
   ]
 }
+
