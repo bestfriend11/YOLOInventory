@@ -191,6 +191,12 @@ Status notes:
 ### Phase 3
 - ship description resolver with caching + editor preview panel
 
+Status notes:
+- Added rich grouped tooltip sections (`Requirements`, `Effects`, `Attributes`, `Condition`, `Economy`) built from resolved tooltip payload.
+- Added subtitle metadata (`Type • Rarity`) derived from schema classification.
+- Upgraded default tooltip Slate widget to a game-like layout (icon, subtitle, section headers, durability bar).
+- Added Blueprint helper (`BuildRichTooltipForBagItem`) for list/panel UIs outside grid hover flow.
+
 ### Phase 4
 - trade/equipment/loot/world policy fragments migrated to resolver pattern
 

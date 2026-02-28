@@ -198,7 +198,7 @@ void UYIInventoryGridGameplayAdapter::AugmentTooltipData(
 	int32 ItemIndex,
 	FYITooltipData& InOutTooltipData)
 {
-	if (!ActiveShopComponent || !Bag || !Bag->Items.IsValidIndex(ItemIndex))
+	if (!Bag || !Bag->Items.IsValidIndex(ItemIndex))
 	{
 		return;
 	}
@@ -209,7 +209,7 @@ void UYIInventoryGridGameplayAdapter::AugmentTooltipData(
 	Context.Bag = Bag;
 	Context.Shop = ActiveShopComponent;
 	Context.ViewerPlayerState = PC ? PC->PlayerState : nullptr;
-	Context.bShopBuyContext = bIsShopStockGrid;
+	Context.bShopBuyContext = (ActiveShopComponent != nullptr) && bIsShopStockGrid;
 	Context.Count = 1;
 	FYIItemDescriptionResolver::AugmentTooltip(Context, InOutTooltipData);
 }

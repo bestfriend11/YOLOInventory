@@ -43,6 +43,7 @@ namespace
 
 	struct FYIDescriptionCacheValue
 	{
+		FText Subtitle;
 		FText EconomyLine;
 		int32 SellPrice = 0;
 		bool bHasDurability = false;
@@ -103,6 +104,28 @@ namespace
 		Key.BagRevision = Context.Bag ? Context.Bag->RuntimeRevision : 0;
 		Key.ContextHash = BuildContextHash(Context);
 		return Key;
+	}
+
+	FString MakeReadableTagLeaf(const FGameplayTag& Tag)
+	{
+		if (!Tag.IsValid())
+		{
+			return FString();
+		}
+
+		FString Name = Tag.GetTagName().ToString();
+		int32 DotIndex = INDEX_NONE;
+		if (Name.FindLastChar(TEXT('.'), DotIndex))
+		{
+			Name = Name.Mid(DotIndex + 1);
+		}
+		Name = Name.Replace(TEXT("_"), TEXT(" "));
+		Name = Name.TrimStartAndEnd();
+		if (!Name.IsEmpty())
+		{
+			Name[0] = FChar::ToUpper(Name[0]);
+		}
+		return Name;
 	}
 
 	FText BuildShopPriceLine(const TArray<FYIShopPrice>& Prices, const bool bForBuy)
@@ -256,6 +279,32 @@ namespace
 		}
 	}
 
+	void ResolveSchemaSubtitle(const FYIItemInstance& Item, FYIDescriptionCacheValue& OutValue)
+	{
+		const UYIItemDefinition* Definition = Item.Definition.Get();
+		if (!Definition)
+		{
+			return;
+		}
+
+		const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Definition);
+		const FString TypeText = MakeReadableTagLeaf(Snapshot.Classification.ItemType);
+		const FString RarityText = MakeReadableTagLeaf(Snapshot.Classification.RarityTag);
+
+		if (!TypeText.IsEmpty() && !RarityText.IsEmpty())
+		{
+			OutValue.Subtitle = FText::FromString(FString::Printf(TEXT("%s  •  %s"), *TypeText, *RarityText));
+		}
+		else if (!TypeText.IsEmpty())
+		{
+			OutValue.Subtitle = FText::FromString(TypeText);
+		}
+		else if (!RarityText.IsEmpty())
+		{
+			OutValue.Subtitle = FText::FromString(RarityText);
+		}
+	}
+
 	void ResolveShopPricing(const FYIItemDescriptionContext& Context, FYIDescriptionCacheValue& OutValue)
 	{
 		if (!Context.Shop || !Context.Item)
@@ -289,8 +338,91 @@ namespace
 		ResolveChargesAndCooldown(*Context.Item, Value, Context.ViewerPlayerState);
 		ResolveTradePolicy(*Context.Item, Value);
 		ResolveShopPricing(Context, Value);
+		ResolveSchemaSubtitle(*Context.Item, Value);
 		Value.LastAccessCycle = static_cast<uint64>(FPlatformTime::Cycles64());
 		return Value;
+	}
+
+	void RebuildRichSections(FYITooltipData& InOutTooltipData)
+	{
+		InOutTooltipData.Sections.Reset();
+
+		if (InOutTooltipData.RequirementLines.Num() > 0)
+		{
+			FYITooltipSection& Section = InOutTooltipData.Sections.AddDefaulted_GetRef();
+			Section.Header = NSLOCTEXT("YOLOInventory", "TooltipSectionRequirements", "Requirements");
+			Section.HeaderColor = FLinearColor(0.90f, 0.72f, 0.42f, 1.0f);
+			for (const FYITooltipRequirementLine& ReqLine : InOutTooltipData.RequirementLines)
+			{
+				FYITooltipStyledLine& Styled = Section.Lines.AddDefaulted_GetRef();
+				Styled.Text = ReqLine.Text;
+				Styled.Color = ReqLine.bMet ? FLinearColor(0.86f, 0.90f, 0.86f, 1.0f) : FLinearColor(0.95f, 0.35f, 0.35f, 1.0f);
+			}
+		}
+
+		if (InOutTooltipData.AffixLines.Num() > 0)
+		{
+			FYITooltipSection& Section = InOutTooltipData.Sections.AddDefaulted_GetRef();
+			Section.Header = NSLOCTEXT("YOLOInventory", "TooltipSectionEffects", "Effects");
+			Section.HeaderColor = FLinearColor(0.57f, 0.79f, 0.98f, 1.0f);
+			for (const FText& AffixLine : InOutTooltipData.AffixLines)
+			{
+				if (AffixLine.IsEmpty())
+				{
+					continue;
+				}
+				FYITooltipStyledLine& Styled = Section.Lines.AddDefaulted_GetRef();
+				Styled.Text = AffixLine;
+				Styled.Color = FLinearColor(0.88f, 0.92f, 1.0f, 1.0f);
+			}
+		}
+
+		if (InOutTooltipData.AttributeLines.Num() > 0)
+		{
+			FYITooltipSection& Section = InOutTooltipData.Sections.AddDefaulted_GetRef();
+			Section.Header = NSLOCTEXT("YOLOInventory", "TooltipSectionAttributes", "Attributes");
+			Section.HeaderColor = FLinearColor(0.52f, 0.88f, 0.70f, 1.0f);
+			for (const FYITooltipAttributeLine& AttrLine : InOutTooltipData.AttributeLines)
+			{
+				FYITooltipStyledLine& Styled = Section.Lines.AddDefaulted_GetRef();
+				Styled.Text = FText::Format(
+					NSLOCTEXT("YOLOInventory", "TooltipAttributeFmt", "{0}: {1}"),
+					AttrLine.Label,
+					FText::AsNumber(AttrLine.Value));
+				Styled.Color = (AttrLine.Value >= 0.0f)
+					? FLinearColor(0.62f, 0.95f, 0.74f, 1.0f)
+					: FLinearColor(0.95f, 0.45f, 0.45f, 1.0f);
+			}
+		}
+
+		if (InOutTooltipData.bHasDurability && InOutTooltipData.MaxDurability > 0.0f)
+		{
+			FYITooltipSection& Section = InOutTooltipData.Sections.AddDefaulted_GetRef();
+			Section.Header = NSLOCTEXT("YOLOInventory", "TooltipSectionCondition", "Condition");
+			Section.HeaderColor = FLinearColor(0.93f, 0.84f, 0.56f, 1.0f);
+			const float Percent = FMath::Clamp(InOutTooltipData.CurrentDurability / InOutTooltipData.MaxDurability, 0.0f, 1.0f);
+			FYITooltipStyledLine& Styled = Section.Lines.AddDefaulted_GetRef();
+			Styled.Text = FText::Format(
+				NSLOCTEXT("YOLOInventory", "TooltipDurabilitySectionFmt", "Durability: {0}/{1} ({2}%)"),
+				FText::AsNumber(FMath::RoundToInt(InOutTooltipData.CurrentDurability)),
+				FText::AsNumber(FMath::RoundToInt(InOutTooltipData.MaxDurability)),
+				FText::AsNumber(FMath::RoundToInt(Percent * 100.0f)));
+			Styled.Color = Percent > 0.60f
+				? FLinearColor(0.70f, 0.95f, 0.70f, 1.0f)
+				: (Percent > 0.30f ? FLinearColor(0.94f, 0.84f, 0.50f, 1.0f) : FLinearColor(0.95f, 0.45f, 0.45f, 1.0f));
+		}
+
+		if (!InOutTooltipData.EconomyLine.IsEmpty() || InOutTooltipData.SellPrice > 0)
+		{
+			FYITooltipSection& Section = InOutTooltipData.Sections.AddDefaulted_GetRef();
+			Section.Header = NSLOCTEXT("YOLOInventory", "TooltipSectionEconomy", "Economy");
+			Section.HeaderColor = FLinearColor(1.0f, 0.84f, 0.44f, 1.0f);
+			FYITooltipStyledLine& Styled = Section.Lines.AddDefaulted_GetRef();
+			Styled.Text = !InOutTooltipData.EconomyLine.IsEmpty()
+				? InOutTooltipData.EconomyLine
+				: FText::Format(NSLOCTEXT("YOLOInventory", "TooltipSellPriceSectionFmt", "Sell Price: {0}"), FText::AsNumber(InOutTooltipData.SellPrice));
+			Styled.Color = FLinearColor(1.0f, 0.90f, 0.62f, 1.0f);
+		}
 	}
 }
 
@@ -307,6 +439,10 @@ void FYIItemDescriptionResolver::AugmentTooltip(const FYIItemDescriptionContext&
 		FReadScopeLock ReadLock(GDescriptionCacheLock);
 		if (const FYIDescriptionCacheValue* Cached = GDescriptionCache.Find(CacheKey))
 		{
+			if (InOutTooltipData.Subtitle.IsEmpty() && !Cached->Subtitle.IsEmpty())
+			{
+				InOutTooltipData.Subtitle = Cached->Subtitle;
+			}
 			if (!Cached->EconomyLine.IsEmpty())
 			{
 				InOutTooltipData.EconomyLine = Cached->EconomyLine;
@@ -323,6 +459,7 @@ void FYIItemDescriptionResolver::AugmentTooltip(const FYIItemDescriptionContext&
 			}
 			InOutTooltipData.AffixLines.Append(Cached->ExtraAffixLines);
 			InOutTooltipData.RequirementLines.Append(Cached->ExtraRequirementLines);
+			RebuildRichSections(InOutTooltipData);
 			return;
 		}
 	}
@@ -339,6 +476,10 @@ void FYIItemDescriptionResolver::AugmentTooltip(const FYIItemDescriptionContext&
 	{
 		InOutTooltipData.EconomyLine = Resolved.EconomyLine;
 	}
+	if (InOutTooltipData.Subtitle.IsEmpty() && !Resolved.Subtitle.IsEmpty())
+	{
+		InOutTooltipData.Subtitle = Resolved.Subtitle;
+	}
 	if (Resolved.SellPrice > 0)
 	{
 		InOutTooltipData.SellPrice = Resolved.SellPrice;
@@ -351,6 +492,7 @@ void FYIItemDescriptionResolver::AugmentTooltip(const FYIItemDescriptionContext&
 	}
 	InOutTooltipData.AffixLines.Append(Resolved.ExtraAffixLines);
 	InOutTooltipData.RequirementLines.Append(Resolved.ExtraRequirementLines);
+	RebuildRichSections(InOutTooltipData);
 }
 
 void FYIItemDescriptionResolver::InvalidateCacheForItem(const FGuid& ItemInstanceId)

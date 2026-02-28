@@ -31,6 +31,33 @@ struct YOLOINVENTORYCONTAINERS_API FYITooltipAttributeLine
 };
 
 USTRUCT(BlueprintType)
+struct YOLOINVENTORYCONTAINERS_API FYITooltipStyledLine
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip")
+	FText Text;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip")
+	FLinearColor Color = FLinearColor::White;
+};
+
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYCONTAINERS_API FYITooltipSection
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip")
+	FText Header;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip")
+	FLinearColor HeaderColor = FLinearColor(0.85f, 0.80f, 0.65f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip")
+	TArray<FYITooltipStyledLine> Lines;
+};
+
+USTRUCT(BlueprintType)
 struct YOLOINVENTORYCONTAINERS_API FYITooltipData
 {
 	GENERATED_BODY()
@@ -43,6 +70,9 @@ public:
 
 	/** Short display title for the item (e.g., 'Exquisite Sword'). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Primary title displayed in tooltips")) FText Title;
+
+	/** Optional subtitle under title (e.g., "Weapon • Rare"). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Secondary metadata line shown under title")) FText Subtitle;
 
 	/** Longer descriptive text shown in the tooltip body. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Long description or flavor text")) FText Description;
@@ -61,6 +91,9 @@ public:
 
 	/** Attribute snippets displayed as buffs or stats. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Attribute/value pairs for buffs or stats")) TArray<FYITooltipAttributeLine> AttributeLines;
+
+	/** Rich grouped tooltip sections for game-like presentation. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip", meta=(ToolTip="Grouped rich tooltip sections (header + colored lines)")) TArray<FYITooltipSection> Sections;
 
 	/** Durability info if the item tracks durability. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Tooltip") bool bHasDurability = false;

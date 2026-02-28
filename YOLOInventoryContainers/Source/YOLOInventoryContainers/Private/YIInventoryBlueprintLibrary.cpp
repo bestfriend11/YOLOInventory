@@ -61,6 +61,29 @@ namespace
 			OutTemplateAffixes.Add(TSoftObjectPtr<UYIAffixAsset>(Path));
 		}
 	}
+
+	static FString YI_MakeReadableTagLeaf(const FGameplayTag& Tag)
+	{
+		if (!Tag.IsValid())
+		{
+			return FString();
+		}
+
+		FString Name = Tag.GetTagName().ToString();
+		int32 DotIndex = INDEX_NONE;
+		if (Name.FindLastChar(TEXT('.'), DotIndex))
+		{
+			Name = Name.Mid(DotIndex + 1);
+		}
+		Name = Name.Replace(TEXT("_"), TEXT(" "));
+		Name = Name.TrimStartAndEnd();
+		if (Name.IsEmpty())
+		{
+			return FString();
+		}
+		Name[0] = FChar::ToUpper(Name[0]);
+		return Name;
+	}
 }
 
 bool UYIInventoryBlueprintLibrary::BuildAffixSnapshot(const UYIAffixAsset* Affix, int32 Level, int32 Seed, bool bRollValue, FYIAffixInstance& OutSnapshot)
@@ -576,6 +599,23 @@ bool UYIInventoryBlueprintLibrary::GetItemTooltipData(const UYIInventoryBag* Bag
 	}
 	// Derive rarity color from definition using designer-authored rarity tags.
 	OutData.RarityColor = UYIInventoryBlueprintLibrary::GetColorForRarityTag(YIItemSchema::GetRarityTag(Def));
+
+	{
+		const FString TypeText = YI_MakeReadableTagLeaf(YIItemSchema::GetItemType(Def));
+		const FString RarityText = YI_MakeReadableTagLeaf(YIItemSchema::GetRarityTag(Def));
+		if (!TypeText.IsEmpty() && !RarityText.IsEmpty())
+		{
+			OutData.Subtitle = FText::FromString(FString::Printf(TEXT("%s  •  %s"), *TypeText, *RarityText));
+		}
+		else if (!TypeText.IsEmpty())
+		{
+			OutData.Subtitle = FText::FromString(TypeText);
+		}
+		else if (!RarityText.IsEmpty())
+		{
+			OutData.Subtitle = FText::FromString(RarityText);
+		}
+	}
 	// Peek at a UI stack entry if present for description and icon
 	// We do not keep a runtime merged stack list here; just use asset fields if available
 	OutData.Description = EffectiveDescription;
