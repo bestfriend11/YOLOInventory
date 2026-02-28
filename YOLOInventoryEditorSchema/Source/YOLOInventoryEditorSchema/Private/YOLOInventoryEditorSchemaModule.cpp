@@ -29,6 +29,7 @@
 #include "YIFragmentStructCustomization.h"
 #include "Data/YIDataTableItemSource.h"
 #include "YIItemFragments.h"
+#include "UObject/UObjectIterator.h"
 
 class FYISchemaDashboardBridge final : public IYISchemaDashboardBridge
 {
@@ -173,29 +174,38 @@ private:
 			}
 
 			const FName TypeName = StructType->GetFName();
+			if (RegisteredFragmentPropertyTypeCustomizations.Contains(TypeName))
+			{
+				return;
+			}
+
 			PropertyEditorModule.RegisterCustomPropertyTypeLayout(
 				TypeName,
 				FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FYIFragmentStructCustomization::MakeInstance));
 			RegisteredFragmentPropertyTypeCustomizations.AddUnique(TypeName);
 		};
 
-		Register(FYIItemCustomRuntimeFragment::StaticStruct());
-		Register(FYIItemCustomDefinitionFragment::StaticStruct());
-		Register(FYIItemUIDefinitionFragment::StaticStruct());
-		Register(FYIItemClassificationDefinitionFragment::StaticStruct());
-		Register(FYIItemAudioDefinitionFragment::StaticStruct());
-		Register(FYIItemLayoutDefinitionFragment::StaticStruct());
-		Register(FYIItemStackingDefinitionFragment::StaticStruct());
-		Register(FYIItemRulesDefinitionFragment::StaticStruct());
-		Register(FYIItemContainerDefinitionFragment::StaticStruct());
-		Register(FYIItemAttributeModsDefinitionFragment::StaticStruct());
-		Register(FYIItemPickupDefinitionFragment::StaticStruct());
-		Register(FYIItemWeightDefinitionFragment::StaticStruct());
-		Register(FYIItemEquipmentDefinitionFragment::StaticStruct());
-		Register(FYIItemAffixDefinitionFragment::StaticStruct());
-		Register(FYIItemAttributesFragment::StaticStruct());
-		Register(FYIItemAffixesFragment::StaticStruct());
-		Register(FYIItemDurabilityFragment::StaticStruct());
+		const UScriptStruct* DefinitionBaseStruct = FYIItemDefinitionFragmentBase::StaticStruct();
+		const UScriptStruct* RuntimeBaseStruct = FYIItemFragmentBase::StaticStruct();
+
+		for (TObjectIterator<UScriptStruct> It; It; ++It)
+		{
+			UScriptStruct* StructType = *It;
+			if (!StructType || StructType == DefinitionBaseStruct || StructType == RuntimeBaseStruct)
+			{
+				continue;
+			}
+
+			if (StructType->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
+			{
+				continue;
+			}
+
+			if (StructType->IsChildOf(DefinitionBaseStruct) || StructType->IsChildOf(RuntimeBaseStruct))
+			{
+				Register(StructType);
+			}
+		}
 	}
 
 private:

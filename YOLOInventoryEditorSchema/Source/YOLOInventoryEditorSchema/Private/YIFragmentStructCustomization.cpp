@@ -131,6 +131,19 @@ namespace
 			if (FieldName == TEXT("ContainerTemplateBag")) return Set(TEXT("Optional template bag asset for initial nested layout/content.\nBind when you need a predefined container arrangement."));
 			if (FieldName == TEXT("ContainerDefaultGridSize")) return Set(TEXT("Fallback nested bag size when no template bag is provided.\nIgnored when a template bag is assigned."));
 		}
+		if (OwnerName == TEXT("YIItemEquipRequirementsFragment"))
+		{
+			if (FieldName == TEXT("MinLevel")) return Set(TEXT("Minimum character/account level to equip this item.\nAuthor only when your game enforces level gates."));
+			if (FieldName == TEXT("RequiredTags")) return Set(TEXT("All required tags that must exist on the equipping actor/state.\nUse for class/faction/progression gates."));
+			if (FieldName == TEXT("BlockedTags")) return Set(TEXT("Tags that forbid equipping while present on the actor/state.\nUse for anti-state restrictions (stunned, shapeshifted, etc)."));
+		}
+		if (OwnerName == TEXT("YIItemTradePolicyFragment"))
+		{
+			if (FieldName == TEXT("bTradable")) return Set(TEXT("Master switch for whether this item can be traded at all.\nServer-side trade validation should always enforce this."));
+			if (FieldName == TEXT("bVisibleInTrade")) return Set(TEXT("Controls whether item appears in trade UIs/offer pickers.\nUseful for hidden/system items."));
+			if (FieldName == TEXT("RequiredTradeTags")) return Set(TEXT("Trade context tags required for this item to be offered.\nUse for event/season/vendor-specific trade rules."));
+			if (FieldName == TEXT("BlockedTradeTags")) return Set(TEXT("Trade context tags that block this item from being offered.\nUse for restricted zones/modes/rulesets."));
+		}
 		if (OwnerName == TEXT("YIItemAffixDefinitionFragment"))
 		{
 			if (FieldName == TEXT("TemplateAffixes")) return Set(TEXT("Legacy affix asset references always applied to new instances.\nLegacy path; prefer fragment-based roll strategies for new systems."));
@@ -150,6 +163,28 @@ namespace
 			if (FieldName == TEXT("bEnabled")) return Set(TEXT("Enables durability state for this instance.\nUse with Current/Max values in runtime pipelines."));
 			if (FieldName == TEXT("Current")) return Set(TEXT("Current durability value.\nMutable runtime state; should not be authored as shared static data."));
 			if (FieldName == TEXT("Max")) return Set(TEXT("Maximum durability value.\nCan be initialized from generation/equip logic or copied from a definition/runtime template."));
+		}
+		if (OwnerName == TEXT("YIItemDurabilityRuntimeFragment"))
+		{
+			if (FieldName == TEXT("bEnabled")) return Set(TEXT("Enables durability runtime state for this item instance."));
+			if (FieldName == TEXT("Current")) return Set(TEXT("Current durability (integer).\nReplicate/mutate this value at runtime when the item takes wear."));
+			if (FieldName == TEXT("Max")) return Set(TEXT("Maximum durability (integer).\nSet from generation/equip initialization rules."));
+		}
+		if (OwnerName == TEXT("YIItemChargesRuntimeFragment"))
+		{
+			if (FieldName == TEXT("Current")) return Set(TEXT("Current charge count for this item instance.\nDecrement on use, refill via gameplay systems."));
+			if (FieldName == TEXT("Max")) return Set(TEXT("Maximum charge count for this item instance."));
+		}
+		if (OwnerName == TEXT("YIItemCooldownRuntimeFragment"))
+		{
+			if (FieldName == TEXT("LastActivatedServerTime")) return Set(TEXT("Authoritative server timestamp of last successful activation.\nUse this with CooldownDurationSeconds to compute remaining cooldown."));
+			if (FieldName == TEXT("CooldownDurationSeconds")) return Set(TEXT("Cooldown duration in seconds.\nCan be scaled by level/quality in runtime systems before use."));
+		}
+		if (OwnerName == TEXT("YIItemBindStateRuntimeFragment"))
+		{
+			if (FieldName == TEXT("bAccountBound")) return Set(TEXT("When true, item cannot leave owning account through trade/transfer."));
+			if (FieldName == TEXT("bCharacterBound")) return Set(TEXT("When true, item cannot leave owning character through trade/transfer."));
+			if (FieldName == TEXT("TradeLockedUntilServerTime")) return Set(TEXT("Server timestamp until which trade is locked.\n<= 0 means no timer lock."));
 		}
 
 		return false;

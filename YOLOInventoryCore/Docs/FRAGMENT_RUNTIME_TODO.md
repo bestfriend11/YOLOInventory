@@ -202,5 +202,8 @@ Status notes:
 - [x] Define exact `PriceDefinition` fragment fields and defaults
 - [x] Decide listing precedence: fragment baseline vs listing override
 - [ ] Add shop price/visibility contract tests
-- [ ] Add description preview panel in editor schema dashboard
+- [x] Add description preview panel in editor schema dashboard
 - [ ] Define first GAS bridge API surface and plugin boundaries
+
+Editor status note:
+- Item dashboard preview now includes selection-level description + resolved fragment field preview (schema-driven, plugin-agnostic).

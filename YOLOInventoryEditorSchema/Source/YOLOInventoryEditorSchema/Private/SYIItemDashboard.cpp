@@ -532,6 +532,76 @@ static FString YIMakeDashboardName(const FString& Name, const bool bMissingUIDis
 		: Name;
 }
 
+static FString YIExportFragmentFieldValueForPreview(const FProperty* Property, const uint8* FragmentMemory)
+{
+	if (!Property || !FragmentMemory)
+	{
+		return FString();
+	}
+
+	const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(FragmentMemory);
+	if (!ValuePtr)
+	{
+		return FString();
+	}
+
+	FString ExportedValue;
+	Property->ExportTextItem_Direct(ExportedValue, ValuePtr, nullptr, nullptr, PPF_None);
+	ExportedValue = ExportedValue.TrimStartAndEnd();
+	if (ExportedValue.IsEmpty())
+	{
+		ExportedValue = TEXT("<Empty>");
+	}
+	constexpr int32 MaxPreviewLen = 160;
+	if (ExportedValue.Len() > MaxPreviewLen)
+	{
+		ExportedValue = ExportedValue.Left(MaxPreviewLen - 3) + TEXT("...");
+	}
+	return ExportedValue;
+}
+
+static void YIAppendResolvedFragmentPreview(const TArray<FInstancedStruct>& Fragments, FString& InOutSummary)
+{
+	if (Fragments.Num() == 0)
+	{
+		return;
+	}
+
+	InOutSummary += TEXT("\n\nResolved Fragments:");
+	for (const FInstancedStruct& Fragment : Fragments)
+	{
+		const UScriptStruct* FragmentStruct = Fragment.GetScriptStruct();
+		const uint8* FragmentMemory = Fragment.GetMemory();
+		if (!FragmentStruct || !FragmentMemory)
+		{
+			continue;
+		}
+
+		InOutSummary += FString::Printf(TEXT("\n- %s"), *MakeReadableFragmentName(FragmentStruct));
+
+		int32 FieldCount = 0;
+		for (TFieldIterator<FProperty> It(FragmentStruct); It; ++It)
+		{
+			const FProperty* Property = *It;
+			if (!Property
+				|| Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated)
+				|| Property->HasMetaData(TEXT("YIInlineMapIgnore")))
+			{
+				continue;
+			}
+
+			++FieldCount;
+			const FString ValueText = YIExportFragmentFieldValueForPreview(Property, FragmentMemory);
+			InOutSummary += FString::Printf(TEXT("\n    %s: %s"), *Property->GetAuthoredName(), *ValueText);
+			if (FieldCount >= 8)
+			{
+				InOutSummary += TEXT("\n    ...");
+				break;
+			}
+		}
+	}
+}
+
 static bool TryAssignDefaultStaticFragmentTarget(FYIFieldMapping& Mapping)
 {
 	TArray<TSharedPtr<FString>> FragmentOptions;
@@ -2431,6 +2501,28 @@ void SYIItemDashboard::Construct(const FArguments& InArgs)
 																				.ListItemsSource(&MappingPreviewRows)
 																				.OnGenerateRow(this, &SYIItemDashboard::MakePreviewRow)
 																		]
+																	+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
+																		[
+																			SNew(SBorder)
+																				.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+																				.Padding(6.f)
+																				[
+																					SNew(SBox)
+																						.MaxDesiredHeight(180.f)
+																						[
+																							SNew(SScrollBox)
+																							+ SScrollBox::Slot()
+																							[
+																								SNew(STextBlock)
+																									.AutoWrapText(true)
+																									.Text_Lambda([this]()
+																									{
+																										return BuildCurrentSelectionPreviewText();
+																									})
+																							]
+																						]
+																				]
+																		]
 																]
 														]
 												]
@@ -3445,6 +3537,28 @@ TSharedRef<SWidget> SYIItemDashboard::BuildPreviewPanelWidget()
 					SAssignNew(MappingPreviewListView, SListView<TSharedPtr<FYIMappingPreviewRow>>)
 						.ListItemsSource(&MappingPreviewRows)
 						.OnGenerateRow(this, &SYIItemDashboard::MakePreviewRow)
+				]
+				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 6.f, 0.f, 0.f)
+				[
+					SNew(SBorder)
+						.BorderImage(FAppStyle::Get().GetBrush("ToolPanel.DarkGroupBorder"))
+						.Padding(6.f)
+						[
+							SNew(SBox)
+								.MaxDesiredHeight(180.f)
+								[
+									SNew(SScrollBox)
+									+ SScrollBox::Slot()
+									[
+										SNew(STextBlock)
+											.AutoWrapText(true)
+											.Text_Lambda([this]()
+											{
+												return BuildCurrentSelectionPreviewText();
+											})
+									]
+								]
+						]
 				]
 		];
 }
@@ -8252,11 +8366,14 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 				{
 					return FText();
 				}
-				const FText DefDescription = YIItemSchema::GetDescription(Def);
+				const FYIItemSchemaSnapshot& Snapshot = YIItemSchema::ResolveSnapshot(Def);
+				const FText DefDescription = Snapshot.Display.Description;
 				if (!DefDescription.IsEmpty())
 				{
 					Summary += FString::Printf(TEXT("\n\n%s"), *DefDescription.ToString());
 				}
+
+				YIAppendResolvedFragmentPreview(Snapshot.ResolvedDefinitionFragments, Summary);
 				return FText::FromString(Summary);
 			}
 		}
@@ -8295,4 +8412,20 @@ FText SYIItemDashboard::BuildPreviewText(const TSharedPtr<FYIItemDashboardEntry>
 	}
 
 	return FText::FromString(Summary);
+}
+
+FText SYIItemDashboard::BuildCurrentSelectionPreviewText() const
+{
+	if (!ListView.IsValid())
+	{
+		return NSLOCTEXT("YOLOInventory", "Dash_PreviewSelectionUnavailable", "Select an item or data row to inspect authoring preview.");
+	}
+
+	const TArray<TSharedPtr<FYIItemDashboardEntry>> Selected = ListView->GetSelectedItems();
+	if (Selected.Num() <= 0 || !Selected[0].IsValid())
+	{
+		return NSLOCTEXT("YOLOInventory", "Dash_PreviewSelectionHint", "Select an item or data row to inspect description + resolved fragment preview.");
+	}
+
+	return BuildPreviewText(Selected[0]);
 }
