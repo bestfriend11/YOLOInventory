@@ -73,11 +73,8 @@ struct YOLOINVENTORYSCHEMA_API FYIItemSchemaStackingData
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
-	bool bAllowStacking = true;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema", meta=(ClampMin="1"))
-	int32 MaxStackCount = 99;
+	int32 MaxStackCount = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Schema")
 	bool bUseRiskChecks = true;

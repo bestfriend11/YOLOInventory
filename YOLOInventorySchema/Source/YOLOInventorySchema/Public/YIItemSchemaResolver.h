@@ -92,7 +92,7 @@ namespace YIItemSchema
 	inline bool IsStackingEnabled(const UYIItemDefinition* Definition)
 	{
 		const FYIItemSchemaStackingData& Stacking = ResolveSnapshot(Definition).Stacking;
-		return Stacking.bAllowStacking && Stacking.MaxStackCount > 1;
+		return Stacking.MaxStackCount > 1;
 	}
 
 	inline int32 GetMaxStackCount(const UYIItemDefinition* Definition)

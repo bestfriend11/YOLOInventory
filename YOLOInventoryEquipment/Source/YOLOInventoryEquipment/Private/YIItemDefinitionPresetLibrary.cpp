@@ -142,9 +142,8 @@ bool UYIItemDefinitionPresetLibrary::ApplyPresetToItemDefinition(UYIItemDefiniti
 			bOverwritePresetFields);
 		{
 			FYIItemStackingDefinitionFragment* Stacking = YI_FindOrAddFragment<FYIItemStackingDefinitionFragment>(ItemDefinition);
-			if (Stacking && (bOverwritePresetFields || !Stacking->bAllowStacking))
+			if (Stacking && (bOverwritePresetFields || Stacking->MaxStackCount <= 1))
 			{
-				Stacking->bAllowStacking = true;
 				Stacking->MaxStackCount = FMath::Max(10, Stacking->MaxStackCount);
 			}
 		}
@@ -170,7 +169,6 @@ bool UYIItemDefinitionPresetLibrary::ApplyPresetToItemDefinition(UYIItemDefiniti
 			FYIItemStackingDefinitionFragment* Stacking = YI_FindOrAddFragment<FYIItemStackingDefinitionFragment>(ItemDefinition);
 			if (Stacking)
 			{
-				Stacking->bAllowStacking = false;
 				Stacking->MaxStackCount = 1;
 				Stacking->bUseRiskChecks = true;
 			}
@@ -221,4 +219,3 @@ bool UYIItemDefinitionPresetLibrary::ApplyPresetToItemDefinition(UYIItemDefiniti
 #endif
 	return true;
 }
-

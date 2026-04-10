@@ -163,11 +163,11 @@ bool UYIItemDefinition::IsRuntimeStackingAllowed(FString* OutReason) const
 		return false;
 	}
 
-	if (!Snapshot.Stacking.bAllowStacking || Snapshot.Stacking.MaxStackCount <= 1)
+	if (Snapshot.Stacking.MaxStackCount <= 1)
 	{
 		if (OutReason)
 		{
-			*OutReason = TEXT("stacking disabled in definition");
+			*OutReason = TEXT("stacking is not defined for this item");
 		}
 		return false;
 	}
@@ -196,7 +196,7 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 	YIItemSchema::InvalidateAllSnapshotCaches();
 
 	FYIItemStackingDefinitionFragment* Stacking = YI_FindDefinitionFragmentMutable<FYIItemStackingDefinitionFragment>(DefinitionFragments);
-	if (!Stacking || !Stacking->bAllowStacking || !Stacking->bUseRiskChecks)
+	if (!Stacking || Stacking->MaxStackCount <= 1 || !Stacking->bUseRiskChecks)
 	{
 		return;
 	}
@@ -235,7 +235,6 @@ void UYIItemDefinition::PostEditChangeProperty(FPropertyChangedEvent& PropertyCh
 	}
 	else
 	{
-		Stacking->bAllowStacking = false;
 		Stacking->MaxStackCount = 1;
 		Stacking->bUseRiskChecks = true;
 	}
@@ -274,16 +273,14 @@ void UYIItemDefinition::PreSave(FObjectPreSaveContext SaveContext)
 
 	if (YIItemSchema::ResolveSnapshot(this).Container.bIsContainerItem)
 	{
-		Stacking->bAllowStacking = false;
 		Stacking->MaxStackCount = 1;
 		Stacking->bUseRiskChecks = true;
 		return;
 	}
 
 	FString RiskReason;
-	if (Stacking->bAllowStacking && Stacking->MaxStackCount > 1 && Stacking->bUseRiskChecks && HasStackingRisk(&RiskReason))
+	if (Stacking->MaxStackCount > 1 && Stacking->bUseRiskChecks && HasStackingRisk(&RiskReason))
 	{
-		Stacking->bAllowStacking = false;
 		Stacking->MaxStackCount = 1;
 		UE_LOG(LogTemp, Warning, TEXT("UYIItemDefinition '%s': stacking auto-disabled due to risk (%s). Disable risk checks to override."),
 			*GetName(), *RiskReason);

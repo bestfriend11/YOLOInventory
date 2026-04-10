@@ -143,11 +143,7 @@ namespace
 				continue;
 			}
 
-			bool bTreatAsUnique = true;
-			if (const FYIItemDefinitionFragmentBase* FragmentPolicy = Fragment.GetPtr<FYIItemDefinitionFragmentBase>())
-			{
-				bTreatAsUnique = FragmentPolicy->bIsUniqueFragment;
-			}
+			const bool bTreatAsUnique = YIIsDefinitionFragmentUnique(Fragment);
 
 			if (bTreatAsUnique)
 			{
@@ -300,7 +296,6 @@ namespace
 
 		if (const FYIItemStackingDefinitionFragment* Stacking = OutSnapshot.FindResolvedFragment<FYIItemStackingDefinitionFragment>())
 		{
-			OutSnapshot.Stacking.bAllowStacking = Stacking->bAllowStacking;
 			OutSnapshot.Stacking.MaxStackCount = FMath::Max(1, Stacking->MaxStackCount);
 			OutSnapshot.Stacking.bUseRiskChecks = Stacking->bUseRiskChecks;
 		}

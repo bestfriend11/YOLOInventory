@@ -74,10 +74,6 @@ namespace
 		};
 
 		// Generic fragment authoring rules
-		if (FieldName == TEXT("bIsUniqueFragment"))
-		{
-			return Set(TEXT("Editor/authoring policy only.\nEnable when multiple copies of this fragment type would be confusing.\nUsually keep ON for definition fragments, OFF for custom fragments that intentionally stack."));
-		}
 		if (FieldName == TEXT("FragmentTag"))
 		{
 			return Set(TEXT("Semantic lookup key used by gameplay/runtime systems.\nBind this when your system resolves fragments by GameplayTag.\nSafe to leave empty if the fragment is only consumed by direct struct lookup."));
@@ -116,8 +112,7 @@ namespace
 		}
 		if (OwnerName == TEXT("YIItemStackingDefinitionFragment"))
 		{
-			if (FieldName == TEXT("bAllowStacking")) return Set(TEXT("Master stack enable flag.\nTurn OFF for unique/mutable items (durability, rolled state, container items)."));
-			if (FieldName == TEXT("MaxStackCount")) return Set(TEXT("Maximum items per stack.\nOnly relevant when stacking is enabled."));
+			if (FieldName == TEXT("MaxStackCount")) return Set(TEXT("Maximum items per stack.\nIf the stacking fragment is absent, the item is non-stackable."));
 			if (FieldName == TEXT("bUseRiskChecks")) return Set(TEXT("Enables runtime safety checks that prevent unsafe stacking of mutable/randomized items.\nKeep enabled unless you intentionally override safety rules."));
 		}
 		if (OwnerName == TEXT("YIItemRulesDefinitionFragment"))

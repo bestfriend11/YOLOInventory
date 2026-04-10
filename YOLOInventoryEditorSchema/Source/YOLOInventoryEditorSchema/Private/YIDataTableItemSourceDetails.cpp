@@ -262,19 +262,7 @@ static void CollectFragmentStructOptionsLocal(TArray<TSharedPtr<FString>>& OutOp
 
 static bool IsFragmentStructUniqueLocal(const UScriptStruct* FragmentStruct)
 {
-	if (!FragmentStruct)
-	{
-		return true;
-	}
-
-	FInstancedStruct Tmp;
-	Tmp.InitializeAs(FragmentStruct);
-	if (const FBoolProperty* BoolProp = CastField<FBoolProperty>(FindPropertyByAuthoredNameLocal(FragmentStruct, FName(TEXT("bIsUniqueFragment")))))
-	{
-		const uint8* Data = Tmp.GetMemory();
-		return Data ? BoolProp->GetPropertyValue_InContainer(Data) : true;
-	}
-	return true;
+	return YIIsDefinitionFragmentStructUnique(FragmentStruct);
 }
 
 static void GetPropertyTypeInfoLocal(const FProperty* Property, FString& OutTypeName, FLinearColor& OutColor)
@@ -415,10 +403,6 @@ static bool TryGetFragmentFieldGuidanceLocal(const FProperty* Property, FString&
 		return true;
 	};
 
-	if (FieldName == TEXT("bIsUniqueFragment"))
-	{
-		return Set(TEXT("Authoring policy flag. Controls whether duplicate fragments of this type should be avoided in editor authoring. Usually ON for typed definition fragments."));
-	}
 	if (FieldName == TEXT("FragmentTag"))
 	{
 		return Set(TEXT("Semantic lookup key for runtime systems. Bind when gameplay resolves fragments by tag. Optional if systems resolve by exact fragment type."));
@@ -456,8 +440,7 @@ static bool TryGetFragmentFieldGuidanceLocal(const FProperty* Property, FString&
 	}
 	if (OwnerName == TEXT("YIItemStackingDefinitionFragment"))
 	{
-		if (FieldName == TEXT("bAllowStacking")) return Set(TEXT("Enables stacking. Turn off for mutable/randomized/container items."));
-		if (FieldName == TEXT("MaxStackCount")) return Set(TEXT("Max stack size. Relevant only when stacking is enabled."));
+		if (FieldName == TEXT("MaxStackCount")) return Set(TEXT("Maximum stack size. If this fragment is absent, the item is non-stackable."));
 		if (FieldName == TEXT("bUseRiskChecks")) return Set(TEXT("Safety checks for stackability of mutable items. Keep enabled unless you intentionally bypass safeguards."));
 	}
 	if (OwnerName == TEXT("YIItemContainerDefinitionFragment"))

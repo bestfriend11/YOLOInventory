@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "StructUtils/InstancedStruct.h"
 #include "StructUtils/PropertyBag.h"
 #include "YIAffix.h"
 #include "YIItemFragments.generated.h"
@@ -47,29 +48,39 @@ USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemDefinitionFragmentBase
 {
 	GENERATED_BODY()
-
-	/**
-	 * Marks whether this fragment type should be treated as unique within a definition.
-	 * Editor tools can use this to prevent duplicate fragment authoring when desired.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment|Policy", AdvancedDisplay, meta=(YIInlineMapIgnore="true"))
-	bool bIsUniqueFragment = true;
 };
+
+/** Fragment uniqueness is type metadata, not item-authored payload. */
+inline bool YIIsDefinitionFragmentStructUnique(const UScriptStruct* FragmentStruct)
+{
+	if (!FragmentStruct)
+	{
+		return true;
+	}
+
+	const FString MetaValue = FragmentStruct->GetMetaData(TEXT("YIUniqueFragment"));
+	if (MetaValue.IsEmpty())
+	{
+		return true;
+	}
+
+	return !MetaValue.Equals(TEXT("false"), ESearchCase::IgnoreCase)
+		&& MetaValue != TEXT("0");
+}
+
+inline bool YIIsDefinitionFragmentUnique(const FInstancedStruct& Fragment)
+{
+	return YIIsDefinitionFragmentStructUnique(Fragment.GetScriptStruct());
+}
 
 /**
  * Generic editor-authored definition fragment.
  * Designers can add arbitrary typed fields in the embedded property bag without C++.
  */
-USTRUCT(BlueprintType, meta=(DisplayName="Custom Definition Fragment"))
+USTRUCT(BlueprintType, meta=(DisplayName="Custom Definition Fragment", YIUniqueFragment="false"))
 struct YOLOINVENTORYSCHEMA_API FYIItemCustomDefinitionFragment : public FYIItemDefinitionFragmentBase
 {
 	GENERATED_BODY()
-
-	FYIItemCustomDefinitionFragment()
-	{
-		// Custom fragments are intentionally multi-instance by default.
-		bIsUniqueFragment = false;
-	}
 
 	/** Optional semantic tag used by runtime systems to query this fragment. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
@@ -154,9 +165,6 @@ USTRUCT(BlueprintType)
 struct YOLOINVENTORYSCHEMA_API FYIItemStackingDefinitionFragment : public FYIItemDefinitionFragmentBase
 {
 	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment")
-	bool bAllowStacking = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Fragment", meta=(ClampMin="1"))
 	int32 MaxStackCount = 99;
