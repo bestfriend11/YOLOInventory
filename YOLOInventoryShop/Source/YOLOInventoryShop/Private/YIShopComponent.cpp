@@ -554,10 +554,6 @@ bool UYIShopComponent::ExecuteBuyRequest(const FYIShopBuyRequest& Request, FYISh
 		StockBag->RemoveItem(StockIndex);
 	}
 	Request.BuyerInv->SyncNetState();
-	if (bAutoSortStock && StockBag)
-	{
-		StockBag->AutoPack();
-	}
 
 	if (StockMode == EYIShopStockMode::SharedStock)
 	{

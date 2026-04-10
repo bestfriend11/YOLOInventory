@@ -167,6 +167,22 @@ static bool YI_IsGlobalDragValid(const UWorld* ContextWorld = nullptr)
 	return true;
 }
 
+static bool YI_DoesGlobalDragTouchGridOrBag(const UInventoryGridWidget* Grid, const UYIInventoryBag* Bag)
+{
+	if (!GInventoryDrag.bActive)
+	{
+		return false;
+	}
+
+	if (GInventoryDrag.SourceGrid.Get() == Grid)
+	{
+		return true;
+	}
+
+	const UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get();
+	return Bag && SourceGrid && SourceGrid->Bag == Bag;
+}
+
 static FYIItemInstanceNet MakeNetItem(const FYIItemInstance& Item)
 {
 	FYIItemInstanceNet Net;
@@ -240,6 +256,109 @@ static bool FindSingleOverlap(const UYIInventoryBag* Bag, int32 SourceIdx, const
 static int32 GetItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cell)
 {
 	return Bag ? Bag->GetItemIndexAtCellFast(Cell) : INDEX_NONE;
+}
+
+static IYIInventoryGridAdapterInterface* YI_ResolveGridFeatureAdapter(UInventoryGridWidget* Grid)
+{
+	if (!Grid)
+	{
+		return nullptr;
+	}
+
+	UObject* AdapterObject = Grid->GetFeatureAdapter();
+	if (!AdapterObject || !AdapterObject->GetClass()->ImplementsInterface(UYIInventoryGridAdapterInterface::StaticClass()))
+	{
+		return nullptr;
+	}
+
+	return Cast<IYIInventoryGridAdapterInterface>(AdapterObject);
+}
+
+static TOptional<bool> YI_TryFeatureTransferRequest(const FYIInventoryGridTransferRequest& Request, int32& OutDestIndex)
+{
+	auto TryAdapter = [&](IYIInventoryGridAdapterInterface* Adapter) -> TOptional<bool>
+	{
+		if (!Adapter)
+		{
+			return {};
+		}
+
+		const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleTransferRequest(Request, OutDestIndex);
+		if (Result == EYIInventoryGridExternalOpResult::NotHandled)
+		{
+			return {};
+		}
+
+		return Result == EYIInventoryGridExternalOpResult::HandledSucceeded;
+	};
+
+	IYIInventoryGridAdapterInterface* DestAdapter = YI_ResolveGridFeatureAdapter(Request.DestGrid);
+	if (const TOptional<bool> DestHandled = TryAdapter(DestAdapter))
+	{
+		return DestHandled;
+	}
+
+	IYIInventoryGridAdapterInterface* SourceAdapter = YI_ResolveGridFeatureAdapter(Request.SourceGrid);
+	if (SourceAdapter && SourceAdapter != DestAdapter)
+	{
+		if (const TOptional<bool> SourceHandled = TryAdapter(SourceAdapter))
+		{
+			return SourceHandled;
+		}
+	}
+
+	return {};
+}
+
+static bool YI_TryCoreInventoryTransferRequest(const FYIInventoryGridTransferRequest& Request, int32& OutDestIndex)
+{
+	if (!Request.SourceGrid || !Request.DestGrid || !Request.SourceGrid->Bag || !Request.DestGrid->Bag)
+	{
+		return false;
+	}
+
+	UYIInventoryBag* SourceBag = Request.SourceGrid->Bag;
+	UYIInventoryBag* DestBag = Request.DestGrid->Bag;
+	UYIInventoryComponent* SourceOwnerComp = SourceBag->GetTypedOuter<UYIInventoryComponent>();
+	UYIInventoryComponent* DestOwnerComp = DestBag->GetTypedOuter<UYIInventoryComponent>();
+
+	if (SourceOwnerComp && SourceOwnerComp == DestOwnerComp &&
+		SourceBag->BagId.IsValid() && DestBag->BagId.IsValid() &&
+		SourceBag->Items.IsValidIndex(Request.SourceIndex))
+	{
+		const FYIBagItem& SourceItem = SourceBag->Items[Request.SourceIndex];
+		if (SourceItem.Item.InstanceId.IsValid())
+		{
+			FYIInventoryTransferItemRequest TransferRequest;
+			TransferRequest.ItemRef.Bag.BagId = SourceBag->BagId;
+			TransferRequest.ItemRef.Item.ItemInstanceId = SourceItem.Item.InstanceId;
+			TransferRequest.DestBagId = DestBag->BagId;
+			TransferRequest.bUseExactCell = Request.bHasDestCell;
+			TransferRequest.DestCell = Request.DestCell;
+			TransferRequest.Count = Request.Count;
+			TransferRequest.bAllowSingleOverlapSwap = Request.bHasDestCell;
+			TransferRequest.ExpectedSourceBagRevision = SourceBag->RuntimeRevision;
+			TransferRequest.ExpectedDestBagRevision = DestBag->RuntimeRevision;
+			return SourceOwnerComp->RequestTransferItem(TransferRequest).bRequestAccepted;
+		}
+	}
+
+	if (SourceOwnerComp && SourceOwnerComp->GetOwner() && !SourceOwnerComp->GetOwner()->HasAuthority())
+	{
+		return false;
+	}
+
+	if (!Request.bHasDestCell)
+	{
+		return UYIInventoryBlueprintLibrary::TransferItemBetweenBags(
+			SourceBag,
+			DestBag,
+			Request.SourceIndex,
+			Request.Count,
+			OutDestIndex);
+	}
+
+	return false;
 }
 
 void UInventoryGridWidget::OnWidgetRebuilt()
@@ -1089,27 +1208,23 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Cross-bag: perform an atomic swap (drag item takes victim's slot, victim becomes active drag or drops)
 	FYIBagItem ToPlace = GInventoryDrag.Item;
 	ToPlace.Pos = Cell;
+	FYIInventoryGridTransferRequest TransferRequest;
+	TransferRequest.SourceGrid = GInventoryDrag.SourceGrid.Get();
+	TransferRequest.DestGrid = this;
+	TransferRequest.SourceIndex = GInventoryDrag.SourceIndex;
+	TransferRequest.Item = GInventoryDrag.Item;
+	TransferRequest.Count = 0;
+	TransferRequest.bIsDragDrop = true;
+	TransferRequest.bHasDestCell = true;
+	TransferRequest.DestCell = Cell;
 
 	// Optional feature adapters can intercept cross-grid drops (trade/shop/etc) before core bag transfer logic.
 	if (UInventoryGridWidget* SourceGrid = GInventoryDrag.SourceGrid.Get())
 	{
-			auto TryAdapterDrop = [&](IYIInventoryGridAdapterInterface* Adapter) -> TOptional<bool>
-			{
-				if (!Adapter)
-				{
-				return {};
-			}
-			const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleCrossGridDrop(
-				this,
-				SourceGrid,
-				GInventoryDrag.SourceIndex,
-				GInventoryDrag.Item,
-				Cell);
-			if (Result == EYIInventoryGridExternalOpResult::NotHandled)
-			{
-				return {};
-			}
-			const bool bSuccess = (Result == EYIInventoryGridExternalOpResult::HandledSucceeded);
+		int32 AdapterDestIndex = INDEX_NONE;
+		if (const TOptional<bool> FeatureHandled = YI_TryFeatureTransferRequest(TransferRequest, AdapterDestIndex))
+		{
+			const bool bSuccess = FeatureHandled.GetValue();
 			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bSuccess);
 			if (bSuccess)
 			{
@@ -1123,18 +1238,6 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				PlayInvalidMoveSound();
 			}
 			return bSuccess;
-		};
-
-			if (const TOptional<bool> DestHandled = TryAdapterDrop(ResolveFeatureAdapterInterface()))
-			{
-				return DestHandled.GetValue();
-			}
-			if (SourceGrid != this)
-			{
-				if (const TOptional<bool> SrcHandled = TryAdapterDrop(SourceGrid->ResolveFeatureAdapterInterface()))
-				{
-					return SrcHandled.GetValue();
-				}
 		}
 	}
 
@@ -1148,51 +1251,27 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 		return false;
 	}
 
-	// Inventory-owned cross-bag transfer/swap path (server-authoritative, explicit bag-targeted RPC).
-	if (UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get())
+	// Standard inventory-component transfer path.
+	if (!GInventoryDrag.bRemovedFromSource)
 	{
-		UYIInventoryBag* SourceBag = DragSourceGrid->Bag;
-		UYIInventoryComponent* DestOwnerComp = Bag ? Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
-		UYIInventoryComponent* SourceOwnerComp = SourceBag ? SourceBag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
-		if (DestOwnerComp && DestOwnerComp == SourceOwnerComp &&
-			SourceBag && SourceBag != Bag &&
-			!GInventoryDrag.bRemovedFromSource &&
-			GInventoryDrag.SourceIndex != INDEX_NONE &&
-			SourceBag->Items.IsValidIndex(GInventoryDrag.SourceIndex) &&
-			SourceBag->BagId.IsValid() && Bag->BagId.IsValid())
+		int32 IgnoredDestIndex = INDEX_NONE;
+		if (YI_TryCoreInventoryTransferRequest(TransferRequest, IgnoredDestIndex))
 		{
-			const FYIBagItem& SourceItem = SourceBag->Items[GInventoryDrag.SourceIndex];
-			if (SourceItem.Item.InstanceId.IsValid())
+			UInventoryGridWidget* DragSourceGrid = GInventoryDrag.SourceGrid.Get();
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
+			PlayDropSound();
+			if (DragSourceGrid)
 			{
-				FYIInventoryTransferItemRequest Request;
-				Request.ItemRef.Bag.BagId = SourceBag->BagId;
-				Request.ItemRef.Item.ItemInstanceId = SourceItem.Item.InstanceId;
-				Request.DestBagId = Bag->BagId;
-				Request.bUseExactCell = true;
-				Request.DestCell = Cell;
-				Request.Count = 0;
-				Request.bAllowSingleOverlapSwap = true;
-				Request.ExpectedSourceBagRevision = SourceBag->RuntimeRevision;
-				Request.ExpectedDestBagRevision = Bag->RuntimeRevision;
-				const bool bTransferred = DestOwnerComp->RequestTransferItem(Request).bRequestAccepted;
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bTransferred);
-				if (!bTransferred)
-				{
-					PlayInvalidMoveSound();
-					return false;
-				}
-
-				PlayDropSound();
 				DragSourceGrid->RefreshBoundTooltip();
-				RefreshBoundTooltip();
-				OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, INDEX_NONE);
+				OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, IgnoredDestIndex);
 				if (DragSourceGrid != this)
 				{
-					DragSourceGrid->OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, INDEX_NONE);
+					DragSourceGrid->OnItemTransferred.Broadcast(DragSourceGrid, GInventoryDrag.SourceIndex, IgnoredDestIndex);
 				}
-				GInventoryDrag.Reset();
-				return true;
 			}
+			RefreshBoundTooltip();
+			GInventoryDrag.Reset();
+			return true;
 		}
 	}
 	
@@ -1785,83 +1864,37 @@ bool UInventoryGridWidget::TransferSelectedItemTo(UInventoryGridWidget* Other, i
 	int32 SourceIndex = GetSelectedItemIndex();
 	if (SourceIndex == INDEX_NONE) return false;
 
+	FYIInventoryGridTransferRequest TransferRequest;
+	TransferRequest.SourceGrid = this;
+	TransferRequest.DestGrid = Other;
+	TransferRequest.SourceIndex = SourceIndex;
+	TransferRequest.Item = Bag->Items[SourceIndex];
+	TransferRequest.Count = Count;
+	TransferRequest.bIsDragDrop = false;
+	TransferRequest.bHasDestCell = false;
+
 	// Feature adapters can route transfer actions (trade/shop/etc) before core bag transfer logic.
-	auto TryAdapterTransfer = [&](IYIInventoryGridAdapterInterface* Adapter) -> TOptional<bool>
+	if (const TOptional<bool> Handled = YI_TryFeatureTransferRequest(TransferRequest, OutDestIndex))
 	{
-		if (!Adapter)
-		{
-			return {};
-		}
-		const EYIInventoryGridExternalOpResult Result = Adapter->TryHandleTransferSelectedTo(this, Other, SourceIndex, Count, OutDestIndex);
-		if (Result == EYIInventoryGridExternalOpResult::NotHandled)
-		{
-			return {};
-		}
-		const bool bSuccess = (Result == EYIInventoryGridExternalOpResult::HandledSucceeded);
-		if (bSuccess)
+		if (Handled.GetValue())
 		{
 			UpdateBoundTooltip();
 			Other->RefreshBoundTooltip();
 			OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
 			Other->OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
 		}
-		return bSuccess;
-	};
-	if (const TOptional<bool> Handled = TryAdapterTransfer(ResolveFeatureAdapterInterface()))
-	{
 		return Handled.GetValue();
 	}
-	if (Other != this)
-	{
-		if (const TOptional<bool> OtherHandled = TryAdapterTransfer(Other->ResolveFeatureAdapterInterface()))
-		{
-			return OtherHandled.GetValue();
-		}
-	}
 
-	// Non-trade: only allow direct transfer on authority.
-	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
-	UYIInventoryComponent* OtherOwnerComp = Other->Bag->GetTypedOuter<UYIInventoryComponent>();
-
-	// Prefer explicit bag-targeted component API when both bags belong to the same inventory component.
-	if (OwnerComp && OwnerComp == OtherOwnerComp &&
-		Bag->BagId.IsValid() && Other->Bag->BagId.IsValid() &&
-		Bag->Items.IsValidIndex(SourceIndex) && Bag->Items[SourceIndex].Item.InstanceId.IsValid())
+	const bool bTransferred = YI_TryCoreInventoryTransferRequest(TransferRequest, OutDestIndex);
+	if (bTransferred)
 	{
-		FYIInventoryTransferItemRequest Request;
-		Request.ItemRef.Bag.BagId = Bag->BagId;
-		Request.ItemRef.Item.ItemInstanceId = Bag->Items[SourceIndex].Item.InstanceId;
-		Request.DestBagId = Other->Bag->BagId;
-		Request.Count = Count;
-		Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
-		Request.ExpectedDestBagRevision = Other->Bag->RuntimeRevision;
-		const bool bTransferred = OwnerComp->RequestTransferItem(Request).bRequestAccepted;
-		if (bTransferred)
-		{
-			UpdateBoundTooltip();
-			Other->RefreshBoundTooltip();
-			OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
-			Other->OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
-		}
-		return bTransferred;
-	}
-
-	if (OwnerComp && OwnerComp->GetOwner() && !OwnerComp->GetOwner()->HasAuthority())
-	{
-		return false;
-	}
-
-	const bool b = UYIInventoryBlueprintLibrary::TransferItemBetweenBags(Bag, Other->Bag, SourceIndex, Count, OutDestIndex);
-	if (b)
-	{
-		// Refresh our tooltip and the other grid's tooltip
 		UpdateBoundTooltip();
 		Other->RefreshBoundTooltip();
-		// Notify grid-level listeners
 		OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
 		Other->OnItemTransferred.Broadcast(this, SourceIndex, OutDestIndex);
 	}
-	return b;
+	return bTransferred;
 }
 
 void UInventoryGridWidget::SetBoundTooltipWidget(UUserWidget* Widget)
@@ -1872,6 +1905,11 @@ void UInventoryGridWidget::SetBoundTooltipWidget(UUserWidget* Widget)
 
 void UInventoryGridWidget::ReleaseSlateResources(bool bReleaseChildren)
 {
+	if (YI_DoesGlobalDragTouchGridOrBag(this, Bag))
+	{
+		CancelDrag();
+	}
+
 	Super::ReleaseSlateResources(bReleaseChildren);
 
 	if (CachedBoundInventoryComponent.IsValid())
@@ -1904,6 +1942,11 @@ void UInventoryGridWidget::ReleaseSlateResources(bool bReleaseChildren)
 
 void UInventoryGridWidget::SetBag(UYIInventoryBag* InBag)
 {
+	if (Bag != InBag && YI_DoesGlobalDragTouchGridOrBag(this, Bag))
+	{
+		CancelDrag();
+	}
+
 	Bag = InBag;
 	// Rebind Slate to the new bag immediately
 	if (MySlateWidget.IsValid())
@@ -1967,6 +2010,11 @@ void UInventoryGridWidget::SetBagBindingToActiveContext(UYIInventoryComponent* I
 
 void UInventoryGridWidget::ClearBagBinding()
 {
+	if (YI_DoesGlobalDragTouchGridOrBag(this, Bag))
+	{
+		CancelDrag();
+	}
+
 	BoundBagId.Invalidate();
 	BoundBagRoleTag = FGameplayTag();
 	bBindToActiveBagContext = false;
@@ -2062,6 +2110,11 @@ void UInventoryGridWidget::HandleInventoryBagClosed(UYIInventoryBag* InBag)
 	if (!InBag)
 	{
 		return;
+	}
+
+	if (YI_DoesGlobalDragTouchGridOrBag(this, InBag))
+	{
+		CancelDrag();
 	}
 
 	if (Bag == InBag)

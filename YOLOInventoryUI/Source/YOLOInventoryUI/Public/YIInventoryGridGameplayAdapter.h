@@ -22,18 +22,8 @@ public:
 	void SetTradeContext(AYITradeSessionActor* InSession, ETradeSide InSide);
 	void SetShopContext(UYIShopComponent* InShop, bool bStockGrid);
 
-	virtual EYIInventoryGridExternalOpResult TryHandleCrossGridDrop(
-		UInventoryGridWidget* DestGrid,
-		UInventoryGridWidget* SourceGrid,
-		int32 SourceIndex,
-		const FYIBagItem& DraggedItem,
-		const FIntPoint& DestCell) override;
-
-	virtual EYIInventoryGridExternalOpResult TryHandleTransferSelectedTo(
-		UInventoryGridWidget* SourceGrid,
-		UInventoryGridWidget* DestGrid,
-		int32 SourceIndex,
-		int32 Count,
+	virtual EYIInventoryGridExternalOpResult TryHandleTransferRequest(
+		const FYIInventoryGridTransferRequest& Request,
 		int32& OutDestIndex) override;
 
 	virtual bool TryEquipItemFromInventory(

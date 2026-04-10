@@ -16,13 +16,27 @@
 static UTexture2D* YI_Overlay_TryResolveItemIconNoLoad(const FYIItemInstance& Item)
 {
 	UYIItemDefinition* Def = Item.Definition.Get();
+	if (!Def && Item.Definition.ToSoftObjectPath().IsValid())
+	{
+		Def = Item.Definition.LoadSynchronous();
+	}
 	if (!Def)
 	{
 		return nullptr;
 	}
 
 	const TSoftObjectPtr<UTexture2D> EffectiveIcon = YIItemSchema::GetIcon(Def);
-	return EffectiveIcon.Get();
+	if (UTexture2D* LoadedIcon = EffectiveIcon.Get())
+	{
+		return LoadedIcon;
+	}
+
+	if (EffectiveIcon.ToSoftObjectPath().IsValid())
+	{
+		return EffectiveIcon.LoadSynchronous();
+	}
+
+	return nullptr;
 }
 
 UInventoryDragOverlayUserWidget::UInventoryDragOverlayUserWidget(const FObjectInitializer& OI)

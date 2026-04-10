@@ -19,6 +19,37 @@ enum class EYIInventoryGridExternalOpResult : uint8
 	HandledSucceeded
 };
 
+USTRUCT(BlueprintType)
+struct YOLOINVENTORYGRID_API FYIInventoryGridTransferRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	TObjectPtr<UInventoryGridWidget> SourceGrid = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	TObjectPtr<UInventoryGridWidget> DestGrid = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	int32 SourceIndex = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	FYIBagItem Item;
+
+	/** <=0 means whole stack/item. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	int32 Count = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	bool bIsDragDrop = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	bool bHasDestCell = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Grid")
+	FIntPoint DestCell = FIntPoint::ZeroValue;
+};
+
 UINTERFACE(BlueprintType)
 class YOLOINVENTORYGRID_API UYIInventoryGridAdapterInterface : public UInterface
 {
@@ -30,6 +61,32 @@ class YOLOINVENTORYGRID_API IYIInventoryGridAdapterInterface
 	GENERATED_BODY()
 public:
 	virtual void OnAssignedToGrid(UInventoryGridWidget* InGrid) {}
+
+	/**
+	 * Unified external transfer request used by both drag-drop and menu/keyboard transfer flows.
+	 * Default behavior dispatches to legacy specialized hooks for backward compatibility.
+	 */
+	virtual EYIInventoryGridExternalOpResult TryHandleTransferRequest(
+		const FYIInventoryGridTransferRequest& Request,
+		int32& OutDestIndex)
+	{
+		if (Request.bIsDragDrop && Request.bHasDestCell)
+		{
+			return TryHandleCrossGridDrop(
+				Request.DestGrid,
+				Request.SourceGrid,
+				Request.SourceIndex,
+				Request.Item,
+				Request.DestCell);
+		}
+
+		return TryHandleTransferSelectedTo(
+			Request.SourceGrid,
+			Request.DestGrid,
+			Request.SourceIndex,
+			Request.Count,
+			OutDestIndex);
+	}
 
 	/** Handle special cross-grid drops (shop/trade/etc). Return NotHandled to fall back to core bag transfer logic. */
 	virtual EYIInventoryGridExternalOpResult TryHandleCrossGridDrop(
@@ -92,6 +149,28 @@ class YOLOINVENTORYGRID_API UYIInventoryGridFeatureAdapter : public UObject, pub
 	GENERATED_BODY()
 public:
 	virtual void OnAssignedToGrid(UInventoryGridWidget* InGrid) override {}
+
+	virtual EYIInventoryGridExternalOpResult TryHandleTransferRequest(
+		const FYIInventoryGridTransferRequest& Request,
+		int32& OutDestIndex) override
+	{
+		if (Request.bIsDragDrop && Request.bHasDestCell)
+		{
+			return TryHandleCrossGridDrop(
+				Request.DestGrid,
+				Request.SourceGrid,
+				Request.SourceIndex,
+				Request.Item,
+				Request.DestCell);
+		}
+
+		return TryHandleTransferSelectedTo(
+			Request.SourceGrid,
+			Request.DestGrid,
+			Request.SourceIndex,
+			Request.Count,
+			OutDestIndex);
+	}
 
 	/** Handle special cross-grid drops (shop/trade/etc). Return NotHandled to fall back to core bag transfer logic. */
 	virtual EYIInventoryGridExternalOpResult TryHandleCrossGridDrop(

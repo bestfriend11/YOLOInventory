@@ -92,9 +92,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Allow players to sell items into shop stock."))
     bool bAllowSelling = true;
 
-    /** Auto-pack stock after buy/sell to keep it tidy. */
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Auto tidy/pack stock after buy/sell operations."))
-    bool bAutoSortStock = true;
+    /** Auto-pack stock after items are added into shop stock. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ToolTip="Auto tidy/pack stock after stock-growth operations such as selling/restocking.\nPurchases preserve existing slot layout so stock grids do not visually jump."))
+    bool bAutoSortStock = false;
 
     /** Sell price multiplier applied to listing prices (e.g. 0.5 = 50% of buy price). */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Shop", meta=(ClampMin="0.0", ClampMax="1.0", ToolTip="Multiplier applied to buy price when player sells to shop (0.5 = 50%)."))

@@ -38,19 +38,24 @@ void UYIInventoryGridGameplayAdapter::SetShopContext(UYIShopComponent* InShop, b
 	bIsShopStockGrid = bStockGrid;
 }
 
-EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCrossGridDrop(
-	UInventoryGridWidget* DestGrid,
-	UInventoryGridWidget* SourceGrid,
-	int32 SourceIndex,
-	const FYIBagItem& DraggedItem,
-	const FIntPoint& DestCell)
+EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleTransferRequest(
+	const FYIInventoryGridTransferRequest& Request,
+	int32& OutDestIndex)
 {
+	OutDestIndex = INDEX_NONE;
+	UInventoryGridWidget* DestGrid = Request.DestGrid;
+	UInventoryGridWidget* SourceGrid = Request.SourceGrid;
 	if (!DestGrid || !SourceGrid)
 	{
 		return EYIInventoryGridExternalOpResult::NotHandled;
 	}
 
 	UYIInventoryGridGameplayAdapter* SourceAdapter = Cast<UYIInventoryGridGameplayAdapter>(SourceGrid->GetFeatureAdapter());
+	const int32 SourceIndex = Request.SourceIndex;
+	const int32 TransferCount = Request.Count > 0 ? Request.Count : FMath::Max(1, Request.Item.Item.Count);
+	const FIntPoint DestCell = Request.bHasDestCell
+		? Request.DestCell
+		: ((DestGrid->SelectedCell.X >= 0 && DestGrid->SelectedCell.Y >= 0) ? DestGrid->SelectedCell : FIntPoint(0, 0));
 
 	// Shop flow interception.
 	if (ActiveShopComponent && SourceAdapter && SourceAdapter->ActiveShopComponent == ActiveShopComponent)
@@ -69,12 +74,11 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 			{
 				if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 				{
-					const int32 BuyCount = FMath::Max(1, DraggedItem.Item.Count);
 					FYIShopBuyRequest Req;
 					Req.Shop = ActiveShopComponent;
 					Req.StockIndex = SourceIndex;
-					Req.StockItemInstanceId = DraggedItem.Item.InstanceId;
-					Req.Count = BuyCount;
+					Req.StockItemInstanceId = Request.Item.Item.InstanceId;
+					Req.Count = TransferCount;
 					Req.BuyerInv = DestOwnerComp;
 					Req.DestPos = DestCell;
 					TradeComp->RequestShopBuyEx(Req);
@@ -97,12 +101,11 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 				if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
 				{
 					UYIInventoryComponent* ShopSourceComp = SourceGrid->Bag ? SourceGrid->Bag->GetTypedOuter<UYIInventoryComponent>() : nullptr;
-					const int32 SellCount = FMath::Max(1, DraggedItem.Item.Count);
 					FYIShopSellRequest Req;
 					Req.Shop = ActiveShopComponent;
 					Req.SourceIndex = SourceIndex;
-					Req.SourceItemInstanceId = DraggedItem.Item.InstanceId;
-					Req.Count = SellCount;
+					Req.SourceItemInstanceId = Request.Item.Item.InstanceId;
+					Req.Count = TransferCount;
 					Req.SellerInv = ShopSourceComp;
 					TradeComp->RequestShopSellEx(Req);
 					return EYIInventoryGridExternalOpResult::HandledSucceeded;
@@ -134,58 +137,12 @@ EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleCross
 				Req.ToSide = TradeSide;
 				Req.SourceIndex = SourceIndex;
 				Req.DestPos = DestCell;
-				Req.Count = 0;
+				Req.Count = Request.Count;
 				TradeComp->RequestTradeTransferEx(Req);
 				return EYIInventoryGridExternalOpResult::HandledSucceeded;
 			}
 		}
 
-		return EYIInventoryGridExternalOpResult::HandledFailed;
-	}
-
-	return EYIInventoryGridExternalOpResult::NotHandled;
-}
-
-EYIInventoryGridExternalOpResult UYIInventoryGridGameplayAdapter::TryHandleTransferSelectedTo(
-	UInventoryGridWidget* SourceGrid,
-	UInventoryGridWidget* DestGrid,
-	int32 SourceIndex,
-	int32 Count,
-	int32& OutDestIndex)
-{
-	OutDestIndex = INDEX_NONE;
-	if (!SourceGrid || !DestGrid)
-	{
-		return EYIInventoryGridExternalOpResult::NotHandled;
-	}
-
-	UYIInventoryGridGameplayAdapter* DestAdapter = Cast<UYIInventoryGridGameplayAdapter>(DestGrid->GetFeatureAdapter());
-	if (ActiveTradeSession && DestAdapter &&
-		DestAdapter->ActiveTradeSession == ActiveTradeSession &&
-		bHasTradeSide && DestAdapter->bHasTradeSide)
-	{
-		const FIntPoint DestCell = (DestGrid->SelectedCell.X >= 0 && DestGrid->SelectedCell.Y >= 0)
-			? DestGrid->SelectedCell
-			: FIntPoint(0, 0);
-		APlayerController* PC = SourceGrid->GetOwningPlayer();
-		if (!PC && SourceGrid->GetWorld())
-		{
-			PC = UGameplayStatics::GetPlayerController(SourceGrid->GetWorld(), 0);
-		}
-		if (PC)
-		{
-			if (UYITradeInteractionComponent* TradeComp = PC->FindComponentByClass<UYITradeInteractionComponent>())
-			{
-				FYITradeTransferRequest Req;
-				Req.FromSide = TradeSide;
-				Req.ToSide = DestAdapter->TradeSide;
-				Req.SourceIndex = SourceIndex;
-				Req.DestPos = DestCell;
-				Req.Count = Count;
-				TradeComp->RequestTradeTransferEx(Req);
-				return EYIInventoryGridExternalOpResult::HandledSucceeded;
-			}
-		}
 		return EYIInventoryGridExternalOpResult::HandledFailed;
 	}
 
