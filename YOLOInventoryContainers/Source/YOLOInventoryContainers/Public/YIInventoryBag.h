@@ -250,10 +250,11 @@ public:
 	/** Gather unique overlapping item indices for a footprint (excluding IgnoreIndex). */
 	void GetOverlappingItemIndicesAt(const FIntPoint& Pos, const FIntPoint& Size, int32 IgnoreIndex, TArray<int32>& OutIndices) const;
 
-private:
-	void MarkRuntimeLookupCacheDirty() const;
+	/** Force rebuild of the runtime lookup cache for cell-to-item mapping. */
 	void BuildRuntimeLookupCache() const;
-	bool IsRuntimeLookupCacheDirty() const;
+
+	/** Mark the runtime lookup cache as dirty, forcing rebuild on next access. */
+	void MarkRuntimeLookupCacheDirty() const;
 
 	mutable bool bRuntimeLookupCacheDirty = true;
 	mutable TArray<int32> RuntimeCellToItemIndex;

@@ -416,6 +416,18 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 		return false;
 	}
 
+	UYIInventoryComponent* SourceComp = Source->GetTypedOuter<UYIInventoryComponent>();
+	if (SourceComp && SourceComp->GetOwner() && !SourceComp->GetOwner()->IsValidLowLevel())
+	{
+		return false;
+	}
+
+	UYIInventoryComponent* DestComp = Dest->GetTypedOuter<UYIInventoryComponent>();
+	if (DestComp && DestComp->GetOwner() && !DestComp->GetOwner()->IsValidLowLevel())
+	{
+		return false;
+	}
+
 	FYIBagItem ToPlace = Src;
 	const bool bStacking = Def->IsRuntimeStackingAllowed();
 	if (bStacking && Count > 0)
@@ -479,6 +491,9 @@ bool UYIInventoryBlueprintLibrary::TransferItemBetweenBags(UYIInventoryBag* Sour
 	{
 		return false;
 	}
+
+	// Force rebuild of the runtime lookup cache to include the new item
+	Dest->BuildRuntimeLookupCache();
 
 	// Reduce source count only after destination insert succeeds.
 	if (bStacking && Count > 0)
@@ -734,6 +749,16 @@ FLinearColor UYIInventoryBlueprintLibrary::GetColorForRarityTag(const FGameplayT
 		if (Name.Contains(TEXT("Mythic"))) return YI_GetRarityColor(EYOLOItemRarity::Mythic);
 	}
 	return FLinearColor::White;
+}
+
+bool UYIInventoryBlueprintLibrary::IsPlayerConnected(APlayerController* PlayerController)
+{
+	if (!PlayerController || !PlayerController->IsValidLowLevel())
+	{
+		return false;
+	}
+	UNetConnection* Connection = PlayerController->GetNetConnection();
+	return Connection != nullptr;
 }
 
 int64 UYIInventoryBlueprintLibrary::ComputeCustomStackKey(const FYIItemInstance& Instance)

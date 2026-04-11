@@ -1098,6 +1098,8 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				if (Bag->CanPlaceAtIgnoring(Cell, SourceItem.Size, GInventoryDrag.SourceIndex))
 				{
 					Bag->MoveItem(GInventoryDrag.SourceIndex, Cell);
+					// End the drag operation after successful local preview
+					GInventoryDrag.Reset();
 				}
 				UpdateBoundTooltip();
 				return true;

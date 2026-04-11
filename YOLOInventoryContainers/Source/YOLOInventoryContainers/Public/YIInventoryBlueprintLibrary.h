@@ -218,5 +218,9 @@ public:
 	/** Optional helper for custom tag-chooser UIs: returns tags matching any provided prefix (for example Equip., Item., Actions.). */
 	UFUNCTION(BlueprintCallable, Category="YOLOInventory|Tags")
 	static void GetSuggestedInventoryGameplayTagsByPrefixes(const TArray<FString>& Prefixes, TArray<FGameplayTag>& OutTags, bool bSortLexical = true);
+
+	/** Check if a player controller is still connected to the server. */
+	UFUNCTION(BlueprintPure, Category="YOLOInventory|Networking")
+	static bool IsPlayerConnected(APlayerController* PlayerController);
 };
 
