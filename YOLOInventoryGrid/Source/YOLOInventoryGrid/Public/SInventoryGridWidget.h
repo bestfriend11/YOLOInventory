@@ -146,6 +146,7 @@ private:
 	mutable int32 GhostIgnoreIndex = INDEX_NONE;
 	mutable FVector2D GhostSize = FVector2D(32.f, 32.f);
 	mutable FVector2D GhostCursorLocal = FVector2D::ZeroVector;
+	mutable FVector2D GhostVisualPosition = FVector2D::ZeroVector; // Smooth position for rendering
 	mutable FIntPoint GhostFootprint = FIntPoint::ZeroValue;
 	mutable FIntPoint GhostTopLeft = FIntPoint::ZeroValue;
 	mutable FIntPoint GhostAnchorCellOffset = FIntPoint::ZeroValue;

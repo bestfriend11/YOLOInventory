@@ -12,6 +12,7 @@
 #include "YIInventoryGridStyleAsset.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "YOLOInventorySettings.h"
 
 static void YI_DrawBrushSlot(
 	FSlateWindowElementList& OutDrawElements,
@@ -599,7 +600,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 		// so the local grid does not draw a second highlight on top.
 		if (!bUseGlobalDragGhost)
 		{
-			const FVector2D FootP = FVector2D(GhostTopLeft) * LocalCell;
+			const FVector2D FootP = GhostVisualPosition;
 			const FVector2D FootS = FVector2D(GhostFootprint) * LocalCell;
 			const FYIGridStyleBrushSlot* GhostSlot = nullptr;
 			if (GridStyle)
@@ -625,7 +626,7 @@ int32 SInventoryGridWidget::OnPaint(const FPaintArgs& Args, const FGeometry& All
 				FSlateDrawElement::MakeBox(OutDrawElements, ++L, AllottedGeometry.ToPaintGeometry(FVector2f(FootS), FSlateLayoutTransform(FVector2f(FootP))), Box, ESlateDrawEffect::None, GhostTint);
 			}
 
-			const FVector2D P = FVector2D(GhostTopLeft) * LocalCell;
+			const FVector2D P = GhostVisualPosition;
 			const FSlateBrush* BrushToUse = bGhostHasIcon ? &GhostBrush : FAppStyle::Get().GetBrush("WhiteBrush");
 			const FLinearColor Tint = bGhostHasIcon
 				? (GridStyle ? GridStyle->GhostIconTint : FLinearColor(1.f, 1.f, 1.f, 0.9f))
@@ -847,6 +848,15 @@ void SInventoryGridWidget::UpdateGhostPlacement(const FVector2D& LocalCursor, co
 		FMath::FloorToInt(LocalCursor.Y / LocalCell.Y));
 	const FIntPoint Candidate = CursorCell - GhostAnchorCellOffset;
 	GhostTopLeft = Candidate;
+
+	// Calculate smooth visual position for rendering (follows cursor smoothly).
+	const UYOLOInventorySettings& Settings = UYOLOInventorySettings::Get();
+	const bool bSnapToGrid = Settings.bSnapDragVisualsToGrid;
+	const FVector2D AnchorOffsetPixels = FVector2D(GhostAnchorCellOffset) * LocalCell;
+	GhostVisualPosition = bSnapToGrid
+		? FVector2D(GhostTopLeft) * LocalCell
+		: (LocalCursor - AnchorOffsetPixels);
+
 	int32 Overlap = INDEX_NONE;
 	// bounds
 	bGhostOutOfBounds = (Candidate.X < 0 || Candidate.Y < 0 || Candidate.X + GhostFootprint.X > Bag->GridSize.X || Candidate.Y + GhostFootprint.Y > Bag->GridSize.Y);

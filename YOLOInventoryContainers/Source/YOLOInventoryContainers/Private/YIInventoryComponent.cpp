@@ -839,55 +839,37 @@ FYIInventoryOpResult UYIInventoryComponent::RequestCombineItem(const FYIInventor
 void UYIInventoryComponent::ServerRequestMoveItem_Implementation(FYIInventoryMoveItemRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestMoveItem(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ServerRequestRotateItem_Implementation(FYIInventoryRotateItemRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestRotateItem(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ServerRequestRemoveItem_Implementation(FYIInventoryRemoveItemRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestRemoveItem(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ServerRequestTransferItem_Implementation(FYIInventoryTransferItemRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestTransferItem(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ServerRequestSplitStack_Implementation(FYIInventorySplitStackRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestSplitStack(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ServerRequestCombineItem_Implementation(FYIInventoryCombineItemRequest Request)
 {
 	const FYIInventoryOpResult Result = RequestCombineItem(Request);
-	if (!Result.bSucceeded)
-	{
-		ClientReceiveInventoryOpResult(Result);
-	}
+	ClientReceiveInventoryOpResult(Result);
 }
 
 void UYIInventoryComponent::ClientReceiveInventoryOpResult_Implementation(const FYIInventoryOpResult& Result)

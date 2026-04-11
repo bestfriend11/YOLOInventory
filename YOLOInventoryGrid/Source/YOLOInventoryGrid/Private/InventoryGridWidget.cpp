@@ -365,7 +365,14 @@ void UInventoryGridWidget::OnWidgetRebuilt()
 {
 	Super::OnWidgetRebuilt();
 	YI_RegisterInventoryDragCleanup();
-	GRegisteredGrids.Add(this);
+	// Only register for drag operations if not in an editor world
+	if (UWorld* World = GetWorld())
+	{
+		if (!World->IsEditorWorld())
+		{
+			GRegisteredGrids.Add(this);
+		}
+	}
 	RebindInventoryContextDelegates();
 	RefreshBagFromBinding();
 }
@@ -391,6 +398,14 @@ void UInventoryGridWidget::ForEachRegisteredGrid(TFunctionRef<void(UInventoryGri
 	{
 		if (UInventoryGridWidget* Grid = It->Get())
 		{
+			// Skip editor world grids
+			if (UWorld* World = Grid->GetWorld())
+			{
+				if (World->IsEditorWorld())
+				{
+					continue;
+				}
+			}
 			if (!TargetGI || (Grid->GetWorld() && Grid->GetWorld()->GetGameInstance() == TargetGI))
 			{
 				Callback(Grid);
@@ -902,11 +917,17 @@ bool UInventoryGridWidget::BeginDragFromCell(FIntPoint Cell)
 	{
 		return false;
 	}
-	// Only allow drag within this game instance (prevents cross-PIE bleed)
+	
+	// Prevent drag operations in editor worlds (preview instances)
 	if (UWorld* World = GetWorld())
 	{
+		if (World->IsEditorWorld())
+		{
+			return false;
+		}
 		GInventoryDrag.DragGI = World->GetGameInstance();
 	}
+	
 	GInventoryDrag.SourceGrid = this;
 	GInventoryDrag.SourceIndex = Idx;
 	GInventoryDrag.Item = Bag->Items[Idx];
@@ -1063,7 +1084,8 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				Request.TargetCell = Cell;
 				Request.bUseExactCell = true;
 				Request.bAllowSingleOverlapSwap = true;
-				Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
+				// Avoid stale client-side revision rejections for non-authoritative move requests.
+				Request.ExpectedSourceBagRevision = INDEX_NONE;
 				const bool bRequested = OwnerComp->RequestMoveItem(Request).bRequestAccepted;
 				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bRequested);
 				if (!bRequested)
@@ -1072,7 +1094,11 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 					return false;
 				}
 				PlayDropSound();
-				GInventoryDrag.Reset();
+				// Locally preview the exact-cell move on the client until the server state replicates.
+				if (Bag->CanPlaceAtIgnoring(Cell, SourceItem.Size, GInventoryDrag.SourceIndex))
+				{
+					Bag->MoveItem(GInventoryDrag.SourceIndex, Cell);
+				}
 				UpdateBoundTooltip();
 				return true;
 			}
