@@ -256,6 +256,7 @@ public:
 	/** Mark the runtime lookup cache as dirty, forcing rebuild on next access. */
 	void MarkRuntimeLookupCacheDirty() const;
 
+	bool IsRuntimeLookupCacheDirty() const;
 	mutable bool bRuntimeLookupCacheDirty = true;
 	mutable TArray<int32> RuntimeCellToItemIndex;
 	mutable TMap<FGuid, int32> RuntimeInstanceToItemIndex;

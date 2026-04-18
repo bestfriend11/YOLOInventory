@@ -146,6 +146,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Visuals|Grid", meta=(ToolTip="If enabled, drag ghost and placement highlight snap to cell boundaries. Disable for free cursor movement visuals."))
 	bool bSnapDragVisualsToGrid = true;
 
+	/** Keep dragging the displaced item after a successful single-item swap, similar to Dungeon Siege style inventory flow. */
+	UPROPERTY(EditAnywhere, config, Category = "Interaction|Grid", meta=(ToolTip="If enabled, swapping by drag-drop keeps the displaced item attached to the cursor instead of ending the drag."))
+	bool bContinueDraggingSwappedItem = false;
+
 	/** Read-only access to settings. */
 	static const UYOLOInventorySettings& Get();
 

@@ -137,6 +137,11 @@ void FYIInventoryMirrorService::RebuildClientPreviewBagFromNet(
 		Item.Size = Net.Size;
 		TargetBag->Items.Add(Item);
 	}
+
+	// Preview bags are rebuilt by direct array assignment, so mark the transient
+	// cell/item lookup cache dirty explicitly. Otherwise paint can show new items
+	// while hit-testing still uses the previous cache until another mutation occurs.
+	TargetBag->MarkRuntimeLookupCacheDirty();
 }
 
 void FYIInventoryMirrorService::SyncNetState(UYIInventoryComponent& Inventory)

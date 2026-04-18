@@ -258,6 +258,133 @@ static int32 GetItemIndexAtCell(const UYIInventoryBag* Bag, const FIntPoint& Cel
 	return Bag ? Bag->GetItemIndexAtCellFast(Cell) : INDEX_NONE;
 }
 
+static int32 YI_AddBagItemExactNoMerge(UYIInventoryBag* Bag, const FYIBagItem& ItemAtExactPos)
+{
+	if (!Bag)
+	{
+		return INDEX_NONE;
+	}
+	if (!Bag->CanPlaceAt(ItemAtExactPos.Pos, ItemAtExactPos.Size))
+	{
+		return INDEX_NONE;
+	}
+
+	const bool bSavedAutoMerge = Bag->bAutoMergeOnAdd;
+	Bag->bAutoMergeOnAdd = false;
+	const int32 NewIndex = Bag->AddBagItem(ItemAtExactPos);
+	Bag->bAutoMergeOnAdd = bSavedAutoMerge;
+	return NewIndex;
+}
+
+static bool YI_ShouldContinueDraggingSwappedItem()
+{
+	return UYOLOInventorySettings::Get().bContinueDraggingSwappedItem;
+}
+
+static bool YI_ContinueDraggingLinkedBagItem(UInventoryGridWidget* Grid, int32 ItemIndex)
+{
+	if (!Grid || !Grid->Bag || !Grid->Bag->Items.IsValidIndex(ItemIndex))
+	{
+		return false;
+	}
+
+	GInventoryDrag.SourceGrid = Grid;
+	GInventoryDrag.SourceIndex = ItemIndex;
+	GInventoryDrag.Item = Grid->Bag->Items[ItemIndex];
+	GInventoryDrag.SourcePos = GInventoryDrag.Item.Pos;
+	GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
+	GInventoryDrag.bRemovedFromSource = false;
+	GInventoryDrag.bFromExchange = false;
+	GInventoryDrag.bActive = true;
+	Grid->OnItemDragStarted.Broadcast(Grid, ItemIndex);
+	return true;
+}
+
+static bool YI_TryLocalAtomicSameBagMoveOrSwap(UYIInventoryBag* Bag, int32 SourceIndex, const FIntPoint& DestCell)
+{
+	if (!Bag || !Bag->Items.IsValidIndex(SourceIndex))
+	{
+		return false;
+	}
+
+	const FYIBagItem SourceItemCopy = Bag->Items[SourceIndex];
+	if (Bag->MoveItem(SourceIndex, DestCell))
+	{
+		return true;
+	}
+
+	int32 VictimIndex = INDEX_NONE;
+	if (!Bag->FindSingleOverlapAt(DestCell, SourceItemCopy.Size, SourceIndex, VictimIndex) ||
+		VictimIndex == INDEX_NONE ||
+		!Bag->Items.IsValidIndex(VictimIndex))
+	{
+		return false;
+	}
+
+	const FYIBagItem VictimItemCopy = Bag->Items[VictimIndex];
+	const FIntPoint SourceOriginalPos = SourceItemCopy.Pos;
+	const FIntPoint VictimOriginalPos = VictimItemCopy.Pos;
+
+	auto RestoreVictim = [Bag, &VictimItemCopy, VictimOriginalPos]() -> bool
+	{
+		FYIBagItem RestoreItem = VictimItemCopy;
+		RestoreItem.Pos = VictimOriginalPos;
+		return YI_AddBagItemExactNoMerge(Bag, RestoreItem) != INDEX_NONE;
+	};
+
+	if (!Bag->RemoveItem(VictimIndex))
+	{
+		return false;
+	}
+
+	int32 SourceIndexAfterVictimRemove = INDEX_NONE;
+	if (SourceItemCopy.Item.InstanceId.IsValid())
+	{
+		Bag->FindItemIndexByInstanceIdFast(SourceItemCopy.Item.InstanceId, SourceIndexAfterVictimRemove);
+	}
+	else
+	{
+		const int32 AdjustedIndex = SourceIndex - ((VictimIndex < SourceIndex) ? 1 : 0);
+		if (Bag->Items.IsValidIndex(AdjustedIndex))
+		{
+			SourceIndexAfterVictimRemove = AdjustedIndex;
+		}
+	}
+
+	if (!Bag->Items.IsValidIndex(SourceIndexAfterVictimRemove) || !Bag->RemoveItem(SourceIndexAfterVictimRemove))
+	{
+		RestoreVictim();
+		return false;
+	}
+
+	FYIBagItem PlacedSource = SourceItemCopy;
+	PlacedSource.Pos = DestCell;
+	const int32 NewSourceIdx = YI_AddBagItemExactNoMerge(Bag, PlacedSource);
+	if (NewSourceIdx == INDEX_NONE)
+	{
+		FYIBagItem RestoreSource = SourceItemCopy;
+		RestoreSource.Pos = SourceOriginalPos;
+		YI_AddBagItemExactNoMerge(Bag, RestoreSource);
+		RestoreVictim();
+		return false;
+	}
+
+	FYIBagItem PlacedVictim = VictimItemCopy;
+	PlacedVictim.Pos = SourceOriginalPos;
+	const int32 NewVictimIdx = YI_AddBagItemExactNoMerge(Bag, PlacedVictim);
+	if (NewVictimIdx == INDEX_NONE)
+	{
+		Bag->RemoveItem(NewSourceIdx);
+		FYIBagItem RestoreSource = SourceItemCopy;
+		RestoreSource.Pos = SourceOriginalPos;
+		YI_AddBagItemExactNoMerge(Bag, RestoreSource);
+		RestoreVictim();
+		return false;
+	}
+
+	return true;
+}
+
 static IYIInventoryGridAdapterInterface* YI_ResolveGridFeatureAdapter(UInventoryGridWidget* Grid)
 {
 	if (!Grid)
@@ -973,42 +1100,6 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	UYIInventoryComponent* OwnerComp = Bag->GetTypedOuter<UYIInventoryComponent>();
 	const bool bHasOwnerComp = (OwnerComp != nullptr);
 	const bool bOwnerCompHasAuthority = bHasOwnerComp && OwnerComp->GetOwner() && OwnerComp->GetOwner()->HasAuthority();
-	const auto TryOwnerMoveItem = [OwnerComp, this](int32 Index, const FIntPoint& NewPos) -> bool
-	{
-		if (!OwnerComp || !Bag || !Bag->Items.IsValidIndex(Index))
-		{
-			return false;
-		}
-		const FYIBagItem& ItemToMove = Bag->Items[Index];
-		if (ItemToMove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
-		{
-			FYIInventoryMoveItemRequest Request;
-			Request.ItemRef.Bag.BagId = Bag->BagId;
-			Request.ItemRef.Item.ItemInstanceId = ItemToMove.Item.InstanceId;
-			Request.TargetCell = NewPos;
-			Request.bUseExactCell = false;
-			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
-			return OwnerComp->RequestMoveItem(Request).bRequestAccepted;
-		}
-			return false;
-	};
-	const auto TryOwnerRemoveItem = [OwnerComp, this](int32 Index) -> bool
-	{
-		if (!OwnerComp || !Bag || !Bag->Items.IsValidIndex(Index))
-		{
-			return false;
-		}
-		const FYIBagItem& ItemToRemove = Bag->Items[Index];
-		if (ItemToRemove.Item.InstanceId.IsValid() && Bag->BagId.IsValid())
-		{
-			FYIInventoryRemoveItemRequest Request;
-			Request.ItemRef.Bag.BagId = Bag->BagId;
-			Request.ItemRef.Item.ItemInstanceId = ItemToRemove.Item.InstanceId;
-			Request.ExpectedSourceBagRevision = Bag->RuntimeRevision;
-			return OwnerComp->RequestRemoveItem(Request).bRequestAccepted;
-		}
-			return false;
-	};
 	auto PlayDropSound = [this]()
 	{
 		if (!IsDragSoundEnabled())
@@ -1071,12 +1162,31 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	// Same bag: if this drag originated here and we removed from source, we are placing an unattached item now
 	if (GInventoryDrag.SourceGrid.Get() == this)
 	{
-		// Client same-bag drops should use server-authoritative exact-cell move/swap and avoid local mutation/self-collision desync.
-		if (bHasOwnerComp && !bOwnerCompHasAuthority && !GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceIndex != INDEX_NONE &&
+		if (!bAllowSelfMove)
+		{
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+			PlayInvalidMoveSound();
+			return false;
+		}
+
+		// Bound runtime inventories should use the exact-cell authoritative path for both simple moves and swaps.
+		if (!GInventoryDrag.bRemovedFromSource &&
+			GInventoryDrag.SourceIndex != INDEX_NONE &&
 			Bag->Items.IsValidIndex(GInventoryDrag.SourceIndex))
 		{
-			const FYIBagItem& SourceItem = Bag->Items[GInventoryDrag.SourceIndex];
-			if (Bag->BagId.IsValid() && SourceItem.Item.InstanceId.IsValid())
+			const FYIBagItem SourceItem = Bag->Items[GInventoryDrag.SourceIndex];
+			FGuid SwappedVictimInstanceId;
+			if (YI_ShouldContinueDraggingSwappedItem())
+			{
+				int32 OverlapIndex = INDEX_NONE;
+				if (FindSingleOverlap(Bag, GInventoryDrag.SourceIndex, Cell, SourceItem.Size, OverlapIndex) &&
+					Bag->Items.IsValidIndex(OverlapIndex))
+				{
+					SwappedVictimInstanceId = Bag->Items[OverlapIndex].Item.InstanceId;
+				}
+			}
+			bool bMoveAccepted = false;
+			if (bHasOwnerComp && Bag->BagId.IsValid() && SourceItem.Item.InstanceId.IsValid())
 			{
 				FYIInventoryMoveItemRequest Request;
 				Request.ItemRef.Bag.BagId = Bag->BagId;
@@ -1084,34 +1194,43 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				Request.TargetCell = Cell;
 				Request.bUseExactCell = true;
 				Request.bAllowSingleOverlapSwap = true;
-				// Avoid stale client-side revision rejections for non-authoritative move requests.
 				Request.ExpectedSourceBagRevision = INDEX_NONE;
-				const bool bRequested = OwnerComp->RequestMoveItem(Request).bRequestAccepted;
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bRequested);
-				if (!bRequested)
+				bMoveAccepted = OwnerComp->RequestMoveItem(Request).bRequestAccepted;
+				if (bMoveAccepted && !bOwnerCompHasAuthority)
 				{
-					PlayInvalidMoveSound();
-					return false;
+					// Predict the same atomic exact-cell move/swap locally so the moved item stays interactive until replication lands.
+					YI_TryLocalAtomicSameBagMoveOrSwap(Bag, GInventoryDrag.SourceIndex, Cell);
 				}
-				PlayDropSound();
-				// Locally preview the exact-cell move on the client until the server state replicates.
-				if (Bag->CanPlaceAtIgnoring(Cell, SourceItem.Size, GInventoryDrag.SourceIndex))
-				{
-					Bag->MoveItem(GInventoryDrag.SourceIndex, Cell);
-					// End the drag operation after successful local preview
-					GInventoryDrag.Reset();
-				}
-				UpdateBoundTooltip();
-				return true;
 			}
+			else
+			{
+				bMoveAccepted = YI_TryLocalAtomicSameBagMoveOrSwap(Bag, GInventoryDrag.SourceIndex, Cell);
+			}
+
+			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, bMoveAccepted);
+			if (!bMoveAccepted)
+			{
+				PlayInvalidMoveSound();
+				return false;
+			}
+
+			PlayDropSound();
+			if (SwappedVictimInstanceId.IsValid())
+			{
+				int32 VictimIndexAfterSwap = INDEX_NONE;
+				if (Bag->FindItemIndexByInstanceIdFast(SwappedVictimInstanceId, VictimIndexAfterSwap) &&
+					YI_ContinueDraggingLinkedBagItem(this, VictimIndexAfterSwap))
+				{
+					UpdateBoundTooltip();
+					return true;
+				}
+			}
+
+			GInventoryDrag.Reset();
+			UpdateBoundTooltip();
+			return true;
 		}
 
-		if (!bAllowSelfMove)
-		{
-			OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-			PlayInvalidMoveSound();
-			return false;
-		}
 		// When pickup removed the item, SourceIndex is INDEX_NONE and the bag no longer contains it. Treat as add-at-cell or swap.
 		if (GInventoryDrag.bRemovedFromSource && GInventoryDrag.SourceIndex == INDEX_NONE)
 		{
@@ -1164,73 +1283,30 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 				return false;
 			}
 			OnItemDropped.Broadcast(this, INDEX_NONE, Cell, true);
-			// Continue dragging the displaced item (victim) as UNATTACHED (no lingering visual)
-			GInventoryDrag.SourceGrid = this;
-			GInventoryDrag.SourceIndex = INDEX_NONE;
-			GInventoryDrag.Item = SavedVictim;
-			GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
-			GInventoryDrag.bRemovedFromSource = true;
-			GInventoryDrag.bFromExchange = true;
-			GInventoryDrag.SourcePos = SavedVictim.Pos;
-			GInventoryDrag.bActive = true;
-			OnItemDragStarted.Broadcast(this, INDEX_NONE);
+			if (YI_ShouldContinueDraggingSwappedItem())
+			{
+				// Continue dragging the displaced item (victim) as unattached.
+				GInventoryDrag.SourceGrid = this;
+				GInventoryDrag.SourceIndex = INDEX_NONE;
+				GInventoryDrag.Item = SavedVictim;
+				GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
+				GInventoryDrag.bRemovedFromSource = true;
+				GInventoryDrag.bFromExchange = true;
+				GInventoryDrag.SourcePos = SavedVictim.Pos;
+				GInventoryDrag.bActive = true;
+				OnItemDragStarted.Broadcast(this, INDEX_NONE);
+			}
+			else
+			{
+				GInventoryDrag.Reset();
+			}
 			UpdateBoundTooltip();
 			return true;
 		}
-		if (!((bHasOwnerComp ? TryOwnerMoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
-		{
-			// Non-authority clients should not attempt local in-place swaps; server-authoritative path above handles exact-cell move/swap.
-			if (bHasOwnerComp && !bOwnerCompHasAuthority)
-			{
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-				PlayInvalidMoveSound();
-				return false;
-			}
-			// Allow displacing a single overlapped item if the footprint only hits that one
-			const FYIBagItem& Src = Bag->Items[GInventoryDrag.SourceIndex];
-			const FIntPoint Foot = Bag->GetEffectiveSize(Src.Size);
-			int32 Victim = INDEX_NONE;
-			if (!FindSingleOverlap(Bag, GInventoryDrag.SourceIndex, Cell, Foot, Victim) || Victim == INDEX_NONE)
-			{
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-				PlayInvalidMoveSound();
-				return false;
-			}
-			// Remove victim, adjust source index if needed, then attempt move again
-			FYIBagItem SavedVictim = Bag->Items[Victim];
-			if (bHasOwnerComp) TryOwnerRemoveItem(Victim); else Bag->RemoveItem(Victim);
-			if (Victim < GInventoryDrag.SourceIndex)
-			{
-				GInventoryDrag.SourceIndex -= 1;
-			}
-			if (!((bHasOwnerComp ? TryOwnerMoveItem(GInventoryDrag.SourceIndex, Cell) : Bag->MoveItem(GInventoryDrag.SourceIndex, Cell))))
-			{
-			// Failed even after clearing victim; restore it in-place to avoid merge/stack side-effects
-			Bag->Items.Insert(SavedVictim, Victim);
-			Bag->MarkPackageDirty(); Bag->OnChanged.Broadcast();
-				OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
-				PlayInvalidMoveSound();
-				return false;
-			}
-			// Start a new drag with the displaced item
-			GInventoryDrag.SourceGrid = nullptr;
-			GInventoryDrag.SourceIndex = INDEX_NONE;
-			GInventoryDrag.Item = SavedVictim;
-			GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
-			GInventoryDrag.SourcePos = SavedVictim.Pos;
-			GInventoryDrag.bRemovedFromSource = true;
-			GInventoryDrag.bFromExchange = true;
-			GInventoryDrag.bActive = true;
-			OnItemDragStarted.Broadcast(this, INDEX_NONE);
-		}
-		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
-		PlayDropSound();
-		if (GInventoryDrag.SourceGrid.IsValid() || GInventoryDrag.SourceIndex != INDEX_NONE)
-		{
-			GInventoryDrag.Reset();
-		}
-		UpdateBoundTooltip();
-		return true;
+		// Any remaining state here is stale or detached and should not fall back to the old shuffle path.
+		OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, false);
+		PlayInvalidMoveSound();
+		return false;
 	}
 
 	// Cross-bag: perform an atomic swap (drag item takes victim's slot, victim becomes active drag or drops)
@@ -1454,17 +1530,23 @@ bool UInventoryGridWidget::DropDraggedItemAtCell(FIntPoint Cell)
 	OnItemDropped.Broadcast(this, GInventoryDrag.SourceIndex, Cell, true);
 	PlayDropSound();
 
-	// Update drag state: the victim is now at VictimIdx in this bag (linked, not unattached)
-	// If BeginDragFromCell is called again, it will just pick up the victim from its new location
-	GInventoryDrag.SourceGrid = this;
-	GInventoryDrag.SourceIndex = INDEX_NONE;
-	GInventoryDrag.Item = SavedVictim;
-	GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
-	GInventoryDrag.bRemovedFromSource = true; // victim no longer exists in any bag after being displaced
-	GInventoryDrag.bFromExchange = true;
-	GInventoryDrag.SourcePos = SavedVictim.Pos;
-	GInventoryDrag.bActive = true;
-	OnItemDragStarted.Broadcast(this, INDEX_NONE);
+	if (YI_ShouldContinueDraggingSwappedItem())
+	{
+		// Continue dragging the displaced item as unattached after the cross-bag swap.
+		GInventoryDrag.SourceGrid = this;
+		GInventoryDrag.SourceIndex = INDEX_NONE;
+		GInventoryDrag.Item = SavedVictim;
+		GInventoryDrag.AnchorCellOffset = FIntPoint::ZeroValue;
+		GInventoryDrag.bRemovedFromSource = true;
+		GInventoryDrag.bFromExchange = true;
+		GInventoryDrag.SourcePos = SavedVictim.Pos;
+		GInventoryDrag.bActive = true;
+		OnItemDragStarted.Broadcast(this, INDEX_NONE);
+	}
+	else
+	{
+		GInventoryDrag.Reset();
+	}
 	return true;
 }
 
