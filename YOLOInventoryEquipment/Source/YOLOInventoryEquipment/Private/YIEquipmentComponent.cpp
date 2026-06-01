@@ -1147,10 +1147,26 @@ bool UYIEquipmentComponent::EquipFromInventoryInternal(UYIInventoryComponent* So
 				SourceBag->RemoveItem(AddedReturnIndices[i]);
 			}
 			EquippedItems = BackupEntries;
-			const int32 RollbackIndex = SourceBag->AddBagItem(SourceBagItem);
-			if (RollbackIndex == INDEX_NONE)
+			if (bKeepInInventoryLocked)
 			{
-				EmitEquipmentMessage(TEXT("Equip rollback failed: source item could not be restored to bag."), FColor::Red);
+				FYIInventoryItemRef SourceItemRef;
+				if (!SourceInventory->GetBagItemCoreRef(SourceBag, SourceIndex, SourceItemRef))
+				{
+					EmitEquipmentMessage(TEXT("Equip rollback failed: source item relock failed."), FColor::Red);
+				}
+				if (!YIEquipmentPrivate::IsValidItemRef(SourceItemRef)
+					|| !SourceInventory->SetBagItemLockedByCoreRef(SourceItemRef, false))
+				{
+					EmitEquipmentMessage(TEXT("Equip rollback failed: source item unlock failed."), FColor::Red);
+				}
+			}
+			else
+			{
+				const int32 RollbackIndex = SourceBag->AddBagItem(SourceBagItem);
+				if (RollbackIndex == INDEX_NONE)
+				{
+					EmitEquipmentMessage(TEXT("Equip rollback failed: source item could not be restored to bag."), FColor::Red);
+				}
 			}
 			OutMessage = TEXT("Equip failed: Could not move replaced equipped item(s) back to bag.");
 			return false;

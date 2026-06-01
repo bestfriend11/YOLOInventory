@@ -30,10 +30,16 @@ void AYIClickPickup::BeginPlay()
 
 void AYIClickPickup::HandleClicked(AActor* /*TouchedActor*/, FKey /*Button*/)
 {
-	if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+	APlayerController* PC = Cast<APlayerController>(GetInstigatorController());
+	if (!PC)
 	{
-		ServerPickup(PC);
+		PC = GetWorld()->GetFirstPlayerController();
 	}
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+	ServerPickup(PC);
 }
 
 void AYIClickPickup::ServerPickup_Implementation(APlayerController* PC)

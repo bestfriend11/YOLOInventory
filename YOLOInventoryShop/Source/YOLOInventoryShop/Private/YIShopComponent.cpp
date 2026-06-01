@@ -13,6 +13,8 @@
 #include "GameFramework/PlayerController.h"
 #include "Components/ActorComponent.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogYIShopComponent, Warning, All);
+
 namespace YIShopPrivate
 {
 	static UObject* ResolveResourceProvider(APlayerState* PlayerState)
@@ -251,6 +253,11 @@ bool UYIShopComponent::ResolvePolicyForItem(
 	bOutRequirePriceForSell = false;
 
 	UYIItemDefinition* Definition = Item.Definition.Get();
+	if (!Definition && Item.Definition.ToSoftObjectPath().IsValid())
+	{
+		UE_LOG(LogYIShopComponent, Warning, TEXT("ResolvePolicyForItem is synchronously loading item definition %s."), *Item.Definition.ToSoftObjectPath().ToString());
+		Definition = Item.Definition.LoadSynchronous();
+	}
 	if (!Definition)
 	{
 		return false;

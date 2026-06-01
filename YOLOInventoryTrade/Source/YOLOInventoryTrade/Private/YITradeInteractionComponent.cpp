@@ -151,11 +151,11 @@ void UYITradeInteractionComponent::TickComponent(float DeltaTime, ELevelTick Tic
         }
     }
 
-    // Disable tick when nothing is active
-    if (!CurrentSession && !CurrentShop)
-    {
-        SetComponentTickEnabled(false);
-    }
+	// Disable tick when nothing is active
+	if (!CurrentSession && !CurrentShop)
+	{
+		SetComponentTickEnabled(false);
+	}
 }
 
 FYITradeOpResult UYITradeInteractionComponent::RequestTradeEx(const FYITradeOpenRequest& InRequest)
@@ -1281,10 +1281,19 @@ void UYITradeInteractionComponent::CloseTradeLocal(bool bCancelServer)
     }
     CurrentSession = nullptr;
     OnTradeClosed.Broadcast();
-    if (!CurrentSession && !CurrentShop)
-    {
-        SetComponentTickEnabled(false);
-    }
+	if (!CurrentSession && !CurrentShop)
+	{
+		if (APlayerController* PC = GetOwningPC())
+		{
+			if (PC->IsLocalController())
+			{
+				PC->bShowMouseCursor = false;
+				PC->SetInputMode(FInputModeGameOnly());
+				PC->FlushPressedKeys();
+			}
+		}
+		SetComponentTickEnabled(false);
+	}
 }
 
 void UYITradeInteractionComponent::CloseShopLocal()
@@ -1297,6 +1306,15 @@ void UYITradeInteractionComponent::CloseShopLocal()
     bShopOpened = false;
     if (!CurrentSession && !CurrentShop)
     {
+        if (APlayerController* PC = GetOwningPC())
+        {
+            if (PC->IsLocalController())
+            {
+                PC->bShowMouseCursor = false;
+                PC->SetInputMode(FInputModeGameOnly());
+                PC->FlushPressedKeys();
+            }
+        }
         SetComponentTickEnabled(false);
     }
 }

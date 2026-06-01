@@ -315,6 +315,21 @@ void UYIInventoryComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 		EquippedBag->OnChanged.Remove(BagChangedHandle);
 		BagChangedHandle.Reset();
 	}
+
+	for (UYIInventoryBag* Bag : Bags)
+	{
+		if (!Bag)
+		{
+			continue;
+		}
+
+		Bag->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);
+		Bag->OnItemRemoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRemoved);
+		Bag->OnItemMoved.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemMoved);
+		Bag->OnItemRotated.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemRotated);
+		Bag->OnItemTransferred.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemTransferred);
+	}
+
 	if (BagEventSource)
 	{
 		BagEventSource->OnItemAdded.RemoveDynamic(this, &UYIInventoryComponent::HandleBagItemAdded);

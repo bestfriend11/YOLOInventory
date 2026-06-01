@@ -11,6 +11,8 @@
 #include "Engine/Engine.h"
 #include "YIItemInstance.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogYIItemPickup, Warning, All);
+
 AYIItemPickup::AYIItemPickup()
 {
 	bReplicates = true;
@@ -50,7 +52,6 @@ void AYIItemPickup::SetItemByCode(int64 InCode, int32 InCount)
 	}
 	ItemCode = InCode;
 	Count = FMath::Max(1, InCount);
-	ItemInstance.Definition = Definition;
 	ItemInstance.Count = Count;
 	if (!ItemInstance.InstanceId.IsValid())
 	{
@@ -71,7 +72,8 @@ UYIItemDefinition* AYIItemPickup::GetItemDefinition() const
 	}
 	if (Definition.ToSoftObjectPath().IsValid())
 	{
-		return Definition.Get();
+		UE_LOG(LogYIItemPickup, Warning, TEXT("Synchronously loading item definition for pickup code %lld."), ItemCode);
+		return Definition.LoadSynchronous();
 	}
 	return nullptr;
 }

@@ -197,7 +197,13 @@ TArray<FYITradeOfferSource>& AYITradeSessionActor::GetOfferSources(ETradeSide Si
 
 FYITradeOfferSource& AYITradeSessionActor::GetOfferSource(ETradeSide Side, int32 Index)
 {
-    return GetOfferSources(Side)[Index];
+    TArray<FYITradeOfferSource>& Sources = GetOfferSources(Side);
+    if (!Sources.IsValidIndex(Index))
+    {
+        static FYITradeOfferSource InvalidOfferSource;
+        return InvalidOfferSource;
+    }
+    return Sources[Index];
 }
 
 bool AYITradeSessionActor::IsSideOwner(ETradeSide Side, APlayerController* PC) const
